@@ -17,7 +17,7 @@ mod ids;
 mod node;
 
 #[cfg(test)]
-mod headless;
+pub(crate) mod headless;
 
 pub use canvas::{Canvas, TextAlign, TextMetrics, TextStyle, TextWeight};
 pub use event::{Event, TimerId};

@@ -13,6 +13,7 @@
 //! backend's events to the widget that owns a node.
 
 pub mod accessibility;
+pub mod app;
 pub mod backend;
 pub mod color;
 pub mod geometry;
@@ -21,6 +22,8 @@ pub mod message;
 pub mod router;
 pub mod theme;
 pub mod units;
+
+pub use app::{App, Ui, run_app};
 
 pub use backend::{
     Backend, BackendError, Canvas, Event, ImplKind, NodeKind, NodeOptions, NodeSpec, Painter,
