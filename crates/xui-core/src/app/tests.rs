@@ -171,6 +171,34 @@ fn a_timer_tick_maps_to_a_message() {
 }
 
 #[test]
+fn a_worker_thread_proxy_reaches_update() {
+    let (_backend, _window, core, ui) = setup();
+    let log = Rc::new(RefCell::new(Vec::new()));
+    let runtime = Runtime::primary(Rc::clone(&core), test_app(&log));
+
+    let proxy = ui.proxy();
+    let handles: Vec<_> = (0..4)
+        .map(|worker| {
+            let proxy = proxy.clone();
+            std::thread::spawn(move || {
+                for message in 0..10 {
+                    proxy.send(worker * 10 + message).unwrap();
+                }
+            })
+        })
+        .collect();
+    for handle in handles {
+        handle.join().expect("worker panicked");
+    }
+
+    // The headless waker does not pump: drive the wake as the backend would.
+    runtime.deliver(WidgetId::NONE, &Event::Wake);
+    let mut received = log.borrow().clone();
+    received.sort_unstable();
+    assert_eq!(received, (0..40).collect::<Vec<_>>());
+}
+
+#[test]
 fn geometry_queries_reach_the_backend() {
     let (_backend, _window, _core, ui) = setup();
     assert_eq!(ui.dpi(), 96);

@@ -23,7 +23,7 @@ pub mod router;
 pub mod theme;
 pub mod units;
 
-pub use app::{App, Ui, run_app};
+pub use app::{App, Proxy, Ui, run_app};
 
 pub use backend::{
     Backend, BackendError, Canvas, Event, ImplKind, NodeKind, NodeOptions, NodeSpec, Painter,

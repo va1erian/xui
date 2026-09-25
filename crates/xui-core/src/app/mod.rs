@@ -10,15 +10,20 @@
 //! is borrowed for the whole call and a drain that runs while it is borrowed
 //! puts its message back.
 
+mod proxy;
 #[cfg(test)]
 mod tests;
 mod ui;
 
+pub use proxy::Proxy;
 pub use ui::Ui;
 
 use std::cell::RefCell;
 use std::collections::VecDeque;
 use std::rc::{Rc, Weak};
+use std::sync::Arc;
+
+use proxy::Inbox;
 
 use crate::backend::{Backend, Event, PlatformSpec, Result, TimerId, WidgetId, WindowId};
 use crate::router::{Router, WidgetHost};
@@ -49,6 +54,7 @@ pub(crate) struct Core<M> {
     backend: Rc<dyn Backend>,
     window: WindowId,
     queue: RefCell<VecDeque<M>>,
+    inbox: Arc<Inbox<M>>,
     router: Router,
     on_close: RefCell<Option<CloseMapper<M>>>,
     on_timer: RefCell<Option<TimerMapper<M>>>,
@@ -62,6 +68,7 @@ impl<M> Core<M> {
             backend,
             window,
             queue: RefCell::new(VecDeque::new()),
+            inbox: Inbox::new(),
             router: Router::new(),
             on_close: RefCell::new(None),
             on_timer: RefCell::new(None),
@@ -94,6 +101,24 @@ impl<M> Core<M> {
         }
     }
 
+    /// A proxy for sending messages from worker threads.
+    pub(crate) fn proxy(&self) -> Proxy<M>
+    where
+        M: Send,
+    {
+        Proxy::new(Arc::clone(&self.inbox), self.backend.waker(self.window))
+    }
+
+    /// Moves every worker-thread message into the queue, ahead of the drain.
+    ///
+    /// `enqueue` may post one extra wake while handling the current one; it
+    /// finds an empty inbox and stops, so this cannot become a wake storm.
+    fn collect_inbox(&self) {
+        for msg in self.inbox.collect() {
+            self.enqueue(msg);
+        }
+    }
+
     /// Records the close mapper.
     pub(crate) fn set_on_close(&self, f: impl Fn() -> Option<M> + 'static) {
         self.on_close.replace(Some(Box::new(f)));
@@ -115,6 +140,14 @@ impl<M> Core<M> {
 
     fn put_back(&self, msg: M) {
         self.queue.borrow_mut().push_front(msg);
+    }
+}
+
+impl<M> Drop for Core<M> {
+    fn drop(&mut self) {
+        // A worker may still hold a `Proxy`; closing the inbox makes its later
+        // sends fail instead of queueing messages nobody will drain.
+        self.inbox.close();
     }
 }
 
@@ -147,6 +180,7 @@ impl<A: App> Runtime<A> {
         if target.is_none() {
             match event {
                 Event::Wake => {
+                    self.core.collect_inbox();
                     self.drain();
                     return true;
                 }

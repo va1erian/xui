@@ -20,6 +20,7 @@ use xui_win32::Win32Backend;
 /// The colour the node paints, chosen to be unmistakable in a capture.
 const ACCENT: Color = Color::rgb(0x00, 0x78, 0xD4);
 
+#[derive(Debug)]
 enum Msg {
     Quit,
 }
@@ -105,5 +106,61 @@ fn a_portable_app_runs_and_paints_on_the_win32_backend() {
         pixel,
         [ACCENT.r, ACCENT.g, ACCENT.b, 0xFF],
         "the portable app painted its accent colour"
+    );
+}
+
+struct WorkerApp;
+
+impl App for WorkerApp {
+    type Msg = Msg;
+
+    fn update(&mut self, msg: Msg, ui: &mut Ui<Msg>) {
+        match msg {
+            Msg::Quit => ui.quit(),
+        }
+    }
+}
+
+#[test]
+fn a_worker_thread_proxy_delivers_on_win32() {
+    let backend = Rc::new(Win32Backend::new());
+    let backend_for_run: Rc<dyn Backend> = backend.clone();
+    let timed_out = Rc::new(Cell::new(false));
+
+    let result = {
+        let timed_out = Rc::clone(&timed_out);
+        run_app(
+            backend_for_run,
+            PlatformSpec::new("xui.worker"),
+            move |ui| {
+                // A background thread hands a message back through the proxy; the
+                // backend wakes the loop and the runtime drains it.
+                let proxy = ui.proxy();
+                std::thread::spawn(move || {
+                    std::thread::sleep(std::time::Duration::from_millis(50));
+                    proxy.send(Msg::Quit).expect("proxy send");
+                });
+
+                let long = ui.set_timer(5000);
+                let watchdog = Rc::clone(&timed_out);
+                ui.on_timer(move |fired| {
+                    if fired == long {
+                        watchdog.set(true);
+                        Some(Msg::Quit)
+                    } else {
+                        None
+                    }
+                });
+                WorkerApp
+            },
+        )
+    };
+
+    if result.is_err() {
+        return;
+    }
+    assert!(
+        !timed_out.get(),
+        "the worker's message arrived before the watchdog"
     );
 }

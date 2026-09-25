@@ -16,7 +16,7 @@ use std::rc::Rc;
 
 use xui_core::backend::{
     Backend, BackendError, ImplKind, NodeKind, NodeSpec, Painter, ParentRef, PlatformSpec,
-    Result as BackendResult, TextMetrics, TextStyle, TimerId, WidgetId, WindowId,
+    Result as BackendResult, TextMetrics, TextStyle, TimerId, Waker, WidgetId, WindowId,
 };
 use xui_core::router::WidgetHost;
 use xui_core::{Rect, Theme};
@@ -154,6 +154,25 @@ impl Backend for Win32Backend {
     fn wake(&self, window: WindowId) {
         if let Some(entry) = self.windows.borrow().get(&window.raw()) {
             let _ = entry.window.post_wake();
+        }
+    }
+
+    fn waker(&self, window: WindowId) -> Waker {
+        let target = self
+            .windows
+            .borrow()
+            .get(&window.raw())
+            .map(|entry| entry.window.hwnd());
+        match target {
+            Some(hwnd) => {
+                let wake = sys::message::wake_message();
+                // Posting to a window handle is thread-safe, so a worker can
+                // call this.
+                Box::new(move || {
+                    let _ = sys::window::post_message(hwnd, wake, 0, 0);
+                })
+            }
+            None => Box::new(|| {}),
         }
     }
 

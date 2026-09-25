@@ -4,7 +4,7 @@
 
 use std::rc::Rc;
 
-use super::Core;
+use super::{Core, Proxy};
 use crate::backend::{
     Event, ImplKind, NodeKind, NodeSpec, Painter, ParentRef, Result, TextMetrics, TextStyle,
     TimerId, WidgetId,
@@ -37,6 +37,16 @@ impl<M: 'static> Ui<M> {
     /// Enqueues `msg` for [`App::update`](super::App::update).
     pub fn emit(&self, msg: M) {
         self.core.enqueue(msg);
+    }
+
+    /// Returns a thread-safe handle for sending messages from worker threads.
+    /// `Proxy` is `Clone`, and `Send + Sync` when the message type is; its
+    /// sends join the same queue as [`Ui::emit`].
+    pub fn proxy(&self) -> Proxy<M>
+    where
+        M: Send,
+    {
+        self.core.proxy()
     }
 
     /// Creates a node parented to the window from `spec`.

@@ -40,6 +40,11 @@ pub type Result<T> = std::result::Result<T, BackendError>;
 /// short-lived [`Canvas`].
 pub type Painter = Rc<dyn Fn(&mut dyn Canvas)>;
 
+/// A thread-safe wake for one window: calling it makes the backend deliver
+/// [`Event::Wake`], as a worker thread needs. `Send + Sync`, unlike the
+/// backend itself.
+pub type Waker = Box<dyn Fn() + Send + Sync>;
+
 /// Why a backend operation failed.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum BackendError {
@@ -117,6 +122,10 @@ pub trait Backend {
 
     /// Wakes the loop for `window` after a worker posted data.
     fn wake(&self, window: WindowId);
+
+    /// A thread-safe handle that wakes `window` from another thread. A worker
+    /// uses one to hand messages back (see the message proxy).
+    fn waker(&self, window: WindowId) -> Waker;
 
     /// Installs the sink the backend delivers decoded [`Event`]s to for
     /// `window`. Replaces any previous sink.

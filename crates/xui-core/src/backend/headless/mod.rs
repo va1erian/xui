@@ -13,7 +13,7 @@ use super::canvas::{TextMetrics, TextStyle};
 use super::event::{Event, TimerId};
 use super::ids::{WidgetId, WindowId};
 use super::node::{ImplKind, NodeKind, NodeSpec, ParentRef};
-use super::{Backend, BackendError, Painter, PlatformSpec, Result};
+use super::{Backend, BackendError, Painter, PlatformSpec, Result, Waker};
 use crate::geometry::Rect;
 use crate::router::WidgetHost;
 use crate::theme::Theme;
@@ -242,6 +242,12 @@ impl Backend for HeadlessBackend {
         if let Some(w) = self.state.borrow_mut().windows.get_mut(&window.raw()) {
             w.wakes += 1;
         }
+    }
+
+    fn waker(&self, _window: WindowId) -> Waker {
+        // The headless backend has no loop to wake; a test drives `Wake`
+        // itself after sending through a proxy.
+        Box::new(|| {})
     }
 
     fn set_event_sink(&self, window: WindowId, sink: Rc<dyn WidgetHost>) {
