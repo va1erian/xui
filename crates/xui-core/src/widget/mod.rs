@@ -10,6 +10,7 @@
 
 mod button;
 mod control;
+mod edit;
 mod label;
 
 #[cfg(test)]
@@ -17,4 +18,5 @@ mod tests;
 
 pub use button::Button;
 pub use control::{Control, HasText};
+pub use edit::Edit;
 pub use label::Label;

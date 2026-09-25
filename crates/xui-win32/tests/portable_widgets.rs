@@ -1,4 +1,5 @@
-//! Portable widgets (`xui_core::widget::{Label, Button}`) on the Win32 backend:
+//! Portable widgets (`xui_core::widget::{Label, Edit, Button}`) on the Win32
+//! backend:
 //! the app builds them, a worker thread clicks the button with real mouse
 //! messages, and the button's painted pixels are sampled; the whole window is
 //! also captured to a PNG for a visual check.
@@ -10,12 +11,12 @@
 
 mod common;
 
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use xui_core::app::{App, Ui, run_app};
 use xui_core::backend::{Backend, PlatformSpec};
-use xui_core::widget::{Button, Label};
+use xui_core::widget::{Button, Edit, HasText, Label};
 use xui_core::{Rect, Theme, TimerId, WidgetId};
 use xui_win32::Win32Backend;
 
@@ -30,10 +31,12 @@ struct WidgetsApp {
     window: xui_win32::Hwnd,
     file: String,
     sample: Rc<Cell<Option<[u8; 4]>>>,
+    text: Rc<RefCell<Option<String>>>,
     capture_at: Rc<Cell<Option<TimerId>>>,
     timed_out: Rc<Cell<bool>>,
     // Kept alive: each owns its node and destroys it on drop.
     _label: Label<Msg>,
+    edit: Edit<Msg>,
     button: Button<Msg>,
 }
 
@@ -53,6 +56,7 @@ impl App for WidgetsApp {
                 self.capture_at.set(Some(id));
             }
             Msg::Capture => {
+                self.text.replace(Some(self.edit.text()));
                 if let Some(node) = self.backend.node_hwnd(self.button.id())
                     && let Some(rect) = common::screen_rect(node)
                     && let Some(image) = common::capture_screen(rect)
@@ -110,12 +114,14 @@ fn run(theme: Theme, file: &str) {
     let backend_for_run: Rc<dyn Backend> = backend.clone();
     let timed_out = Rc::new(Cell::new(false));
     let sample = Rc::new(Cell::new(None));
+    let text = Rc::new(RefCell::new(None));
     // After the click the button rests in its hover state.
     let expected = theme.hover;
 
     let result = {
         let timed_out = Rc::clone(&timed_out);
         let sample = Rc::clone(&sample);
+        let text = Rc::clone(&text);
         let file = file.to_string();
         let backend = Rc::clone(&backend);
         run_app(
@@ -124,17 +130,34 @@ fn run(theme: Theme, file: &str) {
             move |ui| {
                 ui.set_theme(theme);
                 let label = Label::new(ui, Rect::new(20, 16, 320, 48), "Portable Label").unwrap();
-                let button = Button::new(ui, Rect::new(20, 60, 160, 96), "Click me")
+                let edit = Edit::new(ui, Rect::new(20, 60, 320, 92), "")
+                    .unwrap()
+                    .on_change(|_| None);
+                let edit_id = edit.id();
+                edit.focus();
+                let button = Button::new(ui, Rect::new(20, 108, 160, 144), "Click me")
                     .unwrap()
                     .on_click(|| Some(Msg::Clicked));
                 let button_id: WidgetId = button.id();
                 let window = backend.window_hwnd(ui.window()).expect("window handle");
 
-                // A worker clicks the button with real mouse messages, so the
-                // backend decodes them into portable Events.
+                // A worker types into the field and then clicks the button with
+                // real messages, so the backend decodes them into portable
+                // Events.
+                let edit_node = backend.node_hwnd(edit_id);
                 if let Some(node) = backend.node_hwnd(button_id) {
                     std::thread::spawn(move || {
-                        std::thread::sleep(std::time::Duration::from_millis(250));
+                        // Click the field to focus it, then type, then click
+                        // the button.
+                        std::thread::sleep(std::time::Duration::from_millis(200));
+                        if let Some(edit) = edit_node {
+                            click(edit);
+                        }
+                        std::thread::sleep(std::time::Duration::from_millis(100));
+                        if let Some(edit) = edit_node {
+                            type_text(edit, "hello xui");
+                        }
+                        std::thread::sleep(std::time::Duration::from_millis(150));
                         click(node);
                     });
                 }
@@ -159,9 +182,11 @@ fn run(theme: Theme, file: &str) {
                     window,
                     file,
                     sample,
+                    text,
                     capture_at,
                     timed_out: Rc::clone(&timed_out),
                     _label: label,
+                    edit,
                     button,
                 }
             },
@@ -180,6 +205,27 @@ fn run(theme: Theme, file: &str) {
         [expected.r, expected.g, expected.b, 0xFF],
         "the button painted its hover colour"
     );
+    assert_eq!(
+        text.borrow().as_deref(),
+        Some("hello xui"),
+        "the edit received the typed text"
+    );
+}
+
+/// Posts `text` to the node as `WM_CHAR` messages, as typing would.
+fn type_text(node: xui_win32::Hwnd, text: &str) {
+    use core::ffi::c_void;
+    use windows::Win32::Foundation::{HWND, LPARAM, WPARAM};
+    use windows::Win32::UI::WindowsAndMessaging::{PostMessageW, WM_CHAR};
+
+    let hwnd = HWND(node.raw() as *mut c_void);
+    for character in text.chars() {
+        // SAFETY: `hwnd` is the live node window; the message carries a
+        // character a real key press would.
+        unsafe {
+            let _ = PostMessageW(Some(hwnd), WM_CHAR, WPARAM(character as usize), LPARAM(0));
+        }
+    }
 }
 
 /// Posts a left-button press and release at `(10, 10)` in the node's client
