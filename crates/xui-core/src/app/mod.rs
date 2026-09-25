@@ -58,6 +58,9 @@ pub(crate) struct Core<M> {
     queue: RefCell<VecDeque<M>>,
     inbox: Arc<Inbox<M>>,
     theme: Rc<Cell<Theme>>,
+    /// Whether the window is in design mode (a form designer): widgets ignore
+    /// their own input so the editor can select and move them.
+    design_mode: Cell<bool>,
     router: Router,
     on_close: RefCell<Option<CloseMapper<M>>>,
     on_timer: RefCell<Option<TimerMapper<M>>>,
@@ -73,6 +76,7 @@ impl<M> Core<M> {
             queue: RefCell::new(VecDeque::new()),
             inbox: Inbox::new(),
             theme: Rc::new(Cell::new(Theme::light())),
+            design_mode: Cell::new(false),
             router: Router::new(),
             on_close: RefCell::new(None),
             on_timer: RefCell::new(None),
@@ -98,6 +102,16 @@ impl<M> Core<M> {
     /// The window's current theme, shared with the widgets' painters.
     pub(crate) fn theme(&self) -> Rc<Cell<Theme>> {
         Rc::clone(&self.theme)
+    }
+
+    /// Whether the window is in design mode.
+    pub(crate) fn design_mode(&self) -> bool {
+        self.design_mode.get()
+    }
+
+    /// Turns design mode on or off.
+    pub(crate) fn set_design_mode(&self, on: bool) {
+        self.design_mode.set(on);
     }
 
     /// Appends `msg` and wakes the backend on the empty-to-non-empty edge, so a

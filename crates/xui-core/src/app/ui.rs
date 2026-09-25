@@ -100,6 +100,22 @@ impl<M: 'static> Ui<M> {
         self.core.backend().text(id)
     }
 
+    /// A node's current bounds, in device pixels.
+    pub fn bounds(&self, id: WidgetId) -> Rect {
+        self.core.backend().bounds(id)
+    }
+
+    /// Whether the window is in design mode. In design mode a widget ignores its
+    /// own input, so a form editor can select and move it.
+    pub fn is_design_mode(&self) -> bool {
+        self.core.design_mode()
+    }
+
+    /// Turns design mode on or off.
+    pub fn set_design_mode(&self, on: bool) {
+        self.core.set_design_mode(on);
+    }
+
     /// Schedules a repaint of a node.
     pub fn invalidate(&self, id: WidgetId) {
         self.core.backend().invalidate(id);

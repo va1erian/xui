@@ -1,10 +1,10 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use super::{Button, Edit, HasText, Label};
+use super::{Button, Control, Edit, HasText, Label};
 use crate::app::{App, Core, Runtime, Ui};
 use crate::backend::headless::{DrawOp, HeadlessBackend};
-use crate::backend::{Backend, Event, PlatformSpec, WidgetId};
+use crate::backend::{Backend, Event, NodeKind, NodeSpec, PlatformSpec, WidgetId};
 use crate::geometry::Rect;
 use crate::message::{Key, Modifiers, MouseButton};
 use crate::property::{Properties, Value};
@@ -215,6 +215,61 @@ fn widgets_report_and_edit_properties() {
     assert_eq!(button.property("enabled"), Some(Value::Bool(true)));
     assert!(button.set_property("enabled", Value::Bool(false)));
     assert!(!button.is_enabled());
+}
+
+#[test]
+fn design_mode_suppresses_widget_input() {
+    let (_backend, core, ui) = setup();
+    let button = Button::new(&ui, Rect::new(0, 0, 80, 28), "Ok")
+        .unwrap()
+        .on_click(|| Some(1));
+    let log = Rc::new(RefCell::new(Vec::new()));
+    let runtime = Runtime::primary(
+        core,
+        TestApp {
+            log: Rc::clone(&log),
+        },
+    );
+
+    ui.set_design_mode(true);
+    click(&runtime, button.id());
+    assert!(
+        log.borrow().is_empty(),
+        "a widget ignores input in design mode"
+    );
+
+    ui.set_design_mode(false);
+    click(&runtime, button.id());
+    assert_eq!(*log.borrow(), vec![1]);
+}
+
+#[test]
+fn selecting_a_widget_paints_an_outline() {
+    let (backend, _core, ui) = setup();
+    let button = Button::new(&ui, Rect::new(0, 0, 80, 28), "Ok").unwrap();
+    button.set_selected(true);
+
+    backend.render(button.id());
+    let accent = ui.theme().accent;
+    assert!(
+        backend
+            .ops(button.id())
+            .iter()
+            .any(|op| matches!(op, DrawOp::Stroke(_, color, _) if *color == accent)),
+        "a selected widget draws an accent outline"
+    );
+}
+
+#[test]
+fn a_controls_bounds_round_trip() {
+    let (_backend, _core, ui) = setup();
+    let control = Control::new(
+        &ui,
+        &NodeSpec::new(NodeKind::Label, Rect::new(0, 0, 10, 10)),
+    )
+    .unwrap();
+    control.set_bounds(Rect::new(5, 6, 50, 60));
+    assert_eq!(control.bounds(), Rect::new(5, 6, 50, 60));
 }
 
 #[test]

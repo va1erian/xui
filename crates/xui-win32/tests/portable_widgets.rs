@@ -135,6 +135,8 @@ fn run(theme: Theme, file: &str) {
             move |ui| {
                 ui.set_theme(theme);
                 let label = Label::new(ui, Rect::new(20, 16, 320, 48), "Portable Label").unwrap();
+                // A form editor's selection outline.
+                label.set_selected(true);
                 let edit = Edit::new(ui, Rect::new(20, 60, 320, 92), "")
                     .unwrap()
                     .on_change(|_| None);

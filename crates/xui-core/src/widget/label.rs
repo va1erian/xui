@@ -27,14 +27,19 @@ impl<M: 'static> Label<M> {
         let control = Control::new(ui, &NodeSpec::new(NodeKind::Label, bounds).text(text))?;
         let state = Rc::new(RefCell::new(text.to_string()));
         let theme = ui.theme_handle();
+        let selected = control.selected_handle();
         let text_for_paint = Rc::clone(&state);
         control.set_painter(Rc::new(move |canvas| {
             let theme = theme.get();
+            let bounds = canvas.bounds();
             // The node is an opaque child window: paint its background first,
             // or the back buffer shows through around the text.
             canvas.clear(theme.background);
             let style = TextStyle::new(theme.text, TEXT_SIZE);
-            canvas.draw_text(&text_for_paint.borrow(), canvas.bounds(), &style);
+            canvas.draw_text(&text_for_paint.borrow(), bounds, &style);
+            if selected.get() {
+                canvas.stroke_rect(bounds, theme.accent, 2.0);
+            }
         }));
         Ok(Label {
             control,
@@ -45,6 +50,17 @@ impl<M: 'static> Label<M> {
     /// The label's node identity.
     pub fn id(&self) -> crate::backend::WidgetId {
         self.control.id()
+    }
+
+    /// Marks the label selected, so its painter draws an outline (a form
+    /// editor's selection).
+    pub fn set_selected(&self, selected: bool) {
+        self.control.set_selected(selected);
+    }
+
+    /// Whether the label is selected.
+    pub fn is_selected(&self) -> bool {
+        self.control.is_selected()
     }
 }
 

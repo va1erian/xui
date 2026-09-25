@@ -170,6 +170,12 @@ pub trait Backend {
         String::new()
     }
 
+    /// A node's current bounds, in device pixels.
+    fn bounds(&self, id: WidgetId) -> Rect {
+        let _ = id;
+        Rect::default()
+    }
+
     /// Schedules a repaint of a node's whole area.
     fn invalidate(&self, id: WidgetId);
 

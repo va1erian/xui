@@ -271,14 +271,19 @@ impl Backend for Win32Backend {
     }
 
     fn apply_moves(&self, _window: WindowId, moves: &[(WidgetId, Rect)]) {
-        let moves: Vec<(crate::hwnd::Hwnd, Rect)> = {
+        let os_moves: Vec<(crate::hwnd::Hwnd, Rect)> = {
             let nodes = self.nodes.borrow();
+            for (id, rect) in moves {
+                if let Some(node) = nodes.get(&id.raw()) {
+                    node.set_bounds(*rect);
+                }
+            }
             moves
                 .iter()
                 .filter_map(|(id, rect)| nodes.get(&id.raw()).map(|node| (node.hwnd, *rect)))
                 .collect()
         };
-        sys::layout::apply(&moves);
+        sys::layout::apply(&os_moves);
     }
 
     fn set_visible(&self, id: WidgetId, visible: bool) {
@@ -315,6 +320,13 @@ impl Backend for Win32Backend {
             .borrow()
             .get(&id.raw())
             .map_or_else(String::new, BackendNode::text)
+    }
+
+    fn bounds(&self, id: WidgetId) -> Rect {
+        self.nodes
+            .borrow()
+            .get(&id.raw())
+            .map_or_else(Rect::default, BackendNode::bounds)
     }
 
     fn invalidate(&self, id: WidgetId) {

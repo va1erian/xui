@@ -54,6 +54,7 @@ impl<M: 'static> Button<M> {
             let state = Rc::clone(&state);
             let label = Rc::clone(&label);
             let theme = ui.theme_handle();
+            let selected = control.selected_handle();
             control.set_painter(Rc::new(move |canvas| {
                 let theme = theme.get();
                 let state = state.get();
@@ -75,6 +76,9 @@ impl<M: 'static> Button<M> {
                 };
                 let style = TextStyle::new(color, TEXT_SIZE).centered().middle();
                 canvas.draw_text(&label.borrow(), bounds, &style);
+                if selected.get() {
+                    canvas.stroke_rect(bounds, theme.accent, 2.0);
+                }
             }));
         }
 
@@ -84,6 +88,10 @@ impl<M: 'static> Button<M> {
             let ui = ui.clone();
             let id = control.id();
             control.on_events(move |event| {
+                // In design mode the editor handles input, not the widget.
+                if ui.is_design_mode() && event.is_input() {
+                    return None;
+                }
                 let mut activate = false;
                 match event {
                     Event::MouseMove { .. } => {
@@ -158,6 +166,17 @@ impl<M: 'static> Button<M> {
     /// The button's node identity.
     pub fn id(&self) -> crate::backend::WidgetId {
         self.control.id()
+    }
+
+    /// Marks the button selected, so its painter draws an outline (a form
+    /// editor's selection).
+    pub fn set_selected(&self, selected: bool) {
+        self.control.set_selected(selected);
+    }
+
+    /// Whether the button is selected.
+    pub fn is_selected(&self) -> bool {
+        self.control.is_selected()
     }
 
     /// Whether the button is enabled.

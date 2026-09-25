@@ -359,6 +359,14 @@ impl Backend for HeadlessBackend {
         }
     }
 
+    fn bounds(&self, id: WidgetId) -> Rect {
+        self.state
+            .borrow()
+            .nodes
+            .get(&id.raw())
+            .map_or(Rect::default(), |node| node.bounds)
+    }
+
     fn measure_text(&self, text: &str, style: &TextStyle, dpi: u32) -> TextMetrics {
         let height = (style.size.to_px(dpi).value() as f32 * 1.25).round() as i32;
         let width = (text.chars().count() as f32 * style.size.to_px(dpi).value() as f32 * 0.5)

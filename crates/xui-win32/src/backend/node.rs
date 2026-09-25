@@ -28,6 +28,8 @@ pub(super) struct BackendNode {
     kind: NodeKind,
     /// Text of a custom node (a native control answers from its own state).
     text: RefCell<String>,
+    /// The last bounds the layout assigned.
+    bounds: Cell<Rect>,
     pub(super) painter: Rc<RefCell<Option<Painter>>>,
 }
 
@@ -70,8 +72,19 @@ impl BackendNode {
             hwnd,
             kind: spec.kind,
             text: RefCell::new(spec.text.clone()),
+            bounds: Cell::new(spec.bounds),
             painter,
         })
+    }
+
+    /// The node's last assigned bounds.
+    pub(super) fn bounds(&self) -> Rect {
+        self.bounds.get()
+    }
+
+    /// Records the bounds the layout assigned.
+    pub(super) fn set_bounds(&self, rect: Rect) {
+        self.bounds.set(rect);
     }
 
     /// Whether the backend hosts this kind natively.

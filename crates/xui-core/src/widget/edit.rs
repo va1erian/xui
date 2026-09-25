@@ -63,6 +63,7 @@ impl<M: 'static> Edit<M> {
             let caret = Rc::clone(&caret);
             let focused = Rc::clone(&focused);
             let theme = ui.theme_handle();
+            let selected = control.selected_handle();
             let ui = ui.clone();
             control.set_painter(Rc::new(move |canvas| {
                 let theme = theme.get();
@@ -92,6 +93,9 @@ impl<M: 'static> Edit<M> {
                         1.0,
                     );
                 }
+                if selected.get() {
+                    canvas.stroke_rect(bounds, theme.accent, 2.0);
+                }
             }));
         }
 
@@ -104,6 +108,11 @@ impl<M: 'static> Edit<M> {
             let ui = ui.clone();
             let id = control.id();
             control.on_events(move |event| {
+                // In design mode the editor handles input, not the field; a
+                // native control's change notification still syncs the text.
+                if ui.is_design_mode() && event.is_input() {
+                    return None;
+                }
                 let mut changed = false;
                 match event {
                     Event::SetFocus => focused.set(true),
@@ -207,6 +216,17 @@ impl<M: 'static> Edit<M> {
     /// Gives the field the keyboard focus.
     pub fn focus(&self) {
         self.control.focus();
+    }
+
+    /// Marks the field selected, so its painter draws an outline (a form
+    /// editor's selection). A native field draws no outline.
+    pub fn set_selected(&self, selected: bool) {
+        self.control.set_selected(selected);
+    }
+
+    /// Whether the field is selected.
+    pub fn is_selected(&self) -> bool {
+        self.control.is_selected()
     }
 }
 

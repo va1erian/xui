@@ -6,6 +6,9 @@
 //! A `Control` owns one node created through [`Ui`]: it registers the widget's
 //! painter and event mapper, moves and shows it, and destroys it on drop.
 
+use std::cell::Cell;
+use std::rc::Rc;
+
 use crate::app::Ui;
 use crate::backend::{Event, NodeSpec, Painter, Result, WidgetId};
 use crate::geometry::Rect;
@@ -14,13 +17,20 @@ use crate::geometry::Rect;
 pub struct Control<M: 'static> {
     ui: Ui<M>,
     id: WidgetId,
+    /// Whether a form editor has selected the widget; its painter draws an
+    /// outline while set.
+    selected: Rc<Cell<bool>>,
 }
 
 impl<M: 'static> Control<M> {
     /// Creates a node from `spec`, parented to the window.
     pub fn new(ui: &Ui<M>, spec: &NodeSpec) -> Result<Control<M>> {
         let id = ui.create_node(spec)?;
-        Ok(Control { ui: ui.clone(), id })
+        Ok(Control {
+            ui: ui.clone(),
+            id,
+            selected: Rc::new(Cell::new(false)),
+        })
     }
 
     /// The node's identity.
@@ -76,6 +86,29 @@ impl<M: 'static> Control<M> {
     /// Replaces the node's text.
     pub fn set_text(&self, text: &str) {
         self.ui.set_text(self.id, text);
+    }
+
+    /// The node's current bounds, in device pixels.
+    pub fn bounds(&self) -> Rect {
+        self.ui.bounds(self.id)
+    }
+
+    /// Marks the widget as selected or not. A painted widget draws an outline
+    /// while selected (a form editor's selection); a natively hosted one draws
+    /// nothing.
+    pub fn set_selected(&self, selected: bool) {
+        self.selected.set(selected);
+        self.invalidate();
+    }
+
+    /// Whether the widget is selected.
+    pub fn is_selected(&self) -> bool {
+        self.selected.get()
+    }
+
+    /// A shared handle to the selection flag, so a painter reads it live.
+    pub(crate) fn selected_handle(&self) -> Rc<Cell<bool>> {
+        Rc::clone(&self.selected)
     }
 
     /// The window's dots-per-inch.
