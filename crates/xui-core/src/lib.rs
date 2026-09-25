@@ -7,19 +7,30 @@
 //! arithmetic, the semantic theme tokens, the input vocabulary and the
 //! accessibility tree model. The crate has no platform dependency and no
 //! `unsafe`, so every backend can share these types.
+//!
+//! [`backend`] holds the contract a backend implements (the [`Backend`] trait,
+//! [`WidgetId`]/[`WindowId`], [`Event`], [`Canvas`]), and [`router`] routes a
+//! backend's events to the widget that owns a node.
 
 pub mod accessibility;
+pub mod backend;
 pub mod color;
 pub mod geometry;
 pub mod layout;
 pub mod message;
+pub mod router;
 pub mod theme;
 pub mod units;
 
+pub use backend::{
+    Backend, BackendError, Canvas, Event, ImplKind, NodeKind, NodeOptions, NodeSpec, ParentRef,
+    TextMetrics, TextStyle, TimerId, WidgetId, WindowId,
+};
 pub use color::Color;
 pub use geometry::{Point, Rect, Size};
 pub use layout::{Dock, DockLayout, Insets, Stack, StackDirection, StackSlot};
 pub use message::{HitTest, Key, Modifiers, MouseButton};
+pub use router::{Router, WidgetHost};
 pub use theme::{Theme, Themed};
 pub use units::{Dip, Px, dip};
 

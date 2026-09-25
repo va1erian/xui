@@ -6,6 +6,10 @@ use crate::controls::listview::ListViewEvent;
 use crate::controls::treeview::TreeViewEvent;
 use crate::hwnd::Hwnd;
 
+/// A `SetTimer` identifier. Shared with the backend contract so a timer id is
+/// portable.
+pub use xui_core::backend::TimerId;
+
 /// A notification routed from a child control (`WM_NOTIFY`).
 #[derive(Clone, Copy, Debug)]
 pub enum Notify {
@@ -33,7 +37,3 @@ pub enum Notify {
         hwnd: Hwnd,
     },
 }
-
-/// A `SetTimer` identifier.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct TimerId(pub usize);
