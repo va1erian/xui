@@ -386,7 +386,9 @@ impl Backend for Win32Backend {
         if let Some(entry) = self.windows.borrow().get(&window.raw()) {
             entry.theme.set(*theme);
             sys::set_class_background(entry.window.hwnd(), theme.background);
-            entry.window.invalidate();
+            // Painters read the shared theme live, but they only repaint when
+            // asked, so invalidate the whole tree (children included).
+            sys::window::redraw_children(entry.window.hwnd());
         }
     }
 

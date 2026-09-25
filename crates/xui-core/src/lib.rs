@@ -22,12 +22,13 @@ pub mod message;
 pub mod router;
 pub mod theme;
 pub mod units;
+pub mod widget;
 
 pub use app::{App, Proxy, Ui, run_app};
 
 pub use backend::{
     Backend, BackendError, Canvas, Event, ImplKind, NodeKind, NodeOptions, NodeSpec, Painter,
-    ParentRef, TextMetrics, TextStyle, TimerId, WidgetId, WindowId,
+    ParentRef, TextMetrics, TextStyle, TextVAlign, TimerId, WidgetId, WindowId,
 };
 pub use color::Color;
 pub use geometry::{Point, Rect, Size};
@@ -36,6 +37,7 @@ pub use message::{HitTest, Key, Modifiers, MouseButton};
 pub use router::{Router, WidgetHost};
 pub use theme::{Theme, Themed};
 pub use units::{Dip, Px, dip};
+pub use widget::{Button, Control, HasText, Label};
 
 /// The core types a frontend or a backend usually needs, in one `use`.
 pub mod prelude {

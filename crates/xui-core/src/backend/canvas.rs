@@ -23,6 +23,16 @@ pub enum TextAlign {
     End,
 }
 
+/// Vertical placement of a text run inside its rectangle.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum TextVAlign {
+    /// Aligned to the top (the default).
+    #[default]
+    Top,
+    /// Vertically centred.
+    Middle,
+}
+
 /// A text weight, coarse enough for every backend to honour.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum TextWeight {
@@ -44,6 +54,8 @@ pub struct TextStyle {
     pub weight: TextWeight,
     /// The horizontal alignment inside the target rectangle.
     pub align: TextAlign,
+    /// The vertical placement inside the target rectangle.
+    pub valign: TextVAlign,
     /// Whether to wrap across lines when the rectangle is too narrow.
     pub wrap: bool,
 }
@@ -56,6 +68,7 @@ impl TextStyle {
             size,
             weight: TextWeight::Regular,
             align: TextAlign::Start,
+            valign: TextVAlign::Top,
             wrap: false,
         }
     }
@@ -66,9 +79,15 @@ impl TextStyle {
         self
     }
 
-    /// Centres the run.
+    /// Centres the run horizontally.
     pub fn centered(mut self) -> TextStyle {
         self.align = TextAlign::Center;
+        self
+    }
+
+    /// Centres the run vertically.
+    pub fn middle(mut self) -> TextStyle {
+        self.valign = TextVAlign::Middle;
         self
     }
 

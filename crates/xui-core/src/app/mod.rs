@@ -18,12 +18,14 @@ mod ui;
 pub use proxy::Proxy;
 pub use ui::Ui;
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::VecDeque;
 use std::rc::{Rc, Weak};
 use std::sync::Arc;
 
 use proxy::Inbox;
+
+use crate::theme::Theme;
 
 use crate::backend::{Backend, Event, PlatformSpec, Result, TimerId, WidgetId, WindowId};
 use crate::router::{Router, WidgetHost};
@@ -55,6 +57,7 @@ pub(crate) struct Core<M> {
     window: WindowId,
     queue: RefCell<VecDeque<M>>,
     inbox: Arc<Inbox<M>>,
+    theme: Rc<Cell<Theme>>,
     router: Router,
     on_close: RefCell<Option<CloseMapper<M>>>,
     on_timer: RefCell<Option<TimerMapper<M>>>,
@@ -69,6 +72,7 @@ impl<M> Core<M> {
             window,
             queue: RefCell::new(VecDeque::new()),
             inbox: Inbox::new(),
+            theme: Rc::new(Cell::new(Theme::light())),
             router: Router::new(),
             on_close: RefCell::new(None),
             on_timer: RefCell::new(None),
@@ -89,6 +93,11 @@ impl<M> Core<M> {
     /// The node event router.
     pub(crate) fn router(&self) -> &Router {
         &self.router
+    }
+
+    /// The window's current theme, shared with the widgets' painters.
+    pub(crate) fn theme(&self) -> Rc<Cell<Theme>> {
+        Rc::clone(&self.theme)
     }
 
     /// Appends `msg` and wakes the backend on the empty-to-non-empty edge, so a

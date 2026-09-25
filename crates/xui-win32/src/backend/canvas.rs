@@ -10,7 +10,7 @@
 
 use crate::d2d::{PointF, RectF, Stroke};
 use crate::gdi::{self, TextFormat};
-use xui_core::backend::{Canvas, TextAlign, TextStyle};
+use xui_core::backend::{Canvas, TextAlign, TextStyle, TextVAlign};
 use xui_core::{Color, Point, Rect};
 
 /// A portable canvas over a Win32 GDI [`gdi::Canvas`].
@@ -64,6 +64,10 @@ impl<'a> Win32Canvas<'a> {
             TextAlign::Start => TextFormat::left(),
             TextAlign::Center => TextFormat::left().center(),
             TextAlign::End => TextFormat::left().right(),
+        };
+        let format = match style.valign {
+            TextVAlign::Top => format,
+            TextVAlign::Middle => format.vcenter(),
         };
         if style.wrap {
             format.word_wrap()

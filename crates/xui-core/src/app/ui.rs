@@ -61,8 +61,12 @@ impl<M: 'static> Ui<M> {
         self.core.backend().create(ParentRef::Widget(parent), spec)
     }
 
-    /// Destroys a node and every node inside it.
+    /// Destroys a node and every node inside it, and forgets its event mapper.
+    ///
+    /// Unregistering first matters: a mapper captures the `Ui` (and so the
+    /// `Core`), and leaving it in the router would keep the whole window alive.
     pub fn destroy(&self, id: WidgetId) {
+        self.core.router().unregister(id);
         self.core.backend().destroy(id);
     }
 
@@ -146,8 +150,20 @@ impl<M: 'static> Ui<M> {
         self.core.backend().client_rect(self.core.window())
     }
 
+    /// The window's current theme.
+    pub fn theme(&self) -> Theme {
+        self.core.theme().get()
+    }
+
+    /// A shared handle to the window's theme, so a widget's painter reads it
+    /// live without keeping the window alive.
+    pub fn theme_handle(&self) -> Rc<std::cell::Cell<Theme>> {
+        self.core.theme()
+    }
+
     /// Applies `theme` to the window and its nodes.
     pub fn set_theme(&self, theme: Theme) {
+        self.core.theme().set(theme);
         self.core.backend().set_theme(self.core.window(), &theme);
     }
 

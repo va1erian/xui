@@ -19,7 +19,7 @@ mod node;
 #[cfg(test)]
 pub(crate) mod headless;
 
-pub use canvas::{Canvas, TextAlign, TextMetrics, TextStyle, TextWeight};
+pub use canvas::{Canvas, TextAlign, TextMetrics, TextStyle, TextVAlign, TextWeight};
 pub use event::{Event, TimerId};
 pub use ids::{WidgetId, WindowId};
 pub use node::{ImplKind, NodeKind, NodeOptions, NodeSpec, ParentRef};
