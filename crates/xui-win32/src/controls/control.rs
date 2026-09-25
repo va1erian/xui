@@ -99,6 +99,11 @@ pub trait ControlExt: AsControl {
         sys::window::enable_window(self.control().hwnd, enabled);
     }
 
+    /// Whether the widget is currently enabled.
+    fn is_enabled(&self) -> bool {
+        crate::sys::window_input::is_enabled(self.control().hwnd)
+    }
+
     /// Shows or hides the widget.
     fn set_visible(&self, visible: bool) {
         self.control().visible.set(visible);

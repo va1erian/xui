@@ -7,6 +7,7 @@ use crate::backend::headless::{DrawOp, HeadlessBackend};
 use crate::backend::{Backend, Event, PlatformSpec, WidgetId};
 use crate::geometry::Rect;
 use crate::message::{Modifiers, MouseButton};
+use crate::property::{Properties, Value};
 
 struct TestApp {
     log: Rc<RefCell<Vec<u32>>>,
@@ -124,6 +125,21 @@ fn a_disabled_button_ignores_clicks() {
 
     click(&runtime, button.id());
     assert!(log.borrow().is_empty(), "a disabled button raised nothing");
+}
+
+#[test]
+fn widgets_report_and_edit_properties() {
+    let (_backend, _core, ui) = setup();
+    let label = Label::new(&ui, Rect::new(0, 0, 120, 30), "hi").unwrap();
+    assert_eq!(label.property("text"), Some(Value::Text("hi".to_string())));
+    assert!(label.set_property("text", Value::Text("bye".to_string())));
+    assert_eq!(label.text(), "bye");
+    assert!(!label.set_property("nope", Value::Bool(true)));
+
+    let button = Button::new(&ui, Rect::new(0, 0, 80, 28), "Ok").unwrap();
+    assert_eq!(button.property("enabled"), Some(Value::Bool(true)));
+    assert!(button.set_property("enabled", Value::Bool(false)));
+    assert!(!button.is_enabled());
 }
 
 #[test]

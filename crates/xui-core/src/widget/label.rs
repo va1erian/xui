@@ -9,6 +9,7 @@ use super::control::{Control, HasText};
 use crate::app::Ui;
 use crate::backend::{NodeKind, NodeSpec, Result, TextStyle};
 use crate::geometry::Rect;
+use crate::property::{Properties, Property, Value};
 use crate::units::Dip;
 
 /// The design size of the label text.
@@ -55,5 +56,24 @@ impl<M: 'static> HasText for Label<M> {
     fn set_text(&self, text: &str) {
         *self.text.borrow_mut() = text.to_string();
         self.control.invalidate();
+    }
+}
+
+impl<M: 'static> Properties for Label<M> {
+    fn properties(&self) -> Vec<Property> {
+        vec![Property {
+            name: "text",
+            value: Value::Text(self.text()),
+        }]
+    }
+
+    fn set_property(&self, name: &str, value: Value) -> bool {
+        match (name, value) {
+            ("text", Value::Text(text)) => {
+                self.set_text(&text);
+                true
+            }
+            _ => false,
+        }
     }
 }

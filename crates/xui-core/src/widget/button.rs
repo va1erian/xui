@@ -10,6 +10,7 @@ use crate::app::Ui;
 use crate::backend::{Event, NodeKind, NodeSpec, Result, TextStyle};
 use crate::geometry::Rect;
 use crate::message::{Key, MouseButton};
+use crate::property::{Properties, Property, Value};
 use crate::units::Dip;
 
 /// Maps a click to an optional app message.
@@ -159,6 +160,11 @@ impl<M: 'static> Button<M> {
         self.control.id()
     }
 
+    /// Whether the button is enabled.
+    pub fn is_enabled(&self) -> bool {
+        self.state.get() != ButtonState::Disabled
+    }
+
     /// Enables or disables the button. A disabled button is dimmed and ignores
     /// input.
     pub fn set_enabled(&self, enabled: bool) {
@@ -180,5 +186,34 @@ impl<M: 'static> HasText for Button<M> {
     fn set_text(&self, text: &str) {
         *self.text.borrow_mut() = text.to_string();
         self.control.invalidate();
+    }
+}
+
+impl<M: 'static> Properties for Button<M> {
+    fn properties(&self) -> Vec<Property> {
+        vec![
+            Property {
+                name: "text",
+                value: Value::Text(self.text()),
+            },
+            Property {
+                name: "enabled",
+                value: Value::Bool(self.is_enabled()),
+            },
+        ]
+    }
+
+    fn set_property(&self, name: &str, value: Value) -> bool {
+        match (name, value) {
+            ("text", Value::Text(text)) => {
+                self.set_text(&text);
+                true
+            }
+            ("enabled", Value::Bool(enabled)) => {
+                self.set_enabled(enabled);
+                true
+            }
+            _ => false,
+        }
     }
 }

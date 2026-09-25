@@ -55,6 +55,7 @@ mod geometry;
 mod hwnd;
 mod layout;
 mod message;
+mod properties;
 mod theme;
 mod units;
 mod window;
@@ -94,6 +95,7 @@ pub use window::{
     Backdrop, CursorShape, Icon, MonitorInfo, Placement, ShowState, TitleBar, Window, WindowClass,
     WindowExStyle, WindowHandler, WindowStyle, monitor_of, monitor_work_areas, monitors,
 };
+pub use xui_core::property::{Properties, Property, Value};
 
 pub use controls::button::Button;
 pub use controls::checkbox::CheckBox;
