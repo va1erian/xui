@@ -56,7 +56,12 @@ impl App for WidgetsApp {
                 self.capture_at.set(Some(id));
             }
             Msg::Capture => {
-                self.text.replace(Some(self.edit.text()));
+                // Programmatic set_text must reach the native control and read
+                // back consistently.
+                self.edit.set_text("set by code");
+                let shown = self.edit.text();
+                let native = self.backend.text(self.edit.id());
+                self.text.replace(Some(format!("{shown}|{native}")));
                 if let Some(node) = self.backend.node_hwnd(self.button.id())
                     && let Some(rect) = common::screen_rect(node)
                     && let Some(image) = common::capture_screen(rect)
@@ -207,8 +212,8 @@ fn run(theme: Theme, file: &str) {
     );
     assert_eq!(
         text.borrow().as_deref(),
-        Some("hello xui"),
-        "the edit received the typed text"
+        Some("set by code|set by code"),
+        "the edit text reached the native control and read back"
     );
 }
 

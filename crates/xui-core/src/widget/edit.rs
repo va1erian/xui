@@ -3,12 +3,14 @@
 //! [`Edit`]: a single-line text field.
 //!
 //! The text and the caret live in the widget, so it edits the same way on every
-//! backend that paints it. A form designer draws one to capture a property; a
-//! normal app maps each change to its `Msg` through [`Edit::on_change`].
+//! backend. A form designer draws one to capture a property; a normal app maps
+//! each change to its `Msg` through [`Edit::on_change`].
 //!
-//! Every current backend reports [`Painted`](ImplKind::Painted) for
-//! [`NodeKind::Edit`], so the field paints itself and handles its own input.
-//! Native hosting (a real `EDIT` control) is a later, Win32-side addition.
+//! A backend that hosts a native control ([`ImplKind::Native`], as the Win32
+//! backend does for a real `EDIT`) draws and edits the field itself; the widget
+//! then draws nothing and syncs its text from the control's change events.
+//! Otherwise ([`Painted`](ImplKind::Painted)) the widget paints the field and
+//! handles its own input.
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
@@ -34,19 +36,29 @@ pub struct Edit<M: 'static> {
     control: Control<M>,
     text: Rc<RefCell<String>>,
     caret: Rc<Cell<usize>>,
+    /// Whether the backend hosts a native control that edits itself.
+    native: bool,
+    /// Set while the widget itself sets the native text, so the resulting
+    /// change notification does not loop back through `on_change`.
+    setting: Rc<Cell<bool>>,
     on_change: ChangeMapper<M>,
 }
 
 impl<M: 'static> Edit<M> {
     /// Creates a field showing `text` at `bounds`.
     pub fn new(ui: &Ui<M>, bounds: Rect, text: &str) -> Result<Edit<M>> {
-        let control = Control::new(ui, &NodeSpec::new(NodeKind::Edit, bounds).text(text))?;
+        let native = ui.supports(NodeKind::Edit) == ImplKind::Native;
+        let control = Control::new(
+            ui,
+            &NodeSpec::new(NodeKind::Edit, bounds).text(text).tab_stop(),
+        )?;
         let state = Rc::new(RefCell::new(text.to_string()));
         let caret = Rc::new(Cell::new(text.chars().count()));
         let focused = Rc::new(Cell::new(false));
+        let setting = Rc::new(Cell::new(false));
         let on_change: ChangeMapper<M> = Rc::new(RefCell::new(None));
 
-        if ui.supports(NodeKind::Edit) == ImplKind::Painted {
+        if !native {
             let text = Rc::clone(&state);
             let caret = Rc::clone(&caret);
             let focused = Rc::clone(&focused);
@@ -87,6 +99,7 @@ impl<M: 'static> Edit<M> {
             let text = Rc::clone(&state);
             let caret = Rc::clone(&caret);
             let focused = Rc::clone(&focused);
+            let setting = Rc::clone(&setting);
             let on_change = Rc::clone(&on_change);
             let ui = ui.clone();
             let id = control.id();
@@ -101,6 +114,21 @@ impl<M: 'static> Edit<M> {
                     } => {
                         focused.set(true);
                         ui.focus(id);
+                    }
+                    // A native control edits itself and reports the change; read
+                    // the new text back and raise it.
+                    Event::TextChanged => {
+                        let value = ui.text(id);
+                        *text.borrow_mut() = value.clone();
+                        // A change the widget itself made is not a user edit.
+                        if setting.get() {
+                            return None;
+                        }
+                        let mapper = on_change.borrow();
+                        if let Some(mapper) = mapper.as_ref() {
+                            return mapper(&value);
+                        }
+                        return None;
                     }
                     // Only the focused field edits.
                     Event::Char(character) if focused.get() && !character.is_control() => {
@@ -158,6 +186,8 @@ impl<M: 'static> Edit<M> {
             control,
             text: state,
             caret,
+            native,
+            setting,
             on_change,
         })
     }
@@ -188,7 +218,15 @@ impl<M: 'static> HasText for Edit<M> {
     fn set_text(&self, text: &str) {
         *self.text.borrow_mut() = text.to_string();
         self.caret.set(text.chars().count());
-        self.control.invalidate();
+        if self.native {
+            // Push to the control; its change notification is suppressed so
+            // `on_change` fires only for real edits.
+            self.setting.set(true);
+            self.control.set_text(text);
+            self.setting.set(false);
+        } else {
+            self.control.invalidate();
+        }
     }
 }
 

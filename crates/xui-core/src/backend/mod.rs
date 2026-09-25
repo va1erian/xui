@@ -163,6 +163,13 @@ pub trait Backend {
     /// Replaces a node's text.
     fn set_text(&self, id: WidgetId, text: &str);
 
+    /// A node's current text; empty for a node that has none. A native control
+    /// answers from its own state.
+    fn text(&self, id: WidgetId) -> String {
+        let _ = id;
+        String::new()
+    }
+
     /// Schedules a repaint of a node's whole area.
     fn invalidate(&self, id: WidgetId);
 

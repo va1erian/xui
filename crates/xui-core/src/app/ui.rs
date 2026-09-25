@@ -95,6 +95,11 @@ impl<M: 'static> Ui<M> {
         self.core.backend().set_text(id, text);
     }
 
+    /// A node's current text (a native control answers from its own state).
+    pub fn text(&self, id: WidgetId) -> String {
+        self.core.backend().text(id)
+    }
+
     /// Schedules a repaint of a node.
     pub fn invalidate(&self, id: WidgetId) {
         self.core.backend().invalidate(id);

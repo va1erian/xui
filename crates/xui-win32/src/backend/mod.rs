@@ -2,13 +2,15 @@
 
 //! The Win32 implementation of the [`Backend`] contract.
 //!
-//! Every node is a painted child window: the front layer registers a painter
-//! and the node's handler runs it on `WM_PAINT`. Native common controls are
-//! delegated per kind later; until then [`Win32Backend::supports`] reports
-//! [`ImplKind::Painted`] for every kind.
+//! Most nodes are painted child windows: the front layer registers a painter
+//! and the node's handler runs it on `WM_PAINT`. Kinds with a good native
+//! control are hosted natively instead — today [`NodeKind::Edit`] is a real
+//! `EDIT`, whose changes reach the widget as [`Event::TextChanged`] — and
+//! [`Win32Backend::supports`] reports [`ImplKind::Native`] for them.
 
 mod canvas;
 mod handler;
+mod node;
 
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
@@ -25,23 +27,14 @@ use crate::gdi::Font;
 use crate::sys;
 use crate::window::{Window, WindowClass, WindowExStyle, WindowStyle};
 
-use handler::{NodeHandler, TopHandler, WindowShared};
+use handler::{TopHandler, WindowShared};
+use node::BackendNode;
 
 /// A top-level window the backend created.
 struct BackendWindow {
     window: Window,
     shared: Rc<WindowShared>,
     theme: Cell<Theme>,
-}
-
-/// A node the backend created.
-struct BackendNode {
-    /// Kept alive so dropping the node destroys its child window.
-    _window: Window,
-    window_id: WindowId,
-    parent: ParentRef,
-    hwnd: crate::hwnd::Hwnd,
-    painter: Rc<RefCell<Option<Painter>>>,
 }
 
 /// The Win32 backend.
@@ -115,6 +108,20 @@ impl Win32Backend {
             .borrow()
             .get(&id.raw())
             .map(|node| (node.hwnd, node.window_id))
+    }
+
+    /// Forgets a node's child handle in its window's index, so a later
+    /// `WM_COMMAND` cannot reach a destroyed widget.
+    fn unregister(&self, id: &WidgetId) {
+        let entry = {
+            let nodes = self.nodes.borrow();
+            nodes.get(&id.raw()).map(|node| (node.hwnd, node.window_id))
+        };
+        if let Some((hwnd, window_id)) = entry
+            && let Some(window) = self.windows.borrow().get(&window_id.raw())
+        {
+            window.shared.unregister_node(hwnd);
+        }
     }
 
     /// The handle behind a top-level window, for interop with the platform
@@ -226,51 +233,13 @@ impl Backend for Win32Backend {
     fn create(&self, parent: ParentRef, spec: &NodeSpec) -> BackendResult<WidgetId> {
         let (parent_hwnd, window_id, shared) = self.resolve_parent(parent)?;
         let widget = WidgetId::from_raw(Self::allocate(&self.next_widget));
-        let painter = Rc::new(RefCell::new(None));
-        let bounds = Rc::new(Cell::new(Rect::from_size(spec.bounds.size())));
-        let handler = NodeHandler::new(
-            widget,
-            Rc::clone(&shared),
-            Rc::clone(&bounds),
-            Rc::clone(&painter),
-        );
-        let class = WindowClass::register("xui.node", Theme::light().background)
-            .map_err(|_| BackendError::CreateFailed("node class"))?;
-        let mut style = WindowStyle::new().child().visible();
-        if spec.tab_stop {
-            style = style.tab_stop();
-        }
-        let window = Window::create(
-            class,
-            Some(parent_hwnd),
-            style,
-            WindowExStyle::new(),
-            spec.bounds,
-            "",
-            handler,
-        )
-        .map_err(|_| BackendError::CreateFailed("node"))?;
-        let hwnd = window.hwnd();
-        if !spec.visible {
-            window.hide();
-        }
-        if !spec.enabled {
-            sys::window::enable_window(hwnd, false);
-        }
-        self.nodes.borrow_mut().insert(
-            widget.raw(),
-            BackendNode {
-                _window: window,
-                window_id,
-                parent,
-                hwnd,
-                painter,
-            },
-        );
+        let node = BackendNode::create(window_id, parent_hwnd, parent, &shared, widget, spec)?;
+        self.nodes.borrow_mut().insert(widget.raw(), node);
         Ok(widget)
     }
 
     fn destroy(&self, id: WidgetId) {
+        self.unregister(&id);
         self.nodes.borrow_mut().remove(&id.raw());
         // Cascade: a container's children may be destroyed with it, so drop
         // every node whose parent chain no longer exists.
@@ -290,6 +259,9 @@ impl Backend for Win32Backend {
             };
             if doomed.is_empty() {
                 break;
+            }
+            for id in &doomed {
+                self.unregister(&WidgetId::from_raw(*id));
             }
             let mut nodes = self.nodes.borrow_mut();
             for id in doomed {
@@ -333,9 +305,16 @@ impl Backend for Win32Backend {
     }
 
     fn set_text(&self, id: WidgetId, text: &str) {
-        if let Some((hwnd, _)) = self.node(id) {
-            let _ = sys::window::set_title(hwnd, text);
+        if let Some(node) = self.nodes.borrow().get(&id.raw()) {
+            node.set_text(text);
         }
+    }
+
+    fn text(&self, id: WidgetId) -> String {
+        self.nodes
+            .borrow()
+            .get(&id.raw())
+            .map_or_else(String::new, BackendNode::text)
     }
 
     fn invalidate(&self, id: WidgetId) {
@@ -406,7 +385,7 @@ impl Backend for Win32Backend {
         }
     }
 
-    fn supports(&self, _kind: NodeKind) -> ImplKind {
-        ImplKind::Painted
+    fn supports(&self, kind: NodeKind) -> ImplKind {
+        BackendNode::impl_kind(kind)
     }
 }

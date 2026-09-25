@@ -68,6 +68,16 @@ impl<M: 'static> Control<M> {
         self.ui.invalidate(self.id);
     }
 
+    /// The node's current text.
+    pub fn text(&self) -> String {
+        self.ui.text(self.id)
+    }
+
+    /// Replaces the node's text.
+    pub fn set_text(&self, text: &str) {
+        self.ui.set_text(self.id, text);
+    }
+
     /// The window's dots-per-inch.
     pub fn dpi(&self) -> u32 {
         self.ui.dpi()

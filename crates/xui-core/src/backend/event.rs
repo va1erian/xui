@@ -98,6 +98,9 @@ pub enum Event {
     },
     /// A translated character.
     Char(char),
+    /// A text field's contents changed (a native control's `EN_CHANGE`). The
+    /// new text is read back with `Backend::text`.
+    TextChanged,
     /// The widget gained the keyboard focus.
     SetFocus,
     /// The widget lost the keyboard focus.

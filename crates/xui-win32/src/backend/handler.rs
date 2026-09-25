@@ -5,6 +5,7 @@
 //! [`Event`] and deliver it to the window's [`WidgetHost`].
 
 use std::cell::{Cell, RefCell};
+use std::collections::HashMap;
 use std::rc::Rc;
 
 use xui_core::Rect;
@@ -13,13 +14,19 @@ use xui_core::router::WidgetHost;
 
 use crate::backend::canvas::Win32Canvas;
 use crate::gdi::Paint;
-use crate::message::{LResult, Message};
+use crate::hwnd::Hwnd;
+use windows::Win32::UI::WindowsAndMessaging::EN_CHANGE;
+
+use crate::message::{CommandNotification, LResult, Message};
 use crate::sys;
 use crate::window::{Window, WindowHandler};
 
 /// State a window shares with every node handler in it.
 pub(crate) struct WindowShared {
     sink: RefCell<Option<Rc<dyn WidgetHost>>>,
+    /// Child handles mapped to their node, so a native control's `WM_COMMAND`
+    /// (sent to the parent) reaches the widget that owns it.
+    nodes: RefCell<HashMap<usize, WidgetId>>,
 }
 
 impl WindowShared {
@@ -27,12 +34,23 @@ impl WindowShared {
     pub(crate) fn new() -> Rc<WindowShared> {
         Rc::new(WindowShared {
             sink: RefCell::new(None),
+            nodes: RefCell::new(HashMap::new()),
         })
     }
 
     /// Replaces the event sink.
     pub(crate) fn set_sink(&self, sink: Rc<dyn WidgetHost>) {
         self.sink.replace(Some(sink));
+    }
+
+    /// Records that `hwnd` belongs to `id`.
+    pub(crate) fn register_node(&self, hwnd: Hwnd, id: WidgetId) {
+        self.nodes.borrow_mut().insert(hwnd.raw(), id);
+    }
+
+    /// Forgets a child handle.
+    pub(crate) fn unregister_node(&self, hwnd: Hwnd) {
+        self.nodes.borrow_mut().remove(&hwnd.raw());
     }
 
     /// Offers `event` to the sink, targeted at `target`.
@@ -170,6 +188,19 @@ impl TopHandler {
 impl WindowHandler for TopHandler {
     fn message(&self, _window: &Window, message: Message) -> Option<LResult> {
         let _ = self.window;
+        // A native control sends its notifications to the parent, so route a
+        // child's `WM_COMMAND` to the node that owns it.
+        if let Message::Command(command) = &message
+            && matches!(
+                command.notification,
+                CommandNotification::Other(code) if code == EN_CHANGE as u16
+            )
+            && let Some(control) = command.control
+            && let Some(target) = self.shared.nodes.borrow().get(&control.raw()).copied()
+        {
+            self.shared.deliver(target, Event::TextChanged);
+            return Some(0);
+        }
         // The class brush erases the top-level window; painting it here would
         // skip that.
         if matches!(&message, Message::Paint) {
