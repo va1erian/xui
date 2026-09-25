@@ -1,4 +1,8 @@
-# win32ui
+# xui
+
+Cross-platform UI for Rust: **small, fast, idiomatic, and properly themed**.
+The Win32 backend lives in the `xui-win32` crate; the decoupled front layer
+(`xui-core`) and further backends are on the way (see the [epic](https://github.com/va1erian/xui/issues/1)).
 
 Native Windows UI for Rust: **small, fast, idiomatic, and properly themed**.
 Real Win32 controls, so you get accessibility, IME and system behaviour for
@@ -6,6 +10,21 @@ free, with a Rust-shaped API on top and **first-class dark mode**. Originally
 extracted from the [emusic](https://github.com/va1erian/emusic) frontend; its
 first large consumer is the [esMail](https://github.com/va1erian/esmail)
 native frontend.
+
+## Crates
+
+- `xui` — the umbrella crate applications depend on; selects a backend by
+  feature (`win32`, default).
+- `xui-core` — the backend-agnostic front layer (geometry, units, colour,
+  layout, theme tokens, input vocabulary, accessibility model). No platform
+  dependency, no `unsafe`.
+- `xui-win32` — the Win32 backend: native common controls, GDI/Direct2D/OpenGL,
+  the Windows-only window features.
+
+The decoupling is in progress; see the
+[epic](https://github.com/va1erian/xui/issues/1) for the milestones, and
+[docs/migration-win32ui-to-xui.md](docs/migration-win32ui-to-xui.md) to move an
+existing `win32ui` app across.
 
 ## Goals
 
@@ -50,7 +69,7 @@ impl App for MailWindow {
     }
 }
 
-win32ui::run_app(WindowSpec::new("Mail"), |ui| {
+xui_win32::run_app(WindowSpec::new("Mail"), |ui| {
     let search = Edit::single_line(ui).cue("Search").on_change(|t| Some(Msg::Search(t.into())));
     let list = ListView::<Row>::new(ui)
         .column("From", dip(180.0), |r| r.from.as_str())
@@ -62,7 +81,7 @@ win32ui::run_app(WindowSpec::new("Mail"), |ui| {
 ```
 
 `column!` shares its name with a std prelude macro, so the layout macros are
-imported explicitly: `use win32ui::{column, row};`.
+imported explicitly: `use xui_win32::{column, row};`.
 
 The design choices, and why:
 
@@ -135,6 +154,9 @@ already retained), and closures that capture shared mutable app state.
 | Occlusion-proof capture (`Windows.Graphics.Capture`, `wgc` feature): `Window::capture_composited`, `capture::capture_hwnd`, `examples/capture`; never raises a window or moves the pointer | exists (#111) |
 
 ## Source layout
+
+The widget and platform code below still lives in the Win32 backend; its paths
+are relative to `crates/xui-win32/`.
 
 ```
 src/
@@ -534,7 +556,13 @@ falls back to `PrintWindow` otherwise.
 ## Running
 
 ```
-cargo run --example demo
+cargo run -p xui-win32 --example demo
+```
+
+A tiny app written against the umbrella crate (not naming the backend):
+
+```
+cargo run -p xui-win32 --example umbrella
 ```
 
 Set `WIN32UI_DEMO_AUTOCLOSE_MS=4000` to have the demo quit itself (used for

@@ -1,0 +1,8 @@
+[package]
+name = "xui-core"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "Backend-agnostic core of xui: geometry, units, colour, layout, theming and input vocabulary"
+repository = "https://github.com/va1erian/xui"
+readme = "README.md"

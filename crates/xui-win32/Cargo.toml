@@ -1,0 +1,81 @@
+[package]
+name = "xui-win32"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "Win32 backend for xui: idiomatic, mostly-safe wrapper over Win32 windows and common controls"
+repository = "https://github.com/va1erian/xui"
+readme = "README.md"
+
+[features]
+# Occlusion-proof window capture through Windows.Graphics.Capture. Off by
+# default: it pulls in the WinRT capture and D3D11 bindings, which several
+# apps never need. Enables `Window::capture_composited`,
+# `Ui::capture_composited`, `xui_win32::capture::capture_hwnd` and
+# `examples/capture.rs`.
+wgc = [
+    "windows/Graphics_Capture",
+    "windows/Graphics_DirectX_Direct3D11",
+    "windows/Win32_Graphics_Direct3D",
+    "windows/Win32_Graphics_Direct3D11",
+    "windows/Win32_Graphics_Dxgi",
+    "windows/Win32_System_WinRT",
+    "windows/Win32_System_WinRT_Direct3D11",
+    "windows/Win32_System_WinRT_Graphics_Capture",
+]
+
+[dependencies]
+xui-core = { path = "../xui-core" }
+thiserror = "2"
+
+[target.'cfg(windows)'.dependencies]
+# The safe OpenGL binding a `Renderer::Gl` widget draws with. Re-exported as
+# `xui_win32::glow` so an implementor names the same version this crate links.
+glow = "0.16"
+# Deliberately narrow: one feature group per Win32 namespace actually used, so
+# the generated bindings (and the resulting binary) stay as small as possible.
+# `Vector2`/`Matrix3x2`, the point and transform types Direct2D takes, live here
+# rather than in `windows`.
+windows-numerics = "0.3"
+# The `#[implement]` macro (COM providers for UI Automation) expands to paths
+# rooted at `windows_core`, so the crate must be a direct dependency.
+windows-core = "0.62"
+windows = { version = "0.62", default-features = false, features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Direct2D",
+    "Win32_Graphics_Direct2D_Common",
+    "Win32_Graphics_DirectWrite",
+    "Win32_Graphics_Dwm",
+    "Win32_Graphics_Dxgi_Common",
+    "Win32_Graphics_Gdi",
+    "Win32_Graphics_Imaging",
+    "Win32_Graphics_OpenGL",
+    "Win32_Storage_Xps",
+    "Win32_System_Com",
+    "Win32_System_Com_StructuredStorage",
+    "Win32_System_DataExchange",
+    "Win32_System_LibraryLoader",
+    "Win32_System_Memory",
+    "Win32_System_Ole",
+    "Win32_System_Registry",
+    "Win32_System_SystemServices",
+    "Win32_System_Threading",
+    "Win32_System_Variant",
+    "Win32_UI_Accessibility",
+    "Win32_UI_Controls",
+    "Win32_UI_Controls_Dialogs",
+    "Win32_UI_HiDpi",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_UI_Shell",
+    "Win32_UI_WindowsAndMessaging",
+] }
+
+[dev-dependencies]
+# `examples/umbrella.rs` is written against the facade, to prove the umbrella
+# crate re-exports this backend.
+xui = { path = "../xui" }
+# Only the demo writes a PNG; the library itself stays dependency-free.
+png = "0.17"
+
+[build-dependencies]
+embed-resource = "3.0"

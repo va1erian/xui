@@ -1,0 +1,20 @@
+[package]
+name = "xui"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "Cross-platform UI for Rust: small, fast, idiomatic and properly themed"
+repository = "https://github.com/va1erian/xui"
+readme = "README.md"
+
+[features]
+default = ["win32"]
+# The Win32 backend. On by default; the only backend implemented so far.
+win32 = ["dep:xui-win32"]
+# The software-rendered cross-platform backend (winit + tiny-skia). Planned;
+# enables nothing yet.
+canvas = []
+
+[dependencies]
+xui-core = { path = "../xui-core" }
+xui-win32 = { path = "../xui-win32", optional = true }
