@@ -20,7 +20,11 @@ type Handler = Rc<dyn Fn(&Event) -> bool>;
 /// Receives events a backend decoded, already targeted at a node.
 pub trait WidgetHost {
     /// Delivers `event` to the widget owning `target`, returning whether it was
-    /// consumed. A backend may bubble an unconsumed event to the parent.
+    /// consumed. Window-level events target [`WidgetId::NONE`].
+    ///
+    /// The return value lets a host report that it handled the event; event
+    /// bubbling to a parent is not implemented yet, so a backend that gets
+    /// `false` may, for example, fall through to its platform default.
     fn deliver(&self, target: WidgetId, event: &Event) -> bool;
 }
 

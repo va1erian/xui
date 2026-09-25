@@ -47,6 +47,7 @@
 mod accel;
 pub mod accessibility;
 mod app;
+pub mod backend;
 pub mod capture;
 mod color;
 mod error;
@@ -73,6 +74,7 @@ pub use app::{
     MenuStripPlacement, Proxy, Split, Tabs, TopBarEvent, TopBarId, TopBarItem, Ui, WindowHandle,
     WindowSpec, run_app,
 };
+pub use backend::Win32Backend;
 pub use capture::RgbaImage;
 pub use color::Color;
 pub use error::{CaptureError, Error, ImagingError, Result, Win32Error};

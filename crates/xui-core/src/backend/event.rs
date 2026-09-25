@@ -9,7 +9,8 @@
 use crate::geometry::Rect;
 use crate::message::{Key, Modifiers, MouseButton};
 
-/// A `SetTimer` identifier.
+/// A `SetTimer` identifier. `TimerId(0)` means a backend could not start the
+/// timer; every valid id is non-zero.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct TimerId(pub usize);
 

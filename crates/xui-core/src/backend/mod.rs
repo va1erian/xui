@@ -16,19 +16,29 @@ mod event;
 mod ids;
 mod node;
 
+#[cfg(test)]
+mod headless;
+
 pub use canvas::{Canvas, TextAlign, TextMetrics, TextStyle, TextWeight};
 pub use event::{Event, TimerId};
 pub use ids::{WidgetId, WindowId};
 pub use node::{ImplKind, NodeKind, NodeOptions, NodeSpec, ParentRef};
 
 use std::fmt;
+use std::rc::Rc;
 
 use crate::geometry::Rect;
+use crate::router::WidgetHost;
 use crate::theme::Theme;
 use crate::units::Dip;
 
 /// A backend operation's result.
 pub type Result<T> = std::result::Result<T, BackendError>;
+
+/// A painted widget's draw routine. The front layer registers one per node;
+/// the backend invokes it whenever the node needs painting, handing it a
+/// short-lived [`Canvas`].
+pub type Painter = Rc<dyn Fn(&mut dyn Canvas)>;
 
 /// Why a backend operation failed.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -108,6 +118,13 @@ pub trait Backend {
     /// Wakes the loop for `window` after a worker posted data.
     fn wake(&self, window: WindowId);
 
+    /// Installs the sink the backend delivers decoded [`Event`]s to for
+    /// `window`. Replaces any previous sink.
+    ///
+    /// Window-level events that belong to no node (close, timers, DPI and
+    /// display changes, activation, wake) target [`WidgetId::NONE`].
+    fn set_event_sink(&self, window: WindowId, sink: Rc<dyn WidgetHost>);
+
     /// Creates a top-level window.
     fn open_window(&self, spec: &PlatformSpec) -> Result<WindowId>;
 
@@ -143,8 +160,9 @@ pub trait Backend {
     /// Schedules a repaint of `rect` within a node.
     fn invalidate_rect(&self, id: WidgetId, rect: Rect);
 
-    /// Paints a node by handing the front layer a short-lived canvas.
-    fn paint(&self, id: WidgetId, dirty: Rect, paint: &mut dyn FnMut(&mut dyn Canvas));
+    /// Registers the draw routine for a painted node, replacing any previous
+    /// one. The backend invokes it on paint; a native node ignores it.
+    fn set_painter(&self, id: WidgetId, painter: Painter);
 
     /// Measures a run of text in device pixels.
     fn measure_text(&self, text: &str, style: &TextStyle, dpi: u32) -> TextMetrics;
@@ -158,7 +176,8 @@ pub trait Backend {
     /// Applies a theme to a window and its nodes.
     fn set_theme(&self, window: WindowId, theme: &Theme);
 
-    /// Starts a repeating timer on `window` and returns its id.
+    /// Starts a repeating timer on `window` and returns its id, or
+    /// `TimerId(0)` when the backend could not start one.
     fn set_timer(&self, window: WindowId, millis: u32) -> TimerId;
 
     /// Stops a timer started with [`Backend::set_timer`].

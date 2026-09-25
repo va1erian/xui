@@ -23,8 +23,8 @@ pub mod theme;
 pub mod units;
 
 pub use backend::{
-    Backend, BackendError, Canvas, Event, ImplKind, NodeKind, NodeOptions, NodeSpec, ParentRef,
-    TextMetrics, TextStyle, TimerId, WidgetId, WindowId,
+    Backend, BackendError, Canvas, Event, ImplKind, NodeKind, NodeOptions, NodeSpec, Painter,
+    ParentRef, TextMetrics, TextStyle, TimerId, WidgetId, WindowId,
 };
 pub use color::Color;
 pub use geometry::{Point, Rect, Size};

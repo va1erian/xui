@@ -141,17 +141,20 @@ pub trait Canvas {
 
     /// Clips subsequent drawing to `rect` until the matching `pop_clip`.
     ///
-    /// Saves and restores the *clip only*, not the transform; wrap a nested
-    /// draw in [`Canvas::save`]/[`Canvas::restore`] to restore both.
+    /// `push_clip`/`pop_clip` manage only the clip; the transform is untouched.
+    /// [`Canvas::save`]/[`Canvas::restore`] manage only the transform and
+    /// scale; the clip is untouched. Pop every clip you push and restore every
+    /// save you make, in order.
     fn push_clip(&mut self, rect: Rect);
 
     /// Removes the most recent clip.
     fn pop_clip(&mut self);
 
-    /// Saves the whole graphics state (clip, transform and scale) on a stack.
+    /// Saves the transform and scale on a stack. Does not save the clip.
     fn save(&mut self);
 
-    /// Restores the state saved by the most recent [`Canvas::save`].
+    /// Restores the transform and scale saved by the most recent
+    /// [`Canvas::save`].
     fn restore(&mut self);
 
     /// Replaces the current translation (it does not compose with a previous
