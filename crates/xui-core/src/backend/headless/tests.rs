@@ -1,7 +1,9 @@
 use crate::Color;
 use crate::image::Image;
+use crate::{Cap, Corner, Dash, GradientStop, LinearGradient, RadialGradient, Rgba, Stroke};
 
 use super::*;
+use crate::geometry::Point;
 use crate::message::MouseButton;
 use crate::router::Router;
 use crate::units::dip;
@@ -82,6 +84,82 @@ fn a_drawn_image_is_recorded() {
         }
         other => panic!("unexpected ops: {other:?}"),
     }
+}
+
+#[test]
+fn the_rich_shape_api_is_recorded() {
+    let backend = HeadlessBackend::new();
+    let window = backend.open_window(&PlatformSpec::new("shapes")).unwrap();
+    let id = backend
+        .create(ParentRef::Window(window), &node(NodeKind::Custom))
+        .unwrap();
+
+    backend.set_painter(
+        id,
+        Rc::new(|canvas| {
+            let rect = Rect::new(0, 0, 40, 40);
+            let corners = [Corner::uniform(6.0); 4];
+            canvas.fill_rect_rgba(rect, Rgba::with_alpha(255, 0, 0, 128));
+            canvas.fill_rounded_rect_corners(rect, corners, Rgba::rgb(0, 0, 255));
+            canvas.stroke_rounded_rect_corners(
+                rect,
+                corners,
+                Rgba::rgb(0, 0, 0),
+                &Stroke::new(2.0).dash(Dash::Dashed),
+            );
+            canvas.draw_line_stroked(
+                Point::new(0, 0),
+                Point::new(40, 40),
+                Rgba::rgb(0, 255, 0),
+                &Stroke::new(1.0),
+            );
+            canvas.stroke_ellipse_stroked(
+                Point::new(20, 20),
+                10.0,
+                10.0,
+                Rgba::rgb(1, 2, 3),
+                &Stroke::new(1.0).cap(Cap::Round),
+            );
+            canvas.fill_rect_linear(
+                rect,
+                &LinearGradient::new(
+                    Point::new(0, 0),
+                    Point::new(40, 0),
+                    vec![
+                        GradientStop::new(0.0, Rgba::rgb(0, 0, 0)),
+                        GradientStop::new(1.0, Rgba::rgb(255, 255, 255)),
+                    ],
+                ),
+            );
+            canvas.fill_rect_radial(
+                rect,
+                &RadialGradient::new(
+                    Point::new(20, 20),
+                    10.0,
+                    10.0,
+                    vec![
+                        GradientStop::new(0.0, Rgba::TRANSPARENT),
+                        GradientStop::new(1.0, Rgba::rgb(0, 0, 0)),
+                    ],
+                ),
+            );
+            canvas.push_clip_rounded(rect, corners);
+            canvas.pop_clip();
+        }),
+    );
+    backend.render(id);
+
+    let ops = backend.ops(id);
+    assert_eq!(ops.len(), 9, "every op recorded once: {ops:?}");
+    assert!(matches!(ops[0], DrawOp::FillRgba(..)));
+    assert!(matches!(ops[1], DrawOp::RoundedCorners(..)));
+    assert!(matches!(ops[2], DrawOp::StrokeRoundedCorners(..)));
+    assert!(matches!(ops[3], DrawOp::LineStroked(..)));
+    assert!(matches!(ops[4], DrawOp::StrokeEllipseStroked(..)));
+    assert!(matches!(ops[5], DrawOp::FillLinear(..)));
+    assert!(matches!(ops[6], DrawOp::FillRadial(..)));
+    assert!(matches!(ops[7], DrawOp::ClipRounded(..)));
+    assert!(matches!(ops[8], DrawOp::Unclip));
 }
 
 #[test]

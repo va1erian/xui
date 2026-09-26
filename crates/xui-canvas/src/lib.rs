@@ -10,6 +10,7 @@
 mod backend;
 mod canvas;
 mod offscreen;
+mod paint;
 mod text;
 
 pub use backend::WinitBackend;
@@ -94,6 +95,12 @@ impl Surface {
 /// Converts a core [`Color`] to a tiny-skia colour.
 pub(crate) fn to_skia(color: Color) -> tiny_skia::Color {
     tiny_skia::Color::from_rgba8(color.r, color.g, color.b, 255)
+}
+
+/// Converts a portable [`Rgba`](xui_core::backend::Rgba) to a tiny-skia colour,
+/// alpha included.
+pub(crate) fn to_skia_rgba(color: xui_core::backend::Rgba) -> tiny_skia::Color {
+    tiny_skia::Color::from_rgba8(color.r, color.g, color.b, color.a)
 }
 
 #[cfg(test)]

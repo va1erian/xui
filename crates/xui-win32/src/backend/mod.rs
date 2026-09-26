@@ -11,6 +11,7 @@
 mod canvas;
 mod handler;
 mod node;
+mod shape;
 
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
