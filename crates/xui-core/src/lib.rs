@@ -42,9 +42,10 @@ pub use router::{Router, WidgetHost};
 pub use theme::{Theme, Themed};
 pub use units::{Dip, Px, dip};
 pub use widget::{
-    Button, CheckBox, ComboBox, Control, Edit, Glyph, GroupBox, HasText, Hyperlink, Label,
-    ListView, MaterialStatusBar, MultilineEdit, NumberField, Panel, ProgressBar, RadioGroup,
-    Separator, Slider, StatusBar, ToggleButton, Toolbar, TopBar, TopBarId, TreeRow, TreeView,
+    Button, CellData, CheckBox, Column, ColumnWidth, ComboBox, Control, Edit, Fill, Glyph,
+    GroupBox, HasText, Hyperlink, Label, ListModel, ListView, MaterialStatusBar, MultilineEdit,
+    NumberField, Panel, ProgressBar, RadioGroup, SelectionMode, Separator, Slider, SortDirection,
+    StatusBar, ToggleButton, Toolbar, TopBar, TopBarId, TreeRow, TreeView,
 };
 
 /// The core types a frontend or a backend usually needs, in one `use`.

@@ -23,5 +23,9 @@ xui-canvas = { path = "../xui-canvas", optional = true }
 name = "widgets"
 required-features = ["canvas"]
 
+[[example]]
+name = "listview"
+required-features = ["canvas"]
+
 [build-dependencies]
 embed-resource = "3.0"
