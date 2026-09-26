@@ -235,8 +235,10 @@ impl Canvas for SkiaCanvas<'_> {
         }
     }
 
-    fn draw_text(&mut self, _text: &str, _rect: Rect, _style: &TextStyle) {
-        // Text rasterisation arrives with the shaping/text system.
+    fn draw_text(&mut self, text: &str, rect: Rect, style: &TextStyle) {
+        let rect = self.rect(rect);
+        let dpi = self.dpi;
+        crate::text::draw(self.pixmap, text, rect, style, dpi);
     }
 
     fn push_clip(&mut self, rect: Rect) {
