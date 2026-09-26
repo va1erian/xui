@@ -2,9 +2,11 @@
 
 //! The [`TopBar`](super::TopBar) item model and its horizontal layout.
 //!
-//! Items keep their natural width; a [`Spacer`](Kind::Spacer) soaks up the
-//! leftover width in proportion to its weight, so a bar can push trailing
-//! items to the right without absolute positions.
+//! Items keep their natural width; a [`Spacer`](Kind::Spacer) or an item
+//! given an explicit [`Width::Expand`] soaks up the leftover width in
+//! proportion to its weight, and [`Width::Fixed`] pins an item's width, so a
+//! bar can stretch a seek slider or push trailing items to the right without
+//! absolute positions.
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -58,6 +60,15 @@ pub(super) enum Kind {
     Spacer(u32),
 }
 
+/// The width an item was asked to take, overriding its natural width.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(super) enum Width {
+    /// A fixed design width.
+    Fixed(Dip),
+    /// A share of the bar's leftover width, by weight.
+    Expand(u32),
+}
+
 /// One entry of a [`TopBar`](super::TopBar).
 #[derive(Clone, Debug)]
 pub(super) struct Item {
@@ -67,6 +78,8 @@ pub(super) struct Item {
     pub(super) enabled: bool,
     /// The item's hover tooltip, if any.
     pub(super) tooltip: Option<String>,
+    /// An explicit width, or `None` to use the kind's natural width.
+    pub(super) width: Option<Width>,
     /// What the item is.
     pub(super) kind: Kind,
 }
@@ -77,7 +90,7 @@ pub(super) fn is_interactive(kind: &Kind) -> bool {
 }
 
 /// An item's natural width in device pixels.
-pub(super) fn item_width(kind: &Kind, dpi: u32) -> i32 {
+fn natural_width(kind: &Kind, dpi: u32) -> i32 {
     match kind {
         Kind::Icon(_) | Kind::Toggle { .. } => ITEM.to_px(dpi).value(),
         Kind::Label(text) => {
@@ -89,38 +102,56 @@ pub(super) fn item_width(kind: &Kind, dpi: u32) -> i32 {
     }
 }
 
+/// The width `item` claims before the leftover is shared: zero when it expands,
+/// so its natural width does not eat into the space meant to be distributed.
+fn fixed_width(item: &Item, dpi: u32) -> i32 {
+    match item.width {
+        Some(Width::Expand(_)) => 0,
+        Some(Width::Fixed(width)) => width.to_px(dpi).value().max(0),
+        None => natural_width(&item.kind, dpi),
+    }
+}
+
+/// The weight with which `item` shares the bar's leftover width, if it does.
+/// A spacer and an explicitly expanding item both take part.
+fn share_weight(item: &Item) -> Option<u32> {
+    match item.width {
+        Some(Width::Expand(weight)) => Some(weight.max(1)),
+        Some(Width::Fixed(_)) => None,
+        None => match item.kind {
+            Kind::Spacer(weight) => Some(weight.max(1)),
+            _ => None,
+        },
+    }
+}
+
 /// Visits every item with the cell it occupies, left to right.
 ///
-/// Leftover width is split between spacers by cumulative rounding, so the
-/// spacers sum to exactly the leftover and the cells tile the bar without gaps.
+/// Leftover width is split between spacers and expanding items by cumulative
+/// rounding, so they sum to exactly the leftover and the cells tile the bar
+/// without gaps.
 pub(super) fn each_rect(
     items: &[Item],
     bounds: Rect,
     dpi: u32,
     mut visit: impl FnMut(usize, Rect),
 ) {
-    let fixed: i32 = items.iter().map(|item| item_width(&item.kind, dpi)).sum();
-    let total_weight: u32 = items
-        .iter()
-        .map(|item| match item.kind {
-            Kind::Spacer(weight) => weight,
-            _ => 0,
-        })
-        .sum();
+    let fixed: i32 = items.iter().map(|item| fixed_width(item, dpi)).sum();
+    let total_weight: u32 = items.iter().filter_map(share_weight).sum();
     let extra = (bounds.width() - fixed).max(0);
     let mut cursor = bounds.left;
     let mut accumulated = 0i64;
     let mut assigned = 0i64;
     for (index, item) in items.iter().enumerate() {
-        let width = match &item.kind {
-            Kind::Spacer(weight) if *weight > 0 && extra > 0 => {
-                accumulated += i64::from(*weight) * i64::from(extra);
+        let width = match share_weight(item) {
+            Some(weight) if extra > 0 => {
+                accumulated += i64::from(weight) * i64::from(extra);
                 let boundary = accumulated / i64::from(total_weight);
                 let width = (boundary - assigned) as i32;
                 assigned = boundary;
                 width
             }
-            _ => item_width(&item.kind, dpi),
+            _ => fixed_width(item, dpi),
         };
         let rect = Rect::new(cursor, bounds.top, cursor + width, bounds.bottom);
         visit(index, rect);
@@ -183,80 +214,4 @@ pub(super) fn set_slider(
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn item(kind: Kind) -> Item {
-        Item {
-            id: TopBarId::new(0),
-            enabled: true,
-            tooltip: None,
-            kind,
-        }
-    }
-
-    fn rects(items: &[Item], bounds: Rect, dpi: u32) -> Vec<Rect> {
-        let mut out = Vec::new();
-        each_rect(items, bounds, dpi, |_, rect| out.push(rect));
-        out
-    }
-
-    #[test]
-    fn fixed_items_keep_their_width_and_ignore_surplus() {
-        let items = [
-            item(Kind::Icon(Glyph::Menu)),
-            item(Kind::Label("ab".into())),
-        ];
-        let bounds = Rect::new(0, 0, 200, 24);
-        let cells = rects(&items, bounds, 96);
-        assert_eq!(cells[0], Rect::new(0, 0, 36, 24));
-        assert_eq!(cells[1].left, 36, "the label starts after the icon");
-        assert_eq!(cells[1].width(), 7 * 2 + 12);
-    }
-
-    #[test]
-    fn spacers_share_the_leftover_width() {
-        let items = [
-            item(Kind::Icon(Glyph::Menu)),
-            item(Kind::Spacer(1)),
-            item(Kind::Icon(Glyph::Close)),
-            item(Kind::Spacer(1)),
-        ];
-        let bounds = Rect::new(0, 0, 200, 24);
-        let cells = rects(&items, bounds, 96);
-        assert_eq!(cells[0], Rect::new(0, 0, 36, 24));
-        assert_eq!(cells[1], Rect::new(36, 0, 100, 24));
-        assert_eq!(cells[2], Rect::new(100, 0, 136, 24));
-        assert_eq!(cells[3], Rect::new(136, 0, 200, 24));
-    }
-
-    #[test]
-    fn weighted_spacers_split_proportionally() {
-        let items = [
-            item(Kind::Spacer(1)),
-            item(Kind::Icon(Glyph::Menu)),
-            item(Kind::Spacer(3)),
-        ];
-        let bounds = Rect::new(0, 0, 136, 24);
-        let cells = rects(&items, bounds, 96);
-        assert_eq!(cells[0].width(), 25);
-        assert_eq!(cells[2].width(), 75);
-        assert_eq!(cells[0].left + cells[0].width(), 25);
-        assert_eq!(cells[2].right, 136);
-    }
-
-    #[test]
-    fn hit_testing_skips_labels_and_spacers() {
-        let items = [
-            item(Kind::Spacer(1)),
-            item(Kind::Label("hi".into())),
-            item(Kind::Icon(Glyph::Search)),
-        ];
-        let bounds = Rect::new(0, 0, 120, 24);
-        let label = item_rect(&items, bounds, 96, 1).unwrap();
-        assert_eq!(item_at(&items, bounds, 96, label.left + 1), Some(1));
-        assert_eq!(hit_interactive(&items, bounds, 96, label.left + 1), None);
-        let icon = item_rect(&items, bounds, 96, 2).unwrap();
-        assert_eq!(hit_interactive(&items, bounds, 96, icon.left + 1), Some(2));
-    }
-}
+mod tests;

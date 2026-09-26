@@ -138,3 +138,92 @@ fn setters_update_by_id_without_events() {
         "programmatic setters raise nothing"
     );
 }
+
+#[test]
+fn an_expanding_slider_fills_the_band() {
+    let (ui, runtime, _log) = setup();
+    let seek = TopBarId::new(1);
+    let bar = TopBar::new(&ui, Rect::new(0, 0, 200, 28))
+        .unwrap()
+        .slider(seek, 0.0, 100.0)
+        .expand(seek);
+
+    // Without `expand` the slider's fixed 120px cell would not reach x = 190.
+    click(&runtime, bar.id(), 190);
+    assert!(
+        bar.value(seek).unwrap() > 80.0,
+        "the expanding slider reached the end: {:?}",
+        bar.value(seek)
+    );
+}
+
+#[test]
+fn a_fixed_width_slider_extends_its_hit_area() {
+    let (ui, runtime, _log) = setup();
+    let volume = TopBarId::new(1);
+    let bar = TopBar::new(&ui, Rect::new(0, 0, 200, 28))
+        .unwrap()
+        .slider(volume, 0.0, 100.0)
+        .width(volume, Dip(180.0));
+
+    // A natural 120px slider would not reach x = 160.
+    click(&runtime, bar.id(), 160);
+    assert!(
+        bar.value(volume).unwrap() > 50.0,
+        "the widened slider was hit: {:?}",
+        bar.value(volume)
+    );
+}
+
+#[test]
+fn expanding_sliders_share_the_band_by_weight() {
+    let (ui, runtime, _log) = setup();
+    let (left, right) = (TopBarId::new(1), TopBarId::new(2));
+    let bar = TopBar::new(&ui, Rect::new(0, 0, 200, 28))
+        .unwrap()
+        .slider(left, 0.0, 100.0)
+        .expand_weight(left, 1)
+        .slider(right, 0.0, 100.0)
+        .expand_weight(right, 3);
+
+    // The 1:3 split puts `left` in 0..50, so a click at x = 90 misses it.
+    click(&runtime, bar.id(), 90);
+    assert_eq!(
+        bar.value(left),
+        Some(0.0),
+        "the narrow slider kept its value"
+    );
+    assert!(
+        bar.value(right).unwrap() > 0.0,
+        "the wide slider took the click"
+    );
+}
+
+#[test]
+fn every_transport_glyph_paints_a_shape() {
+    let backend = Rc::new(HeadlessBackend::new());
+    let window = backend.open_window(&PlatformSpec::new("test")).unwrap();
+    let window_backend: Rc<dyn Backend> = backend.clone();
+    let core = Core::new(window_backend, window);
+    let ui = Ui::new(Rc::clone(&core));
+    let _runtime = Runtime::primary(core, TestApp(Rc::new(RefCell::new(Vec::new()))));
+
+    for glyph in [
+        Glyph::Play,
+        Glyph::Pause,
+        Glyph::Stop,
+        Glyph::Previous,
+        Glyph::Next,
+        Glyph::Repeat,
+        Glyph::Shuffle,
+    ] {
+        let bar = TopBar::new(&ui, Rect::new(0, 0, 36, 28))
+            .unwrap()
+            .icon(TopBarId::new(1), glyph);
+        backend.render(bar.id());
+        assert!(
+            !backend.ops(bar.id()).is_empty(),
+            "{glyph:?} painted nothing"
+        );
+    }
+}

@@ -1,5 +1,6 @@
-//! Demonstrates the portable [`TopBar`]: icons, a toggle, a label, a spacer and
-//! a slider report through one label.
+//! Demonstrates the portable [`TopBar`]: vector transport icons, toggles, a
+//! label, an expanding seek slider and a fixed-width volume slider report
+//! through one label.
 //!
 //! Run with:
 //!
@@ -17,8 +18,10 @@ mod support;
 use support::{Layout, autoclose, backend};
 
 enum Msg {
-    New,
-    Star(bool),
+    Transport(&'static str),
+    Repeat(bool),
+    Shuffle(bool),
+    Seek(f64),
     Volume(f64),
     Quit,
 }
@@ -33,11 +36,10 @@ impl App for Demo {
 
     fn update(&mut self, msg: Msg, ui: &mut Ui<Msg>) {
         match msg {
-            Msg::New => self.result.set_text("New pressed"),
-            Msg::Star(checked) => {
-                self.result
-                    .set_text(if checked { "Starred" } else { "Unstarred" });
-            }
+            Msg::Transport(name) => self.result.set_text(&format!("{name} pressed")),
+            Msg::Repeat(on) => self.result.set_text(&format!("Repeat: {on}")),
+            Msg::Shuffle(on) => self.result.set_text(&format!("Shuffle: {on}")),
+            Msg::Seek(value) => self.result.set_text(&format!("Seek: {value:.0}")),
             Msg::Volume(value) => self.result.set_text(&format!("Volume: {value:.0}")),
             Msg::Quit => ui.quit(),
         }
@@ -47,35 +49,60 @@ impl App for Demo {
 fn main() -> xui_core::backend::Result<()> {
     run_app(
         backend(),
-        PlatformSpec::new("TopBar demo").size(Dip(520.0), Dip(360.0)),
+        PlatformSpec::new("TopBar demo").size(Dip(640.0), Dip(200.0)),
         |ui| {
             let l = Layout::new(ui.dpi());
-            let new_id = TopBarId::new(1);
-            let star_id = TopBarId::new(2);
-            let volume_id = TopBarId::new(3);
-            let bar = TopBar::new(ui, l.rect(16.0, 16.0, 504.0, 72.0))
+            let previous = TopBarId::new(1);
+            let play = TopBarId::new(2);
+            let pause = TopBarId::new(3);
+            let stop = TopBarId::new(4);
+            let next = TopBarId::new(5);
+            let repeat = TopBarId::new(6);
+            let shuffle = TopBarId::new(7);
+            let seek = TopBarId::new(8);
+            let volume = TopBarId::new(9);
+            let bar = TopBar::new(ui, l.rect(16.0, 16.0, 624.0, 72.0))
                 .unwrap()
-                .icon(new_id, Glyph::Text("+"))
-                .toggle(star_id, Glyph::Star)
-                .label(TopBarId::new(4), "Volume")
-                .spacer()
-                .slider(volume_id, 0.0, 100.0)
-                .on_click(move |id| if id == new_id { Some(Msg::New) } else { None })
+                .icon(previous, Glyph::Previous)
+                .icon(play, Glyph::Play)
+                .icon(pause, Glyph::Pause)
+                .icon(stop, Glyph::Stop)
+                .icon(next, Glyph::Next)
+                .toggle(repeat, Glyph::Repeat)
+                .toggle(shuffle, Glyph::Shuffle)
+                .label(TopBarId::new(10), "Seek")
+                .slider(seek, 0.0, 100.0)
+                .expand(seek)
+                .label(TopBarId::new(11), "Vol")
+                .slider(volume, 0.0, 100.0)
+                .width(volume, Dip(80.0))
+                .on_click(move |id| match id {
+                    id if id == previous => Some(Msg::Transport("Previous")),
+                    id if id == play => Some(Msg::Transport("Play")),
+                    id if id == pause => Some(Msg::Transport("Pause")),
+                    id if id == stop => Some(Msg::Transport("Stop")),
+                    id if id == next => Some(Msg::Transport("Next")),
+                    _ => None,
+                })
                 .on_toggle(move |id, checked| {
-                    if id == star_id {
-                        Some(Msg::Star(checked))
+                    if id == repeat {
+                        Some(Msg::Repeat(checked))
+                    } else if id == shuffle {
+                        Some(Msg::Shuffle(checked))
                     } else {
                         None
                     }
                 })
                 .on_change(move |id, value| {
-                    if id == volume_id {
+                    if id == seek {
+                        Some(Msg::Seek(value))
+                    } else if id == volume {
                         Some(Msg::Volume(value))
                     } else {
                         None
                     }
                 });
-            let result = Label::new(ui, l.rect(16.0, 88.0, 504.0, 120.0), "Top bar ready").unwrap();
+            let result = Label::new(ui, l.rect(16.0, 88.0, 624.0, 120.0), "Top bar ready").unwrap();
             autoclose(ui, || Msg::Quit);
             Demo { result, _bar: bar }
         },

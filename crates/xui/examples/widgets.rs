@@ -89,6 +89,7 @@ enum Msg {
     Tool(usize),
     TopBarNew,
     TopBarSearch,
+    TopBarPlay,
     TopBarStar(bool),
     TopBarVolume(f64),
     BarMenu(&'static str),
@@ -171,6 +172,7 @@ impl App for Gallery {
             Msg::Tool(index) => format!("toolbar #{index}"),
             Msg::TopBarNew => "topbar: new".to_string(),
             Msg::TopBarSearch => "topbar: search".to_string(),
+            Msg::TopBarPlay => "topbar: play".to_string(),
             Msg::TopBarStar(checked) => format!("topbar star: {checked}"),
             Msg::TopBarVolume(value) => format!("topbar volume: {value:.0}"),
             Msg::BarMenu(name) => format!("menu: {name}"),
@@ -333,17 +335,20 @@ fn run(renderer: Renderer, switch: Rc<Cell<Option<Renderer>>>) {
             let star_id = TopBarId::new(2);
             let volume_id = TopBarId::new(3);
             let search_id = TopBarId::new(4);
+            let play_id = TopBarId::new(6);
             let topbar = TopBar::new(ui, rect(16.0, 424.0, 380.0, 452.0))
                 .unwrap()
                 .icon(new_id, Glyph::Menu)
+                .icon(play_id, Glyph::Play)
                 .toggle(star_id, Glyph::Star)
                 .label(TopBarId::new(5), "xui")
-                .spacer()
                 .slider(volume_id, 0.0, 100.0)
+                .expand(volume_id)
                 .icon(search_id, Glyph::Search)
                 .on_click(move |id| match id {
                     id if id == new_id => Some(Msg::TopBarNew),
                     id if id == search_id => Some(Msg::TopBarSearch),
+                    id if id == play_id => Some(Msg::TopBarPlay),
                     _ => None,
                 })
                 .on_toggle(move |id, checked| (id == star_id).then_some(Msg::TopBarStar(checked)))

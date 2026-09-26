@@ -148,14 +148,20 @@ fn build(ui: &Ui<()>) -> Vec<Box<dyn Any>> {
 
     let new_id = TopBarId::new(1);
     let star_id = TopBarId::new(2);
+    let seek_id = TopBarId::new(4);
     keep.push(Box::new(
         TopBar::new(ui, rect(16, 396, 380, 424))
             .unwrap()
             .icon(new_id, Glyph::Menu)
+            .icon(TopBarId::new(5), Glyph::Play)
+            .icon(TopBarId::new(6), Glyph::Previous)
+            .icon(TopBarId::new(7), Glyph::Next)
             .toggle(star_id, Glyph::Star)
+            .toggle(TopBarId::new(8), Glyph::Repeat)
+            .toggle(TopBarId::new(9), Glyph::Shuffle)
             .label(TopBarId::new(3), "xui")
-            .spacer()
-            .slider(TopBarId::new(4), 0.0, 100.0),
+            .slider(seek_id, 0.0, 100.0)
+            .expand(seek_id),
     ));
 
     // Containers: the children are created through the container's `ui()` and
