@@ -30,12 +30,9 @@ impl Win32Backend {
         // the process-wide system DPI; once it exists `dpi()` reads the
         // monitor it landed on.
         let dpi = sys::dpi::system_dpi();
-        let bounds = Rect::new(
-            0,
-            0,
-            spec.width.to_px(dpi).value(),
-            spec.height.to_px(dpi).value(),
-        );
+        let width = spec.width.to_px(dpi).value();
+        let height = spec.height.to_px(dpi).value();
+        let bounds = Rect::new(0, 0, width, height);
         let class = WindowClass::register("xui.backend", background)
             .map_err(|_| BackendError::CreateFailed("window class"))?;
         let window = Window::create(
@@ -49,6 +46,7 @@ impl Win32Backend {
         )
         .map_err(|_| BackendError::CreateFailed("window"))?;
         chrome::apply(spec, &window);
+        resize_client(&window, width, height);
         window.show();
         self.windows.borrow_mut().insert(
             id.raw(),
@@ -113,4 +111,24 @@ impl Win32Backend {
         crate::looper::run_modal(hwnd);
         Ok(())
     }
+}
+
+/// Resizes a freshly created `window` so its client area is exactly
+/// `width` x `height` pixels, keeping its current position. `CreateWindowEx`
+/// sizes the *outer* window, so a decorated window created from a requested
+/// client size would otherwise be short by its frame and caption.
+///
+/// Call after the chrome is applied: an extended frame changes which part of
+/// the window is client, so the frame is measured, not assumed.
+fn resize_client(window: &Window, width: i32, height: i32) {
+    let outer = window.window_rect();
+    let client = window.client_rect();
+    let width = (width + outer.width() - client.width()).max(1);
+    let height = (height + outer.height() - client.height()).max(1);
+    window.set_bounds(Rect::new(
+        outer.left,
+        outer.top,
+        outer.left + width,
+        outer.top + height,
+    ));
 }

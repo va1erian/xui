@@ -274,10 +274,14 @@ fn cell_rect(bounds: Rect, columns: usize, count: usize, index: usize) -> Rect {
 
 /// Draws a check mark inside a swatch.
 fn draw_check(canvas: &mut dyn Canvas, swatch: Rect, ink: Color) {
-    let (w, h) = (swatch.width(), swatch.height());
-    let first = Point::new(swatch.left + w * 28 / 100, swatch.top + h * 52 / 100);
-    let corner = Point::new(swatch.left + w * 45 / 100, swatch.top + h * 70 / 100);
-    let last = Point::new(swatch.left + w * 74 / 100, swatch.top + h * 30 / 100);
+    // Draw the tick in a centred square of the swatch's shorter side, so a wide
+    // swatch shows the check's usual shape instead of a stretched one.
+    let side = swatch.width().min(swatch.height());
+    let left = swatch.left + (swatch.width() - side) / 2;
+    let top = swatch.top + (swatch.height() - side) / 2;
+    let first = Point::new(left + side * 28 / 100, top + side * 52 / 100);
+    let corner = Point::new(left + side * 45 / 100, top + side * 70 / 100);
+    let last = Point::new(left + side * 74 / 100, top + side * 30 / 100);
     canvas.draw_line(first, corner, ink, 2.0);
     canvas.draw_line(corner, last, ink, 2.0);
 }
