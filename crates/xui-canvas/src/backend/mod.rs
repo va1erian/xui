@@ -13,6 +13,7 @@
 
 mod app;
 mod contract;
+pub(crate) mod geometry;
 mod gl;
 mod render;
 mod software;
@@ -158,7 +159,7 @@ impl Shared {
             if node.window != window || !node.visible || !node.enabled {
                 continue;
             }
-            let abs = render::absolute_bounds(&nodes, *id)?;
+            let abs = geometry::absolute_bounds(&nodes, *id)?;
             if abs.contains(xui_core::Point::new(x, y)) {
                 return Some((*id, x - abs.left, y - abs.top));
             }
@@ -170,7 +171,7 @@ impl Shared {
     /// client coordinates.
     pub(crate) fn local_point(&self, id: WidgetId, x: i32, y: i32) -> Option<(i32, i32)> {
         let nodes = self.nodes.borrow();
-        let abs = render::absolute_bounds(&nodes, id)?;
+        let abs = geometry::absolute_bounds(&nodes, id)?;
         Some((x - abs.left, y - abs.top))
     }
 
