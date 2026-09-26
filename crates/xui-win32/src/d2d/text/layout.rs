@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 //! [`Layout`]: laid-out text with hit testing and selection boxes.
 
 use std::ops::Range;

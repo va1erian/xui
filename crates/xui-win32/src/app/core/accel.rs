@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 //! Accelerator registration and menu-bar bookkeeping for [`Core`].
 
 use super::{Accelerator, Core};

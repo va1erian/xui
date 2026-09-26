@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 //! CSS-style font family lists.
 
 /// Splits a family list (`"Arial, 'Segoe UI', sans-serif"`) into candidate

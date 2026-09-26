@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 //! [`Font`]: a resolved font with cached measurement.
 
 use std::sync::{Arc, Mutex, PoisonError};

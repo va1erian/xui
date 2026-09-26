@@ -1,3 +1,5 @@
+#![warn(missing_docs)]
+
 //! The cross-platform, software-rendered backend for xui.
 //!
 //! It rasterises the portable widgets with `tiny-skia` into an RGBA buffer, so

@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 //! [`TextSystem`]: the entry point that turns a [`FontSpec`] into a [`Font`].
 
 use std::collections::HashMap;

@@ -42,12 +42,17 @@ pub enum Error {
 
     /// `RegisterClassExW` failed; the window name is included for context.
     #[error("window class `{name}` could not be registered")]
-    ClassRegistration { name: String },
+    ClassRegistration {
+        /// The window class name that failed to register.
+        name: String,
+    },
 
     /// `CreateWindowExW` failed.
     #[error("could not create a window of class `{class}`")]
     CreateWindow {
+        /// The window class whose instance could not be created.
         class: String,
+        /// The error the OS reported.
         #[source]
         source: Win32Error,
     },

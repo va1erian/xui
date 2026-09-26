@@ -1,3 +1,5 @@
+#![warn(missing_docs)]
+
 //! Native Windows UI for Rust: small, fast, idiomatic, and themed. Dark mode is
 //! first-class. Two layers: a safe platform layer over Win32 (windows, typed
 //! messages, GDI) and a widget layer where widget events are mapped to the

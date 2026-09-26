@@ -307,11 +307,26 @@ pub enum TopBarEvent {
     /// An icon button was clicked (or activated with the keyboard).
     Click(TopBarId),
     /// A toggle was flipped to `checked`.
-    Toggle { id: TopBarId, checked: bool },
+    Toggle {
+        /// The toggle that changed.
+        id: TopBarId,
+        /// Its new state.
+        checked: bool,
+    },
     /// A slider moved while dragging (last value wins per painted frame).
-    SliderChange { id: TopBarId, value: f64 },
+    SliderChange {
+        /// The slider that moved.
+        id: TopBarId,
+        /// Its value at this frame.
+        value: f64,
+    },
     /// A slider gesture ended (released, or a keyboard step).
-    SliderCommit { id: TopBarId, value: f64 },
+    SliderCommit {
+        /// The slider that was committed.
+        id: TopBarId,
+        /// Its final value.
+        value: f64,
+    },
 }
 
 /// The default design height of the band, in device-independent pixels.

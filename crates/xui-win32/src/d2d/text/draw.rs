@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 //! Drawing text on a [`D2dCanvas`].
 
 use crate::color::Color;
