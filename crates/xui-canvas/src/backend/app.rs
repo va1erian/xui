@@ -16,7 +16,7 @@ use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::keyboard::{Key as WinitKey, NamedKey};
 use winit::window::{CursorIcon, Window, WindowAttributes};
 
-use xui_core::backend::{Event, TimerId, WidgetId, WindowId};
+use xui_core::backend::{Decorations, Event, TimerId, WidgetId, WindowId};
 use xui_core::geometry::Rect;
 use xui_core::message::{Key, Modifiers, MouseButton};
 
@@ -51,16 +51,20 @@ impl App {
             if self.windows.contains_key(&raw) {
                 continue;
             }
-            let (title, size) = {
+            let (title, size, decorations) = {
                 let windows = self.shared.windows.borrow();
                 let Some(state) = windows.get(&raw) else {
                     continue;
                 };
-                (state.title.clone(), state.size)
+                (state.title.clone(), state.size, state.decorations)
             };
+            // A requested backdrop (Acrylic/Mica) is approximated by the opaque
+            // theme background on platforms without the DWM material; softbuffer
+            // presents an opaque surface, so there is nothing else to do.
             let attributes = WindowAttributes::default()
                 .with_title(title)
-                .with_inner_size(LogicalSize::new(f64::from(size.0), f64::from(size.1)));
+                .with_inner_size(LogicalSize::new(f64::from(size.0), f64::from(size.1)))
+                .with_decorations(decorations == Decorations::System);
             let Ok(window) = event_loop.create_window(attributes) else {
                 continue;
             };
@@ -225,6 +229,23 @@ impl App {
         let Some(button) = mouse_button(button) else {
             return;
         };
+        // A left-button press on a drag region moves the whole window, as a
+        // title bar's empty area does, instead of reaching the node.
+        if state == ElementState::Pressed
+            && button == MouseButton::Left
+            && self.shared.is_drag_region(id)
+        {
+            let handle = self
+                .shared
+                .windows
+                .borrow()
+                .get(&raw)
+                .and_then(|state| state.window.clone());
+            if let Some(handle) = handle {
+                let _ = handle.drag_window();
+            }
+            return;
+        }
         let event = if state == ElementState::Pressed {
             self.set_focus(raw, id);
             Event::MouseDown {

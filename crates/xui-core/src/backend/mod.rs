@@ -72,10 +72,39 @@ impl fmt::Display for BackendError {
 
 impl std::error::Error for BackendError {}
 
-/// The portable part of a top-level window's spec.
+/// Whether a window shows the platform's system title bar and border.
 ///
-/// Backend-specific extras (backdrop materials, an extended title bar, …) are
-/// not here; a backend exposes them through its own extension trait.
+/// Set with [`PlatformSpec::decorations`]. [`Decorations::None`] removes the
+/// system title bar so the application can draw its own. A backend that
+/// supports an extended title bar (Win32) keeps the native window buttons and
+/// resize borders, while one that does not leaves the whole frame to the
+/// application.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Decorations {
+    /// The system title bar, border and window buttons (the default).
+    #[default]
+    System,
+    /// No system title bar: the application draws its own.
+    None,
+}
+
+/// The material a backend draws behind a window's client area.
+///
+/// Set with [`PlatformSpec::backdrop`]. A backend without the material, or one
+/// where the platform rejects it, falls back to the opaque theme background —
+/// exactly as on Windows when DWM declines the request.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Backdrop {
+    /// An opaque theme background (the default).
+    #[default]
+    Opaque,
+    /// A translucent, blurred material (Windows Acrylic).
+    Acrylic,
+    /// A desktop-tinted material (Windows Mica).
+    Mica,
+}
+
+/// The portable part of a top-level window's spec.
 #[derive(Clone, Debug, PartialEq)]
 pub struct PlatformSpec {
     /// The window title.
@@ -86,6 +115,15 @@ pub struct PlatformSpec {
     pub height: Dip,
     /// Whether the user may resize the window.
     pub resizable: bool,
+    /// Whether the window shows the platform's system title bar.
+    pub decorations: Decorations,
+    /// The height of a custom caption band reserved at the top of the client
+    /// area, as a design value. Zero (the default) when the application draws
+    /// no caption. Read the band a backend actually reserved with
+    /// [`Backend::caption_inset`].
+    pub caption_inset: Dip,
+    /// The material behind the client area.
+    pub backdrop: Backdrop,
 }
 
 impl PlatformSpec {
@@ -96,6 +134,9 @@ impl PlatformSpec {
             width: Dip(640.0),
             height: Dip(480.0),
             resizable: true,
+            decorations: Decorations::System,
+            caption_inset: Dip(0.0),
+            backdrop: Backdrop::Opaque,
         }
     }
 
@@ -103,6 +144,25 @@ impl PlatformSpec {
     pub fn size(mut self, width: Dip, height: Dip) -> PlatformSpec {
         self.width = width;
         self.height = height;
+        self
+    }
+
+    /// Hides the system title bar so the application draws its own.
+    pub fn decorations(mut self, decorations: Decorations) -> PlatformSpec {
+        self.decorations = decorations;
+        self
+    }
+
+    /// Reserves a custom caption band of `height` at the top of the client
+    /// area, so a title bar can sit in the title area.
+    pub fn caption_inset(mut self, height: Dip) -> PlatformSpec {
+        self.caption_inset = height;
+        self
+    }
+
+    /// Selects the material behind the client area.
+    pub fn backdrop(mut self, backdrop: Backdrop) -> PlatformSpec {
+        self.backdrop = backdrop;
         self
     }
 }
@@ -144,6 +204,32 @@ pub trait Backend {
     /// Destroys a top-level window and every node in it.
     fn close_window(&self, window: WindowId);
 
+    /// Minimizes `window` to the taskbar. A backend that cannot minimize a
+    /// window does nothing.
+    fn minimize(&self, window: WindowId) {
+        let _ = window;
+    }
+
+    /// Toggles `window` between maximized and its restored bounds. A backend
+    /// that cannot maximize a window does nothing.
+    fn toggle_maximize(&self, window: WindowId) {
+        let _ = window;
+    }
+
+    /// Whether `window` is currently maximized.
+    fn is_maximized(&self, window: WindowId) -> bool {
+        let _ = window;
+        false
+    }
+
+    /// The height a backend reserves at the top of `window`'s client area for a
+    /// custom caption, in design units. Zero for a window with a system title
+    /// bar, or one whose backend reserves no caption band.
+    fn caption_inset(&self, window: WindowId) -> Dip {
+        let _ = window;
+        Dip(0.0)
+    }
+
     /// Creates a node inside `parent`, which is the window or a container node.
     fn create(&self, parent: ParentRef, spec: &NodeSpec) -> Result<WidgetId>;
 
@@ -165,6 +251,14 @@ pub trait Backend {
     /// overlapping children may ignore it.
     fn raise(&self, id: WidgetId) {
         let _ = id;
+    }
+
+    /// Marks a node's area as a window-drag region: a left-button press that
+    /// begins there moves the whole window instead of reaching the node. A
+    /// custom title bar sets this on its empty area. A backend that cannot move
+    /// a window by region, or a window with a system title bar, ignores it.
+    fn set_drag_region(&self, id: WidgetId, drag: bool) {
+        let _ = (id, drag);
     }
 
     /// Requests the pointer shape shown over a node. A backend that cannot
@@ -224,4 +318,29 @@ pub trait Backend {
     /// Whether the backend provides a native widget for `kind`, or expects the
     /// front layer to paint it.
     fn supports(&self, kind: NodeKind) -> ImplKind;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Backdrop, Decorations, PlatformSpec};
+    use crate::units::dip;
+
+    #[test]
+    fn a_new_window_is_decorated_and_opaque_by_default() {
+        let spec = PlatformSpec::new("t");
+        assert_eq!(spec.decorations, Decorations::System);
+        assert_eq!(spec.caption_inset, dip(0.0));
+        assert_eq!(spec.backdrop, Backdrop::Opaque);
+    }
+
+    #[test]
+    fn builder_sets_the_portable_chrome_options() {
+        let spec = PlatformSpec::new("t")
+            .decorations(Decorations::None)
+            .caption_inset(dip(36.0))
+            .backdrop(Backdrop::Mica);
+        assert_eq!(spec.decorations, Decorations::None);
+        assert_eq!(spec.caption_inset, dip(36.0));
+        assert_eq!(spec.backdrop, Backdrop::Mica);
+    }
 }

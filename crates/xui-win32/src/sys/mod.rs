@@ -21,6 +21,7 @@ pub(crate) mod cursor_idle;
 pub(crate) mod d2d;
 pub(crate) mod dispatch;
 pub(crate) mod dpi;
+pub(crate) mod drag;
 pub(crate) mod dwm;
 pub(crate) mod edit;
 pub(crate) mod first_show;

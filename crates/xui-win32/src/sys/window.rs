@@ -547,6 +547,12 @@ pub(crate) fn validate_rect(hwnd: Hwnd, rect: Rect) {
     }
 }
 
+/// Whether a top-level window is currently maximized.
+pub(crate) fn is_maximized(hwnd: Hwnd) -> bool {
+    // SAFETY: `IsZoomed` only reads the window's state.
+    unsafe { windows::Win32::UI::WindowsAndMessaging::IsZoomed(raw_hwnd(hwnd)).as_bool() }
+}
+
 /// Shows, hides or minimizes a window.
 ///
 /// Minimising uses `SW_SHOWMINNOACTIVE`: a programmatic minimise must not
