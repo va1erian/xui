@@ -8,11 +8,13 @@ use std::rc::Rc;
 
 use super::Mappers;
 use super::model::SelectionMode;
+use super::resize;
 use super::state::{
     ROW, State, WHEEL_ROWS, column_at, column_widths, header_px, row_at, toggled_sort,
 };
 use crate::app::Ui;
-use crate::backend::{Event, WidgetId};
+use crate::backend::{Cursor, Event, WidgetId};
+use crate::geometry::Point;
 use crate::message::{Key, Modifiers, MouseButton};
 
 /// Builds the event closure a [`ListView`](super::ListView) registers.
@@ -56,11 +58,22 @@ fn handle<M: 'static>(
                 if button != MouseButton::Left {
                     return None;
                 }
-                let local = x - ui.bounds(id).left;
+                // A press on a column boundary starts a resize instead of a
+                // sort, so dragging never toggles the arrow.
+                let grabbed = {
+                    let mut state = state.borrow_mut();
+                    let widths = column_widths(dpi, ui.bounds(id).width(), &state.columns);
+                    resize::begin(&mut state, x, &widths, dpi)
+                };
+                if grabbed.is_some() {
+                    ui.set_capture(id);
+                    ui.set_cursor(id, Cursor::SizeHorizontal);
+                    return None;
+                }
                 let column = {
                     let state = state.borrow();
                     let widths = column_widths(dpi, ui.bounds(id).width(), &state.columns);
-                    column_at(&widths, local)
+                    column_at(&widths, x)
                 };
                 let column = column?;
                 {
@@ -89,7 +102,7 @@ fn handle<M: 'static>(
                         .context
                         .borrow()
                         .as_ref()
-                        .and_then(|context| context(row))
+                        .and_then(|context| context(row, Point::new(x, y)))
                 }
                 MouseButton::Left => {
                     {
@@ -104,11 +117,81 @@ fn handle<M: 'static>(
                 _ => None,
             }
         }
-        Event::MouseMove { y, .. } => {
-            let header_h = {
-                let state = state.borrow();
-                header_px(state.has_header(), dpi)
+        Event::MouseUp {
+            button: MouseButton::Left,
+            ..
+        }
+        | Event::CaptureChanged => {
+            let finished = {
+                let mut state = state.borrow_mut();
+                resize::finish(&mut state)
             };
+            ui.release_capture();
+            ui.set_cursor(id, Cursor::Default);
+            finished.and_then(|(column, width)| {
+                mappers
+                    .resize
+                    .borrow()
+                    .as_ref()
+                    .and_then(|resize| resize(column, width))
+            })
+        }
+        Event::MouseDoubleClick {
+            x,
+            y,
+            button: MouseButton::Left,
+            ..
+        } => {
+            let (column, width) = {
+                let mut state = state.borrow_mut();
+                if *y >= header_px(state.has_header(), dpi) {
+                    return None;
+                }
+                let widths = column_widths(dpi, ui.bounds(id).width(), &state.columns);
+                let column = resize::boundary_at(&widths, *x, resize::GRAB.to_px(dpi).value())?;
+                // Drop any drag the preceding press began, then auto-size.
+                state.resize = None;
+                let width = resize::autosize(ui, id, &state, column, dpi);
+                resize::set_width(&mut state, column, width);
+                (column, width)
+            };
+            ui.set_cursor(id, Cursor::SizeHorizontal);
+            ui.invalidate(id);
+            mappers
+                .resize
+                .borrow()
+                .as_ref()
+                .and_then(|resize| resize(column, width))
+        }
+        Event::MouseMove { x, y, .. } => {
+            let dragging = {
+                let mut state = state.borrow_mut();
+                resize::drag(&mut state, *x, dpi).is_some()
+            };
+            if dragging {
+                ui.set_cursor(id, Cursor::SizeHorizontal);
+                ui.invalidate(id);
+                return None;
+            }
+            let (header_h, boundary) = {
+                let state = state.borrow();
+                let header_h = header_px(state.has_header(), dpi);
+                let boundary = if *y < header_h {
+                    let widths = column_widths(dpi, ui.bounds(id).width(), &state.columns);
+                    resize::boundary_at(&widths, *x, resize::GRAB.to_px(dpi).value())
+                } else {
+                    None
+                };
+                (header_h, boundary)
+            };
+            ui.set_cursor(
+                id,
+                if boundary.is_some() {
+                    Cursor::SizeHorizontal
+                } else {
+                    Cursor::Default
+                },
+            );
             let row = {
                 let state = state.borrow();
                 row_at(
@@ -131,6 +214,7 @@ fn handle<M: 'static>(
             None
         }
         Event::MouseLeave => {
+            ui.set_cursor(id, Cursor::Default);
             let mut state = state.borrow_mut();
             if state.hover.take().is_some() {
                 drop(state);
@@ -180,11 +264,19 @@ fn handle_key<M: 'static>(
     }
     if key == Key::MENU || (key == Key::F10 && modifiers.shift) {
         let row = state.borrow().primary()?;
+        // Anchor the keyboard menu at the focused row's bottom-left corner.
+        let (offset, header_h) = {
+            let state = state.borrow();
+            (state.offset, header_px(state.has_header(), ui.dpi()))
+        };
+        let row_px = ROW.to_px(ui.dpi()).value().max(1);
+        let slot = row.saturating_sub(offset) as i32;
+        let at = Point::new(0, header_h + (slot + 1) * row_px);
         return mappers
             .context
             .borrow()
             .as_ref()
-            .and_then(|context| context(row));
+            .and_then(|context| context(row, at));
     }
 
     let before = state.borrow().selected.clone();

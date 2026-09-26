@@ -135,6 +135,25 @@ impl<M: 'static> ListView<M> {
         self.state.borrow().columns.len()
     }
 
+    /// Sets a column's width without raising an event; out-of-range columns are
+    /// ignored. Pass [`Fill`](super::Fill) to make the column share the
+    /// leftover space again, or a design value to fix it.
+    pub fn set_column_width(&self, column: usize, width: impl Into<super::ColumnWidth>) {
+        let width = width.into();
+        let mut state = self.state.borrow_mut();
+        let Some(column) = state.columns.get_mut(column) else {
+            return;
+        };
+        column.width = width;
+        drop(state);
+        self.control.invalidate();
+    }
+
+    /// A column's width spec, `None` when `column` is out of range.
+    pub fn column_width(&self, column: usize) -> Option<super::ColumnWidth> {
+        self.state.borrow().columns.get(column).map(|cl| cl.width)
+    }
+
     /// Reads back a cell's text. Allocates; the paint path borrows instead.
     pub fn cell_text(&self, row: usize, column: usize) -> Option<String> {
         self.state

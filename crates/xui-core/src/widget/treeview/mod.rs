@@ -11,7 +11,8 @@
 //!
 //! Events map to the app's `Msg` through the closures given at construction:
 //! [`on_select`](TreeView::on_select),
-//! [`on_toggle`](TreeView::on_toggle) and [`on_check`](TreeView::on_check).
+//! [`on_toggle`](TreeView::on_toggle), [`on_check`](TreeView::on_check) and
+//! [`on_context`](TreeView::on_context), which receives the pointer position.
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
@@ -19,7 +20,7 @@ use std::rc::Rc;
 use super::control::Control;
 use crate::app::Ui;
 use crate::backend::{NodeKind, NodeSpec, Result, WidgetId};
-use crate::geometry::Rect;
+use crate::geometry::{Point, Rect};
 use crate::property::{Properties, Property, Value};
 
 mod events;
@@ -36,12 +37,16 @@ pub use self::model::{CheckState, NodeId, TreeModel, TreeNode, TreeRow};
 type SelectMapper<M> = Rc<RefCell<Option<Box<dyn Fn(NodeId) -> Option<M>>>>>;
 type ToggleMapper<M> = Rc<RefCell<Option<Box<dyn Fn(NodeId, bool) -> Option<M>>>>>;
 type CheckMapper<M> = Rc<RefCell<Option<Box<dyn Fn(NodeId, CheckState) -> Option<M>>>>>;
+/// Maps a right-clicked row and its node-local pointer position to the app's
+/// message.
+type ContextMapper<M> = Rc<RefCell<Option<Box<dyn Fn(NodeId, Point) -> Option<M>>>>>;
 
 /// The app-level events a [`TreeView`] maps to `Msg`.
 pub(crate) struct Mappers<M> {
     pub(crate) select: SelectMapper<M>,
     pub(crate) toggle: ToggleMapper<M>,
     pub(crate) check: CheckMapper<M>,
+    pub(crate) context: ContextMapper<M>,
 }
 
 impl<M> Mappers<M> {
@@ -50,6 +55,7 @@ impl<M> Mappers<M> {
             select: Rc::new(RefCell::new(None)),
             toggle: Rc::new(RefCell::new(None)),
             check: Rc::new(RefCell::new(None)),
+            context: Rc::new(RefCell::new(None)),
         }
     }
 }
@@ -161,6 +167,15 @@ impl<M: 'static> TreeView<M> {
         mapper: impl Fn(NodeId, CheckState) -> Option<M> + 'static,
     ) -> TreeView<M> {
         *self.mappers.check.borrow_mut() = Some(Box::new(mapper));
+        self
+    }
+
+    /// Maps a right click (or the Menu key) on a row to the app's message. The
+    /// pointer position is in node-local device pixels, so the app can anchor
+    /// its context menu there. For the keyboard key, it is the row's
+    /// bottom-left corner.
+    pub fn on_context(self, mapper: impl Fn(NodeId, Point) -> Option<M> + 'static) -> TreeView<M> {
+        *self.mappers.context.borrow_mut() = Some(Box::new(mapper));
         self
     }
 

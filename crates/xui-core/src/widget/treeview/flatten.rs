@@ -235,6 +235,15 @@ pub(crate) fn is_visible(rows: &[FlatNode], index: usize) -> bool {
     true
 }
 
+/// The visible slot the raw row at `index` is drawn at, or `None` when it is
+/// hidden by a collapsed ancestor.
+pub(crate) fn index_to_slot(rows: &[FlatNode], index: usize) -> Option<usize> {
+    if index >= rows.len() || !is_visible(rows, index) {
+        return None;
+    }
+    Some((0..index).filter(|at| is_visible(rows, *at)).count())
+}
+
 /// The raw row index drawn at visible slot `slot`, or `None` past the end.
 pub(crate) fn slot_to_index(rows: &[FlatNode], slot: usize) -> Option<usize> {
     let mut visible = 0;

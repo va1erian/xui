@@ -39,6 +39,10 @@ impl<M: 'static> Input<M> {
                 button: MouseButton::Left,
                 ..
             } => self.mouse_down(event),
+            Event::MouseDown {
+                button: MouseButton::Right,
+                ..
+            } => self.context(event),
             Event::MouseMove { y, .. } => {
                 let id = self.id_at(*y);
                 if self.hover.get() != id {
@@ -91,12 +95,54 @@ impl<M: 'static> Input<M> {
             .and_then(|map| map(id))
     }
 
+    /// Maps a right click on a row to the app's context message with its
+    /// node-local pointer position.
+    fn context(&self, event: &Event) -> Option<M> {
+        let (x, y) = event.position()?;
+        let dpi = self.ui.dpi();
+        let (id, at) = {
+            let state = self.state.borrow();
+            let slot = flatten::row_at(dpi, y, state.rows.len())?;
+            let index = flatten::slot_to_index(&state.rows, slot)?;
+            (state.rows[index].id, Point::new(x, y))
+        };
+        self.emit_context(id, at)
+    }
+
+    /// Maps the Menu key to the selected row's context message, anchored at
+    /// the row's bottom-left corner.
+    fn context_keyboard(&self) -> Option<M> {
+        let dpi = self.ui.dpi();
+        let (id, at) = {
+            let state = self.state.borrow();
+            let id = self.selected.get()?;
+            let index = state.find(id)?;
+            let slot = flatten::index_to_slot(&state.rows, index)?;
+            let y = (slot as i32 + 1) * flatten::ROW.to_px(dpi).value().max(1);
+            (id, Point::new(0, y))
+        };
+        self.emit_context(id, at)
+    }
+
+    /// Selects `id`, repaints and maps its context message.
+    fn emit_context(&self, id: NodeId, at: Point) -> Option<M> {
+        self.selected.set(Some(id));
+        self.ui.invalidate(self.id);
+        self.mappers
+            .context
+            .borrow()
+            .as_ref()
+            .and_then(|map| map(id, at))
+    }
+
     fn key_down(&self, event: &Event) -> Option<M> {
-        let Event::KeyDown { key, .. } = *event else {
+        let Event::KeyDown { key, modifiers, .. } = *event else {
             return None;
         };
         let selected = self.selected.get();
         match key {
+            Key::MENU => self.context_keyboard(),
+            Key::F10 if modifiers.shift => self.context_keyboard(),
             Key::UP | Key::DOWN | Key::HOME | Key::END => {
                 let target = {
                     let state = self.state.borrow();

@@ -11,7 +11,9 @@
 //! Events map to the app's `Msg` through the closures given at construction:
 //! [`on_select`](ListView::on_select)/[`on_selection`](ListView::on_selection),
 //! [`on_activate`](ListView::on_activate),
-//! [`on_context`](ListView::on_context) and [`on_sort`](ListView::on_sort).
+//! [`on_context`](ListView::on_context) (which receives the pointer position),
+//! [`on_sort`](ListView::on_sort) and [`on_resize`](ListView::on_resize). A
+//! column boundary in the header can be dragged to resize the column.
 
 use std::cell::RefCell;
 use std::collections::BTreeSet;
@@ -20,12 +22,14 @@ use std::rc::Rc;
 use super::control::Control;
 use crate::app::Ui;
 use crate::backend::{NodeKind, NodeSpec, Result};
-use crate::geometry::Rect;
+use crate::geometry::{Point, Rect};
+use crate::units::Dip;
 
 mod api;
 mod events;
 mod model;
 mod paint;
+mod resize;
 mod state;
 
 #[cfg(test)]
@@ -38,16 +42,22 @@ use self::state::{Rows, State};
 
 /// Maps a row index to the app's message.
 type RowMapper<M> = Box<dyn Fn(usize) -> Option<M>>;
+/// Maps a right click's row and pointer position (node-local pixels) to the
+/// app's message.
+type ContextMapper<M> = Box<dyn Fn(usize, Point) -> Option<M>>;
 /// Maps the whole selection to the app's message.
 type SelectionMapper<M> = Box<dyn Fn(&[usize]) -> Option<M>>;
+/// Maps a finished column resize to the app's message.
+type ResizeMapper<M> = Box<dyn Fn(usize, Dip) -> Option<M>>;
 
 /// The app-level events a [`ListView`] maps to `Msg`.
 pub(crate) struct Mappers<M> {
     pub(crate) select: RefCell<Option<RowMapper<M>>>,
     pub(crate) selection: RefCell<Option<SelectionMapper<M>>>,
     pub(crate) activate: RefCell<Option<RowMapper<M>>>,
-    pub(crate) context: RefCell<Option<RowMapper<M>>>,
+    pub(crate) context: RefCell<Option<ContextMapper<M>>>,
     pub(crate) sort: RefCell<Option<RowMapper<M>>>,
+    pub(crate) resize: RefCell<Option<ResizeMapper<M>>>,
 }
 
 impl<M> Mappers<M> {
@@ -58,6 +68,7 @@ impl<M> Mappers<M> {
             activate: RefCell::new(None),
             context: RefCell::new(None),
             sort: RefCell::new(None),
+            resize: RefCell::new(None),
         }
     }
 }
@@ -67,8 +78,10 @@ impl<M> Mappers<M> {
 /// The selection and activation map to the app's `Msg` through
 /// [`on_select`](ListView::on_select) and
 /// [`on_activate`](ListView::on_activate); a header click maps through
-/// [`on_sort`](ListView::on_sort) and a right click through
-/// [`on_context`](ListView::on_context).
+/// [`on_sort`](ListView::on_sort), dragging a header boundary resizes the
+/// column and maps through [`on_resize`](ListView::on_resize), and a right
+/// click maps through [`on_context`](ListView::on_context) with its pointer
+/// position.
 pub struct ListView<M: 'static> {
     control: Control<M>,
     state: Rc<RefCell<State>>,
@@ -113,6 +126,7 @@ impl<M: 'static> ListView<M> {
             hover: None,
             offset: 0,
             sort: None,
+            resize: None,
             enabled: true,
         }));
         let mappers = Rc::new(Mappers::new());
@@ -203,9 +217,21 @@ impl<M: 'static> ListView<M> {
         self
     }
 
-    /// Maps a right click (or the Menu key) on a row to the app's message.
-    pub fn on_context(self, mapper: impl Fn(usize) -> Option<M> + 'static) -> ListView<M> {
+    /// Maps a right click (or the Menu key) on a row to the app's message. The
+    /// pointer position is in node-local device pixels, so the app can anchor
+    /// its context menu there. For the keyboard key, it is the focused row's
+    /// bottom-left corner.
+    pub fn on_context(self, mapper: impl Fn(usize, Point) -> Option<M> + 'static) -> ListView<M> {
         *self.mappers.context.borrow_mut() = Some(Box::new(mapper));
+        self
+    }
+
+    /// Maps a finished column resize to the app's message: the column and its
+    /// new design width. Dragging a `Fill` boundary converts that column to a
+    /// fixed width, so an app can persist the value back through
+    /// [`set_column_width`](ListView::set_column_width).
+    pub fn on_resize(self, mapper: impl Fn(usize, Dip) -> Option<M> + 'static) -> ListView<M> {
+        *self.mappers.resize.borrow_mut() = Some(Box::new(mapper));
         self
     }
 
