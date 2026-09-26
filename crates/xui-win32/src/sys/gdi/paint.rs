@@ -247,6 +247,25 @@ pub(crate) fn triangle(hdc: HDC, rect: Rect, pointing_up: bool) {
     }
 }
 
+/// Fills the polygon through `points`, using the DC's current brush (the
+/// caller selects a null pen first).
+pub(crate) fn polygon(hdc: HDC, points: &[Point]) {
+    if points.len() < 3 {
+        return;
+    }
+    let points: Vec<POINT> = points
+        .iter()
+        .map(|point| POINT {
+            x: point.x,
+            y: point.y,
+        })
+        .collect();
+    // SAFETY: `points` is a valid slice for the call.
+    unsafe {
+        let _ = Polygon(hdc, &points);
+    }
+}
+
 /// Draws a straight line from `from` to `to` with the DC's current pen.
 pub(crate) fn line(hdc: HDC, from: Point, to: Point) {
     // SAFETY: plain coordinates; the current pen is selected by the caller.

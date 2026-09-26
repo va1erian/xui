@@ -136,6 +136,10 @@ pub trait Canvas {
     /// Fills an ellipse centred on `center`.
     fn fill_ellipse(&mut self, center: Point, radius_x: f32, radius_y: f32, color: Color);
 
+    /// Fills the polygon through `points` (at least three), in the canvas's own
+    /// coordinates, applying the current transform and clip like a shape.
+    fn fill_polygon(&mut self, points: &[Point], color: Color);
+
     /// Strokes a rectangle outline of `width` pixels.
     fn stroke_rect(&mut self, rect: Rect, color: Color, width: f32);
 

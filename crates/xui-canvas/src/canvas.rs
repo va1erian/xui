@@ -187,6 +187,39 @@ impl Canvas for SkiaCanvas<'_> {
         }
     }
 
+    fn fill_polygon(&mut self, points: &[Point], color: Color) {
+        if points.len() < 3 {
+            return;
+        }
+        // Like the other shapes, clip is approximated by the bounding box.
+        let points: Vec<Point> = points.iter().map(|point| self.point(*point)).collect();
+        if let Some(clip) = self.clips.last().copied() {
+            let bbox = points.iter().fold(
+                Rect::new(i32::MAX, i32::MAX, i32::MIN, i32::MIN),
+                |bounds, point| {
+                    Rect::new(
+                        bounds.left.min(point.x),
+                        bounds.top.min(point.y),
+                        bounds.right.max(point.x),
+                        bounds.bottom.max(point.y),
+                    )
+                },
+            );
+            if intersect(bbox, clip).is_empty() {
+                return;
+            }
+        }
+        let mut builder = PathBuilder::new();
+        builder.move_to(points[0].x as f32, points[0].y as f32);
+        for point in &points[1..] {
+            builder.line_to(point.x as f32, point.y as f32);
+        }
+        builder.close();
+        if let Some(path) = builder.finish() {
+            self.fill(&path, color);
+        }
+    }
+
     fn stroke_rect(&mut self, rect: Rect, color: Color, width: f32) {
         if let Some(path) = rect_path(self.rect(rect)) {
             self.stroke(&path, color, width);

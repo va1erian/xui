@@ -169,14 +169,22 @@ impl<M: 'static> TreeView<M> {
                     let base = bounds.left + pad + entry.depth as i32 * indent;
                     let left = if entry.expandable {
                         let (cx, cy) = (base + chevron / 2, top + row / 2);
-                        let half = (chevron / 4).max(1);
-                        let (tip, tail) = if entry.expanded {
-                            (Point::new(cx, cy + half), Point::new(cx + half, cy - half))
+                        let half = (chevron / 5).max(2);
+                        // Expanded points down; collapsed points right.
+                        let triangle = if entry.expanded {
+                            [
+                                Point::new(cx - half, cy - half),
+                                Point::new(cx + half, cy - half),
+                                Point::new(cx, cy + half),
+                            ]
                         } else {
-                            (Point::new(cx + half, cy), Point::new(cx - half, cy + half))
+                            [
+                                Point::new(cx - half, cy - half),
+                                Point::new(cx - half, cy + half),
+                                Point::new(cx + half, cy),
+                            ]
                         };
-                        canvas.draw_line(Point::new(cx - half, cy - half), tip, color, 1.5);
-                        canvas.draw_line(tip, tail, color, 1.5);
+                        canvas.fill_polygon(&triangle, color);
                         base + chevron
                     } else {
                         base
