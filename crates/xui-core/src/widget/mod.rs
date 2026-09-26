@@ -14,6 +14,7 @@ mod control;
 mod edit;
 mod label;
 mod progressbar;
+mod radiogroup;
 mod slider;
 
 #[cfg(test)]
@@ -25,4 +26,5 @@ pub use control::{Control, HasText};
 pub use edit::Edit;
 pub use label::Label;
 pub use progressbar::ProgressBar;
+pub use radiogroup::RadioGroup;
 pub use slider::Slider;

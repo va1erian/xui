@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use super::{Button, CheckBox, Control, Edit, HasText, Label, ProgressBar, Slider};
+use super::{Button, CheckBox, Control, Edit, HasText, Label, ProgressBar, RadioGroup, Slider};
 use crate::app::{App, Core, Runtime, Ui};
 use crate::backend::headless::{DrawOp, HeadlessBackend};
 use crate::backend::{Backend, Event, NodeKind, NodeSpec, PlatformSpec, WidgetId};
@@ -445,6 +445,42 @@ fn a_slider_steps_with_the_keyboard_and_clamps() {
         "the value is clamped to the new range"
     );
     assert_eq!(slider.property("value"), Some(Value::Float(10.0)));
+}
+
+#[test]
+fn a_radio_group_selects_one_option() {
+    let (_backend, core, ui) = setup();
+    let group = RadioGroup::new(&ui, Rect::new(0, 0, 200, 84), &["Small", "Medium", "Large"])
+        .unwrap()
+        .on_select(|index| Some(index as u32));
+    let ids = group.ids();
+    let log = Rc::new(RefCell::new(Vec::new()));
+    let runtime = Runtime::primary(
+        core,
+        TestApp {
+            log: Rc::clone(&log),
+        },
+    );
+
+    assert_eq!(group.selected(), 0);
+    let modifiers = Modifiers::NONE;
+    runtime.deliver(
+        ids[2],
+        &Event::MouseUp {
+            x: 5,
+            y: 5,
+            button: MouseButton::Left,
+            modifiers,
+        },
+    );
+    runtime.deliver(WidgetId::NONE, &Event::Wake);
+    assert_eq!(group.selected(), 2);
+    assert_eq!(*log.borrow(), vec![2]);
+    assert_eq!(group.property("selected"), Some(Value::Integer(2)));
+
+    group.select(1);
+    assert_eq!(group.selected(), 1, "programmatic select raises nothing");
+    assert_eq!(*log.borrow(), vec![2]);
 }
 
 #[test]
