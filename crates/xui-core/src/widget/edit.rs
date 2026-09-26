@@ -17,7 +17,7 @@ use std::rc::Rc;
 
 use super::control::{Control, HasText};
 use crate::app::Ui;
-use crate::backend::{Event, ImplKind, NodeKind, NodeSpec, Result, TextStyle};
+use crate::backend::{Cursor, Event, ImplKind, NodeKind, NodeSpec, Result, TextStyle};
 use crate::geometry::{Point, Rect};
 use crate::message::{Key, MouseButton};
 use crate::property::{Properties, Property, Value};
@@ -52,6 +52,7 @@ impl<M: 'static> Edit<M> {
             ui,
             &NodeSpec::new(NodeKind::Edit, bounds).text(text).tab_stop(),
         )?;
+        ui.set_cursor(control.id(), Cursor::Text);
         let state = Rc::new(RefCell::new(text.to_string()));
         let caret = Rc::new(Cell::new(text.chars().count()));
         let focused = Rc::new(Cell::new(false));

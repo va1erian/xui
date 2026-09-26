@@ -14,10 +14,10 @@ use windows::Win32::UI::Shell::SUBCLASSPROC;
 use windows::Win32::UI::WindowsAndMessaging::{
     CS_DBLCLKS, CreateWindowExW, DestroyWindow, GA_ROOT, GWL_STYLE, GetAncestor, GetClientRect,
     GetWindowLongPtrW, GetWindowRect, GetWindowTextLengthW, GetWindowTextW, HCURSOR, HMENU,
-    HWND_BOTTOM, IDC_ARROW, KillTimer, LoadCursorW, MoveWindow, RegisterClassExW, SW_HIDE, SW_SHOW,
-    SW_SHOWMAXIMIZED, SW_SHOWMINNOACTIVE, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SetTimer,
-    SetWindowLongPtrW, SetWindowPos, SetWindowTextW, ShowWindow, UnregisterClassW, WINDOW_EX_STYLE,
-    WINDOW_STYLE, WNDCLASSEXW, WS_TABSTOP,
+    HWND_BOTTOM, HWND_TOP, IDC_ARROW, KillTimer, LoadCursorW, MoveWindow, RegisterClassExW,
+    SW_HIDE, SW_SHOW, SW_SHOWMAXIMIZED, SW_SHOWMINNOACTIVE, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE,
+    SetTimer, SetWindowLongPtrW, SetWindowPos, SetWindowTextW, ShowWindow, UnregisterClassW,
+    WINDOW_EX_STYLE, WINDOW_STYLE, WNDCLASSEXW, WS_TABSTOP,
 };
 use windows::core::{HSTRING, PCWSTR};
 
@@ -370,6 +370,24 @@ pub(crate) fn send_to_back(hwnd: Hwnd) {
         let _ = SetWindowPos(
             raw_hwnd(hwnd),
             Some(HWND_BOTTOM),
+            0,
+            0,
+            0,
+            0,
+            SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
+        );
+    }
+}
+
+/// Raises `hwnd` to the top of its sibling z-order, so a drop-down popup draws
+/// over the widgets created after it.
+pub(crate) fn bring_to_top(hwnd: Hwnd) {
+    // SAFETY: only state flags and a positioning constant are passed; a stale
+    // handle is a documented no-op failure.
+    unsafe {
+        let _ = SetWindowPos(
+            raw_hwnd(hwnd),
+            Some(HWND_TOP),
             0,
             0,
             0,

@@ -64,15 +64,19 @@ fn set_open<M: 'static>(
         ui.apply_moves(&[(popup, popup_rect(ui.bounds(field), ui.dpi(), s.items.len()))]);
     }
     ui.set_visible(popup, want);
+    if want {
+        // The popup is a sibling created before the widgets below it, so raise
+        // it above them or the list draws behind them.
+        ui.raise(popup);
+    }
     ui.invalidate(field);
     ui.invalidate(popup);
 }
 
-/// The row an event `y` falls on, relative to the popup's bounds.
-fn row_at<M: 'static>(ui: &Ui<M>, popup: WidgetId, y: i32, count: usize) -> Option<usize> {
-    let rel = y - ui.bounds(popup).top;
-    (rel >= 0)
-        .then(|| (rel / ROW.to_px(ui.dpi()).value().max(1)) as usize)
+/// The row an event `y` (node-local) falls on.
+fn row_at(dpi: u32, y: i32, count: usize) -> Option<usize> {
+    (y >= 0)
+        .then(|| (y / ROW.to_px(dpi).value().max(1)) as usize)
         .filter(|index| *index < count)
 }
 
@@ -172,7 +176,7 @@ fn popup_event<M: 'static>(
         return None;
     }
     if let Event::MouseMove { y, .. } = event {
-        let hover = row_at(ui, popup, *y, s.items.len());
+        let hover = row_at(ui.dpi(), *y, s.items.len());
         if s.hover.get() != hover {
             s.hover.set(hover);
             ui.invalidate(popup);
@@ -185,7 +189,7 @@ fn popup_event<M: 'static>(
     if *button != MouseButton::Left {
         return None;
     }
-    let index = row_at(ui, popup, *y, s.items.len())?;
+    let index = row_at(ui.dpi(), *y, s.items.len())?;
     s.selected.set(index);
     set_open(ui, (field, popup), s, false);
     let mapper = s.on_select.borrow();
@@ -370,9 +374,9 @@ mod tests {
         rt.deliver(combo.id(), &down(5, 5));
         let popup = combo.popup.id();
         assert!(visible(&backend, popup));
-        let top = backend.node(popup).unwrap().1.top;
+        // Events carry node-local coordinates, as the backend decodes them.
         let row = ROW.to_px(ui.dpi()).value().max(1);
-        rt.deliver(popup, &down(5, top + row * 2 + row / 2));
+        rt.deliver(popup, &down(5, row * 2 + row / 2));
         rt.deliver(WidgetId::NONE, &Event::Wake);
         assert_eq!(combo.selected(), 2);
         assert_eq!(combo.text(), "three");

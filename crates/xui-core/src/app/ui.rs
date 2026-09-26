@@ -6,8 +6,8 @@ use std::rc::Rc;
 
 use super::{Core, Proxy};
 use crate::backend::{
-    Event, ImplKind, NodeKind, NodeSpec, Painter, ParentRef, Result, TextMetrics, TextStyle,
-    TimerId, WidgetId,
+    Cursor, Event, ImplKind, NodeKind, NodeSpec, Painter, ParentRef, Result, TextMetrics,
+    TextStyle, TimerId, WidgetId,
 };
 use crate::geometry::Rect;
 use crate::theme::Theme;
@@ -98,6 +98,16 @@ impl<M: 'static> Ui<M> {
     /// Enables or disables a node.
     pub fn set_enabled(&self, id: WidgetId, enabled: bool) {
         self.core.backend().set_enabled(id, enabled);
+    }
+
+    /// Raises a node above its siblings in the z-order.
+    pub fn raise(&self, id: WidgetId) {
+        self.core.backend().raise(id);
+    }
+
+    /// Requests the pointer shape shown over a node.
+    pub fn set_cursor(&self, id: WidgetId, cursor: Cursor) {
+        self.core.backend().set_cursor(id, cursor);
     }
 
     /// Gives a node the keyboard focus.

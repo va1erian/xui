@@ -17,7 +17,7 @@ use std::collections::HashMap;
 use std::rc::Rc;
 
 use xui_core::backend::{
-    Backend, BackendError, ImplKind, NodeKind, NodeSpec, Painter, ParentRef, PlatformSpec,
+    Backend, BackendError, Cursor, ImplKind, NodeKind, NodeSpec, Painter, ParentRef, PlatformSpec,
     Result as BackendResult, TextMetrics, TextStyle, TimerId, Waker, WidgetId, WindowId,
 };
 use xui_core::router::WidgetHost;
@@ -300,6 +300,18 @@ impl Backend for Win32Backend {
     fn set_enabled(&self, id: WidgetId, enabled: bool) {
         if let Some((hwnd, _)) = self.node(id) {
             sys::window::enable_window(hwnd, enabled);
+        }
+    }
+
+    fn raise(&self, id: WidgetId) {
+        if let Some((hwnd, _)) = self.node(id) {
+            sys::window::bring_to_top(hwnd);
+        }
+    }
+
+    fn set_cursor(&self, id: WidgetId, cursor: Cursor) {
+        if let Some(node) = self.nodes.borrow().get(&id.raw()) {
+            node.cursor.set(cursor);
         }
     }
 

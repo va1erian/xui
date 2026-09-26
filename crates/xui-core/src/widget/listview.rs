@@ -38,15 +38,14 @@ pub struct ListView<M: 'static> {
     on_activate: RowMapper<M>,
 }
 
-/// The row an event `y` falls on, relative to `bounds`; `None` above the first
-/// row or below the last one.
-fn row_at(bounds: Rect, dpi: u32, y: i32, count: usize) -> Option<usize> {
-    let rel = y - bounds.top;
-    if rel < 0 {
+/// The row an event `y` (node-local) falls on; `None` above the first row or
+/// below the last one.
+fn row_at(dpi: u32, y: i32, count: usize) -> Option<usize> {
+    if y < 0 {
         return None;
     }
     let row = ROW.to_px(dpi).value().max(1);
-    let index = (rel / row) as usize;
+    let index = (y / row) as usize;
     (index < count).then_some(index)
 }
 
@@ -133,14 +132,14 @@ impl<M: 'static> ListView<M> {
                         button: MouseButton::Left,
                         ..
                     } => {
-                        let index = row_at(ui.bounds(id), ui.dpi(), *y, items.borrow().len())?;
+                        let index = row_at(ui.dpi(), *y, items.borrow().len())?;
                         selected.set(Some(index));
                         ui.invalidate(id);
                         let mapper = on_select.borrow();
                         mapper.as_ref().and_then(|mapper| mapper(index))
                     }
                     Event::MouseMove { y, .. } => {
-                        let index = row_at(ui.bounds(id), ui.dpi(), *y, items.borrow().len());
+                        let index = row_at(ui.dpi(), *y, items.borrow().len());
                         if hover.get() != index {
                             hover.set(index);
                             ui.invalidate(id);
@@ -340,6 +339,25 @@ mod tests {
     fn clicking_a_row_selects_and_raises_a_message() {
         let (_backend, core, ui) = setup();
         let list = ListView::new(&ui, Rect::new(0, 0, 120, 88), &["one", "two", "three"])
+            .unwrap()
+            .on_select(|index| Some(index as u32));
+        let log = Rc::new(RefCell::new(Vec::new()));
+        let runtime = Runtime::primary(core, TestApp(Rc::clone(&log)));
+
+        let row = ROW.to_px(ui.dpi()).value().max(1);
+        runtime.deliver(list.id(), &down(5, row + row / 2));
+        runtime.deliver(WidgetId::NONE, &Event::Wake);
+
+        assert_eq!(list.selected(), Some(1));
+        assert_eq!(*log.borrow(), vec![1]);
+    }
+
+    #[test]
+    fn a_hit_test_uses_node_local_coordinates() {
+        let (_backend, core, ui) = setup();
+        // A list away from the origin: the event's `y` is relative to the
+        // node's client area, not the window.
+        let list = ListView::new(&ui, Rect::new(40, 200, 160, 288), &["one", "two", "three"])
             .unwrap()
             .on_select(|index| Some(index as u32));
         let log = Rc::new(RefCell::new(Vec::new()));

@@ -8,8 +8,8 @@ use std::rc::Rc;
 
 use xui_core::Rect;
 use xui_core::backend::{
-    BackendError, ImplKind, NodeKind, NodeSpec, Painter, ParentRef, Result as BackendResult,
-    WidgetId, WindowId,
+    BackendError, Cursor, ImplKind, NodeKind, NodeSpec, Painter, ParentRef,
+    Result as BackendResult, WidgetId, WindowId,
 };
 
 use super::handler::{NodeHandler, WindowShared};
@@ -31,6 +31,8 @@ pub(super) struct BackendNode {
     /// The last bounds the layout assigned.
     bounds: Cell<Rect>,
     pub(super) painter: Rc<RefCell<Option<Painter>>>,
+    /// The pointer shape requested for this node, shared with its handler.
+    pub(super) cursor: Rc<Cell<Cursor>>,
 }
 
 impl Drop for BackendNode {
@@ -52,10 +54,11 @@ impl BackendNode {
         spec: &NodeSpec,
     ) -> BackendResult<BackendNode> {
         let painter = Rc::new(RefCell::new(None));
+        let cursor = Rc::new(Cell::new(Cursor::Default));
         let (hwnd, window) = if spec.kind == NodeKind::Edit {
             create_native_edit(parent_hwnd, spec)?
         } else {
-            create_painted(widget, parent_hwnd, shared, &painter, spec)?
+            create_painted(widget, parent_hwnd, shared, &painter, &cursor, spec)?
         };
 
         if !spec.visible {
@@ -74,6 +77,7 @@ impl BackendNode {
             text: RefCell::new(spec.text.clone()),
             bounds: Cell::new(spec.bounds),
             painter,
+            cursor,
         })
     }
 
@@ -142,6 +146,7 @@ fn create_painted(
     parent_hwnd: Hwnd,
     shared: &Rc<WindowShared>,
     painter: &Rc<RefCell<Option<Painter>>>,
+    cursor: &Rc<Cell<Cursor>>,
     spec: &NodeSpec,
 ) -> BackendResult<(Hwnd, Option<Window>)> {
     let bounds = Rc::new(Cell::new(Rect::from_size(spec.bounds.size())));
@@ -150,6 +155,7 @@ fn create_painted(
         Rc::clone(shared),
         Rc::clone(&bounds),
         Rc::clone(painter),
+        Rc::clone(cursor),
     );
     let class = WindowClass::register("xui.node", xui_core::Theme::light().background)
         .map_err(|_| BackendError::CreateFailed("node class"))?;
