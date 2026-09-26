@@ -2,22 +2,20 @@
 
 //! The contract over painted child windows.
 
-use std::cell::Cell;
 use std::rc::Rc;
 
 use xui_core::backend::{
-    Backend, BackendError, Cursor, FontSpec, ImplKind, NodeKind, NodeSpec, Painter, ParentRef,
-    PlatformSpec, Result as BackendResult, TextLayout, TextMetrics, TextShaper, TextStyle, TimerId,
-    Waker, WidgetId, WindowId,
+    Backend, Cursor, FontSpec, ImplKind, NativeWindowHandle, NodeKind, NodeSpec, Painter,
+    ParentRef, PlatformSpec, Result as BackendResult, TextLayout, TextMetrics, TextShaper,
+    TextStyle, TimerId, Waker, WidgetId, WindowId,
 };
+use xui_core::image::Image;
 use xui_core::router::WidgetHost;
 use xui_core::{Dip, Px, Rect, Theme};
 
-use super::handler::{TopHandler, WindowShared};
 use super::node::BackendNode;
-use super::{BackendWindow, Win32Backend, chrome, cursor::cursor_shape, text};
+use super::{Win32Backend, cursor::cursor_shape, text};
 use crate::sys;
-use crate::window::{Window, WindowClass, WindowExStyle, WindowStyle};
 
 /// The contract over painted child windows.
 ///
@@ -69,42 +67,7 @@ impl Backend for Win32Backend {
     }
 
     fn open_window(&self, spec: &PlatformSpec) -> BackendResult<WindowId> {
-        let id = WindowId::from_raw(Self::allocate(&self.next_window));
-        let shared = WindowShared::new();
-        let background = Theme::light().background;
-        // The spec is in Dip and the window does not exist yet, so convert at
-        // the process-wide system DPI; once it exists `dpi()` reads the
-        // monitor it landed on.
-        let dpi = sys::dpi::system_dpi();
-        let bounds = Rect::new(
-            0,
-            0,
-            spec.width.to_px(dpi).value(),
-            spec.height.to_px(dpi).value(),
-        );
-        let class = WindowClass::register("xui.backend", background)
-            .map_err(|_| BackendError::CreateFailed("window class"))?;
-        let window = Window::create(
-            class,
-            None,
-            WindowStyle::overlapped().clip_children(),
-            WindowExStyle::new(),
-            bounds,
-            &spec.title,
-            TopHandler::new(id, Rc::clone(&shared)),
-        )
-        .map_err(|_| BackendError::CreateFailed("window"))?;
-        chrome::apply(spec, &window);
-        window.show();
-        self.windows.borrow_mut().insert(
-            id.raw(),
-            BackendWindow {
-                window,
-                shared,
-                theme: Cell::new(Theme::light()),
-            },
-        );
-        Ok(id)
+        self.open(spec)
     }
 
     fn close_window(&self, window: WindowId) {
@@ -112,6 +75,26 @@ impl Backend for Win32Backend {
         self.nodes
             .borrow_mut()
             .retain(|_, node| node.window_id != window);
+    }
+
+    fn set_window_title(&self, window: WindowId, title: &str) {
+        self.set_title(window, title);
+    }
+
+    fn set_window_enabled(&self, window: WindowId, enabled: bool) {
+        self.set_enabled(window, enabled);
+    }
+
+    fn native_window(&self, window: WindowId) -> Option<NativeWindowHandle> {
+        self.native_handle(window)
+    }
+
+    fn capture(&self, window: WindowId) -> BackendResult<Image> {
+        self.capture_image(window)
+    }
+
+    fn run_modal(&self, window: WindowId) -> BackendResult<()> {
+        self.run_modal_loop(window)
     }
 
     fn minimize(&self, window: WindowId) {

@@ -27,13 +27,13 @@ pub mod theme;
 pub mod units;
 pub mod widget;
 
-pub use app::{App, Proxy, Ui, run_app};
+pub use app::{App, Proxy, Ui, WindowHandle, run_app};
 
 pub use backend::{
-    Backend, BackendError, Canvas, Cap, Corner, Dash, Event, FontSpec, GradientStop, ImplKind,
-    LinearGradient, NodeKind, NodeOptions, NodeSpec, Painter, ParentRef, RadialGradient, Rgba,
-    Stroke, TextHit, TextLayout, TextMetrics, TextShaper, TextStyle, TextVAlign, TimerId, WidgetId,
-    WindowId,
+    Backdrop, Backend, BackendError, Canvas, Cap, Corner, Dash, Decorations, Event, FontSpec,
+    GradientStop, ImplKind, LinearGradient, NativeWindowHandle, NodeKind, NodeOptions, NodeSpec,
+    Painter, ParentRef, PlatformSpec, RadialGradient, Rgba, Stroke, TextHit, TextLayout,
+    TextMetrics, TextShaper, TextStyle, TextVAlign, TimerId, WidgetId, WindowId,
 };
 pub use color::Color;
 pub use geometry::{Point, Rect, Size};

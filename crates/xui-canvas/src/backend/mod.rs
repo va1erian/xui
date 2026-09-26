@@ -103,6 +103,10 @@ pub(crate) struct WindowState {
     pub(crate) gl: Option<Rc<dyn GlWidget>>,
     /// The GL surface state for the content in `gl`.
     pub(crate) renderer: RendererState,
+    /// Whether this is the first window opened on the backend (the app's main
+    /// window). An unhandled close on it ends the loop; a secondary window's
+    /// close does not.
+    pub(crate) primary: bool,
 }
 
 impl WindowState {
@@ -123,6 +127,7 @@ impl WindowState {
             focused: None,
             gl: None,
             renderer: RendererState::Untried,
+            primary: false,
         }
     }
 }

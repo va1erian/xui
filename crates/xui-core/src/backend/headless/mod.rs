@@ -52,6 +52,9 @@ struct SinkWindow {
     sink: Option<Rc<dyn WidgetHost>>,
     theme: Theme,
     wakes: u32,
+    /// Whether the window is enabled. A modal opener is disabled while its
+    /// child runs.
+    enabled: bool,
 }
 
 /// What the headless backend recorded so far.
@@ -205,6 +208,15 @@ impl HeadlessBackend {
             .windows
             .get(&window.raw())
             .map(|w| w.theme)
+    }
+
+    /// Whether `window` is currently enabled.
+    pub fn window_enabled(&self, window: WindowId) -> bool {
+        self.state
+            .borrow()
+            .windows
+            .get(&window.raw())
+            .is_some_and(|w| w.enabled)
     }
 
     /// How many times `window` was woken.

@@ -130,6 +130,9 @@ already retained), and closures that capture shared mutable app state.
 | Widget layer: `App`/`Ui`, `Msg` mapping, `ControlExt`, `run_app` | exists |
 | Portable backend: `xui-canvas` (winit + tiny-skia), headless snapshots, and a window-level `glow`/`glutin` OpenGL `GlWidget` with a software fallback (`unsafe` isolated in `sys/gl/`) | exists |
 | Secondary windows: `Ui::open_window` (non-modal) and `Ui::open_modal` (modal), `WindowHandle` (`placement`/`set_placement`, `show`/`hide`, `is_visible`), close interception with `Ui::on_close` + `Ui::hide` so a window keeps its state; hosts a `Custom<W>` including `Renderer::Gl` | exists (#45, #163) |
+| Portable multiple top-level windows: `xui_core::Ui::open_window` (non-modal) and `Ui::open_modal` (modal, blocking on `Backend::run_modal`), `WindowHandle` (`send`/`close`/`set_title`/`native`/`capture`), one `Core` and theme per window, `Ui::close_with_result` for a modal result | exists (#98) |
+| Portable capture: `Backend::capture(window)` (Win32 `PrintWindow`, canvas software composite), `Ui::capture`, `WindowHandle::capture` | exists (#98) |
+| Portable native handle: `Backend::native_window`, `Ui::native_window` and `WindowHandle::native` returning an opaque `NativeWindowHandle` for OS integrations | exists (#98) |
 | Borderless fullscreen: `Window::enter_fullscreen(&MonitorInfo)`/`leave_fullscreen` (topmost `WS_POPUP` covering the monitor's full rect, saved style/placement restored), events delivered normally, and `hide_cursor_when_idle` | exists (#162) |
 | Window placement: new windows centred on the owner's monitor (primary for a standalone window), `Ui::placement`/`set_placement` for persisting geometry, `centered_in_work_area` | exists (#157) |
 | Monitor enumeration: `MonitorInfo` (device and friendly name, rect, work area, primary, DPI), `monitors`, `monitor_of`/`Window::monitor`, and `Ui::on_display_change` for `WM_DISPLAYCHANGE` | exists (#161) |

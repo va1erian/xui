@@ -221,6 +221,12 @@ exposing a `windows` type:
 - **The window handle.** `Ui::hwnd()` returns an opaque `xui_win32::Hwnd`
   (`Copy`, with `raw()`), which is all a COM integration such as
   `ITaskbarList3` needs. No `windows` type crosses the public API.
+- **A portable native handle.** On the portable runtime,
+  `xui_core::Ui::native_window()` (and `WindowHandle::native`) return an opaque
+  `xui_core::NativeWindowHandle` whose `raw()` is the platform handle (`HWND` on
+  Windows), so an integration can be written against the portable layer and only
+  `#[cfg(windows)]` code interprets the value. `Backend::capture` likewise
+  gives the portable runtime the screenshot path the Win32 layer already had.
 - **A thread boundary.** `Proxy<Msg>` and `Window::post_wake` carry worker
   results (an MPRIS command, a D-Bus signal) back to `App::update` without
   re-entrancy.

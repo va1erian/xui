@@ -242,3 +242,36 @@ fn a_scroll_view_clips_overflowing_content_light_and_dark() {
         assert!(rendered.is_some(), "the view rendered");
     }
 }
+
+#[test]
+fn capture_returns_the_rendered_surface() {
+    let backend = OffscreenBackend::new();
+    let window = backend
+        .open_window(&PlatformSpec::new("shot").size(Dip(60.0), Dip(40.0)))
+        .unwrap();
+    let node = backend
+        .create(
+            ParentRef::Window(window),
+            &NodeSpec::new(NodeKind::Custom, Rect::new(0, 0, 60, 40)),
+        )
+        .unwrap();
+    backend.set_painter(
+        node,
+        Rc::new(|canvas| {
+            let bounds = canvas.bounds();
+            canvas.fill_rect(bounds, Color::rgb(255, 0, 0));
+        }),
+    );
+
+    let image = backend.capture(window).expect("the window was captured");
+    assert_eq!(image.size(), (60, 40));
+    assert_eq!(image.pixel(30, 20), Some([255, 0, 0, 255]));
+}
+
+#[test]
+fn capturing_a_closed_window_is_an_error() {
+    let backend = OffscreenBackend::new();
+    let window = backend.open_window(&PlatformSpec::new("gone")).unwrap();
+    backend.close_window(window);
+    assert!(backend.capture(window).is_err());
+}

@@ -92,3 +92,31 @@ fn a_painted_node_shows_the_colour_its_painter_drew() {
         "the node painted its accent colour"
     );
 }
+
+#[test]
+fn the_backend_exposes_a_title_native_handle_and_capture() {
+    let backend = Win32Backend::new();
+    backend.init();
+    let Some(window) = backend
+        .open_window(&PlatformSpec::new("xui.backend.meta"))
+        .ok()
+    else {
+        return; // no desktop; skip
+    };
+
+    backend.set_window_title(window, "renamed");
+    assert_eq!(
+        backend.native_window(window).map(|handle| handle.is_null()),
+        Some(false),
+        "the backend exposes a non-null native handle"
+    );
+
+    let image = backend.capture(window).expect("the window was captured");
+    assert!(image.width() > 0 && image.height() > 0, "non-empty capture");
+    assert_eq!(
+        image.pixels().len(),
+        image.width() as usize * image.height() as usize * 4
+    );
+
+    backend.close_window(window);
+}
