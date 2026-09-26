@@ -94,7 +94,8 @@ list.set_items(&["A", "B", "C"]);
 - `with_model(ui, rect, impl ListModel)` takes a custom model; a `Vec<String>`
   and `Vec<Vec<String>>` implement `ListModel` already.
 
-`TreeView<M>` is keyed and lazy, with checkboxes optional:
+`TreeView<M>` is keyed and lazy, with checkboxes optional and indent guides
+behind `indent_guides(bool)` (on by default):
 
 ```rust
 use xui_core::widget::{Glyph, TreeRow, TreeView};

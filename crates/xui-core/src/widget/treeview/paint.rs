@@ -18,6 +18,7 @@ pub(crate) struct Options {
     pub(crate) enabled: bool,
     pub(crate) checkboxes: bool,
     pub(crate) outline: bool,
+    pub(crate) guides: bool,
 }
 
 /// Paints `state` into `canvas` from semantic theme tokens.
@@ -52,18 +53,20 @@ pub(crate) fn paint(canvas: &mut dyn Canvas, state: &State, theme: &Theme, optio
             (true, false) => theme.text,
         };
 
-        let guide = guide_color(theme, fill);
-        for level in 0..node.depth {
-            if !flatten::guide_continues(&state.rows, index, level) {
-                continue;
+        if options.guides {
+            let guide = guide_color(theme, fill);
+            for level in 0..node.depth {
+                if !flatten::guide_continues(&state.rows, index, level) {
+                    continue;
+                }
+                let x = flatten::guide_x(dpi, bounds.left, level);
+                canvas.draw_line(
+                    Point::new(x, top),
+                    Point::new(x, top + row_height),
+                    guide,
+                    1.0,
+                );
             }
-            let x = flatten::guide_x(dpi, bounds.left, level);
-            canvas.draw_line(
-                Point::new(x, top),
-                Point::new(x, top + row_height),
-                guide,
-                1.0,
-            );
         }
 
         let level = flatten::level_x(dpi, bounds.left, node.depth);

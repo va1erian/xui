@@ -7,7 +7,8 @@
 //! up front, and a branch's children are fetched the first time it expands, so
 //! an unopened branch costs nothing. A per-row checkbox is switched on with
 //! [`TreeView::checkboxes`] and its third state with [`TreeView::tri_state`].
-//! Indent guides run down each ancestor column. A row may carry a leading
+//! Indent guides run down each ancestor column, unless
+//! [`TreeView::indent_guides`] turns them off. A row may carry a leading
 //! [`RowIcon`], a vector [`Glyph`](crate::widget::Glyph) or an
 //! [`Image`](crate::image::Image), drawn before its label.
 //!
@@ -73,6 +74,7 @@ pub struct TreeView<M: 'static> {
     enabled: Rc<Cell<bool>>,
     checkboxes: Rc<Cell<bool>>,
     tri_state: Rc<Cell<bool>>,
+    guides: Rc<Cell<bool>>,
     mappers: Rc<Mappers<M>>,
 }
 
@@ -100,6 +102,7 @@ impl<M: 'static> TreeView<M> {
         let enabled = Rc::new(Cell::new(true));
         let checkboxes = Rc::new(Cell::new(false));
         let tri_state = Rc::new(Cell::new(false));
+        let guides = Rc::new(Cell::new(true));
         let mappers = Rc::new(Mappers::new());
 
         {
@@ -108,6 +111,7 @@ impl<M: 'static> TreeView<M> {
             let hover = Rc::clone(&hover);
             let enabled = Rc::clone(&enabled);
             let checkboxes = Rc::clone(&checkboxes);
+            let guides = Rc::clone(&guides);
             let theme = ui.theme_handle();
             let outline = control.selected_handle();
             control.set_painter(Rc::new(move |canvas| {
@@ -121,6 +125,7 @@ impl<M: 'static> TreeView<M> {
                         enabled: enabled.get(),
                         checkboxes: checkboxes.get(),
                         outline: outline.get(),
+                        guides: guides.get(),
                     },
                 );
             }));
@@ -148,6 +153,7 @@ impl<M: 'static> TreeView<M> {
             enabled,
             checkboxes,
             tri_state,
+            guides,
             mappers,
         })
     }
@@ -193,6 +199,15 @@ impl<M: 'static> TreeView<M> {
     /// Whether a checkbox click also visits [`CheckState::Indeterminate`].
     pub fn tri_state(self, tri_state: bool) -> TreeView<M> {
         self.tri_state.set(tri_state);
+        self
+    }
+
+    /// Shows or hides the indent guides (the vertical lines under each
+    /// ancestor column). A shallow tree, like a two-level navigator, may read
+    /// better without them. On by default.
+    pub fn indent_guides(self, guides: bool) -> TreeView<M> {
+        self.guides.set(guides);
+        self.control.invalidate();
         self
     }
 
