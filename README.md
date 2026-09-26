@@ -32,6 +32,7 @@ snapshots and tests. Dark mode is first-class on every backend.
 | `xui-core` | The portable front layer: geometry, units, colour, pure layout arithmetic, semantic theme tokens, the input vocabulary, the accessibility model, the **widget layer**, the `App`/`Ui` runtime and the `Backend` contract. No platform dependency, no `unsafe`. |
 | `xui-win32` | The Win32 backend: `Win32Backend` (an implementation of `xui-core`'s contract) plus a mature Win32-native widget layer — native common controls, GDI/Direct2D/OpenGL, backdrop materials, the extended title bar, monitors, capture and UI Automation. |
 | `xui-canvas` | The cross-platform software backend: a `winit` window compositing with `tiny-skia` and presenting through `softbuffer`, an optional GPU path (`glow` OpenGL through `glutin`), and an `OffscreenBackend` that renders the same widgets headlessly. |
+| `xui-gpu` | The shared OpenGL seam behind both backends' GL widgets: the opaque `GlContext` handle, the `GlSurface` frame/offscreen lifecycle and the offscreen readback. Keeps `glow` out of `xui-core`. |
 | `xui` | The umbrella crate most applications depend on. Selects a backend by feature (`win32` by default, `canvas` for the software backend) and re-exports the front layer. |
 | `xui-litehtml` | An HTML view built on `litehtml` and Direct2D. Windows-only today; not part of the umbrella. |
 

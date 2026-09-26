@@ -108,10 +108,12 @@ snapshots without a desktop.
 
 ## GPU rendering on the canvas backend
 
-A `WinitBackend` window can hand its **whole client area** to a GPU renderer.
-Install a `GlWidget` and the backend presents `glow` OpenGL frames through a
-`GlSurface` (a `glutin` core-profile 3.3 context on the winit window) instead of
-the software copy:
+A `WinitBackend` window can host a GPU renderer. Install a `GlWidget` and the
+backend renders `glow` OpenGL frames through a `GlSurface` (a `glutin`
+core-profile 3.3 context on the winit window) into a texture, reads them back and
+composites them through the software painter model, so GL content is one painter
+among many — the whole client area with `set_gl_content`, or one pane with
+`set_gl_content_on`:
 
 ```rust
 use xui_canvas::{GlWidget, glow};
@@ -128,6 +130,9 @@ impl GlWidget for Visualizer {
 
 // From inside run_app's `make`, with an Rc<WinitBackend> in hand:
 backend.set_gl_content(ui.window(), Triangle::new());
+
+// Or fill one node's pane, laid out like any other widget:
+backend.set_gl_content_on(visualizer_node, Triangle::new());
 ```
 
 ```text
@@ -136,11 +141,13 @@ cargo run -p xui-canvas --example gl
 
 Constraints worth knowing:
 
-- **GL takes over the window.** CPU nodes are not composited into a GL frame, so
-  a GL widget must be the window's sole content. Compositing CPU nodes as a
-  texture on top is a follow-up.
+- **Composited, not a takeover.** A GL frame is rendered into an offscreen
+  texture, read back as pixels and composited through the same software surface
+  as CPU nodes: window-level content is the base layer and node-level content
+  sits at its node's bounds, so a GL visualizer can share a window with ordinary
+  widgets.
 - **Fallback is permanent.** If no display/config/context can be created, or a
-  frame cannot be presented, the backend switches to the software `paint` path
+  frame cannot be rendered, the backend switches to the software `paint` path
   for good, so the window stays usable. `gl_teardown` runs with the context
   still current.
 - The GL context and `glow` loader are the crate's only `unsafe`
@@ -193,7 +200,7 @@ spell the core path (`xui::xui_core::…`) or depend on `xui-core` directly.
 painters and event sink all live there, and a `WidgetId` is meaningless to
 another backend. The offscreen backend is a separate world used for rendering,
 not a window you show. GL content is the exception inside a canvas window, but it
-still takes the whole window.
+is composited like any other node and can cover the whole window or one pane.
 
 **Choosing.** Use `Win32Backend` for Windows apps that want native text fields
 and the Windows window features; use `WinitBackend` when the app must also run

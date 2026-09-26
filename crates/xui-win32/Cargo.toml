@@ -32,6 +32,9 @@ thiserror = "2"
 # The safe OpenGL binding a `Renderer::Gl` widget draws with. Re-exported as
 # `xui_win32::glow` so an implementor names the same version this crate links.
 glow = "0.16"
+# The shared OpenGL surface seam; WGL context creation stays here, the frame
+# lifecycle is shared with the canvas backend.
+xui-gpu = { path = "../xui-gpu" }
 # Deliberately narrow: one feature group per Win32 namespace actually used, so
 # the generated bindings (and the resulting binary) stay as small as possible.
 # `Vector2`/`Matrix3x2`, the point and transform types Direct2D takes, live here

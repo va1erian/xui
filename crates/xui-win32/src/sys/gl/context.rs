@@ -62,7 +62,7 @@ impl Context {
         // or a null handle.
         let hdc = unsafe { GetDC(Some(raw)) };
         if hdc.0.is_null() {
-            return Err(Error::Gl("GetDC returned no device context"));
+            return Err(Error::Gl("GetDC returned no device context".to_string()));
         }
         match Context::build(hwnd, hdc) {
             Ok(context) => Ok(context),
@@ -167,6 +167,34 @@ impl Context {
     }
 }
 
+impl xui_gpu::GlContext for Context {
+    fn make_current(&self) {
+        Context::make_current(self);
+    }
+
+    fn glow(&self) -> &glow::Context {
+        Context::glow(self)
+    }
+
+    fn set_viewport(&self, width: i32, height: i32) {
+        Context::set_viewport(self, width, height);
+    }
+
+    fn clear_to(&self, background: Color) {
+        Context::clear_to(self, background);
+    }
+
+    fn present(&self) -> std::result::Result<(), String> {
+        self.swap().map_err(|error| error.to_string())
+    }
+
+    fn prepare_frame(&self, _width: u32, _height: u32) -> Option<u32> {
+        // Child windows are never told about a DPI change, so re-read the
+        // window's DPI every frame.
+        Some(crate::sys::dpi::window_dpi(self.hwnd()))
+    }
+}
+
 impl Drop for Context {
     fn drop(&mut self) {
         // SAFETY: `hglrc` is live and owned by this context. It is released
@@ -201,7 +229,7 @@ fn set_pixel_format(hdc: HDC) -> Result<()> {
     let format = unsafe { ChoosePixelFormat(hdc, &pfd) };
     if format == 0 {
         return Err(Error::Gl(
-            "the driver offers no matching OpenGL pixel format",
+            "the driver offers no matching OpenGL pixel format".to_string(),
         ));
     }
     // SAFETY: `format` came from `ChoosePixelFormat` for this DC and `pfd`

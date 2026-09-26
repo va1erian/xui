@@ -163,6 +163,33 @@ impl Context {
     }
 }
 
+impl xui_gpu::GlContext for Context {
+    fn make_current(&self) {
+        Context::make_current(self);
+    }
+
+    fn glow(&self) -> &glow::Context {
+        Context::glow(self)
+    }
+
+    fn set_viewport(&self, width: i32, height: i32) {
+        Context::set_viewport(self, width, height);
+    }
+
+    fn clear_to(&self, background: Color) {
+        Context::clear_to(self, background);
+    }
+
+    fn present(&self) -> Result<(), String> {
+        self.swap()
+    }
+
+    fn prepare_frame(&self, width: u32, height: u32) -> Option<u32> {
+        self.resize(width, height);
+        None
+    }
+}
+
 impl Drop for Context {
     fn drop(&mut self) {
         // Release the thread's current binding before the surface and context

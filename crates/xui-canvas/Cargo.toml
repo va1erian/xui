@@ -9,6 +9,8 @@ readme = "README.md"
 
 [dependencies]
 xui-core = { path = "../xui-core" }
+# The shared OpenGL surface seam (context handle + frame/offscreen lifecycle).
+xui-gpu = { path = "../xui-gpu" }
 tiny-skia = "0.11"
 cosmic-text = "0.19"
 winit = "0.30"

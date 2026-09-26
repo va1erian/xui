@@ -2,8 +2,8 @@
 
 //! The `winit` [`ApplicationHandler`] that drives [`WinitBackend`]: it creates
 //! the real windows, translates platform input into portable events, and
-//! presents a frame on redraw — an OpenGL frame when the window has GL content,
-//! otherwise a `softbuffer` copy of the software composite.
+//! presents a frame on redraw — a `softbuffer` copy of the software composite,
+//! into which any GL content has already been rendered.
 //!
 //! The handler is a thin dispatcher: window creation and DPI live in
 //! [`window`], input translation in [`input`] (with the pure mappings in

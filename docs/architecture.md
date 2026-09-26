@@ -224,6 +224,7 @@ crates/xui-core/src/
 
 crates/xui-win32/src/     the Win32 backend + the Win32-native widget layer
 crates/xui-canvas/src/    WinitBackend, SkiaCanvas, OffscreenBackend, GL seam
+crates/xui-gpu/src/       the shared OpenGL surface seam (no platform code)
 crates/xui-litehtml/src/  the litehtml HTML view (Windows)
 crates/xui/src/           the umbrella crate
 ```
@@ -232,7 +233,7 @@ crates/xui/src/           the umbrella crate
 
 These are non-negotiable and are part of `AGENTS.md`.
 
-- **`unsafe` only in a backend's `sys/` module.** Every other module starts with
+- **`unsafe` only in a `sys/` module.** Every other module starts with
   `#![forbid(unsafe_code)]`. Each `unsafe` block carries a `// SAFETY:` comment.
 - **No platform types in the public API.** A platform handle may be a private
   field; callers only see xui types (`Hwnd` and `NativeWindowHandle` are opaque

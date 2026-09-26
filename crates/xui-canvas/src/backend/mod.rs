@@ -98,10 +98,14 @@ pub(crate) struct WindowState {
     pub(crate) hover: Option<WidgetId>,
     /// The node with the keyboard focus.
     pub(crate) focused: Option<WidgetId>,
-    /// The window-level GPU renderer, when the app installed one. Takes over
-    /// the whole client area.
+    /// The window-level GPU renderer, when the app installed one. Rendered
+    /// offscreen and composited as the base layer of the client area.
     pub(crate) gl: Option<Rc<dyn GlWidget>>,
-    /// The GL surface state for the content in `gl`.
+    /// Per-node GPU renderers, keyed by the node they fill. Each is rendered
+    /// offscreen at its node's bounds and composited among the other nodes, so
+    /// a GL visualizer can sit in one pane of an ordinary app.
+    pub(crate) gl_nodes: HashMap<WidgetId, Rc<dyn GlWidget>>,
+    /// The GL surface state shared by the content in `gl` and `gl_nodes`.
     pub(crate) renderer: RendererState,
     /// Whether this is the first window opened on the backend (the app's main
     /// window). An unhandled close on it ends the loop; a secondary window's
@@ -126,6 +130,7 @@ impl WindowState {
             hover: None,
             focused: None,
             gl: None,
+            gl_nodes: HashMap::new(),
             renderer: RendererState::Untried,
             primary: false,
         }

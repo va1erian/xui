@@ -8,11 +8,12 @@
 //! `winit` window through `softbuffer`; an [`OffscreenBackend`] renders the
 //! same widgets headlessly for tests and snapshots.
 //!
-//! A window can also hand its client area to a GPU renderer: install a
-//! [`GlWidget`] with [`WinitBackend::set_gl_content`] and the backend presents
-//! `glow` OpenGL frames through a [`GlSurface`] instead of the software copy.
-//! Every module but `sys::gl` forbids `unsafe`; the GL context and loader's
-//! `unsafe` is isolated there.
+//! A window can also host a GPU renderer: install a [`GlWidget`] with
+//! [`WinitBackend::set_gl_content`] and the backend renders `glow` OpenGL
+//! frames through a [`GlSurface`] into a texture, reads them back and
+//! composites them through the same software path as every CPU node, so GL
+//! content is one painter among many. Every module but `sys::gl` forbids
+//! `unsafe`; the GL context and loader's `unsafe` is isolated there.
 
 mod backend;
 mod canvas;

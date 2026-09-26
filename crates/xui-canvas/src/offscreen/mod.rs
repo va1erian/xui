@@ -43,6 +43,9 @@ struct OffscreenWindow {
     /// Window-level GL content, painted through its software fallback (the
     /// offscreen backend never has a GL context).
     gl: Option<Rc<dyn GlWidget>>,
+    /// Per-node GL content, keyed by the node it fills, also painted through its
+    /// software fallback.
+    gl_nodes: HashMap<u64, Rc<dyn GlWidget>>,
 }
 
 struct Node {
@@ -55,6 +58,16 @@ struct Node {
     painter: Option<Painter>,
     /// A clip on this node's descendants, in the node's own coordinates.
     clip: Option<Rect>,
+}
+
+/// One node to draw in creation order: its painter (if any) and whether it also
+/// carries GL fallback content.
+struct Draw {
+    id: WidgetId,
+    bounds: Rect,
+    clip: Option<Rect>,
+    painter: Option<Painter>,
+    gl: bool,
 }
 
 /// A backend that renders into a software surface.
@@ -110,6 +123,7 @@ impl OffscreenBackend {
                 width: width as i32,
                 height: height as i32,
                 gl: None,
+                gl_nodes: HashMap::new(),
             },
         );
         Ok(id)
@@ -121,36 +135,67 @@ impl OffscreenBackend {
         let entry = windows.get_mut(&window.raw())?;
         entry.surface.fill(entry.theme.background);
         let dpi = entry.dpi;
+        let theme = entry.theme;
+        // GL content is one painter among many, exactly as in the windowed
+        // backend; the offscreen backend has no GPU, so it paints the widget's
+        // software fallback: window-level content as the base layer, node-level
+        // content at its node's bounds.
+        if let Some(widget) = entry.gl.clone() {
+            let bounds = Rect::new(0, 0, entry.width, entry.height);
+            entry
+                .surface
+                .with_canvas_at(bounds, dpi, |canvas| widget.paint(canvas, bounds, &theme));
+        }
+        let gl_nodes: Vec<(u64, Rc<dyn GlWidget>)> = entry
+            .gl_nodes
+            .iter()
+            .map(|(raw, widget)| (*raw, Rc::clone(widget)))
+            .collect();
         let nodes = self.nodes.borrow();
-        let paints: Vec<(Rect, Option<Rect>, Painter)> = nodes
+        let paints: Vec<Draw> = nodes
             .iter()
             .filter(|(_, node)| node.window == window && node.visible)
             .filter_map(|(id, node)| {
-                let painter = node.painter.clone()?;
+                let painter = node.painter.clone();
+                let gl = gl_nodes.iter().any(|(raw, _)| *raw == id.raw());
+                if painter.is_none() && !gl {
+                    return None;
+                }
                 let clip = ancestor_clip(&nodes, *id);
                 if let Some(clip) = clip
                     && intersect(node.bounds, clip).is_empty()
                 {
                     return None;
                 }
-                Some((node.bounds, clip, painter))
+                Some(Draw {
+                    id: *id,
+                    bounds: node.bounds,
+                    clip,
+                    painter,
+                    gl,
+                })
             })
             .collect();
         drop(nodes);
-        for (bounds, clip, painter) in paints {
-            entry.surface.with_canvas_at(bounds, dpi, |canvas| {
-                if let Some(clip) = clip {
-                    canvas.push_clip(clip);
-                }
-                painter(canvas);
-            });
-        }
-        if let Some(widget) = entry.gl.clone() {
-            let bounds = Rect::new(0, 0, entry.width, entry.height);
-            let theme = entry.theme;
-            entry
-                .surface
-                .with_canvas_at(bounds, dpi, |canvas| widget.paint(canvas, bounds, &theme));
+        for draw in paints {
+            if let Some(painter) = draw.painter {
+                entry.surface.with_canvas_at(draw.bounds, dpi, |canvas| {
+                    if let Some(clip) = draw.clip {
+                        canvas.push_clip(clip);
+                    }
+                    painter(canvas);
+                });
+            }
+            if draw.gl
+                && let Some((_, widget)) = gl_nodes.iter().find(|(raw, _)| *raw == draw.id.raw())
+            {
+                entry.surface.with_canvas_at(draw.bounds, dpi, |canvas| {
+                    if let Some(clip) = draw.clip {
+                        canvas.push_clip(clip);
+                    }
+                    widget.paint(canvas, draw.bounds, &theme);
+                });
+            }
         }
         Some(entry.surface.to_image())
     }
@@ -169,6 +214,38 @@ impl OffscreenBackend {
     pub fn clear_gl_content(&self, window: WindowId) {
         if let Some(entry) = self.windows.borrow_mut().get_mut(&window.raw()) {
             entry.gl = None;
+        }
+    }
+
+    /// Installs `widget` as the GL content of the node `id`, painted through its
+    /// software fallback at the node's bounds. Mirrors the windowed backend's
+    /// per-node seam and lets a headless test exercise the fallback in a pane.
+    pub fn set_gl_content_on<W: GlWidget + 'static>(&self, id: WidgetId, widget: W) {
+        let window = self
+            .nodes
+            .borrow()
+            .iter()
+            .find(|(node_id, _)| *node_id == id)
+            .map(|(_, node)| node.window);
+        if let Some(window) = window
+            && let Some(entry) = self.windows.borrow_mut().get_mut(&window.raw())
+        {
+            entry.gl_nodes.insert(id.raw(), Rc::new(widget));
+        }
+    }
+
+    /// Removes the GL content of the node `id`.
+    pub fn clear_gl_content_on(&self, id: WidgetId) {
+        let window = self
+            .nodes
+            .borrow()
+            .iter()
+            .find(|(node_id, _)| *node_id == id)
+            .map(|(_, node)| node.window);
+        if let Some(window) = window
+            && let Some(entry) = self.windows.borrow_mut().get_mut(&window.raw())
+        {
+            entry.gl_nodes.remove(&id.raw());
         }
     }
 

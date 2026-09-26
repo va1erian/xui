@@ -2,36 +2,80 @@
 
 //! Compositing a window's nodes into a [`Surface`].
 
-use xui_core::backend::Canvas as _;
+use std::rc::Rc;
+
+use xui_core::Theme;
+use xui_core::backend::{Canvas as _, WidgetId, WindowId};
 use xui_core::geometry::Rect;
+use xui_core::image::Image;
 
 use super::Shared;
 use super::geometry::{absolute_bounds, ancestor_clip, intersect};
 use crate::Surface;
+use crate::gl::GlWidget;
 
-/// Fills `surface` with the window's background and runs each visible node's
+/// Where a window's GL content is attached.
+#[derive(Clone, Copy)]
+enum GlSlot {
+    /// Covers the whole client area, as the base layer.
+    Window,
+    /// Covers one node's bounds, composited among the window's other nodes.
+    Node(WidgetId),
+}
+
+/// A node to draw, in creation order: its painter (if any) and whether it also
+/// carries GL content.
+struct NodeDraw {
+    id: WidgetId,
+    bounds: Rect,
+    clip: Option<Rect>,
+    painter: Option<xui_core::backend::Painter>,
+    gl: bool,
+}
+
+/// Fills `surface` with the window's background, composites the window's
+/// window-level GL content as the base layer, then runs each visible node's
 /// painter at its absolute bounds, in creation order (later nodes on top),
-/// clipped to its ancestors' clips.
-pub(super) fn composite(
-    shared: &Shared,
-    window: xui_core::backend::WindowId,
-    surface: &mut Surface,
-) {
-    let (theme, dpi, size, gl) = {
+/// clipped to its ancestors' clips, with per-node GL content at that node's
+/// bounds.
+///
+/// GL content is one painter among many: each frame is rendered into a texture,
+/// read back as pixels and drawn through the same software surface, so CPU nodes
+/// composite over it instead of being hidden by a GPU frame that took over the
+/// whole window; node-level content sits in its pane.
+pub(super) fn composite(shared: &Shared, window: WindowId, surface: &mut Surface) {
+    let (theme, dpi, size) = {
         let windows = shared.windows.borrow();
         let Some(state) = windows.get(&window.raw()) else {
             return;
         };
-        (state.theme, state.dpi, state.size, state.gl.clone())
+        (state.theme, state.dpi, state.size)
     };
     surface.fill(theme.background);
-    let paints: Vec<(Rect, Option<Rect>, xui_core::backend::Painter)> = {
+    draw_gl(
+        shared,
+        window,
+        GlSlot::Window,
+        Rect::new(0, 0, size.0 as i32, size.1 as i32),
+        None,
+        theme,
+        dpi,
+        surface,
+    );
+
+    let draws: Vec<NodeDraw> = {
         let nodes = shared.nodes.borrow();
+        let windows = shared.windows.borrow();
+        let gl_nodes = windows.get(&window.raw()).map(|state| &state.gl_nodes);
         nodes
             .iter()
             .filter(|(_, node)| node.window == window && node.visible)
             .filter_map(|(id, node)| {
-                let painter = node.painter.clone()?;
+                let painter = node.painter.clone();
+                let gl = gl_nodes.is_some_and(|nodes| nodes.contains_key(id));
+                if painter.is_none() && !gl {
+                    return None;
+                }
                 let bounds = absolute_bounds(&nodes, *id)?;
                 let clip = ancestor_clip(&nodes, *id);
                 if let Some(clip) = clip
@@ -39,24 +83,102 @@ pub(super) fn composite(
                 {
                     return None;
                 }
-                Some((bounds, clip, painter))
+                Some(NodeDraw {
+                    id: *id,
+                    bounds,
+                    clip,
+                    painter,
+                    gl,
+                })
             })
             .collect()
     };
-    for (bounds, clip, painter) in paints {
-        surface.with_canvas_at(bounds, dpi, |canvas| {
-            if let Some(clip) = clip {
-                canvas.push_clip(clip);
-            }
-            painter(canvas);
-        });
+    for draw in draws {
+        if let Some(painter) = &draw.painter {
+            surface.with_canvas_at(draw.bounds, dpi, |canvas| {
+                if let Some(clip) = draw.clip {
+                    canvas.push_clip(clip);
+                }
+                painter(canvas);
+            });
+        }
+        if draw.gl {
+            draw_gl(
+                shared,
+                window,
+                GlSlot::Node(draw.id),
+                draw.bounds,
+                draw.clip,
+                theme,
+                dpi,
+                surface,
+            );
+        }
     }
-    // A GL widget has no painter node; its software fallback covers the whole
-    // client area, because installing GL content takes over the window.
-    if let Some(widget) = gl {
-        let bounds = Rect::new(0, 0, size.0 as i32, size.1 as i32);
-        surface.with_canvas_at(bounds, dpi, |canvas| widget.paint(canvas, bounds, &theme));
+}
+
+/// Renders the GL content at `slot` into an image of `bounds`' size and draws
+/// it at `bounds`. When no GL context or framebuffer is available the widget's
+/// software fallback is painted instead, so the window stays usable.
+#[allow(clippy::too_many_arguments)]
+fn draw_gl(
+    shared: &Shared,
+    window: WindowId,
+    slot: GlSlot,
+    bounds: Rect,
+    clip: Option<Rect>,
+    theme: Theme,
+    dpi: u32,
+    surface: &mut Surface,
+) {
+    if bounds.is_empty() {
+        return;
     }
+    let Some(widget) = gl_widget(shared, window, slot) else {
+        return;
+    };
+    let image = render_image(shared, window, &widget, bounds, theme);
+    surface.with_canvas_at(bounds, dpi, |canvas| {
+        if let Some(clip) = clip {
+            canvas.push_clip(clip);
+        }
+        match &image {
+            Some(image) => canvas.draw_image(image, bounds),
+            None => widget.paint(canvas, bounds, &theme),
+        }
+    });
+}
+
+/// The GL widget attached at `slot`, if any.
+fn gl_widget(shared: &Shared, window: WindowId, slot: GlSlot) -> Option<Rc<dyn GlWidget>> {
+    let windows = shared.windows.borrow();
+    let state = windows.get(&window.raw())?;
+    match slot {
+        GlSlot::Window => state.gl.clone(),
+        GlSlot::Node(id) => state.gl_nodes.get(&id).cloned(),
+    }
+}
+
+/// Renders `widget` into an offscreen image of `bounds`' size, or `None` when no
+/// GL context or framebuffer is available.
+fn render_image(
+    shared: &Shared,
+    window: WindowId,
+    widget: &Rc<dyn GlWidget>,
+    bounds: Rect,
+    theme: Theme,
+) -> Option<Image> {
+    let mut windows = shared.windows.borrow_mut();
+    let state = windows.get_mut(&window.raw())?;
+    let handle = state.window.clone()?;
+    state.renderer.render(
+        &handle,
+        bounds.width() as u32,
+        bounds.height() as u32,
+        theme.background,
+        |gl| widget.paint_gl(gl, bounds, &theme),
+        |gl| widget.gl_teardown(gl),
+    )
 }
 
 #[cfg(test)]
