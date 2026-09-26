@@ -31,5 +31,160 @@ required-features = ["canvas"]
 name = "gridview"
 required-features = ["canvas"]
 
+[[example]]
+name = "control_button"
+path = "examples/controls/button.rs"
+required-features = ["canvas"]
+
+[[example]]
+name = "control_checkbox"
+path = "examples/controls/checkbox.rs"
+required-features = ["canvas"]
+
+[[example]]
+name = "control_colorpicker"
+path = "examples/controls/colorpicker.rs"
+required-features = ["canvas"]
+
+[[example]]
+name = "control_combobox"
+path = "examples/controls/combobox.rs"
+required-features = ["canvas"]
+
+[[example]]
+name = "control_dialog"
+path = "examples/controls/dialog.rs"
+required-features = ["canvas"]
+
+[[example]]
+name = "control_edit"
+path = "examples/controls/edit.rs"
+required-features = ["canvas"]
+
+[[example]]
+name = "control_flowtext"
+path = "examples/controls/flowtext.rs"
+required-features = ["canvas"]
+
+[[example]]
+name = "control_gridview"
+path = "examples/controls/gridview.rs"
+required-features = ["canvas"]
+
+[[example]]
+name = "control_groupbox"
+path = "examples/controls/groupbox.rs"
+required-features = ["canvas"]
+
+[[example]]
+name = "control_hyperlink"
+path = "examples/controls/hyperlink.rs"
+required-features = ["canvas"]
+
+[[example]]
+name = "control_icon"
+path = "examples/controls/icon.rs"
+required-features = ["canvas"]
+
+[[example]]
+name = "control_label"
+path = "examples/controls/label.rs"
+required-features = ["canvas"]
+
+[[example]]
+name = "control_listview"
+path = "examples/controls/listview.rs"
+required-features = ["canvas"]
+
+[[example]]
+name = "control_materialstatusbar"
+path = "examples/controls/materialstatusbar.rs"
+required-features = ["canvas"]
+
+[[example]]
+name = "control_menu"
+path = "examples/controls/menu.rs"
+required-features = ["canvas"]
+
+[[example]]
+name = "control_multilineedit"
+path = "examples/controls/multilineedit.rs"
+required-features = ["canvas"]
+
+[[example]]
+name = "control_numberfield"
+path = "examples/controls/numberfield.rs"
+required-features = ["canvas"]
+
+[[example]]
+name = "control_panel"
+path = "examples/controls/panel.rs"
+required-features = ["canvas"]
+
+[[example]]
+name = "control_progressbar"
+path = "examples/controls/progressbar.rs"
+required-features = ["canvas"]
+
+[[example]]
+name = "control_radiogroup"
+path = "examples/controls/radiogroup.rs"
+required-features = ["canvas"]
+
+[[example]]
+name = "control_scrollview"
+path = "examples/controls/scrollview.rs"
+required-features = ["canvas"]
+
+[[example]]
+name = "control_separator"
+path = "examples/controls/separator.rs"
+required-features = ["canvas"]
+
+[[example]]
+name = "control_slider"
+path = "examples/controls/slider.rs"
+required-features = ["canvas"]
+
+[[example]]
+name = "control_split"
+path = "examples/controls/split.rs"
+required-features = ["canvas"]
+
+[[example]]
+name = "control_statusbar"
+path = "examples/controls/statusbar.rs"
+required-features = ["canvas"]
+
+[[example]]
+name = "control_tabs"
+path = "examples/controls/tabs.rs"
+required-features = ["canvas"]
+
+[[example]]
+name = "control_toolbar"
+path = "examples/controls/toolbar.rs"
+required-features = ["canvas"]
+
+[[example]]
+name = "control_togglebutton"
+path = "examples/controls/togglebutton.rs"
+required-features = ["canvas"]
+
+[[example]]
+name = "control_tooltip"
+path = "examples/controls/tooltip.rs"
+required-features = ["canvas"]
+
+[[example]]
+name = "control_topbar"
+path = "examples/controls/topbar.rs"
+required-features = ["canvas"]
+
+[[example]]
+name = "control_treeview"
+path = "examples/controls/treeview.rs"
+required-features = ["canvas"]
+
 [build-dependencies]
 embed-resource = "3.0"
