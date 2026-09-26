@@ -7,6 +7,7 @@ use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use super::control::{Control, HasText};
+use super::popup;
 use crate::app::Ui;
 use crate::backend::{Canvas, Event, NodeKind, NodeSpec, Result, TextStyle, WidgetId};
 use crate::geometry::{Point, Rect};
@@ -111,8 +112,7 @@ fn paint_popup<M: 'static>(s: &Shared<M>, canvas: &mut dyn Canvas, theme: Theme)
     let b = canvas.bounds();
     let row = ROW.to_px(canvas.dpi()).value().max(1);
     let pad = PADDING.to_px(canvas.dpi()).value();
-    canvas.clear(theme.surface);
-    canvas.stroke_rect(b, theme.border, 1.0);
+    popup::paint(canvas, theme, theme.surface);
     for (index, item) in s.items.iter().enumerate() {
         let top = b.top + row * index as i32;
         let rect = Rect::new(b.left, top, b.right, top + row);

@@ -15,6 +15,7 @@ use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use super::control::{Control, HasText};
+use super::popup;
 use crate::app::Ui;
 use crate::backend::{Canvas, Event, NodeKind, NodeSpec, Result, TextStyle, TimerId, WidgetId};
 use crate::geometry::Rect;
@@ -27,8 +28,6 @@ const TEXT_SIZE: Dip = Dip(12.0);
 const PADDING: Dip = Dip(8.0);
 /// Gap between the target and the popup.
 const GAP: Dip = Dip(4.0);
-/// Corner radius of the popup face, in pixels.
-const RADIUS: f32 = 4.0;
 /// The hover delay before the popup appears.
 const DEFAULT_DELAY_MS: u32 = 500;
 
@@ -277,9 +276,7 @@ fn target_event<M: 'static>(ui: &Ui<M>, popup: WidgetId, shared: &Shared, event:
 fn paint(shared: &Shared, canvas: &mut dyn Canvas, theme: Theme) {
     let bounds = canvas.bounds();
     let pad = PADDING.to_px(canvas.dpi()).value();
-    canvas.clear(theme.background);
-    canvas.fill_rounded_rect(bounds, RADIUS, theme.raised);
-    canvas.stroke_rounded_rect(bounds, RADIUS, theme.border, 1.0);
+    popup::paint(canvas, theme, theme.raised);
     let text = shared.text.borrow();
     let style = TextStyle::new(theme.text, TEXT_SIZE).middle();
     canvas.draw_text(text.as_str(), bounds.shrink(pad), &style);

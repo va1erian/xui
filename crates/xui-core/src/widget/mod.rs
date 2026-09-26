@@ -23,6 +23,7 @@ mod menu;
 mod multilineedit;
 mod numberfield;
 mod panel;
+mod popup;
 mod progressbar;
 mod radiogroup;
 mod scrollview;
