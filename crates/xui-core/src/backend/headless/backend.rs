@@ -145,8 +145,22 @@ impl Backend for HeadlessBackend {
     }
 
     fn set_visible(&self, id: WidgetId, visible: bool) {
-        if let Some(node) = self.state.borrow_mut().nodes.get_mut(&id.raw()) {
-            node.visible = visible;
+        let shown = {
+            let mut state = self.state.borrow_mut();
+            match state.nodes.get_mut(&id.raw()) {
+                Some(node) => {
+                    let was = node.visible;
+                    node.visible = visible;
+                    visible && !was
+                }
+                None => false,
+            }
+        };
+        // A native show paints synchronously before the window is composed
+        // (the Win32 backend cloaks, paints and uncloaks), so model it: a
+        // test then sees the same first frame a platform would compose.
+        if shown {
+            self.render(id);
         }
     }
 

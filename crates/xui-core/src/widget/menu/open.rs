@@ -78,16 +78,19 @@ fn open_level<M: 'static>(rt: &Rc<Runtime<M>>, path: Vec<usize>, origin: Rect) {
         .min((client.bottom - height).max(client.top))
         .max(client.top);
     let bounds = Rect::new(left, top, left + width, top + height);
-    rt.ui.apply_moves(&[(id, bounds)]);
-    rt.ui.set_visible(id, true);
-    rt.ui.raise(id);
-    rt.ui.focus(id);
-    rt.ui.invalidate(id);
+    // Record the level before showing: a native backend paints a popup
+    // synchronously inside `set_visible` (so its first composed frame is
+    // finished), and the painter reads this state (#130).
     rt.view
         .borrow_mut()
         .levels
         .push(Level { path, hover: first });
     rt.open.borrow_mut().push(Open { id, bounds });
+    rt.ui.apply_moves(&[(id, bounds)]);
+    rt.ui.set_visible(id, true);
+    rt.ui.raise(id);
+    rt.ui.focus(id);
+    rt.ui.invalidate(id);
 }
 
 /// Opens the submenu of entry `index` at `depth`.
