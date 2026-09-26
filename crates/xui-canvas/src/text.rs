@@ -8,7 +8,9 @@
 
 use std::cell::RefCell;
 
-use cosmic_text::{Align, Attrs, Buffer, Color, FontSystem, Metrics, Shaping, SwashCache};
+use cosmic_text::{
+    Align, Attrs, Buffer, Color, Family, FontSystem, Metrics, Shaping, Style, SwashCache, Weight,
+};
 use tiny_skia::{Pixmap, PremultipliedColorU8};
 
 use xui_core::backend::{TextAlign, TextMetrics, TextStyle, TextVAlign};
@@ -45,6 +47,22 @@ fn align_of(style: &TextStyle) -> Option<Align> {
     }
 }
 
+/// The shaping attributes for `style`: its family, weight and slant, so the
+/// measured glyph advances are the ones that get painted.
+fn attrs(style: &TextStyle) -> Attrs<'_> {
+    let mut attrs = Attrs::new();
+    if let Some(family) = style.family.as_deref() {
+        attrs = attrs.family(Family::Name(family));
+    }
+    if style.weight.value() != 400 {
+        attrs = attrs.weight(Weight(style.weight.value()));
+    }
+    if style.italic {
+        attrs = attrs.style(Style::Italic);
+    }
+    attrs
+}
+
 /// Measures `text` for `style` at `dpi`, wrapping to `max_width` when the style
 /// asks for it.
 pub fn measure(text: &str, style: &TextStyle, dpi: u32, max_width: i32) -> TextMetrics {
@@ -68,7 +86,7 @@ pub fn measure(text: &str, style: &TextStyle, dpi: u32, max_width: i32) -> TextM
         );
         let wrap = style.wrap.then_some(max_width.max(1) as f32);
         buffer.set_size(wrap, None);
-        buffer.set_text(text, &Attrs::new(), Shaping::Advanced, align_of(style));
+        buffer.set_text(text, &attrs(style), Shaping::Advanced, align_of(style));
         buffer.shape_until_scroll(&mut text_system.font_system, false);
         for run in buffer.layout_runs() {
             width = width.max(run.line_w);
@@ -100,7 +118,7 @@ pub fn draw(pixmap: &mut Pixmap, text: &str, rect: Rect, style: &TextStyle, dpi:
         let mut buffer = Buffer::new(&mut text_system.font_system, metrics);
         let wrap = style.wrap.then_some(rect_w.max(1) as f32);
         buffer.set_size(wrap, None);
-        buffer.set_text(text, &Attrs::new(), Shaping::Advanced, align_of(style));
+        buffer.set_text(text, &attrs(style), Shaping::Advanced, align_of(style));
         buffer.shape_until_scroll(&mut text_system.font_system, false);
 
         let total_height: f32 = buffer.layout_runs().map(|run| run.line_height).sum();

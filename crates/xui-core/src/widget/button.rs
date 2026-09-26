@@ -6,6 +6,7 @@ use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use super::control::{Control, HasText};
+use super::icon::{Icon, draw_icon};
 use crate::app::Ui;
 use crate::backend::{Event, NodeKind, NodeSpec, Result, TextStyle};
 use crate::geometry::Rect;
@@ -20,6 +21,10 @@ type ClickMapper<M> = Rc<RefCell<Option<Box<dyn Fn() -> Option<M>>>>>;
 const TEXT_SIZE: Dip = Dip(12.0);
 /// The corner radius of the button face.
 const RADIUS: f32 = 4.0;
+/// The gap between an icon and its label, in device pixels.
+const GAP: i32 = 6;
+/// The largest icon side, in device pixels.
+const ICON_MAX: i32 = 20;
 
 /// The visual state of a button.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -39,6 +44,7 @@ pub struct Button<M: 'static> {
     control: Control<M>,
     state: Rc<Cell<ButtonState>>,
     text: Rc<RefCell<String>>,
+    icon: Rc<Cell<Option<Icon>>>,
     on_click: ClickMapper<M>,
 }
 
@@ -48,11 +54,13 @@ impl<M: 'static> Button<M> {
         let control = Control::new(ui, &NodeSpec::new(NodeKind::Button, bounds).text(text))?;
         let state = Rc::new(Cell::new(ButtonState::Normal));
         let label = Rc::new(RefCell::new(text.to_string()));
+        let icon = Rc::new(Cell::new(None));
         let on_click: ClickMapper<M> = Rc::new(RefCell::new(None));
 
         {
             let state = Rc::clone(&state);
             let label = Rc::clone(&label);
+            let icon = Rc::clone(&icon);
             let theme = ui.theme_handle();
             let selected = control.selected_handle();
             control.set_painter(Rc::new(move |canvas| {
@@ -67,6 +75,7 @@ impl<M: 'static> Button<M> {
                     ButtonState::Pressed => theme.pressed,
                 };
                 let bounds = canvas.bounds();
+                let dpi = canvas.dpi();
                 canvas.fill_rounded_rect(bounds, RADIUS, fill);
                 canvas.stroke_rounded_rect(bounds, RADIUS, theme.border, 1.0);
                 let color = if state == ButtonState::Disabled {
@@ -74,8 +83,15 @@ impl<M: 'static> Button<M> {
                 } else {
                     theme.text
                 };
+                let text = label.borrow();
+                let (icon_rect, text_rect) = layout_content(bounds, icon.get(), text.is_empty());
+                if let Some(icon_rect) = icon_rect
+                    && let Some(icon) = icon.get()
+                {
+                    draw_icon(canvas, icon, icon_rect, color, dpi);
+                }
                 let style = TextStyle::new(color, TEXT_SIZE).centered().middle();
-                canvas.draw_text(&label.borrow(), bounds, &style);
+                canvas.draw_text(&text, text_rect, &style);
                 if selected.get() {
                     canvas.stroke_rect(bounds, theme.accent, 2.0);
                 }
@@ -152,8 +168,21 @@ impl<M: 'static> Button<M> {
             control,
             state,
             text: label,
+            icon,
             on_click,
         })
+    }
+
+    /// Draws `icon` before the label (or centred when there is no label).
+    pub fn icon(self, icon: Icon) -> Button<M> {
+        self.set_icon(Some(icon));
+        self
+    }
+
+    /// Replaces the leading icon, or removes it with `None`.
+    pub fn set_icon(&self, icon: Option<Icon>) {
+        self.icon.set(icon);
+        self.control.invalidate();
     }
 
     /// Maps a click to the app's message: the closure returns `Some(msg)` to
@@ -195,6 +224,32 @@ impl<M: 'static> Button<M> {
         self.control.set_enabled(enabled);
         self.control.invalidate();
     }
+}
+
+/// The icon and text rectangles inside a button face.
+///
+/// With no icon the label keeps the whole face; with an icon and a label the
+/// icon sits at the leading edge and the label is centred in what remains; with
+/// an icon and no label the icon is centred.
+fn layout_content(bounds: Rect, icon: Option<Icon>, text_empty: bool) -> (Option<Rect>, Rect) {
+    if icon.is_none() {
+        return (None, bounds);
+    }
+    let side = (bounds.height() * 2 / 3).clamp(8, ICON_MAX);
+    if text_empty {
+        let left = bounds.left + (bounds.width() - side) / 2;
+        let top = bounds.top + (bounds.height() - side) / 2;
+        return (Some(Rect::new(left, top, left + side, top + side)), bounds);
+    }
+    let top = bounds.top + (bounds.height() - side) / 2;
+    let icon_rect = Rect::new(bounds.left + GAP, top, bounds.left + GAP + side, top + side);
+    let text_rect = Rect::new(
+        icon_rect.right + GAP,
+        bounds.top,
+        bounds.right,
+        bounds.bottom,
+    );
+    (Some(icon_rect), text_rect)
 }
 
 impl<M: 'static> HasText for Button<M> {

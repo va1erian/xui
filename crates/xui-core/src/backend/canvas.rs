@@ -35,14 +35,41 @@ pub enum TextVAlign {
     Middle,
 }
 
-/// A text weight, coarse enough for every backend to honour.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum TextWeight {
-    /// The regular face (the default).
-    #[default]
-    Regular,
-    /// A heavier face.
-    Bold,
+/// A text weight on the CSS 100-900 scale; 400 is regular, 700 bold.
+///
+/// The value is snapped to the nearest hundred and clamped to `100..=900`, so
+/// every backend resolves the same face for a given request.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct TextWeight(u16);
+
+impl TextWeight {
+    /// The regular face (400), the default.
+    pub const REGULAR: TextWeight = TextWeight(400);
+    /// The bold face (700).
+    pub const BOLD: TextWeight = TextWeight(700);
+
+    /// A weight from 100 (thin) to 900 (black), snapped to the nearest hundred.
+    pub const fn new(weight: u16) -> TextWeight {
+        let clamped = if weight < 100 {
+            100
+        } else if weight > 900 {
+            900
+        } else {
+            weight
+        };
+        TextWeight((clamped + 50) / 100 * 100)
+    }
+
+    /// The numeric weight.
+    pub const fn value(self) -> u16 {
+        self.0
+    }
+}
+
+impl Default for TextWeight {
+    fn default() -> TextWeight {
+        TextWeight::REGULAR
+    }
 }
 
 /// How to draw a run of text.
@@ -54,6 +81,10 @@ pub struct TextStyle {
     pub size: Dip,
     /// The face weight.
     pub weight: TextWeight,
+    /// Whether the face is slanted.
+    pub italic: bool,
+    /// The font family, or `None` for the backend's default UI font.
+    pub family: Option<String>,
     /// The horizontal alignment inside the target rectangle.
     pub align: TextAlign,
     /// The vertical placement inside the target rectangle.
@@ -63,12 +94,15 @@ pub struct TextStyle {
 }
 
 impl TextStyle {
-    /// A left-aligned, non-wrapping run of `size` in `color`.
+    /// A left-aligned, non-wrapping run of `size` in `color` in the default
+    /// family and a regular weight.
     pub fn new(color: Color, size: Dip) -> TextStyle {
         TextStyle {
             color,
             size,
-            weight: TextWeight::Regular,
+            weight: TextWeight::REGULAR,
+            italic: false,
+            family: None,
             align: TextAlign::Start,
             valign: TextVAlign::Top,
             wrap: false,
@@ -77,7 +111,25 @@ impl TextStyle {
 
     /// Uses a heavier face.
     pub fn bold(mut self) -> TextStyle {
-        self.weight = TextWeight::Bold;
+        self.weight = TextWeight::BOLD;
+        self
+    }
+
+    /// Sets the weight (100-900).
+    pub fn weight(mut self, weight: u16) -> TextStyle {
+        self.weight = TextWeight::new(weight);
+        self
+    }
+
+    /// Sets whether the face is slanted.
+    pub fn italic(mut self, italic: bool) -> TextStyle {
+        self.italic = italic;
+        self
+    }
+
+    /// Sets the family, or `None` for the backend's default UI font.
+    pub fn family(mut self, family: impl Into<String>) -> TextStyle {
+        self.family = Some(family.into());
         self
     }
 

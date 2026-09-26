@@ -21,8 +21,9 @@ use crate::geometry::Size;
 
 use crate::sys::win32_error;
 
-/// Creates a font for `family` with the given (negative) pixel height.
-pub(crate) fn create_font(family: &str, height: i32, weight: i32) -> Result<HFONT> {
+/// Creates a font for `family` with the given (negative) pixel height, weight
+/// (`FW_*`) and slant.
+pub(crate) fn create_font(family: &str, height: i32, weight: i32, italic: bool) -> Result<HFONT> {
     let mut face = [0u16; 32];
     let wide: Vec<u16> = family.encode_utf16().collect();
     let count = wide.len().min(31);
@@ -37,7 +38,7 @@ pub(crate) fn create_font(family: &str, height: i32, weight: i32) -> Result<HFON
             0,
             0,
             weight,
-            0,
+            u32::from(italic),
             0,
             0,
             FONT_CHARSET(1),

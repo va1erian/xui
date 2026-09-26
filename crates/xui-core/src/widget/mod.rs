@@ -13,9 +13,11 @@ mod checkbox;
 mod combobox;
 mod control;
 mod edit;
+mod flow_text;
 mod gridview;
 mod groupbox;
 mod hyperlink;
+mod icon;
 mod label;
 mod listview;
 mod materialstatusbar;
@@ -45,9 +47,11 @@ pub use checkbox::CheckBox;
 pub use combobox::ComboBox;
 pub use control::{Control, HasText};
 pub use edit::Edit;
+pub use flow_text::{FlowText, Run, RunStyle};
 pub use gridview::{GridModel, GridView, Tile, TilePaint, TileSize};
 pub use groupbox::GroupBox;
 pub use hyperlink::Hyperlink;
+pub use icon::{Icon, draw_icon};
 pub use label::Label;
 pub use listview::{
     CellData, Column, ColumnWidth, Fill, ListModel, ListView, SelectionMode, SortDirection,
