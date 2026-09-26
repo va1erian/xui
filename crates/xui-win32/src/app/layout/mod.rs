@@ -10,6 +10,7 @@
 //! parent rectangle to one rectangle per visible leaf, using the existing
 //! [`Stack`] arithmetic.
 
+use crate::app::Ui;
 use crate::geometry::{Rect, Size};
 use crate::layout::{Insets, Stack, StackDirection};
 use crate::units::Dip;
@@ -172,6 +173,39 @@ impl Layout {
         }
         placed
     }
+
+    /// The size the layout's content wants, in device pixels at `dpi`.
+    ///
+    /// A stack packs its visible items along its main axis: margins plus each
+    /// item's natural extent plus one `spacing` gap between adjacent items; the
+    /// cross axis is the margins plus the largest natural cross extent. A
+    /// [`free`](Layout::free) layout reports the furthest edge of its items'
+    /// design bounds. A split adds both panes and its divider; a tab node takes
+    /// its largest page. Sizing (`fill`/`min`/`fixed`/…) is honoured as in
+    /// [`compute`](Layout::compute): a `fill` item contributes no natural extent,
+    /// so it is the caller's job to open at least a workable size.
+    ///
+    /// The arithmetic is the pure [`Stack::preferred_size`] /
+    /// [`free_preferred`](crate::layout::free_preferred) in `xui-core`, so it is
+    /// DPI-independent. Use [`Ui::pack`] to apply the result to a window.
+    pub fn preferred_size(&self, dpi: u32) -> Size {
+        if let Some(origin) = self.origin {
+            return free::preferred(self, origin, dpi);
+        }
+        let naturals: Vec<Size> = self
+            .slots
+            .iter()
+            .filter(|item| item.is_visible())
+            .map(|item| item.natural_size(self.direction, dpi))
+            .collect();
+        let stack = match self.direction {
+            StackDirection::Horizontal => Stack::horizontal(),
+            StackDirection::Vertical => Stack::vertical(),
+        }
+        .spacing(self.spacing)
+        .margins(self.margins);
+        stack.preferred_size(&naturals, dpi)
+    }
 }
 
 /// Narrows `rect` to `extent` pixels along the cross axis, keeping the start
@@ -190,6 +224,30 @@ fn cross_rect(rect: Rect, direction: StackDirection, extent: i32) -> Rect {
             (rect.left + extent).min(rect.right),
             rect.bottom,
         ),
+    }
+}
+
+impl<M: 'static> Ui<M> {
+    /// The installed layout's [`preferred_size`](Layout::preferred_size) in
+    /// device pixels at the window's current DPI, or `None` when no layout was
+    /// installed.
+    ///
+    /// A frontend uses it to choose the window's initial size; call it before
+    /// the layout has been laid out, or after any change that affects content.
+    pub fn layout_preferred_size(&self) -> Option<Size> {
+        let core = self.core_weak().upgrade()?;
+        core.layout_preferred_size(self.dpi())
+    }
+
+    /// Applies the installed layout's preferred size as the window's minimum
+    /// tracking size, so the user cannot shrink it below its content, and
+    /// returns that size for the app to also use as the initial window size.
+    ///
+    /// `None` when no layout is installed. This targets the top-level window.
+    pub fn pack(&self) -> Option<Size> {
+        let size = self.layout_preferred_size()?;
+        crate::sys::window_ext::set_min_size(self.hwnd(), size);
+        Some(size)
     }
 }
 

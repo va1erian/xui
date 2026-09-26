@@ -506,3 +506,119 @@ fn split_row_macro_builds_a_two_pane_node() {
     let placed = tree.compute(Rect::new(0, 0, 50, 20), 96);
     assert!(placed.is_empty(), "empty panes have no leaves");
 }
+
+#[test]
+fn column_preferred_size_packs_natural_heights() {
+    let mut layout = Layout::column()
+        .margins(Insets::all(dip(4.0)))
+        .spacing(dip(2.0));
+    layout
+        .slots
+        .push(widget(leaf(Rect::new(0, 0, 0, 20)), Sizing::Auto));
+    layout
+        .slots
+        .push(widget(leaf(Rect::new(0, 0, 0, 30)), Sizing::Auto));
+    // Height: 4 + 20 + 2 + 30 + 4 = 60; width: left+right margins + widest (0).
+    assert_eq!(layout.preferred_size(96), Size::new(8, 60));
+}
+
+#[test]
+fn row_preferred_size_packs_natural_widths() {
+    let mut layout = Layout::row()
+        .margins(Insets::all(dip(3.0)))
+        .spacing(dip(5.0));
+    layout
+        .slots
+        .push(widget(leaf(Rect::new(0, 0, 30, 0)), Sizing::Auto));
+    layout
+        .slots
+        .push(widget(leaf(Rect::new(0, 0, 40, 0)), Sizing::Auto));
+    // Width: 3 + 30 + 5 + 40 + 3 = 81; height: top+bottom margins + tallest (0).
+    assert_eq!(layout.preferred_size(96), Size::new(81, 6));
+}
+
+#[test]
+fn fill_items_contribute_no_natural_extent() {
+    let mut layout = Layout::column().margins(Insets::all(dip(4.0)));
+    layout
+        .slots
+        .push(widget(leaf(Rect::new(0, 0, 0, 10)), Sizing::Auto));
+    layout
+        .slots
+        .push(widget(leaf(Rect::new(0, 0, 0, 500)), Sizing::Fill(1)));
+    // The fill item's 500-tall current bounds are ignored.
+    assert_eq!(layout.preferred_size(96), Size::new(8, 18));
+}
+
+#[test]
+fn nested_layouts_contribute_their_preferred_size() {
+    let mut inner = Layout::column().spacing(dip(2.0));
+    inner
+        .slots
+        .push(widget(leaf(Rect::new(0, 0, 0, 10)), Sizing::Auto));
+    inner
+        .slots
+        .push(widget(leaf(Rect::new(0, 0, 0, 20)), Sizing::Auto));
+
+    let mut outer = Layout::row().margins(Insets::all(dip(1.0)));
+    outer.slots.push(LayoutItem {
+        content: Content::Nested(Box::new(inner)),
+        sizing: Sizing::Fill(1),
+    });
+    outer
+        .slots
+        .push(widget(leaf(Rect::new(0, 0, 15, 0)), Sizing::Auto));
+    // Inner packs 0 x 32; the row is 1 + 0 + 15 + 1 wide and 1 + max(32, 0) + 1 tall.
+    assert_eq!(outer.preferred_size(96), Size::new(17, 34));
+}
+
+#[test]
+fn free_layout_preferred_size_reports_the_content_extent() {
+    let mut layout = Layout::free(Size::new(100, 100));
+    layout.slots.push(widget(
+        leaf(Rect::new(0, 0, 250, 120)),
+        Sizing::Anchored(Anchor::Fill),
+    ));
+    assert_eq!(layout.preferred_size(96), Size::new(250, 120));
+}
+
+#[test]
+fn preferred_size_scales_with_dpi() {
+    let mut layout = Layout::column()
+        .margins(Insets::all(dip(2.0)))
+        .spacing(dip(3.0));
+    layout
+        .slots
+        .push(widget(leaf(Rect::default()), Sizing::Fixed(dip(10.0))));
+    // At 96: width 4, height 2 + 10 + 2 = 14. At 192 everything doubles.
+    assert_eq!(layout.preferred_size(96), Size::new(4, 14));
+    assert_eq!(layout.preferred_size(192), Size::new(8, 28));
+}
+
+#[test]
+fn split_preferred_size_adds_panes_and_the_divider() {
+    let split = Split::row()
+        .a(widget(leaf(Rect::new(0, 0, 40, 10)), Sizing::Auto))
+        .b(widget(leaf(Rect::new(0, 0, 50, 30)), Sizing::Auto));
+    // A split wraps as a `fill` item in its parent, so measure the node itself.
+    let item = (&split).into_layout_item();
+    let Content::Split(node) = item.content else {
+        panic!("expected a split node");
+    };
+    // Width: 40 + divider (5) + 50; height: the taller pane (30).
+    assert_eq!(node.preferred_size(96), Size::new(95, 30));
+}
+
+#[test]
+fn split_preferred_size_honours_pane_minimums() {
+    let split = Split::row()
+        .a(widget(leaf(Rect::default()), Sizing::Fill(1)))
+        .b(widget(leaf(Rect::default()), Sizing::Fill(1)))
+        .min(dip(120.0), dip(80.0));
+    let item = (&split).into_layout_item();
+    let Content::Split(node) = item.content else {
+        panic!("expected a split node");
+    };
+    // Fill panes have no natural extent, so the minimums and divider stand.
+    assert_eq!(node.preferred_size(96), Size::new(205, 0));
+}

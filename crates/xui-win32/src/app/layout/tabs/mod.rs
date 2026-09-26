@@ -29,8 +29,9 @@ use crate::app::core::Core;
 use crate::controls::control::Control;
 use crate::controls::{next_id, registry};
 use crate::gdi::Font;
-use crate::geometry::Rect;
+use crate::geometry::{Rect, Size};
 use crate::hwnd::Hwnd;
+use crate::layout::StackDirection;
 use crate::message::{Message, Notify};
 use crate::sys;
 
@@ -139,6 +140,19 @@ impl TabsNode {
         for page in &self.pages {
             page.set_tree_visible(visible);
         }
+    }
+
+    /// The tabs' preferred size in device pixels at `dpi`: the largest page
+    /// content, since only one page is shown at a time. The native tab strip's
+    /// own height is added by the control at layout time, not here.
+    pub(crate) fn preferred_size(&self, dpi: u32) -> Size {
+        let mut size = Size::default();
+        for page in &self.pages {
+            let page = page.natural_size(StackDirection::Vertical, dpi);
+            size.width = size.width.max(page.width);
+            size.height = size.height.max(page.height);
+        }
+        size
     }
 
     /// Positions the tab control in `rect`, then lays the selected page out in

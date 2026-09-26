@@ -8,7 +8,7 @@ use std::cell::Cell;
 use std::rc::Rc;
 
 use crate::controls::control::{AsControl, Control};
-use crate::geometry::Rect;
+use crate::geometry::{Rect, Size};
 use crate::hwnd::Hwnd;
 use crate::layout::{Anchor, StackDirection, StackSlot};
 use crate::sys;
@@ -264,6 +264,44 @@ impl LayoutItem {
         match self.sizing {
             Sizing::Anchored(anchor) => anchor,
             _ => Anchor::TopLeft,
+        }
+    }
+
+    /// The item's natural size in device pixels at `dpi`, for the parent
+    /// stack's preferred-size pass. `direction` is the parent's main axis:
+    /// `Fixed`/`Min`/`Fill` resolve along it (a `Fill` item contributes no
+    /// natural main extent), while `Width`/`Height` pin the axis they name.
+    pub(crate) fn natural_size(&self, direction: StackDirection, dpi: u32) -> Size {
+        let content = match &self.content {
+            Content::Widget(handle) => Size::new(
+                handle.natural(StackDirection::Horizontal),
+                handle.natural(StackDirection::Vertical),
+            ),
+            Content::Nested(nested) => nested.preferred_size(dpi),
+            Content::Split(node) => node.preferred_size(dpi),
+            Content::Tabs(node) => node.preferred_size(dpi),
+        };
+        let px = |value: Dip| value.to_px(dpi).value().max(0);
+        match self.sizing {
+            Sizing::Width(value) => Size::new(px(value), content.height),
+            Sizing::Height(value) => Size::new(content.width, px(value)),
+            sizing => {
+                let (main, cross) = match direction {
+                    StackDirection::Horizontal => (content.width, content.height),
+                    StackDirection::Vertical => (content.height, content.width),
+                };
+                let main = match sizing {
+                    Sizing::Fixed(value) => px(value),
+                    Sizing::Min(value) => main.max(px(value)),
+                    Sizing::Fill(_) => 0,
+                    // A widget, or an anchored item in a stack, keeps its size.
+                    _ => main,
+                };
+                match direction {
+                    StackDirection::Horizontal => Size::new(main, cross),
+                    StackDirection::Vertical => Size::new(cross, main),
+                }
+            }
         }
     }
 

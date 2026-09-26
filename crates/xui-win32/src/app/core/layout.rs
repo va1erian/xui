@@ -7,7 +7,7 @@ use crate::app::Ui;
 use crate::app::layout::split;
 use crate::app::layout::tabs;
 use crate::app::layout::{Content, Layout, LayoutItem, Placed};
-use crate::geometry::Rect;
+use crate::geometry::{Rect, Size};
 use crate::hwnd::Hwnd;
 use crate::sys;
 
@@ -67,6 +67,15 @@ impl<M> Core<M> {
     /// Whether a layout tree has been installed.
     pub(crate) fn has_layout(&self) -> bool {
         self.layout.borrow().is_some()
+    }
+
+    /// The installed layout's preferred (content) size at `dpi`, if a layout
+    /// was installed.
+    pub(crate) fn layout_preferred_size(&self, dpi: u32) -> Option<Size> {
+        self.layout
+            .borrow()
+            .as_ref()
+            .map(|layout| layout.preferred_size(dpi))
     }
 
     /// Lays the tree out again at the window's current DPI.
