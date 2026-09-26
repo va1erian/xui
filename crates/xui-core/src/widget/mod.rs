@@ -59,4 +59,4 @@ pub use statusbar::StatusBar;
 pub use togglebutton::ToggleButton;
 pub use toolbar::Toolbar;
 pub use topbar::{Glyph, TopBar, TopBarId};
-pub use treeview::{TreeRow, TreeView};
+pub use treeview::{CheckState, NodeId, TreeModel, TreeNode, TreeRow, TreeView};
