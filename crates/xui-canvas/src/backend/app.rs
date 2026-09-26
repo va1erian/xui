@@ -17,6 +17,7 @@ use winit::keyboard::{Key as WinitKey, NamedKey};
 use winit::window::{CursorIcon, Window, WindowAttributes};
 
 use xui_core::backend::{Event, TimerId, WidgetId, WindowId};
+use xui_core::geometry::Rect;
 use xui_core::message::{Key, Modifiers, MouseButton};
 
 use super::{Shared, SharedWindow, UserEvent, render};
@@ -74,9 +75,9 @@ impl App {
             let metrics = window_metrics(&window);
             if let Some(state) = self.shared.windows.borrow_mut().get_mut(&raw) {
                 state.size = metrics.0;
-                state.dpi = metrics.1;
                 state.window = Some(Rc::clone(&window));
             }
+            self.set_dpi(raw, metrics.1);
             self.windows.insert(
                 raw,
                 RealWindow {
@@ -85,6 +86,30 @@ impl App {
                 },
             );
             self.redraw(raw);
+        }
+    }
+
+    /// Records `raw`'s dots-per-inch, lifting the node bounds the app laid out
+    /// at the old value to the new scale so the window stays filled.
+    ///
+    /// `run_app` builds the widgets before the real window exists, so they are
+    /// laid out at [`super::DEFAULT_DPI`]; the first real window reports the
+    /// monitor's scale factor (2.0 on a Retina display) and the bounds move to
+    /// the backing pixels. Later scale changes (a window dragged to another
+    /// monitor) rescale by the ratio, since the portable widgets do not reflow
+    /// themselves.
+    fn set_dpi(&self, raw: u64, dpi: u32) {
+        let old = {
+            let mut windows = self.shared.windows.borrow_mut();
+            let Some(state) = windows.get_mut(&raw) else {
+                return;
+            };
+            let old = state.dpi;
+            state.dpi = dpi;
+            old
+        };
+        if old != dpi {
+            rescale_nodes(&self.shared, raw, dpi as f32 / old as f32);
         }
     }
 
@@ -329,11 +354,41 @@ impl App {
     }
 }
 
+/// The dots-per-inch a `winit` scale factor corresponds to (96 at 100%).
+fn dpi_from_scale(scale_factor: f64) -> u32 {
+    (scale_factor * f64::from(super::DEFAULT_DPI))
+        .round()
+        .max(1.0) as u32
+}
+
 /// The window's `(size, dpi)` from its scale factor.
 fn window_metrics(window: &Window) -> ((u32, u32), u32) {
     let size = window.inner_size();
-    let dpi = (window.scale_factor() * 96.0).round().max(1.0) as u32;
+    let dpi = dpi_from_scale(window.scale_factor());
     ((size.width.max(1), size.height.max(1)), dpi)
+}
+
+/// Multiplies `rect`'s edges by `ratio`, rounding to the nearest pixel.
+fn scale_rect(rect: Rect, ratio: f32) -> Rect {
+    let scale = |value: i32| (value as f32 * ratio).round() as i32;
+    Rect::new(
+        scale(rect.left),
+        scale(rect.top),
+        scale(rect.right),
+        scale(rect.bottom),
+    )
+}
+
+/// Rescales every node of `raw` from one layout scale to another.
+fn rescale_nodes(shared: &Shared, raw: u64, ratio: f32) {
+    if (ratio - 1.0).abs() < f32::EPSILON {
+        return;
+    }
+    for (_, node) in shared.nodes.borrow_mut().iter_mut() {
+        if node.window.raw() == raw {
+            node.bounds = scale_rect(node.bounds, ratio);
+        }
+    }
 }
 
 fn mouse_button(button: WinitButton) -> Option<MouseButton> {
@@ -426,10 +481,8 @@ impl ApplicationHandler<UserEvent> for App {
                 self.redraw(raw);
             }
             WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
-                let dpi = (scale_factor * 96.0).round().max(1.0) as u32;
-                if let Some(state) = self.shared.windows.borrow_mut().get_mut(&raw) {
-                    state.dpi = dpi;
-                }
+                let dpi = dpi_from_scale(scale_factor);
+                self.set_dpi(raw, dpi);
                 self.shared.deliver(
                     Self::window_id(raw),
                     WidgetId::NONE,
@@ -554,5 +607,20 @@ mod tests {
         assert_eq!(mouse_button(WinitButton::Left), Some(MouseButton::Left));
         assert_eq!(mouse_button(WinitButton::Back), Some(MouseButton::X1));
         assert_eq!(mouse_button(WinitButton::Forward), Some(MouseButton::X2));
+    }
+
+    #[test]
+    fn scale_factor_maps_to_a_dots_per_inch() {
+        assert_eq!(dpi_from_scale(1.0), 96);
+        assert_eq!(dpi_from_scale(1.25), 120);
+        assert_eq!(dpi_from_scale(2.0), 192, "a Retina display is 2x");
+        assert_eq!(dpi_from_scale(0.0), 1, "never zero");
+    }
+
+    #[test]
+    fn scaling_a_rect_lifts_the_backing_store() {
+        let rect = Rect::new(16, 12, 380, 40);
+        assert_eq!(scale_rect(rect, 2.0), Rect::new(32, 24, 760, 80));
+        assert_eq!(scale_rect(rect, 1.25), Rect::new(20, 15, 475, 50));
     }
 }

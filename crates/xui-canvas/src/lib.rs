@@ -4,8 +4,9 @@
 //!
 //! It rasterises the portable widgets with `tiny-skia` into an RGBA buffer, so
 //! the same widget code that runs on the Win32 backend draws here without any
-//! platform UI toolkit. This crate currently provides the drawing surface and
-//! an offscreen renderer; the windowing shell and event loop build on it.
+//! platform UI toolkit. A [`WinitBackend`] presents the surface in a real
+//! `winit` window through `softbuffer`; an [`OffscreenBackend`] renders the
+//! same widgets headlessly for tests and snapshots.
 
 mod backend;
 mod canvas;
