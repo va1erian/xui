@@ -8,7 +8,7 @@
 
 use std::cell::RefCell;
 
-use cosmic_text::{Align, Attrs, Buffer, Color, FontSystem, Metrics, Shaping, SwashCache};
+use cosmic_text::{Align, Attrs, Buffer, Color, FontSystem, Metrics, Shaping, SwashCache, Wrap};
 use tiny_skia::{Pixmap, PremultipliedColorU8};
 
 use xui_core::backend::{TextAlign, TextMetrics, TextStyle, TextVAlign};
@@ -37,11 +37,11 @@ fn line_height(size_px: f32) -> f32 {
     size_px * 1.25
 }
 
-fn align_of(style: &TextStyle) -> Option<Align> {
+fn align_of(style: &TextStyle) -> Align {
     match style.align {
-        TextAlign::Start => None,
-        TextAlign::Center => Some(Align::Center),
-        TextAlign::End => Some(Align::Right),
+        TextAlign::Start => Align::Left,
+        TextAlign::Center => Align::Center,
+        TextAlign::End => Align::Right,
     }
 }
 
@@ -68,7 +68,17 @@ pub fn measure(text: &str, style: &TextStyle, dpi: u32, max_width: i32) -> TextM
         );
         let wrap = style.wrap.then_some(max_width.max(1) as f32);
         buffer.set_size(wrap, None);
-        buffer.set_text(text, &Attrs::new(), Shaping::Advanced, align_of(style));
+        buffer.set_wrap(if style.wrap {
+            Wrap::WordOrGlyph
+        } else {
+            Wrap::None
+        });
+        buffer.set_text(
+            text,
+            &Attrs::new(),
+            Shaping::Advanced,
+            Some(align_of(style)),
+        );
         buffer.shape_until_scroll(&mut text_system.font_system, false);
         for run in buffer.layout_runs() {
             width = width.max(run.line_w);
@@ -98,9 +108,20 @@ pub fn draw(pixmap: &mut Pixmap, text: &str, rect: Rect, style: &TextStyle, dpi:
         let text_system = &mut *text_system.borrow_mut();
         let metrics = Metrics::new(size, line_height(size));
         let mut buffer = Buffer::new(&mut text_system.font_system, metrics);
-        let wrap = style.wrap.then_some(rect_w.max(1) as f32);
-        buffer.set_size(wrap, None);
-        buffer.set_text(text, &Attrs::new(), Shaping::Advanced, align_of(style));
+        // Always size the layout to the rect so `align` has a frame to align
+        // within; without wrapping the run still stays on one line.
+        buffer.set_size(Some(rect_w.max(1) as f32), None);
+        buffer.set_wrap(if style.wrap {
+            Wrap::WordOrGlyph
+        } else {
+            Wrap::None
+        });
+        buffer.set_text(
+            text,
+            &Attrs::new(),
+            Shaping::Advanced,
+            Some(align_of(style)),
+        );
         buffer.shape_until_scroll(&mut text_system.font_system, false);
 
         let total_height: f32 = buffer.layout_runs().map(|run| run.line_height).sum();

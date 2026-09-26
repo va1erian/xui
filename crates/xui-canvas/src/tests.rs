@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use xui_core::app::{App, Ui, run_app};
-use xui_core::backend::{Backend, PlatformSpec};
+use xui_core::backend::{Backend, PlatformSpec, TextAlign};
 use xui_core::geometry::{Point, Rect};
 use xui_core::image::Image;
 use xui_core::widget::{Button, CheckBox, Label, ProgressBar, Slider};
@@ -45,6 +45,36 @@ fn save(path: &str, image: &RgbaImage) {
     if let Ok(mut writer) = encoder.write_header() {
         let _ = writer.write_image_data(&image.pixels);
     }
+}
+
+/// The text and rect the alignment tests render into.
+const ALIGN_TEXT: &str = "Alignment";
+const ALIGN_RECT: Rect = Rect::new(20, 20, 300, 60);
+
+/// Renders `ALIGN_TEXT` in `ALIGN_RECT` with `align`, on a white surface.
+fn render_alignment(align: TextAlign) -> RgbaImage {
+    let style = TextStyle {
+        align,
+        ..TextStyle::new(Color::hex(0x1B_1B_1B), Dip(20.0))
+    };
+    let mut surface = Surface::new(320, 80);
+    surface.fill(Color::hex(0xFFFFFF));
+    surface.with_canvas(Rect::new(0, 0, 320, 80), |canvas| {
+        canvas.draw_text(ALIGN_TEXT, ALIGN_RECT, &style);
+    });
+    surface.to_image()
+}
+
+/// The leftmost pixel column containing dark (text) pixels.
+fn leftmost_dark(image: &RgbaImage) -> i32 {
+    for x in 0..image.width {
+        for y in 0..image.height {
+            if image.pixel(x, y).is_some_and(|pixel| pixel[0] < 128) {
+                return x as i32;
+            }
+        }
+    }
+    panic!("no dark text pixels");
 }
 
 fn dark_pixels(image: &RgbaImage) -> usize {
@@ -228,4 +258,43 @@ fn text_scales_with_dpi() {
         canvas.draw_text("Hello 200%", Rect::new(12, 72, 468, 120), &style);
     });
     save("canvas-hidpi.png", &surface.to_image());
+}
+
+#[test]
+fn start_aligned_text_sits_at_the_left_of_the_rect() {
+    let left = leftmost_dark(&render_alignment(TextAlign::Start));
+    assert!(
+        (ALIGN_RECT.left..=ALIGN_RECT.left + 3).contains(&left),
+        "start-aligned text should hug the left edge, got {left}"
+    );
+}
+
+#[test]
+fn center_aligned_text_is_centred_in_the_rect() {
+    let sample = TextStyle::new(Color::hex(0x1B_1B_1B), Dip(20.0));
+    let measured = measure_text(ALIGN_TEXT, &sample, 96, 1000).width;
+    let start = leftmost_dark(&render_alignment(TextAlign::Start));
+    let center = leftmost_dark(&render_alignment(TextAlign::Center));
+    let expected = (ALIGN_RECT.width() - measured) / 2;
+    assert!(
+        (center - start - expected).abs() <= 2,
+        "centre should shift the run by {expected}px: start {start}, centre {center}"
+    );
+}
+
+#[test]
+fn end_aligned_text_sits_against_the_right_edge() {
+    let sample = TextStyle::new(Color::hex(0x1B_1B_1B), Dip(20.0));
+    let measured = measure_text(ALIGN_TEXT, &sample, 96, 1000).width;
+    let start = leftmost_dark(&render_alignment(TextAlign::Start));
+    let end = leftmost_dark(&render_alignment(TextAlign::End));
+    let expected = ALIGN_RECT.width() - measured;
+    assert!(
+        (end - start - expected).abs() <= 2,
+        "end should shift the run by {expected}px: start {start}, end {end}"
+    );
+    assert!(
+        end + measured >= ALIGN_RECT.right - 2,
+        "end-aligned text should reach the right edge: end {end}, measured {measured}"
+    );
 }
