@@ -8,8 +8,10 @@
 //! ```
 //!
 //! `XUI_BACKEND=canvas` starts on the software backend instead of the native
-//! one; the **Renderer** button restarts the app on the other backend.
-//! `XUI_DEMO_AUTOCLOSE_MS` makes it quit itself, for a headless smoke run.
+//! one; the **Renderer** button starts a fresh process on the other backend
+//! (`winit` allows one event loop per process, so it cannot be restarted in
+//! place). `XUI_DEMO_AUTOCLOSE_MS` makes it quit itself, and
+//! `XUI_AUTOSWITCH_MS` clicks the button for it, both for headless smoke runs.
 
 use std::cell::Cell;
 use std::rc::Rc;
@@ -44,6 +46,13 @@ impl Renderer {
         match self {
             Renderer::Native => Renderer::Canvas,
             Renderer::Canvas => Renderer::Native,
+        }
+    }
+
+    fn env_value(self) -> &'static str {
+        match self {
+            Renderer::Native => "native",
+            Renderer::Canvas => "canvas",
         }
     }
 }
@@ -272,10 +281,30 @@ fn run(renderer: Renderer, switch: Rc<Cell<Option<Renderer>>>) {
 
             let echo = Label::new(ui, rect(16.0, 590.0, 764.0, 618.0), "Edit: ").unwrap();
 
-            if let Ok(millis) = std::env::var("XUI_DEMO_AUTOCLOSE_MS") {
-                let _ = millis.parse::<u32>().map(|ms| ui.set_timer(ms));
-                ui.on_timer(|_| Some(Msg::Autoclose));
+            // Both smoke hooks fire through one timer mapper, told apart by id.
+            let switch_at = Rc::new(Cell::new(None));
+            let autoclose_at = Rc::new(Cell::new(None));
+            if CAN_SWITCH
+                && let Ok(millis) = std::env::var("XUI_AUTOSWITCH_MS")
+            {
+                let _ = millis.parse::<u32>().map(|ms| switch_at.set(Some(ui.set_timer(ms))));
             }
+            if let Ok(millis) = std::env::var("XUI_DEMO_AUTOCLOSE_MS") {
+                let _ = millis
+                    .parse::<u32>()
+                    .map(|ms| autoclose_at.set(Some(ui.set_timer(ms))));
+            }
+            let switch_at_for_timer = Rc::clone(&switch_at);
+            let autoclose_at_for_timer = Rc::clone(&autoclose_at);
+            ui.on_timer(move |fired| {
+                if switch_at_for_timer.get() == Some(fired) {
+                    Some(Msg::Switch)
+                } else if autoclose_at_for_timer.get() == Some(fired) {
+                    Some(Msg::Autoclose)
+                } else {
+                    None
+                }
+            });
 
             Gallery {
                 echo,
@@ -310,18 +339,27 @@ fn run(renderer: Renderer, switch: Rc<Cell<Option<Renderer>>>) {
 }
 
 fn main() {
-    let mut renderer = match std::env::var("XUI_BACKEND").as_deref() {
+    let renderer = match std::env::var("XUI_BACKEND").as_deref() {
         Ok("canvas") => Renderer::Canvas,
         _ => Renderer::Native,
     };
-    // The renderer switch restarts the app on the other backend; each loop
-    // iteration owns and drops its backend (and, for winit, its event loop).
-    loop {
-        let switch = Rc::new(Cell::new(None));
-        run(renderer, Rc::clone(&switch));
-        match switch.get() {
-            Some(next) if CAN_SWITCH => renderer = next,
-            _ => break,
-        }
+    let switch = Rc::new(Cell::new(None));
+    run(renderer, Rc::clone(&switch));
+    if let Some(next) = switch.get() {
+        relaunch(next);
     }
+}
+
+/// Starts a fresh process on `renderer`. `winit` allows only one `EventLoop`
+/// per process on desktop, so the software backend cannot be torn down and
+/// rebuilt in place; a child process gives each backend its own loop.
+fn relaunch(renderer: Renderer) {
+    let Ok(exe) = std::env::current_exe() else {
+        return;
+    };
+    let _ = std::process::Command::new(exe)
+        .env("XUI_BACKEND", renderer.env_value())
+        // The child must not switch again on its own.
+        .env_remove("XUI_AUTOSWITCH_MS")
+        .spawn();
 }
