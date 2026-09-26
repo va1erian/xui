@@ -11,10 +11,17 @@ readme = "README.md"
 default = ["win32"]
 # The Win32 backend. On by default; the only backend implemented so far.
 win32 = ["dep:xui-win32"]
-# The software-rendered cross-platform backend (winit + tiny-skia). Planned;
-# enables nothing yet.
-canvas = []
+# The software-rendered cross-platform backend (winit + tiny-skia).
+canvas = ["dep:xui-canvas"]
 
 [dependencies]
 xui-core = { path = "../xui-core" }
 xui-win32 = { path = "../xui-win32", optional = true }
+xui-canvas = { path = "../xui-canvas", optional = true }
+
+[[example]]
+name = "widgets"
+required-features = ["canvas"]
+
+[build-dependencies]
+embed-resource = "3.0"

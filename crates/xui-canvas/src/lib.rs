@@ -7,10 +7,12 @@
 //! platform UI toolkit. This crate currently provides the drawing surface and
 //! an offscreen renderer; the windowing shell and event loop build on it.
 
+mod backend;
 mod canvas;
 mod offscreen;
 mod text;
 
+pub use backend::WinitBackend;
 pub use canvas::SkiaCanvas;
 pub use offscreen::OffscreenBackend;
 pub use text::measure as measure_text;

@@ -20,6 +20,11 @@ jobs:
       - run: cargo check --all-targets
       - run: cargo clippy --all-targets -- -D warnings
       - run: cargo test
+      # The software backend and its cross-platform gallery are behind the
+      # off-by-default `canvas` feature.
+      - run: cargo check -p xui --features canvas --all-targets
+      - run: cargo clippy -p xui --features canvas --all-targets -- -D warnings
+      - run: cargo test -p xui-canvas
 
   # The occlusion-proof capture backend is behind the off-by-default `wgc`
   # feature, so it needs its own build and test pass. Tests that require a real
@@ -50,6 +55,8 @@ jobs:
       - run: cargo check --all-targets
       - run: cargo clippy -p xui-core --all-targets -- -D warnings
       - run: cargo test -p xui-core
+      # The software backend must build and its non-window tests pass here too.
+      - run: cargo test -p xui-canvas
 
   # The same portable guarantee on macOS (the future home of a native backend).
   cross-check-macos:
@@ -60,3 +67,4 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo check --all-targets
       - run: cargo test -p xui-core
+      - run: cargo test -p xui-canvas
