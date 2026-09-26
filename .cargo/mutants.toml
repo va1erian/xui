@@ -1,0 +1,15 @@
+# cargo-mutants configuration. Run it locally with scripts\mutants.ps1.
+#
+# Mutation testing is slow, so it is pointed at the portable core: its logic is
+# pure and its tests are fast and headless, so a surviving mutant there is a
+# genuine gap in the suite. The GUI crates are excluded because each mutant
+# would need a desktop and minutes to test.
+exclude_globs = [
+  "crates/xui/**",
+  "crates/xui-win32/**",
+  "crates/xui-canvas/**",
+  "crates/xui-litehtml/**",
+]
+
+# A mutant that takes longer than this to test is reported and skipped.
+timeout = 120

@@ -31,6 +31,24 @@ jobs:
       - run: cargo test -p xui-canvas --test gl
         env:
           XUI_CANVAS_GL_TEST: "1"
+      # Every feature at once (win32 + canvas + wgc), so feature interactions
+      # and the all-features build are checked together.
+      - run: cargo test --all-features
+      # Compilation of every example is covered by `--all-targets`; run the
+      # runnable ones with an auto-close so a panic-on-startup or a paint
+      # regression is visible rather than only a compile error.
+      # (The `gl` example is left to the opt-in GL test: a runner without a real
+      # driver can hand back a half-loaded context that the example, unlike the
+      # test, does not guard against.)
+      - run: cargo run -p xui --features canvas --example widgets
+        env:
+          XUI_DEMO_AUTOCLOSE_MS: "4000"
+      - run: cargo run -p xui-win32 --example demo
+        env:
+          WIN32UI_DEMO_AUTOCLOSE_MS: "4000"
+      - run: cargo run -p xui-win32 --example umbrella
+        env:
+          WIN32UI_DEMO_AUTOCLOSE_MS: "4000"
 
   # The occlusion-proof capture backend is behind the off-by-default `wgc`
   # feature, so it needs its own build and test pass. Tests that require a real
@@ -77,3 +95,31 @@ jobs:
       # The software backend and its gallery must build for a Mac (winit +
       # softbuffer + tiny-skia); the app itself only runs in a GUI session.
       - run: cargo check -p xui --features canvas --example widgets
+
+  # Source-based coverage of the full suite (GUI tests need a desktop, so this
+  # runs on Windows). The LCOV file is uploaded to Codecov and kept as an
+  # artifact for the HTML report.
+  coverage:
+    runs-on: windows-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@cargo-llvm-cov
+      - run: cargo llvm-cov --workspace --all-features --lcov --output-path lcov.info
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverage-lcov
+          path: lcov.info
+      # `use_oidc` works for a public repo without a token; `fail_ci_if_error`
+      # keeps a Codecov outage from failing the build.
+      - uses: codecov/codecov-action@v5
+        with:
+          files: lcov.info
+          use_oidc: true
+          fail_ci_if_error: false

@@ -11,3 +11,7 @@ readme = "README.md"
 # Pure-Rust decoders, so the portable `image` module stays platform-independent.
 png = "0.17"
 zune-jpeg = "0.5"
+
+[dev-dependencies]
+# Property tests for the pure arithmetic in `tests/properties.rs`.
+proptest = "1"
