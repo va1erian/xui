@@ -6,3 +6,8 @@ license = "MIT"
 description = "Backend-agnostic core of xui: geometry, units, colour, layout, theming and input vocabulary"
 repository = "https://github.com/va1erian/xui"
 readme = "README.md"
+
+[dependencies]
+# Pure-Rust decoders, so the portable `image` module stays platform-independent.
+png = "0.17"
+zune-jpeg = "0.5"

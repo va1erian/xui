@@ -3,6 +3,7 @@ use std::rc::Rc;
 use xui_core::app::{App, Ui, run_app};
 use xui_core::backend::{Backend, PlatformSpec};
 use xui_core::geometry::{Point, Rect};
+use xui_core::image::Image;
 use xui_core::widget::{Button, CheckBox, Label, ProgressBar, Slider};
 use xui_core::{Canvas, Color, Dip, TextStyle};
 
@@ -122,6 +123,29 @@ fn a_push_clip_limits_drawing() {
 fn skia_colour_is_opaque() {
     let color = to_skia(Color::rgb(0x12, 0x34, 0x56));
     assert_eq!(color.alpha(), 1.0);
+}
+
+#[test]
+fn a_drawn_image_lands_on_the_surface() {
+    let image = Image::from_rgba(1, 1, vec![255, 0, 0, 255]).expect("image");
+
+    let mut surface = Surface::new(32, 32);
+    surface.fill(Color::rgb(0, 0, 0));
+    surface.with_canvas(Rect::new(0, 0, 32, 32), |canvas| {
+        canvas.draw_image(&image, Rect::new(8, 8, 24, 24));
+    });
+
+    let rendered = surface.to_image();
+    assert_eq!(
+        rendered.pixel(16, 16),
+        Some([255, 0, 0, 255]),
+        "image lands"
+    );
+    assert_eq!(
+        rendered.pixel(2, 2),
+        Some([0, 0, 0, 255]),
+        "outside stays clear"
+    );
 }
 
 #[test]

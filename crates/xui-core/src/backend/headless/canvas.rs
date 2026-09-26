@@ -5,6 +5,7 @@
 use crate::backend::canvas::{Canvas, TextStyle};
 use crate::color::Color;
 use crate::geometry::{Point, Rect};
+use crate::image::Image;
 /// One drawing command a painted node recorded.
 #[derive(Clone, Debug, PartialEq)]
 pub enum DrawOp {
@@ -28,6 +29,8 @@ pub enum DrawOp {
     Line(Point, Point, Color, f32),
     /// Draws text.
     Text(Rect, String, Color),
+    /// Draws an image scaled into the rectangle.
+    Image(Rect, Image),
     /// Pushes a clip.
     Clip(Rect),
     /// Pops a clip.
@@ -158,6 +161,11 @@ impl Canvas for RecordingCanvas {
         let rect = self.rect(rect);
         self.ops
             .push(DrawOp::Text(rect, text.to_string(), style.color));
+    }
+
+    fn draw_image(&mut self, image: &Image, rect: Rect) {
+        let rect = self.rect(rect);
+        self.ops.push(DrawOp::Image(rect, image.clone()));
     }
 
     fn push_clip(&mut self, rect: Rect) {
