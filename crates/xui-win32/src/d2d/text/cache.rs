@@ -1,8 +1,10 @@
 #![forbid(unsafe_code)]
 
-//! A bounded least-recently-used cache of measured widths.
+//! Bounded least-recently-used caches of measured widths and laid-out text.
 
 use std::collections::HashMap;
+
+use super::layout::Layout;
 
 /// Widths keyed by string, evicting the least recently used half in one sweep
 /// when full, so a miss costs O(1) amortised and a hit allocates nothing.
@@ -56,6 +58,80 @@ impl WidthCache {
         let middle = stamps.len() / 2;
         let (_, &mut cutoff, _) = stamps.select_nth_unstable(middle);
         self.entries.retain(|_, entry| entry.last_used >= cutoff);
+    }
+}
+
+struct LayoutEntry {
+    layout: Layout,
+    last_used: u64,
+}
+
+/// Laid-out text keyed by `(text, wrap width)`, so a virtualized list of
+/// repeated cell text lays each one out once instead of rebuilding a
+/// DirectWrite layout per cell, per frame. Bounded like [`WidthCache`].
+///
+/// The text is the outer key, so a hit looks up by `&str` and allocates
+/// nothing; the width is a `f32`'s bits inside, so two widths that are
+/// bit-identical (`f32::INFINITY` is the single-line case) share an entry.
+pub(super) struct LayoutCache {
+    entries: HashMap<Box<str>, HashMap<u32, LayoutEntry>>,
+    clock: u64,
+    count: usize,
+    capacity: usize,
+}
+
+impl LayoutCache {
+    pub(super) fn new(capacity: usize) -> LayoutCache {
+        LayoutCache {
+            entries: HashMap::new(),
+            clock: 0,
+            count: 0,
+            capacity,
+        }
+    }
+
+    pub(super) fn get(&mut self, text: &str, width: f32) -> Option<&Layout> {
+        self.clock += 1;
+        let entry = self.entries.get_mut(text)?.get_mut(&width.to_bits())?;
+        entry.last_used = self.clock;
+        Some(&entry.layout)
+    }
+
+    pub(super) fn insert(&mut self, text: &str, width: f32, layout: Layout) {
+        if self.count >= self.capacity {
+            self.evict_older_half();
+        }
+        self.clock += 1;
+        let replaced = self
+            .entries
+            .entry(text.into())
+            .or_default()
+            .insert(
+                width.to_bits(),
+                LayoutEntry {
+                    layout,
+                    last_used: self.clock,
+                },
+            )
+            .is_none();
+        if replaced {
+            self.count += 1;
+        }
+    }
+
+    fn evict_older_half(&mut self) {
+        let mut stamps: Vec<u64> = self
+            .entries
+            .values()
+            .flat_map(|by_width| by_width.values().map(|entry| entry.last_used))
+            .collect();
+        let middle = stamps.len() / 2;
+        let (_, &mut cutoff, _) = stamps.select_nth_unstable(middle);
+        for by_width in self.entries.values_mut() {
+            by_width.retain(|_, entry| entry.last_used >= cutoff);
+        }
+        self.entries.retain(|_, by_width| !by_width.is_empty());
+        self.count = self.entries.values().map(HashMap::len).sum();
     }
 }
 

@@ -122,20 +122,22 @@ pub(crate) fn draw_d2d(
     } else {
         f32::INFINITY
     };
-    let Ok(layout) = font.layout(text, max_width) else {
-        return false;
-    };
-    let (width, height) = layout.size();
+    // Shares the painter's open Direct2D frame; when this is the only call (a
+    // standalone draw), the handle owns and ends its own frame.
     let Some(mut d2d) = canvas.d2d() else {
         return false;
     };
-    d2d.draw_text(
-        &layout,
-        PointF::new(align_x(style, rect, width), align_y(style, rect, height)),
-        style.color,
-    );
-    let _ = d2d.end_draw();
-    true
+    // The layout is cached per (text, width), so repeated cell text is not laid
+    // out again every frame.
+    font.with_layout(text, max_width, |layout| {
+        let (width, height) = layout.size();
+        d2d.draw_text(
+            layout,
+            PointF::new(align_x(style, rect, width), align_y(style, rect, height)),
+            style.color,
+        );
+    })
+    .is_ok()
 }
 
 /// The GDI font cache key for `style` at `dpi`.

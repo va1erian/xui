@@ -7,13 +7,17 @@ use std::sync::{Arc, Mutex, PoisonError};
 use crate::error::Result;
 use crate::sys::d2d::text::{ResolvedFont, RichStyle, TextFactory};
 
-use super::cache::WidthCache;
+use super::cache::{LayoutCache, WidthCache};
 use super::layout::Layout;
 use super::rich::{RichLayout, Span};
 use super::system::FontSpec;
 
 /// How many distinct strings a font remembers the width of.
 const WIDTH_CACHE_ENTRIES: usize = 16_384;
+
+/// How many laid-out strings a font remembers. A layout is heavier than a
+/// width, so the cache is smaller.
+const LAYOUT_CACHE_ENTRIES: usize = 4_096;
 
 /// Strings longer than this (in bytes) are measured but not remembered, so a
 /// few huge paragraphs cannot crowd out the short strings layout repeats.
@@ -46,6 +50,7 @@ struct FontInner {
     spec: FontSpec,
     resolved: ResolvedFont,
     widths: Mutex<WidthCache>,
+    layouts: Mutex<LayoutCache>,
 }
 
 /// A font at one size and style, from [`TextSystem::font`](super::TextSystem::font).
@@ -65,6 +70,7 @@ impl Font {
                 spec,
                 resolved,
                 widths: Mutex::new(WidthCache::new(WIDTH_CACHE_ENTRIES)),
+                layouts: Mutex::new(LayoutCache::new(LAYOUT_CACHE_ENTRIES)),
             }),
         }
     }
@@ -127,6 +133,32 @@ impl Font {
         Ok(Layout::new(text, sys))
     }
 
+    /// Lays `text` out at `max_width` (reusing a cached layout when the same
+    /// `(text, width)` was laid out before) and calls `draw` with it. The cache
+    /// is why painting many cells of repeated text does not rebuild a
+    /// DirectWrite layout per cell, per frame.
+    pub(crate) fn with_layout<R>(
+        &self,
+        text: &str,
+        max_width: f32,
+        draw: impl FnOnce(&Layout) -> R,
+    ) -> Result<R> {
+        let mut layouts = self.layouts();
+        if let Some(layout) = layouts.get(text, max_width) {
+            return Ok(draw(layout));
+        }
+        let sys = self
+            .inner
+            .factory
+            .layout(&self.inner.resolved.format, text, max_width)?;
+        let layout = Layout::new(text, sys);
+        let result = draw(&layout);
+        if text.len() <= MAX_CACHED_LEN {
+            layouts.insert(text, max_width, layout);
+        }
+        Ok(result)
+    }
+
     /// Lays `spans` out as one wrapped, flowing line at `max_width` (use
     /// `f32::INFINITY` for a single unwrapped line). Every run is styled in
     /// place, so word wrap, bidi and hit testing cross run boundaries. Draw it
@@ -166,6 +198,13 @@ impl Font {
     fn widths(&self) -> std::sync::MutexGuard<'_, WidthCache> {
         self.inner
             .widths
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+    }
+
+    fn layouts(&self) -> std::sync::MutexGuard<'_, LayoutCache> {
+        self.inner
+            .layouts
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
     }

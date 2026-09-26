@@ -12,7 +12,7 @@
 //! [`Win32Backend::supports`] reports
 //! [`ImplKind::Native`](xui_core::backend::ImplKind::Native) for them.
 
-mod canvas;
+pub(crate) mod canvas;
 mod chrome;
 mod contract;
 mod cursor;
