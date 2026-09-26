@@ -9,7 +9,7 @@ readme = "README.md"
 
 [features]
 default = ["win32"]
-# The Win32 backend. On by default; the only backend implemented so far.
+# The Win32 backend (and the Win32-native widget layer). On by default.
 win32 = ["dep:xui-win32"]
 # The software-rendered cross-platform backend (winit + tiny-skia).
 canvas = ["dep:xui-canvas"]

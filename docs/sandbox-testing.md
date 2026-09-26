@@ -63,24 +63,24 @@ app), then stops the executable. Test-driven captures (`WIN32UI_*_SHOTS`,
 `Window::capture_composited`) work as usual when you point them at
 `C:\stage\out`.
 
-## Client apps of win32ui
+## Client apps
 
 The script works with any Cargo project. Call it from your app's repository:
 
 ```powershell
 # your app's tests
-path\to\win32ui\scripts\sandbox\run.ps1 -ManifestPath .\Cargo.toml
+path\to\xui\scripts\sandbox\run.ps1 -ManifestPath .\Cargo.toml
 
 # build and launch the app itself as a smoke test (give it an auto-close switch
-# like the demo's WIN32UI_DEMO_AUTOCLOSE_MS, or it will run until the timeout)
-path\to\win32ui\scripts\sandbox\run.ps1 -Build -CargoArgs '--bin','myapp' -Env @{ MYAPP_AUTOCLOSE_MS = '4000' }
+# like the demo's WIN32UI_DEMO_AUTOCLOSE_MS / XUI_DEMO_AUTOCLOSE_MS, or it
+# runs until the timeout)
+path\to\xui\scripts\sandbox\run.ps1 -Build -CargoArgs '--bin','myapp' -Env @{ MYAPP_AUTOCLOSE_MS = '4000' }
 
 # executables you already built
-path\to\win32ui\scripts\sandbox\run.ps1 -Exe .\dist\myapp_tests.exe
+path\to\xui\scripts\sandbox\run.ps1 -Exe .\dist\myapp_tests.exe
 ```
 
-You can also copy `run.ps1` into your repository. It has no dependency on
-win32ui.
+You can also copy `run.ps1` into your repository. It has no dependency on xui.
 
 ## CI
 

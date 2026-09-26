@@ -7,7 +7,9 @@ WinRT / shell calls; on Linux and macOS they are D-Bus services, `.desktop`
 files and `Info.plist`. This document fixes where that code lives so it never
 leaks into xui's portable layer.
 
-It complements [macos.md](macos.md) (what the software backend supports) and
+It complements [Backends](backends.md) (what each backend supports),
+[The Win32 layer](win32.md) (the Windows escape hatches), [macos.md](macos.md)
+(what the software backend supports) and
 [migration-win32ui-to-xui.md](migration-win32ui-to-xui.md) (Cargo and API
 renames). It is not a widget-library change: xui gains no `cfg`-dependent
 public API from it.
@@ -18,7 +20,7 @@ xui is split so a feature sits in exactly one of three places.
 
 | | Where | What it is | Example |
 |---|---|---|---|
-| **(a)** | `xui-core` | already portable, no platform dependency, no `unsafe` | `Theme`, `Dip`, `Key`, the `Node`/`Role`/`Action` accessibility model, `PlatformSpec`/`Backend` |
+| **(a)** | `xui-core` | already portable, no platform dependency, no `unsafe` | `Theme`, `Dip`, `Key`, the `Node`/`Role`/`Action` accessibility model, `PlatformSpec`/`Backend`, the portable widget layer and its `App`/`Ui` runtime |
 | **(b)** | `xui-win32` (`#![cfg(windows)]`) | the Win32 backend, including `cfg(windows)` extension traits over `xui-core` types | `Backdrop`/`TitleBar`, `SystemTheme::system()`, UIA, WGC capture, native controls |
 | **(c)** | the application | an OS integration the library will not host, compiled away on other targets | SMTC, taskbar thumbar/jump list/progress, `winshell` associations, notifications |
 
