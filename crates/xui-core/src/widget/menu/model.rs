@@ -197,18 +197,20 @@ pub(super) fn set_enabled(nodes: &mut [Node], id: MenuId, enabled: bool) -> bool
 }
 
 /// Checks (or unchecks) entry `id`, clearing its radio siblings when checking,
-/// and returns whether it was found.
+/// and returns whether any checked flag actually changed.
 pub(super) fn set_checked(nodes: &mut [Node], id: MenuId, checked: bool) -> bool {
     if let Some(index) = nodes.iter().position(|node| node.id == id) {
+        let mut changed = nodes[index].checked != checked;
         if checked && nodes[index].kind == Kind::Radio {
-            for node in nodes.iter_mut() {
-                if node.kind == Kind::Radio {
+            for (sibling, node) in nodes.iter_mut().enumerate() {
+                if sibling != index && node.kind == Kind::Radio && node.checked {
                     node.checked = false;
+                    changed = true;
                 }
             }
         }
         nodes[index].checked = checked;
-        return true;
+        return changed;
     }
     for node in nodes.iter_mut() {
         if set_checked(&mut node.children, id, checked) {
@@ -303,6 +305,43 @@ mod tests {
             Node::radio(MenuId::new(2), "Right", false),
         ];
         assert!(set_checked(&mut nodes, MenuId::new(2), true));
+        assert!(!nodes[0].checked);
+        assert!(nodes[1].checked);
+    }
+
+    #[test]
+    fn set_checked_reports_only_a_real_change() {
+        let mut nodes = tree();
+        assert!(
+            !set_checked(&mut nodes, MenuId::new(3), false),
+            "setting the existing value is not a change"
+        );
+        assert!(set_checked(&mut nodes, MenuId::new(3), true));
+        assert!(
+            !set_checked(&mut nodes, MenuId::new(3), true),
+            "a redundant set is not a change"
+        );
+        assert!(
+            !set_checked(&mut nodes, MenuId::new(9), true),
+            "an unknown id is not a change"
+        );
+    }
+
+    #[test]
+    fn set_checked_reports_a_radio_group_change() {
+        let mut nodes = vec![
+            Node::radio(MenuId::new(1), "Left", false),
+            Node::radio(MenuId::new(2), "Right", false),
+        ];
+        assert!(set_checked(&mut nodes, MenuId::new(1), true));
+        assert!(
+            !set_checked(&mut nodes, MenuId::new(1), true),
+            "re-checking the same radio is not a change"
+        );
+        assert!(
+            set_checked(&mut nodes, MenuId::new(2), true),
+            "moving the radio clears the old selection"
+        );
         assert!(!nodes[0].checked);
         assert!(nodes[1].checked);
     }
