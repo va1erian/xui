@@ -7,7 +7,9 @@
 //! up front, and a branch's children are fetched the first time it expands, so
 //! an unopened branch costs nothing. A per-row checkbox is switched on with
 //! [`TreeView::checkboxes`] and its third state with [`TreeView::tri_state`].
-//! Indent guides run down each ancestor column.
+//! Indent guides run down each ancestor column. A row may carry a leading
+//! [`RowIcon`], a vector [`Glyph`](crate::widget::Glyph) or an
+//! [`Image`](crate::image::Image), drawn before its label.
 //!
 //! Events map to the app's `Msg` through the closures given at construction:
 //! [`on_select`](TreeView::on_select),
@@ -25,6 +27,7 @@ use crate::property::{Properties, Property, Value};
 
 mod events;
 mod flatten;
+mod icon;
 mod model;
 mod paint;
 
@@ -32,6 +35,7 @@ mod paint;
 mod tests;
 
 use self::flatten::State;
+pub use self::icon::RowIcon;
 pub use self::model::{CheckState, NodeId, TreeModel, TreeNode, TreeRow};
 
 type SelectMapper<M> = Rc<RefCell<Option<Box<dyn Fn(NodeId) -> Option<M>>>>>;

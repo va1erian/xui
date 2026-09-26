@@ -48,10 +48,10 @@ pub use widget::{
     Button, CellData, CheckBox, CheckState, ColorPicker, Column, ColumnWidth, ComboBox, Control,
     Dialog, DialogAction, Edit, Fill, FlowText, Glyph, GridModel, GridView, GroupBox, HasText,
     Hyperlink, Icon, Label, ListModel, ListView, MaterialStatusBar, Menu, MenuId, MenuScope,
-    MultilineEdit, NodeId, NumberField, Panel, ProgressBar, RadioGroup, Run, RunStyle, ScrollView,
-    SelectionMode, Separator, Slider, SortDirection, Split, StatusBar, Tabs, Tile, TilePaint,
-    TileSize, ToggleButton, Toolbar, Tooltip, TopBar, TopBarId, TreeModel, TreeNode, TreeRow,
-    TreeView, draw_icon,
+    MultilineEdit, NodeId, NumberField, Panel, ProgressBar, RadioGroup, RowIcon, Run, RunStyle,
+    ScrollView, SelectionMode, Separator, Slider, SortDirection, Split, StatusBar, Tabs, Tile,
+    TilePaint, TileSize, ToggleButton, Toolbar, Tooltip, TopBar, TopBarId, TreeModel, TreeNode,
+    TreeRow, TreeView, draw_icon,
 };
 
 /// The core types a frontend or a backend usually needs, in one `use`.

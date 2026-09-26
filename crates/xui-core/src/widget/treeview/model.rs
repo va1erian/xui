@@ -3,6 +3,8 @@
 //! The tree view's data: flat [`TreeRow`]s, the virtual, lazily-loaded
 //! [`TreeModel`], the [`TreeNode`] it returns and a row's [`CheckState`].
 
+use super::icon::RowIcon;
+
 /// A node's stable identity in a [`TreeModel`].
 ///
 /// Ids are opaque to the tree, but they must be unique across the whole model
@@ -48,6 +50,8 @@ pub struct TreeRow {
     pub expanded: bool,
     /// The initial state of the row's checkbox.
     pub checked: CheckState,
+    /// An optional leading icon, drawn before the label.
+    pub icon: Option<RowIcon>,
 }
 
 impl TreeRow {
@@ -77,6 +81,12 @@ impl TreeRow {
         self.checked = checked;
         self
     }
+
+    /// Sets the row's leading icon, before the label.
+    pub fn icon(mut self, icon: impl Into<RowIcon>) -> TreeRow {
+        self.icon = Some(icon.into());
+        self
+    }
 }
 
 /// One node handed back by a [`TreeModel`].
@@ -90,6 +100,8 @@ pub struct TreeNode {
     pub has_children: bool,
     /// The initial state of the node's checkbox.
     pub checked: CheckState,
+    /// An optional leading icon, drawn before the label.
+    pub icon: Option<RowIcon>,
 }
 
 impl TreeNode {
@@ -100,6 +112,7 @@ impl TreeNode {
             label: label.into(),
             has_children: false,
             checked: CheckState::Unchecked,
+            icon: None,
         }
     }
 
@@ -114,6 +127,12 @@ impl TreeNode {
     /// Sets the node's initial checkbox state.
     pub fn checked(mut self, checked: CheckState) -> TreeNode {
         self.checked = checked;
+        self
+    }
+
+    /// Sets the node's leading icon, before the label.
+    pub fn icon(mut self, icon: impl Into<RowIcon>) -> TreeNode {
+        self.icon = Some(icon.into());
         self
     }
 }
@@ -131,6 +150,7 @@ pub trait TreeModel {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::widget::Glyph;
 
     #[test]
     fn check_state_cycles_depend_on_tri_state() {
@@ -166,9 +186,12 @@ mod tests {
         let leaf = TreeNode::leaf(1, "a");
         assert!(!leaf.has_children);
         assert_eq!(leaf.checked, CheckState::Unchecked);
-        let branch = TreeNode::branch(2, "b").checked(CheckState::Checked);
+        let branch = TreeNode::branch(2, "b")
+            .checked(CheckState::Checked)
+            .icon(Glyph::People);
         assert!(branch.has_children);
         assert_eq!(branch.checked, CheckState::Checked);
+        assert_eq!(branch.icon, Some(RowIcon::Glyph(Glyph::People)));
     }
 
     #[test]
@@ -176,8 +199,10 @@ mod tests {
         let row = TreeRow::new("x", 1)
             .expandable(true)
             .expanded(true)
-            .checked(CheckState::Indeterminate);
+            .checked(CheckState::Indeterminate)
+            .icon(Glyph::Folder);
         assert!(row.expandable && row.expanded);
         assert_eq!(row.checked, CheckState::Indeterminate);
+        assert_eq!(row.icon, Some(RowIcon::Glyph(Glyph::Folder)));
     }
 }
