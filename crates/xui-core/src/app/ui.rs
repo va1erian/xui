@@ -21,12 +21,25 @@ use crate::theme::Theme;
 /// add its own widgets.
 pub struct Ui<M> {
     core: Rc<Core<M>>,
+    /// A container node this handle was scoped to, so widgets it creates become
+    /// that container's children. `None` parents to the window.
+    parent: Option<WidgetId>,
 }
 
 impl<M: 'static> Ui<M> {
     /// A handle over `core`.
     pub(crate) fn new(core: Rc<Core<M>>) -> Ui<M> {
-        Ui { core }
+        Ui { core, parent: None }
+    }
+
+    /// A handle scoped to the container `parent`: widgets created through it
+    /// become children of that node, while messages and the window still belong
+    /// to the top-level window.
+    pub fn with_parent(&self, parent: WidgetId) -> Ui<M> {
+        Ui {
+            core: Rc::clone(&self.core),
+            parent: Some(parent),
+        }
     }
 
     /// The window this handle drives.
@@ -49,11 +62,13 @@ impl<M: 'static> Ui<M> {
         self.core.proxy()
     }
 
-    /// Creates a node parented to the window from `spec`.
+    /// Creates a node from `spec`, parented to the container this handle is
+    /// scoped to, or to the window.
     pub fn create_node(&self, spec: &NodeSpec) -> Result<WidgetId> {
-        self.core
-            .backend()
-            .create(ParentRef::Window(self.core.window()), spec)
+        let parent = self
+            .parent
+            .map_or(ParentRef::Window(self.core.window()), ParentRef::Widget);
+        self.core.backend().create(parent, spec)
     }
 
     /// Creates a node inside the container `parent`.
@@ -234,6 +249,7 @@ impl<M> Clone for Ui<M> {
     fn clone(&self) -> Ui<M> {
         Ui {
             core: Rc::clone(&self.core),
+            parent: self.parent,
         }
     }
 }

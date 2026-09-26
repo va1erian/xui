@@ -17,6 +17,7 @@ mod groupbox;
 mod hyperlink;
 mod label;
 mod listview;
+mod panel;
 mod progressbar;
 mod radiogroup;
 mod separator;
@@ -24,6 +25,7 @@ mod slider;
 mod statusbar;
 mod togglebutton;
 mod toolbar;
+mod treeview;
 
 #[cfg(test)]
 mod tests;
@@ -37,6 +39,7 @@ pub use groupbox::GroupBox;
 pub use hyperlink::Hyperlink;
 pub use label::Label;
 pub use listview::ListView;
+pub use panel::Panel;
 pub use progressbar::ProgressBar;
 pub use radiogroup::RadioGroup;
 pub use separator::Separator;
@@ -44,3 +47,4 @@ pub use slider::Slider;
 pub use statusbar::StatusBar;
 pub use togglebutton::ToggleButton;
 pub use toolbar::Toolbar;
+pub use treeview::{TreeRow, TreeView};

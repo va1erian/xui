@@ -17,10 +17,11 @@ use std::rc::Rc;
 use xui_core::app::{App, Ui, run_app};
 use xui_core::backend::{Backend, PlatformSpec};
 use xui_core::widget::{
-    Button, CheckBox, ComboBox, Edit, GroupBox, HasText, Hyperlink, Label, ListView, ProgressBar,
-    RadioGroup, Separator, Slider, StatusBar, ToggleButton, Toolbar,
+    Button, CheckBox, ComboBox, Edit, GroupBox, HasText, Hyperlink, Label, ListView, Panel,
+    ProgressBar, RadioGroup, Separator, Slider, StatusBar, ToggleButton, Toolbar, TreeRow,
+    TreeView,
 };
-use xui_core::{Color, Rect, Theme, TimerId, WidgetId};
+use xui_core::{Color, Dip, Rect, Theme, TimerId, WidgetId};
 use xui_win32::Win32Backend;
 
 enum Msg {
@@ -54,6 +55,9 @@ struct WidgetsApp {
     _toolbar: Toolbar<Msg>,
     _status: StatusBar<Msg>,
     _toggle: ToggleButton<Msg>,
+    _tree: TreeView<Msg>,
+    _panel: Panel<Msg>,
+    _inside: Label<Msg>,
 }
 
 impl App for WidgetsApp {
@@ -151,7 +155,7 @@ fn run(theme: Theme, file: &str) {
         let backend = Rc::clone(&backend);
         run_app(
             backend_for_run,
-            PlatformSpec::new("xui portable widgets"),
+            PlatformSpec::new("xui portable widgets").size(Dip(720.0), Dip(600.0)),
             move |ui| {
                 ui.set_theme(theme);
                 let label = Label::new(ui, Rect::new(20, 16, 320, 48), "Portable Label").unwrap();
@@ -201,6 +205,20 @@ fn run(theme: Theme, file: &str) {
                 let status =
                     StatusBar::new(ui, Rect::new(20, 452, 620, 476), &["Ready", "3 items"])
                         .unwrap();
+                let tree = TreeView::new(
+                    ui,
+                    Rect::new(340, 392, 700, 472),
+                    &[
+                        TreeRow::new("Inbox", 0).expandable(true).expanded(true),
+                        TreeRow::new("Work", 1),
+                        TreeRow::new("Home", 1),
+                        TreeRow::new("Archive", 0).expandable(true),
+                    ],
+                )
+                .unwrap();
+                let panel = Panel::new(ui, Rect::new(20, 486, 340, 566)).unwrap();
+                let inside =
+                    Label::new(panel.ui(), Rect::new(12, 12, 300, 40), "In a panel").unwrap();
                 let window = backend.window_hwnd(ui.window()).expect("window handle");
 
                 // A worker types into the field and then clicks the button with
@@ -262,6 +280,9 @@ fn run(theme: Theme, file: &str) {
                     _toolbar: toolbar,
                     _status: status,
                     _toggle: toggle,
+                    _tree: tree,
+                    _panel: panel,
+                    _inside: inside,
                     expected,
                 }
             },
