@@ -14,7 +14,7 @@ Read this and [README.md](README.md) before writing any code. The docs'
   only ever see xui types.
 - **Controls own their child `HWND`** and destroy it (and unregister from
   `controls::registry`) in `Drop`.
-- **Small files.** Aim under 300 lines, hard limit 400. If a change would push a
+- **Small files.** Aim under 300 lines, hard limit 500. If a change would push a
   file past that, split it along a real seam first. New raw-Win32 helpers for a
   new control go in their own `src/sys/<name>.rs` rather than growing
   `sys/control.rs`.
@@ -78,4 +78,4 @@ cargo test
   Never scan the filesystem (`find /`, `Get-ChildItem -Recurse C:\`) for it.
 - Touch only the files your issue names; if you need to change a file another
   open issue owns, say so in the PR description instead of working around it.
-- Do not merge your own PR.
+- Do not merge your own PR unless requested.
