@@ -13,6 +13,7 @@ mod canvas;
 mod offscreen;
 mod paint;
 mod text;
+mod text_layout;
 
 pub use backend::WinitBackend;
 pub use canvas::SkiaCanvas;

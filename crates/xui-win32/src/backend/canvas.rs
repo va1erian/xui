@@ -12,7 +12,9 @@
 
 use crate::d2d::{PointF, RectF, Stroke as D2dStroke};
 use crate::gdi;
-use xui_core::backend::{Canvas, Corner, LinearGradient, RadialGradient, Rgba, Stroke, TextStyle};
+use xui_core::backend::{
+    Canvas, Corner, LinearGradient, RadialGradient, Rgba, Stroke, TextLayout, TextStyle,
+};
 use xui_core::image::Image;
 use xui_core::{Color, Point, Rect};
 
@@ -314,6 +316,10 @@ impl Canvas for Win32Canvas<'_> {
             self.dpi,
             Self::text_format(style),
         );
+    }
+
+    fn draw_layout(&mut self, layout: &dyn TextLayout, origin: Point, color: Rgba) {
+        super::text::draw_layout(self.canvas, layout, self.point(origin), color);
     }
 
     fn draw_image(&mut self, image: &Image, rect: Rect) {

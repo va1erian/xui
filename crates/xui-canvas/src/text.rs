@@ -13,20 +13,20 @@ use cosmic_text::{
 };
 use tiny_skia::{Pixmap, PremultipliedColorU8};
 
-use xui_core::backend::{TextAlign, TextMetrics, TextStyle, TextVAlign};
+use xui_core::backend::{TextAlign, TextMetrics, TextStyle, TextVAlign, TextWeight};
 use xui_core::geometry::Rect;
 
 thread_local! {
     static TEXT: RefCell<TextSystem> = RefCell::new(TextSystem::new());
 }
 
-struct TextSystem {
-    font_system: FontSystem,
-    cache: SwashCache,
+pub(crate) struct TextSystem {
+    pub(crate) font_system: FontSystem,
+    pub(crate) cache: SwashCache,
 }
 
 impl TextSystem {
-    fn new() -> TextSystem {
+    pub(crate) fn new() -> TextSystem {
         TextSystem {
             font_system: FontSystem::new(),
             cache: SwashCache::new(),
@@ -35,8 +35,28 @@ impl TextSystem {
 }
 
 /// The line height for a font size, matching the widgets' design convention.
-fn line_height(size_px: f32) -> f32 {
+pub(crate) fn line_height(size_px: f32) -> f32 {
     size_px * 1.25
+}
+
+/// The shaping attributes for a family, weight and slant, so the measured
+/// glyph advances are the ones that get painted.
+pub(crate) fn attrs_for<'a>(
+    family: Option<&'a str>,
+    weight: TextWeight,
+    italic: bool,
+) -> Attrs<'a> {
+    let mut attrs = Attrs::new();
+    if let Some(family) = family {
+        attrs = attrs.family(Family::Name(family));
+    }
+    if weight.value() != 400 {
+        attrs = attrs.weight(Weight(weight.value()));
+    }
+    if italic {
+        attrs = attrs.style(Style::Italic);
+    }
+    attrs
 }
 
 fn align_of(style: &TextStyle) -> Option<Align> {
@@ -50,17 +70,7 @@ fn align_of(style: &TextStyle) -> Option<Align> {
 /// The shaping attributes for `style`: its family, weight and slant, so the
 /// measured glyph advances are the ones that get painted.
 fn attrs(style: &TextStyle) -> Attrs<'_> {
-    let mut attrs = Attrs::new();
-    if let Some(family) = style.family.as_deref() {
-        attrs = attrs.family(Family::Name(family));
-    }
-    if style.weight.value() != 400 {
-        attrs = attrs.weight(Weight(style.weight.value()));
-    }
-    if style.italic {
-        attrs = attrs.style(Style::Italic);
-    }
-    attrs
+    attrs_for(style.family.as_deref(), style.weight, style.italic)
 }
 
 /// Measures `text` for `style` at `dpi`, wrapping to `max_width` when the style
@@ -152,7 +162,15 @@ pub fn draw(pixmap: &mut Pixmap, text: &str, rect: Rect, style: &TextStyle, dpi:
 
 /// Blends `color` with coverage `alpha` (0..=255) over a `w` x `h` glyph block
 /// at `(left, top)`, clipped to the pixmap.
-fn blend(pixmap: &mut Pixmap, left: i32, top: i32, w: u32, h: u32, color: [u8; 3], alpha: u32) {
+pub(crate) fn blend(
+    pixmap: &mut Pixmap,
+    left: i32,
+    top: i32,
+    w: u32,
+    h: u32,
+    color: [u8; 3],
+    alpha: u32,
+) {
     let (pw, ph) = (pixmap.width() as i32, pixmap.height() as i32);
     let a = alpha as f32 / 255.0;
     let pixels = pixmap.pixels_mut();

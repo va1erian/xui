@@ -13,7 +13,9 @@ use super::canvas::{TextMetrics, TextStyle};
 use super::event::{Event, TimerId};
 use super::ids::{WidgetId, WindowId};
 use super::node::{ImplKind, NodeKind, NodeSpec, ParentRef};
-use super::{Backend, BackendError, Painter, PlatformSpec, Result, Waker};
+use super::{
+    Backend, BackendError, FontSpec, Painter, PlatformSpec, Result, TextLayout, TextShaper, Waker,
+};
 use crate::geometry::Rect;
 use crate::router::WidgetHost;
 use crate::theme::Theme;
@@ -21,9 +23,11 @@ use crate::theme::Theme;
 mod canvas;
 #[cfg(test)]
 mod tests;
+mod text;
 
 pub(crate) use canvas::DrawOp;
 use canvas::RecordingCanvas;
+use text::HeadlessShaper;
 /// A node the headless backend recorded.
 #[derive(Clone)]
 struct Node {
@@ -377,6 +381,20 @@ impl Backend for HeadlessBackend {
             ascent: height * 3 / 4,
             descent: height / 4,
         }
+    }
+
+    fn text_shaper(&self) -> Box<dyn TextShaper> {
+        Box::new(HeadlessShaper)
+    }
+
+    fn layout_text(
+        &self,
+        text: &str,
+        spec: &FontSpec,
+        max_width: f32,
+        dpi: u32,
+    ) -> Box<dyn TextLayout> {
+        HeadlessShaper.layout(text, spec, max_width, dpi)
     }
 
     fn dpi(&self, window: WindowId) -> u32 {

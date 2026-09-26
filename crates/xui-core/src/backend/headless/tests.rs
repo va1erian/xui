@@ -283,7 +283,67 @@ fn window_state_is_recorded() {
 }
 
 #[test]
-fn quitting_is_recorded() {
+fn a_shaped_layout_hit_tests_and_selects() {
+    let backend = HeadlessBackend::new();
+    let spec = FontSpec::new(dip(10.0));
+    let layout = backend.layout_text("abcd", &spec, f32::INFINITY, 96);
+
+    assert_eq!(layout.width(), 20.0, "4 chars x 5px advance");
+    assert_eq!(layout.height(), 13.0);
+
+    let hit = layout.hit_test_point(0.0, 6.0);
+    assert_eq!(
+        hit.byte_index, 0,
+        "the leading edge is before the first char"
+    );
+    assert!(hit.inside);
+    assert_eq!(
+        layout.hit_test_point(7.0, 6.0).byte_index,
+        1,
+        "x=7 is nearest the second char"
+    );
+    assert_eq!(
+        layout.hit_test_point(20.0, 6.0).byte_index,
+        4,
+        "the trailing edge clamps to the end"
+    );
+
+    assert_eq!(
+        layout.selection_rects(1, 3),
+        vec![Rect::new(5, 0, 15, 13)],
+        "one box per line, covering the chars selected"
+    );
+    assert!(layout.selection_rects(3, 1).is_empty(), "an empty range");
+}
+
+#[test]
+fn drawing_a_shaped_layout_is_recorded() {
+    let backend = HeadlessBackend::new();
+    let window = backend.open_window(&PlatformSpec::new("t")).unwrap();
+    let id = backend
+        .create(ParentRef::Window(window), &node(NodeKind::Custom))
+        .unwrap();
+
+    let layout = backend.layout_text("hi", &FontSpec::new(dip(10.0)), f32::INFINITY, 96);
+    backend.set_painter(
+        id,
+        Rc::new(move |canvas| {
+            canvas.draw_layout(layout.as_ref(), Point::new(3, 4), Rgba::rgb(1, 2, 3));
+        }),
+    );
+    backend.render(id);
+
+    match backend.ops(id).as_slice() {
+        [DrawOp::ShapedText(origin, color)] => {
+            assert_eq!(*origin, Point::new(3, 4));
+            assert_eq!(*color, Rgba::rgb(1, 2, 3));
+        }
+        other => panic!("unexpected ops: {other:?}"),
+    }
+}
+
+#[test]
+fn quit_requested_is_recorded() {
     let backend = HeadlessBackend::new();
     assert!(!backend.quit_requested());
     backend.quit(0);

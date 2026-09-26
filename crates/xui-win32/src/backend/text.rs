@@ -6,13 +6,17 @@
 //! is painted with. A thread-local GDI font cache backs the rare case Direct2D
 //! is unavailable, so a styled draw does not create a font per frame.
 
+use std::any::Any;
 use std::cell::RefCell;
 use std::collections::HashMap;
 
-use xui_core::backend::{TextMetrics, TextStyle};
-use xui_core::geometry::Rect;
+use xui_core::backend::{
+    FontSpec as PortableFontSpec, Rgba, TextHit, TextLayout, TextMetrics, TextShaper, TextStyle,
+};
+use xui_core::geometry::{Point, Rect};
 
-use crate::d2d::{FontSpec, PointF, TextSystem};
+use crate::color::Color;
+use crate::d2d::{FontSpec, PointF, RectF, TextSystem};
 use crate::gdi::{self, TextFormat};
 use crate::geometry::Size;
 
@@ -186,6 +190,140 @@ pub(crate) fn measure_gdi(text: &str, style: &TextStyle, dpi: u32) -> TextMetric
     })
 }
 
+/// The DirectWrite request for a portable [`PortableFontSpec`] at `dpi`.
+fn portable_spec(spec: &PortableFontSpec, dpi: u32) -> FontSpec {
+    let family = spec
+        .family
+        .clone()
+        .unwrap_or_else(|| DEFAULT_FAMILY.to_owned());
+    let size_px = spec.size.to_px(dpi).value().max(1) as f32;
+    FontSpec::new(family, size_px)
+        .weight(spec.weight.value())
+        .italic(spec.italic)
+}
+
+/// A shaped DirectWrite layout exposed through the portable [`TextLayout`].
+pub(crate) struct Win32Layout {
+    inner: Option<crate::d2d::Layout>,
+}
+
+impl TextLayout for Win32Layout {
+    fn width(&self) -> f32 {
+        self.inner.as_ref().map_or(0.0, |layout| layout.width())
+    }
+
+    fn height(&self) -> f32 {
+        self.inner.as_ref().map_or(0.0, |layout| layout.height())
+    }
+
+    fn hit_test_point(&self, x: f32, y: f32) -> TextHit {
+        let Some(layout) = &self.inner else {
+            return TextHit {
+                byte_index: 0,
+                inside: false,
+            };
+        };
+        let hit = layout.hit_test_point(x, y);
+        TextHit {
+            byte_index: hit.index,
+            inside: hit.inside,
+        }
+    }
+
+    fn selection_rects(&self, byte_start: usize, byte_end: usize) -> Vec<Rect> {
+        let Some(layout) = &self.inner else {
+            return Vec::new();
+        };
+        layout
+            .selection_rects(byte_start, byte_end)
+            .into_iter()
+            .map(rect_from)
+            .collect()
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+/// Rounds a DirectWrite rectangle to device pixels.
+fn rect_from(rect: RectF) -> Rect {
+    Rect::new(
+        rect.left.round() as i32,
+        rect.top.round() as i32,
+        rect.right.round() as i32,
+        rect.bottom.round() as i32,
+    )
+}
+
+/// Shapes `text` with the UI thread's cached DirectWrite system.
+pub(crate) fn layout_text(
+    text: &str,
+    spec: &PortableFontSpec,
+    max_width: f32,
+    dpi: u32,
+) -> Box<dyn TextLayout> {
+    let layout = system()
+        .and_then(|system| system.font(&portable_spec(spec, dpi)).ok())
+        .and_then(|font| font.layout(text, max_width).ok());
+    Box::new(Win32Layout { inner: layout })
+}
+
+/// A `Send + Sync` DirectWrite shaper the UI thread hands a worker.
+pub(crate) struct Win32TextShaper {
+    system: Option<TextSystem>,
+}
+
+impl Win32TextShaper {
+    pub(crate) fn new() -> Win32TextShaper {
+        Win32TextShaper {
+            system: TextSystem::new().ok(),
+        }
+    }
+}
+
+impl TextShaper for Win32TextShaper {
+    fn layout(
+        &self,
+        text: &str,
+        spec: &PortableFontSpec,
+        max_width: f32,
+        dpi: u32,
+    ) -> Box<dyn TextLayout> {
+        let layout = self
+            .system
+            .as_ref()
+            .and_then(|system| system.font(&portable_spec(spec, dpi)).ok())
+            .and_then(|font| font.layout(text, max_width).ok());
+        Box::new(Win32Layout { inner: layout })
+    }
+}
+
+/// Draws a shaped layout at `origin`, in `color` (alpha ignored by Direct2D).
+pub(crate) fn draw_layout(
+    canvas: &gdi::Canvas,
+    layout: &dyn TextLayout,
+    origin: Point,
+    color: Rgba,
+) -> bool {
+    let Some(Win32Layout {
+        inner: Some(layout),
+    }) = layout.as_any().downcast_ref::<Win32Layout>()
+    else {
+        return false;
+    };
+    let Some(mut d2d) = canvas.d2d() else {
+        return false;
+    };
+    d2d.draw_text(
+        layout,
+        PointF::new(origin.x as f32, origin.y as f32),
+        Color::rgb(color.r, color.g, color.b),
+    );
+    let _ = d2d.end_draw();
+    true
+}
+
 /// Draws `text` into `rect` with a cached GDI font when DirectWrite is
 /// unavailable, aligned with `format`.
 pub(crate) fn draw_gdi(
@@ -210,4 +348,27 @@ pub(crate) fn draw_gdi(
             });
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use xui_core::units::dip;
+
+    #[test]
+    fn a_shaped_layout_hit_tests_and_selects() {
+        crate::init();
+        let shaper = Win32TextShaper::new();
+        let spec = PortableFontSpec::new(dip(14.0));
+        let layout = shaper.layout("hello world", &spec, f32::INFINITY, 96);
+
+        assert!(layout.width() > 0.0, "DirectWrite measured the run");
+        assert!(layout.height() > 0.0);
+
+        let y = layout.height() / 2.0;
+        assert_eq!(layout.hit_test_point(0.0, y).byte_index, 0);
+        let boxes = layout.selection_rects(6, 11);
+        assert!(!boxes.is_empty(), "the selected word has a box");
+        assert!(boxes[0].width() > 0);
+    }
 }
