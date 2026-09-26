@@ -307,6 +307,14 @@ impl<W: CustomWidget, M: 'static> Custom<W, M> {
         }
     }
 
+    /// The widget's built-in scroll state, when it was hosted with
+    /// [`Custom::with_vscroll`]. A composite widget captures this in its
+    /// `on_resize` callback (which runs after `Custom` is moved into it) to
+    /// resize the scroll extent from the new viewport width.
+    pub(crate) fn scroll_handle(&self) -> Option<Rc<CustomScroll<M>>> {
+        self.shared.scroll.borrow().clone()
+    }
+
     /// The current scroll offset in design units, clamped to the content.
     pub fn scroll_offset(&self) -> Dip {
         self.shared
@@ -354,6 +362,32 @@ impl<W: CustomWidget, M: 'static> Custom<W, M> {
     /// Schedules a repaint of the widget.
     pub fn invalidate(&self) {
         self.window.invalidate();
+    }
+
+    /// Drops the widget's renderer surface — the Direct2D target and its
+    /// uploaded-image caches (or the OpenGL context) — so a heavy view does not
+    /// hold them while it is hidden. The next paint recreates it, so a caller
+    /// that also cached image handles from the surface must drop them too.
+    pub fn release_renderer(&self) {
+        {
+            let widget = self.shared.widget.borrow();
+            self.renderer
+                .borrow_mut()
+                .teardown_gl(|gl| widget.gl_teardown(gl));
+        }
+        *self.renderer.borrow_mut() = RendererState::Untried;
+    }
+
+    /// Releases the widget's uploaded Direct2D images — the retained RGBA cache
+    /// and the device bitmaps — while keeping the render target. Use it instead
+    /// of [`release_renderer`](Custom::release_renderer) when hiding a heavy
+    /// Direct2D view: the covers' memory is freed, but the surface is not
+    /// dropped, so the next show does not recreate the target (a fresh target
+    /// paints nothing until its first frame, so the window can flash stale
+    /// pixels). A caller that cached image handles from the surface must drop
+    /// them too. A no-op for the OpenGL and GDI renderers.
+    pub fn release_images(&self) {
+        self.renderer.borrow().release_images();
     }
 
     /// Schedules a repaint of `rect` only — the widget's client coordinates, in

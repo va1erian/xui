@@ -59,24 +59,11 @@ impl Divider {
         }
     }
 
-    /// Clamps `px` to the panes' minimums and emits the move.
+    /// Clamps `px` (the anchored pane's extent) to the panes' minimums and
+    /// emits the move.
     fn emit_position(&self, cx: &WidgetCx<SplitEvent>, px: i32) {
-        let shared = &self.shared;
-        let dpi = shared.dpi.get().max(96);
-        let area = shared.area.get();
-        let total = if shared.is_horizontal() {
-            area.width()
-        } else {
-            area.height()
-        };
-        let available = (total - shared.thickness.get()).max(0);
-        let min_a = Dip(shared.min_a.get()).to_px(dpi).value();
-        let min_b = Dip(shared.min_b.get()).to_px(dpi).value();
-        let position = if min_a + min_b <= available {
-            px.clamp(min_a, available - min_b)
-        } else {
-            available / 2
-        };
+        let dpi = self.shared.dpi.get().max(96);
+        let position = self.shared.clamp_anchored(px);
         cx.emit(SplitEvent::Moved(Px(position).to_dip(dpi)));
     }
 }
@@ -113,9 +100,9 @@ impl CustomWidget for Divider {
                 }
                 cx.cursor(self.cursor());
                 if self.dragging.get() {
-                    let position =
-                        self.shared.position_px() + (self.coordinate(x, y) - self.grab.get());
-                    self.emit_position(cx, position);
+                    let drag =
+                        self.shared.anchored_sign() * (self.coordinate(x, y) - self.grab.get());
+                    self.emit_position(cx, self.shared.position_px() + drag);
                 }
             }
             Input::MouseDown {
@@ -152,7 +139,9 @@ impl CustomWidget for Divider {
                 };
                 if delta != 0 {
                     let dpi = self.shared.dpi.get().max(96);
-                    let step = Dip(ARROW_STEP_DIP).to_px(dpi).value() * delta;
+                    let step = self.shared.anchored_sign()
+                        * Dip(ARROW_STEP_DIP).to_px(dpi).value()
+                        * delta;
                     self.emit_position(cx, self.shared.position_px() + step);
                 }
             }

@@ -8,9 +8,9 @@ use windows::Win32::Foundation::{COLORREF, POINT, RECT};
 use windows::Win32::Graphics::Gdi::{
     AC_SRC_ALPHA, AC_SRC_OVER, AlphaBlend, BLENDFUNCTION, BeginPaint, BitBlt,
     CreateCompatibleBitmap, CreateCompatibleDC, DRAW_TEXT_FORMAT, DeleteDC, DeleteObject,
-    DrawTextW, EndPaint, GetClipBox, HBITMAP, HBRUSH, HDC, HGDIOBJ, IntersectClipRect, LineTo,
-    MoveToEx, PAINTSTRUCT, Polygon, SRCCOPY, SelectClipRgn, SelectObject, SetBkMode, SetTextColor,
-    TRANSPARENT,
+    DrawTextW, EndPaint, ExcludeClipRect, GetClipBox, HBITMAP, HBRUSH, HDC, HGDIOBJ,
+    IntersectClipRect, LineTo, MoveToEx, PAINTSTRUCT, Polygon, SRCCOPY, SelectClipRgn,
+    SelectObject, SetBkMode, SetTextColor, SetViewportOrgEx, TRANSPARENT,
 };
 
 use crate::color::Color;
@@ -125,6 +125,16 @@ fn destroy(buffer: BackBuffer) {
     }
 }
 
+/// Sets the mapping origin of `hdc`, so subsequent logical coordinates are
+/// offset by `(x, y)` before hitting the device. Used to scroll a custom
+/// widget's content inside its viewport-sized back buffer.
+pub(crate) fn set_viewport_origin(hdc: HDC, x: i32, y: i32) {
+    // SAFETY: `hdc` is live; the previous origin out-pointer is optional.
+    unsafe {
+        let _ = SetViewportOrgEx(hdc, x, y, None);
+    }
+}
+
 /// Removes any clip region from `hdc`.
 pub(crate) fn reset_clip(hdc: HDC) {
     // SAFETY: a null region selects the DC's default (unclipped) region.
@@ -138,6 +148,16 @@ pub(crate) fn clip_rect(hdc: HDC, rect: Rect) {
     // SAFETY: `rect` is plain geometry.
     unsafe {
         let _ = IntersectClipRect(hdc, rect.left, rect.top, rect.right, rect.bottom);
+    }
+}
+
+/// Removes `rect` from `hdc`'s clip region, so later drawing cannot paint over
+/// it. Used to suppress the system's default submenu arrow, which it draws
+/// after an owner-drawn menu item's `WM_DRAWITEM`.
+pub(crate) fn exclude_clip_rect(hdc: HDC, rect: Rect) {
+    // SAFETY: `rect` is plain geometry.
+    unsafe {
+        let _ = ExcludeClipRect(hdc, rect.left, rect.top, rect.right, rect.bottom);
     }
 }
 
