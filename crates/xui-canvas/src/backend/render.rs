@@ -67,6 +67,7 @@ mod tests {
             enabled: true,
             text: String::new(),
             painter: None,
+            drag_region: false,
         }
     }
 

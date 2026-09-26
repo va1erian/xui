@@ -12,6 +12,8 @@
 
 mod app;
 mod render;
+#[cfg(test)]
+mod tests;
 
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
@@ -25,11 +27,12 @@ use winit::raw_window_handle::{
 use winit::window::Window;
 
 use xui_core::backend::{
-    Backend, BackendError, Cursor, ImplKind, NodeKind, NodeSpec, Painter, ParentRef, PlatformSpec,
-    Result as BackendResult, TextMetrics, TextStyle, TimerId, Waker, WidgetId, WindowId,
+    Backend, BackendError, Cursor, Decorations, ImplKind, NodeKind, NodeSpec, Painter, ParentRef,
+    PlatformSpec, Result as BackendResult, TextMetrics, TextStyle, TimerId, Waker, WidgetId,
+    WindowId,
 };
 use xui_core::router::WidgetHost;
-use xui_core::{Rect, Theme};
+use xui_core::{Dip, Rect, Theme};
 
 /// A cloneable window handle for `softbuffer`. `winit::Window` is not `Clone`,
 /// so the display and window handles share one `Rc`.
@@ -67,6 +70,8 @@ pub(crate) struct Node {
     pub(crate) enabled: bool,
     pub(crate) text: String,
     pub(crate) painter: Option<Painter>,
+    /// Whether a press that starts here drags the whole window.
+    pub(crate) drag_region: bool,
 }
 
 /// The per-window state.
@@ -77,6 +82,10 @@ pub(crate) struct WindowState {
     pub(crate) theme: Theme,
     pub(crate) sink: Option<Rc<dyn WidgetHost>>,
     pub(crate) window: Option<Rc<Window>>,
+    /// Whether the window shows the system title bar.
+    pub(crate) decorations: Decorations,
+    /// The custom caption band height the app asked for.
+    pub(crate) caption_inset: Dip,
     /// The node the pointer is over, so a `MouseLeave` can be sent on exit.
     pub(crate) hover: Option<WidgetId>,
     /// The node with the keyboard focus.
@@ -95,6 +104,8 @@ impl WindowState {
             theme: Theme::light(),
             sink: None,
             window: None,
+            decorations: spec.decorations,
+            caption_inset: spec.caption_inset,
             hover: None,
             focused: None,
         }
@@ -136,6 +147,14 @@ impl Shared {
             }
         }
         None
+    }
+
+    /// Whether the node `id` is marked as a window-drag region.
+    pub(crate) fn is_drag_region(&self, id: WidgetId) -> bool {
+        self.nodes
+            .borrow()
+            .iter()
+            .any(|(node_id, node)| *node_id == id && node.drag_region)
     }
 
     /// Sends `event` to the sink of `window`.
@@ -259,6 +278,29 @@ impl Backend for WinitBackend {
             .retain(|(_, node)| node.window != window);
     }
 
+    fn minimize(&self, window: WindowId) {
+        self.window_handle(window, |handle| handle.set_minimized(true));
+    }
+
+    fn toggle_maximize(&self, window: WindowId) {
+        self.window_handle(window, |handle| {
+            handle.set_maximized(!handle.is_maximized());
+        });
+    }
+
+    fn is_maximized(&self, window: WindowId) -> bool {
+        self.window_handle(window, Window::is_maximized)
+            .unwrap_or(false)
+    }
+
+    fn caption_inset(&self, window: WindowId) -> Dip {
+        self.shared
+            .windows
+            .borrow()
+            .get(&window.raw())
+            .map_or(Dip(0.0), |state| state.caption_inset)
+    }
+
     fn create(&self, parent: ParentRef, spec: &NodeSpec) -> BackendResult<WidgetId> {
         let window = match parent {
             ParentRef::Window(window) => window,
@@ -285,6 +327,7 @@ impl Backend for WinitBackend {
                 enabled: spec.enabled,
                 text: spec.text.clone(),
                 painter: None,
+                drag_region: false,
             },
         ));
         Ok(id)
@@ -334,6 +377,10 @@ impl Backend for WinitBackend {
             let entry = nodes.remove(at);
             nodes.push(entry);
         }
+    }
+
+    fn set_drag_region(&self, id: WidgetId, drag: bool) {
+        self.with_node(id, |node| node.drag_region = drag);
     }
 
     fn set_cursor(&self, id: WidgetId, cursor: Cursor) {
@@ -456,6 +503,17 @@ impl Backend for WinitBackend {
 }
 
 impl WinitBackend {
+    /// Runs `f` with `window`'s live `winit::Window`, if it has one yet.
+    fn window_handle<R>(&self, window: WindowId, f: impl FnOnce(&Window) -> R) -> Option<R> {
+        let handle = self
+            .shared
+            .windows
+            .borrow()
+            .get(&window.raw())
+            .and_then(|state| state.window.clone())?;
+        Some(f(&handle))
+    }
+
     fn with_node(&self, id: WidgetId, f: impl FnOnce(&mut Node)) {
         if let Some((_, node)) = self
             .shared

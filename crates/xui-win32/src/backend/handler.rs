@@ -20,7 +20,7 @@ use crate::backend::canvas::Win32Canvas;
 use crate::gdi::Paint;
 use crate::hwnd::Hwnd;
 
-use crate::message::{CommandNotification, LResult, Message};
+use crate::message::{CommandNotification, LResult, Message, MouseButton};
 use crate::sys;
 use crate::window::{Window, WindowHandler};
 
@@ -288,6 +288,8 @@ pub(crate) struct NodeHandler {
     shared: Rc<WindowShared>,
     bounds: Rc<Cell<Rect>>,
     painter: Rc<RefCell<Option<Painter>>>,
+    /// Whether a press that starts on this node drags the window.
+    drag_region: Rc<Cell<bool>>,
     tracking_mouse: Cell<bool>,
 }
 
@@ -298,12 +300,14 @@ impl NodeHandler {
         shared: Rc<WindowShared>,
         bounds: Rc<Cell<Rect>>,
         painter: Rc<RefCell<Option<Painter>>>,
+        drag_region: Rc<Cell<bool>>,
     ) -> NodeHandler {
         NodeHandler {
             widget,
             shared,
             bounds,
             painter,
+            drag_region,
             tracking_mouse: Cell::new(false),
         }
     }
@@ -346,6 +350,21 @@ impl WindowHandler for NodeHandler {
         // on `WM_PAINT`, so claim the erase and skip the default fill.
         if matches!(&message, Message::Other { code, .. } if *code == sys::d2d::WM_ERASEBKGND) {
             return Some(1);
+        }
+        // A left press on a drag region starts a window move on the top-level
+        // window, as the system caption would, so the node's own handler never
+        // sees the click.
+        if self.drag_region.get()
+            && matches!(
+                &message,
+                Message::MouseDown {
+                    button: MouseButton::Left,
+                    ..
+                }
+            )
+        {
+            sys::drag::begin_move(sys::window::root(window.hwnd()));
+            return Some(0);
         }
         match &message {
             Message::Paint => {

@@ -9,6 +9,7 @@
 //! [`Win32Backend::supports`] reports [`ImplKind::Native`] for them.
 
 mod canvas;
+mod chrome;
 mod handler;
 mod node;
 mod shape;
@@ -23,7 +24,7 @@ use xui_core::backend::{
     Result as BackendResult, TextMetrics, TextStyle, TimerId, Waker, WidgetId, WindowId,
 };
 use xui_core::router::WidgetHost;
-use xui_core::{Rect, Theme};
+use xui_core::{Dip, Px, Rect, Theme};
 
 use crate::sys;
 use crate::window::{CursorShape, Window, WindowClass, WindowExStyle, WindowStyle};
@@ -211,6 +212,7 @@ impl Backend for Win32Backend {
             TopHandler::new(id, Rc::clone(&shared)),
         )
         .map_err(|_| BackendError::CreateFailed("window"))?;
+        chrome::apply(spec, &window);
         window.show();
         self.windows.borrow_mut().insert(
             id.raw(),
@@ -228,6 +230,42 @@ impl Backend for Win32Backend {
         self.nodes
             .borrow_mut()
             .retain(|_, node| node.window_id != window);
+    }
+
+    fn minimize(&self, window: WindowId) {
+        let hwnd = self.window_hwnd(window);
+        if let Some(hwnd) = hwnd {
+            sys::window::show(hwnd, sys::window::ShowKind::Minimized);
+        }
+    }
+
+    fn toggle_maximize(&self, window: WindowId) {
+        let Some(hwnd) = self.window_hwnd(window) else {
+            return;
+        };
+        let kind = if sys::window::is_maximized(hwnd) {
+            sys::window::ShowKind::Normal
+        } else {
+            sys::window::ShowKind::Maximized
+        };
+        sys::window::show(hwnd, kind);
+    }
+
+    fn is_maximized(&self, window: WindowId) -> bool {
+        self.windows
+            .borrow()
+            .get(&window.raw())
+            .is_some_and(|entry| sys::window::is_maximized(entry.window.hwnd()))
+    }
+
+    fn caption_inset(&self, window: WindowId) -> Dip {
+        let Some(hwnd) = self.window_hwnd(window) else {
+            return Dip(0.0);
+        };
+        if !crate::window::nc::is_extended(hwnd) {
+            return Dip(0.0);
+        }
+        Px(sys::nc::title_bar_height(hwnd)).to_dip(self.dpi(window))
     }
 
     fn create(&self, parent: ParentRef, spec: &NodeSpec) -> BackendResult<WidgetId> {
@@ -309,6 +347,12 @@ impl Backend for Win32Backend {
         }
     }
 
+    fn set_drag_region(&self, id: WidgetId, drag: bool) {
+        if let Some(node) = self.nodes.borrow().get(&id.raw()) {
+            node.drag_region.set(drag);
+        }
+    }
+
     fn set_cursor(&self, id: WidgetId, cursor: Cursor) {
         if let Some((hwnd, _)) = self.node(id) {
             let shape = match cursor {
@@ -386,10 +430,15 @@ impl Backend for Win32Backend {
         if let Some(entry) = self.windows.borrow().get(&window.raw()) {
             entry.theme.set(*theme);
             entry.shared.set_theme(*theme);
-            sys::set_class_background(entry.window.hwnd(), theme.background);
+            let hwnd = entry.window.hwnd();
+            sys::set_class_background(hwnd, theme.background);
+            sys::set_titlebar_dark(hwnd, theme.is_dark);
+            if crate::window::nc::is_extended(hwnd) {
+                sys::apply_extended_colors(hwnd, theme, crate::theme::backdrop_active(hwnd));
+            }
             // Painters read the shared theme live, but they only repaint when
             // asked, so invalidate the whole tree (children included).
-            sys::window::redraw_children(entry.window.hwnd());
+            sys::window::redraw_children(hwnd);
         }
     }
 
