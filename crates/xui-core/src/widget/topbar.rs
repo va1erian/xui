@@ -9,6 +9,7 @@ use super::control::Control;
 use crate::app::Ui;
 use crate::backend::{NodeKind, NodeSpec, Result, WidgetId};
 use crate::geometry::Rect;
+use crate::units::Dip;
 
 mod events;
 mod icon;
@@ -39,8 +40,13 @@ const SPACER: TopBarId = TopBarId(usize::MAX);
 ///
 /// The set is deliberately small: the bar carries it without an image
 /// dependency (see issue #35), drawing each shape with the portable
-/// [`Canvas`] and any other short mark as a text glyph. A caller that needs a
-/// richer set can pass text, e.g. `Glyph::Text("+")`.
+/// [`Canvas`] and any other short mark as a text glyph. The transport shapes
+/// ([`Play`](Glyph::Play), [`Pause`](Glyph::Pause), [`Stop`](Glyph::Stop),
+/// [`Previous`](Glyph::Previous), [`Next`](Glyph::Next),
+/// [`Repeat`](Glyph::Repeat), [`Shuffle`](Glyph::Shuffle)) are drawn as
+/// vectors, so a media bar needs no icon font and renders the same on every
+/// backend. A caller that needs a richer set can pass text, e.g.
+/// `Glyph::Text("+")`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Glyph {
     /// Three stacked bars (a menu).
@@ -53,6 +59,20 @@ pub enum Glyph {
     More,
     /// A five-pointed star (a favourite).
     Star,
+    /// A right-pointing triangle (play).
+    Play,
+    /// Two vertical bars (pause).
+    Pause,
+    /// A filled square (stop).
+    Stop,
+    /// A bar and a left-pointing triangle (previous track).
+    Previous,
+    /// A right-pointing triangle and a bar (next track).
+    Next,
+    /// A loop with two arrow heads (repeat).
+    Repeat,
+    /// Two crossing arrows (shuffle).
+    Shuffle,
     /// A short text run drawn as the icon, e.g. `"+"` or `"A"`.
     Text(&'static str),
 }
@@ -64,8 +84,10 @@ pub enum Glyph {
 /// event to the app's `Msg` through a closure given at construction:
 /// [`on_click`](TopBar::on_click) for icon buttons,
 /// [`on_toggle`](TopBar::on_toggle) for toggles and
-/// [`on_change`](TopBar::on_change) for sliders. Spacers have no id and simply
-/// share the leftover width, so trailing items are pushed to the edge.
+/// [`on_change`](TopBar::on_change) for sliders. A spacer or an item marked
+/// [`expand`](TopBar::expand) shares the leftover width, and
+/// [`width`](TopBar::width) pins an item's width, so a bar can push trailing
+/// items to the edge or stretch a seek slider without absolute positions.
 pub struct TopBar<M: 'static> {
     control: Control<M>,
     items: Rc<RefCell<Vec<Item>>>,
@@ -163,6 +185,22 @@ impl<M: 'static> TopBar<M> {
         self.push(SPACER, Kind::Spacer(weight.max(1)))
     }
 
+    /// Pins item `id` to a fixed design `width`, ignoring its natural width.
+    pub fn width(self, id: TopBarId, width: Dip) -> TopBar<M> {
+        self.set_width(id, Some(items::Width::Fixed(width)))
+    }
+
+    /// Lets item `id` absorb the bar's leftover width, so a slider stretches to
+    /// fill the band. Several expanding items share the leftover equally.
+    pub fn expand(self, id: TopBarId) -> TopBar<M> {
+        self.expand_weight(id, 1)
+    }
+
+    /// Lets item `id` absorb leftover width in proportion to `weight`.
+    pub fn expand_weight(self, id: TopBarId, weight: u32) -> TopBar<M> {
+        self.set_width(id, Some(items::Width::Expand(weight.max(1))))
+    }
+
     /// Sets an item's hover tooltip.
     pub fn tooltip(self, id: TopBarId, text: &str) -> TopBar<M> {
         if let Some(item) = self
@@ -199,8 +237,23 @@ impl<M: 'static> TopBar<M> {
             id,
             enabled: true,
             tooltip: None,
+            width: None,
             kind,
         });
+        self.control.invalidate();
+        self
+    }
+
+    /// Sets or clears item `id`'s explicit width.
+    fn set_width(self, id: TopBarId, width: Option<items::Width>) -> TopBar<M> {
+        if let Some(item) = self
+            .items
+            .borrow_mut()
+            .iter_mut()
+            .find(|item| item.id == id)
+        {
+            item.width = width;
+        }
         self.control.invalidate();
         self
     }
