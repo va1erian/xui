@@ -24,6 +24,7 @@ pub(crate) mod dpi;
 pub(crate) mod drag;
 pub(crate) mod dwm;
 pub(crate) mod edit;
+pub(crate) mod edit_edge;
 pub(crate) mod first_show;
 pub(crate) mod fullscreen;
 pub(crate) mod gdi;
