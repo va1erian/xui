@@ -14,7 +14,7 @@ use xui_core::message::MouseButton;
 use super::App;
 use super::keymap::{cursor_icon, mouse_button, virtual_key};
 
-impl App {
+impl App<'_> {
     /// Moves the keyboard focus to `id`, telling the old and new holders.
     fn set_focus(&self, raw: u64, id: WidgetId) {
         let previous = self

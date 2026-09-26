@@ -34,7 +34,10 @@ pub(crate) trait Host {
 }
 
 impl<A: App> Runtime<A> {
-    /// A runtime for a window whose close quits the loop.
+    /// A runtime for a window whose close quits the loop. The primary window
+    /// built by [`run_app`] uses [`Runtime::pending`] instead, so this is only
+    /// for the widget unit tests.
+    #[cfg(test)]
     pub(crate) fn primary(core: Rc<Core<A::Msg>>, app: A) -> Rc<Runtime<A>> {
         Runtime::new(core, app, true)
     }
@@ -48,6 +51,23 @@ impl<A: App> Runtime<A> {
             quits_on_close,
             closed: Cell::new(false),
         })
+    }
+
+    /// A runtime whose app is built later, once its window is live, so the
+    /// widgets lay out at the window's real DPI.
+    pub(crate) fn pending(core: Rc<Core<A::Msg>>, quits_on_close: bool) -> Rc<Runtime<A>> {
+        Rc::new(Runtime {
+            core,
+            app: RefCell::new(None),
+            quits_on_close,
+            closed: Cell::new(false),
+        })
+    }
+
+    /// Installs the app and drains what was queued before it existed.
+    pub(crate) fn prime(&self, app: A) {
+        *self.app.borrow_mut() = Some(app);
+        self.drain();
     }
 
     /// Offers `event` to the app: window-level events first, then the target's
@@ -210,6 +230,11 @@ impl WidgetHost for Sink {
 
 /// Builds a window through `backend`, constructs the app with `make`, and runs
 /// the event loop until the window closes or [`Ui::quit`] is called.
+///
+/// `make` runs via [`Backend::run_with`], once the platform window exists and
+/// its DPI is known. A backend that creates its window synchronously builds it
+/// before the loop starts; `winit` builds it from inside the loop, after the
+/// window is live, so the widgets lay out at the real DPI.
 pub fn run_app<A, F>(backend: Rc<dyn Backend>, spec: PlatformSpec, make: F) -> Result<()>
 where
     A: App,
@@ -218,15 +243,30 @@ where
     backend.init();
     let window = backend.open_window(&spec)?;
     let core = Core::new(Rc::clone(&backend), window);
-    let mut ui = Ui::new(Rc::clone(&core));
-    let app = make(&mut ui);
-    let runtime = Runtime::primary(Rc::clone(&core), app);
+    // The runtime exists before the app, so the sink can catch an event that
+    // arrives before `make` runs; `drain` puts a message back until `prime`.
+    let runtime = Runtime::pending(Rc::clone(&core), true);
     let host: Rc<dyn Host> = Rc::clone(&runtime) as Rc<dyn Host>;
     backend.set_event_sink(window, Rc::new(Sink::new(Rc::downgrade(&host))));
-    // Flush anything `make` queued before the sink existed, so a synchronous
-    // backend's `run` returning immediately cannot strand it.
-    runtime.drain();
-    backend.run();
+
+    // The backend calls this once the platform window exists and reports its
+    // DPI. It is borrowed rather than boxed so `make` may capture the caller's
+    // stack (it is dropped when `run_with` returns).
+    let mut make = Some(make);
+    let ready_runtime = Rc::clone(&runtime);
+    let ready_core = Rc::clone(&core);
+    let mut on_ready = || {
+        // Called exactly once; a backend that re-fires is a no-op rather than
+        // building the app twice.
+        let Some(make) = make.take() else {
+            return;
+        };
+        let mut ui = Ui::new(Rc::clone(&ready_core));
+        let app = make(&mut ui);
+        ready_runtime.prime(app);
+    };
+
+    backend.run_with(window, &mut on_ready);
     backend.close_window(window);
     Ok(())
 }
