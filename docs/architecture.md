@@ -63,6 +63,7 @@ umbrella with `--no-default-features --features canvas`) and pass a backend to
 `Rc<dyn Backend>` and you can choose it at run time. Its operations group into:
 
 - **Lifecycle** — `init` (idempotent, default no-op), `run` (pump until `quit`),
+  `run_with` (build the app once the window is live, then pump; see below),
   `quit`, `wake`/`waker` (a `Send + Sync` cross-thread wake), `set_event_sink`.
 - **Windows** — `open_window`, `close_window`, `set_window_title`,
   `set_window_enabled` (make a modal owner inert), `native_window`,
@@ -83,6 +84,15 @@ Methods a backend cannot meaningfully provide have defaults: `capture` and
 and the rest are no-ops. This is why the portable core can run on a minimal
 backend (the offscreen one overrides `run` to return immediately) without
 special-casing it.
+
+`run_app` builds the app through `run_with`: the runtime installs its event sink
+first, then the backend invokes the `make` closure once its platform window
+exists and its DPI is known, and only then pumps the loop. A backend that
+creates its window synchronously (Win32) builds the app before pumping; a
+backend whose window is created lazily by the loop (`winit`) builds it from
+inside the loop, so widgets lay out at the real scale factor from the start
+instead of being built at 96 DPI and rescaled afterwards. The default
+implementation calls `on_ready` and then `run`.
 
 `NodeKind` is the portable widget vocabulary (`Label`, `Button`, `Edit`,
 `ListView`, `ScrollView`, `Panel`, `Custom`, …). `supports` tells the front

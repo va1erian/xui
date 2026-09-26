@@ -58,19 +58,15 @@ Quit); **Cmd-Q** quits the process.
 `round(scale_factor * 96)`, so a Retina display reports 192 DPI and the
 software surface is the window's physical (backing) pixel size.
 
-`run_app` builds the widgets before the real window exists, so they are first
-laid out at the default 96 DPI. As soon as the window reports its real scale
-factor the backend lifts every node's bounds to the backing pixels (and does
-so again if the window moves between monitors of different scale), so the
-layout fills the window and text is rasterised at the display scale rather than
-upscaled.
+`run_app` builds the app through `Backend::run_with`, so on this backend the
+`make` closure runs from inside the event loop, after the real window exists
+and its scale factor has been recorded. Widgets therefore lay out at the
+display's DPI from the start, rather than being built at 96 and rescaled.
 
-The residual ordering issue — a widget that captures `ui.dpi()` at
-construction time for its own internal measurements still sees 96 while its
-canvas paints at the real DPI — is tracked as
-[#58](https://github.com/va1erian/xui/issues/58). The clean fix is to create
-the window before the app is built, which needs a change in `xui-core`'s
-`run_app`, not in this backend.
+If the window later moves between monitors of different scale, the backend
+lifts every existing node's bounds to the new backing pixels (the portable
+widgets do not reflow themselves), so the layout stays filled and text is
+rasterised at the display scale rather than upscaled.
 
 ## Continuous integration
 

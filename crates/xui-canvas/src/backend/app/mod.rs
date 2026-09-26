@@ -30,16 +30,21 @@ use super::{Shared, UserEvent};
 use window::dpi_from_scale;
 
 /// Drives one `winit` event loop for a [`super::WinitBackend`].
-struct App {
+struct App<'a> {
     shared: Rc<Shared>,
     windows: HashMap<u64, RealWindow>,
     /// The last pointer position in window pixels, for button messages `winit`
     /// sends without one.
     cursor: (f64, f64),
     modifiers: Modifiers,
+    /// The primary window's deferred app builder and the raw id of the window
+    /// that must exist before it runs; taken out the first time that window is
+    /// created. A secondary window opened later is a separate path and is not
+    /// deferred.
+    on_ready: Option<(u64, &'a mut dyn FnMut())>,
 }
 
-impl App {
+impl App<'_> {
     fn window_id(raw: u64) -> WindowId {
         WindowId::from_raw(raw)
     }
@@ -74,7 +79,7 @@ impl App {
     }
 }
 
-impl ApplicationHandler<UserEvent> for App {
+impl ApplicationHandler<UserEvent> for App<'_> {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         self.create_windows(event_loop);
     }
@@ -207,7 +212,7 @@ impl ApplicationHandler<UserEvent> for App {
 
 /// The raw id of the window `winit` handed the event for, or `None` for a
 /// window the backend does not track.
-fn window_id_index(app: &App, window_id: winit::window::WindowId) -> Option<u64> {
+fn window_id_index(app: &App<'_>, window_id: winit::window::WindowId) -> Option<u64> {
     app.shared
         .windows
         .borrow()
@@ -228,6 +233,25 @@ pub(crate) fn run(event_loop: EventLoop<UserEvent>, shared: Rc<Shared>) {
         windows: HashMap::new(),
         cursor: (0.0, 0.0),
         modifiers: Modifiers::NONE,
+        on_ready: None,
+    };
+    let _ = event_loop.run_app(&mut app);
+}
+
+/// Runs the event loop, invoking `on_ready` once `window`'s real `winit` window
+/// exists and its DPI is known, then pumping until quit.
+pub(crate) fn run_with(
+    event_loop: EventLoop<UserEvent>,
+    shared: Rc<Shared>,
+    window: WindowId,
+    on_ready: &mut dyn FnMut(),
+) {
+    let mut app = App {
+        shared,
+        windows: HashMap::new(),
+        cursor: (0.0, 0.0),
+        modifiers: Modifiers::NONE,
+        on_ready: Some((window.raw(), on_ready)),
     };
     let _ = event_loop.run_app(&mut app);
 }

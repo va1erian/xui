@@ -93,6 +93,20 @@ pub trait Backend {
     /// exit code.
     fn run(&self) -> i32;
 
+    /// Runs `on_ready` once `window`'s platform window exists and its DPI is
+    /// known, then pumps events until quit, returning the exit code.
+    ///
+    /// A backend that creates its window synchronously (Win32) leaves the
+    /// default, which calls `on_ready` and then [`Backend::run`]. A backend
+    /// whose window is created lazily by the event loop — `winit`, where
+    /// `open_window` only records the request — overrides this so the app is
+    /// built after the window is live and lays out at the real DPI.
+    fn run_with(&self, window: WindowId, on_ready: &mut dyn FnMut()) -> i32 {
+        let _ = window;
+        on_ready();
+        self.run()
+    }
+
     /// Ends the event loop with `code`.
     fn quit(&self, code: i32);
 

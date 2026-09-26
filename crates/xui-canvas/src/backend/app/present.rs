@@ -12,7 +12,7 @@ use super::super::render;
 use super::App;
 use crate::Surface;
 
-impl App {
+impl App<'_> {
     /// Presents one frame of `raw`: an OpenGL frame when the window has GL
     /// content and a context could be created, otherwise the software
     /// composite (including a GL widget's fallback paint).

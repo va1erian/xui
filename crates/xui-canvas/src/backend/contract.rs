@@ -29,6 +29,16 @@ impl Backend for WinitBackend {
         self.shared.exit_code.get()
     }
 
+    fn run_with(&self, window: WindowId, on_ready: &mut dyn FnMut()) -> i32 {
+        // `open_window` only recorded the request; carry the builder into the
+        // handler so it runs once the real window exists and its DPI is known.
+        let Some(event_loop) = self.event_loop.take() else {
+            return self.shared.exit_code.get();
+        };
+        app::run_with(event_loop, Rc::clone(&self.shared), window, on_ready);
+        self.shared.exit_code.get()
+    }
+
     fn quit(&self, code: i32) {
         self.shared.exit_code.set(code);
         self.shared.quit.set(true);

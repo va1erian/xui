@@ -17,7 +17,7 @@ use super::App;
 use crate::backend::software::RealWindow;
 use crate::backend::{DEFAULT_DPI, Shared};
 
-impl App {
+impl App<'_> {
     /// Creates the OS window for any backend window that lacks one. Its
     /// presentation surface is created lazily on the first frame.
     pub(super) fn create_windows(&mut self, event_loop: &ActiveEventLoop) {
@@ -51,19 +51,38 @@ impl App {
             }
             self.set_dpi(raw, metrics.1);
             self.windows.insert(raw, RealWindow::new());
+            // Build the primary window's app now that DPI is known, before the
+            // first frame, so its widgets lay out at the real scale.
+            self.fire_ready(raw);
             self.redraw(raw);
+        }
+    }
+
+    /// Invokes the deferred app builder for `raw`, if it is waiting for this
+    /// window. Exactly once: the builder is taken out before it runs, so the
+    /// `create_windows` calls from `user_event`/`about_to_wait` are no-ops.
+    fn fire_ready(&mut self, raw: u64) {
+        match self.on_ready.as_ref() {
+            Some((window, _)) if *window == raw => {}
+            _ => return,
+        }
+        if let Some((_, on_ready)) = self.on_ready.take() {
+            on_ready();
         }
     }
 
     /// Records `raw`'s dots-per-inch, lifting the node bounds the app laid out
     /// at the old value to the new scale so the window stays filled.
     ///
-    /// `run_app` builds the widgets before the real window exists, so they are
-    /// laid out at [`DEFAULT_DPI`]; the first real window reports the
-    /// monitor's scale factor (2.0 on a Retina display) and the bounds move to
-    /// the backing pixels. Later scale changes (a window dragged to another
-    /// monitor) rescale by the ratio, since the portable widgets do not reflow
-    /// themselves.
+    /// The primary window's app is built after its real window exists (see
+    /// [`Backend::run_with`]), so it is already laid out at this DPI and there
+    /// are no nodes to lift. A secondary window opened while the loop runs is
+    /// still built before its OS window exists, so it is laid out at
+    /// [`DEFAULT_DPI`] and its bounds move to the backing pixels here. Later
+    /// scale changes (a window dragged to another monitor) rescale by the ratio,
+    /// since the portable widgets do not reflow themselves.
+    ///
+    /// [`Backend::run_with`]: xui_core::backend::Backend::run_with
     pub(super) fn set_dpi(&self, raw: u64, dpi: u32) {
         let old = {
             let mut windows = self.shared.windows.borrow_mut();
