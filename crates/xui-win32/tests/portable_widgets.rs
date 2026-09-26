@@ -20,7 +20,7 @@ use xui_core::widget::{
     Button, CheckBox, ComboBox, Edit, GroupBox, HasText, Hyperlink, Label, ListView, ProgressBar,
     RadioGroup, Separator, Slider,
 };
-use xui_core::{Rect, Theme, TimerId, WidgetId};
+use xui_core::{Color, Rect, Theme, TimerId, WidgetId};
 use xui_win32::Win32Backend;
 
 enum Msg {
@@ -37,6 +37,7 @@ struct WidgetsApp {
     text: Rc<RefCell<Option<String>>>,
     capture_at: Rc<Cell<Option<TimerId>>>,
     timed_out: Rc<Cell<bool>>,
+    expected: Color,
     // Kept alive: each owns its node and destroys it on drop.
     _label: Label<Msg>,
     edit: Edit<Msg>,
@@ -74,10 +75,13 @@ impl App for WidgetsApp {
                 let shown = self.edit.text();
                 let native = self.backend.text(self.edit.id());
                 self.text.replace(Some(format!("{shown}|{native}")));
+                let expected = [self.expected.r, self.expected.g, self.expected.b];
                 if let Some(node) = self.backend.node_hwnd(self.button.id())
                     && let Some(rect) = common::screen_rect(node)
                     && let Some(image) = common::capture_screen(rect)
-                    && !common::is_flat(&image)
+                    // Only sample when the button actually painted; a
+                    // non-rendering CI desktop leaves no hover colour.
+                    && common::contains(&image, expected)
                     // Sample above the vertically-centred text, where the face
                     // fill shows cleanly.
                     && let Some(pixel) = image.pixel(image.width / 2, image.height / 6)
@@ -244,6 +248,7 @@ fn run(theme: Theme, file: &str) {
                     _list: list,
                     _link: link,
                     _sep: sep,
+                    expected,
                 }
             },
         )

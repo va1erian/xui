@@ -40,7 +40,7 @@ impl App for PortApp {
                 if let Some(hwnd) = self.backend.node_hwnd(self.node)
                     && let Some(rect) = common::screen_rect(hwnd)
                     && let Some(image) = common::capture_screen(rect)
-                    && !common::is_flat(&image)
+                    && common::contains(&image, [ACCENT.r, ACCENT.g, ACCENT.b])
                     && let Some(pixel) = image.pixel(image.width / 2, image.height / 2)
                 {
                     self.pixel.set(Some(pixel));

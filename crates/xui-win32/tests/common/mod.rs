@@ -315,19 +315,17 @@ pub fn capture_screen(rect: Rect) -> Option<RgbaImage> {
     })
 }
 
-/// Whether every pixel of `image` is the same colour: a window that never
-/// actually painted, as when the capture lands on an occluded or non-rendering
-/// CI desktop. A pixel assertion should skip rather than fail in that case.
-pub fn is_flat(image: &RgbaImage) -> bool {
-    let Some(first) = image.pixels.as_slice().first_chunk::<4>() else {
-        return true;
-    };
+/// Whether any pixel of `image` has the RGB `color`. A pixel test uses this to
+/// tell a window that painted (the colour is present) from one that never
+/// rendered — an occluded or non-rendering CI desktop — so it can skip rather
+/// than fail.
+pub fn contains(image: &RgbaImage, color: [u8; 3]) -> bool {
     image
         .pixels
         .as_chunks::<4>()
         .0
         .iter()
-        .all(|pixel| pixel == first)
+        .any(|pixel| pixel[..3] == color)
 }
 
 /// Whether `color` is near-white (all channels high), the shape of the #67
