@@ -296,6 +296,18 @@ impl<M: 'static> Ui<M> {
         self.core.set_on_display_change(f);
     }
 
+    /// Maps a DPI change to a message. The mapper receives the new
+    /// dots-per-inch (96 = 100%) and the backend's suggested window bounds in
+    /// device pixels, or an empty [`Rect`] when the backend has no suggestion.
+    ///
+    /// The runtime does not move the window itself — a backend that can
+    /// recommend bounds passes them through, but the application decides
+    /// whether to adopt them. A window whose DPI changed must re-lay-out and
+    /// repaint at the new value; [`Ui::dpi`] returns it.
+    pub fn on_dpi_changed(&self, f: impl Fn(u32, Rect) -> Option<M> + 'static) {
+        self.core.set_on_dpi_changed(f);
+    }
+
     /// Closes the window.
     pub fn close(&self) {
         self.core.backend().close_window(self.core.window());

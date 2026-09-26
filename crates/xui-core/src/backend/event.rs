@@ -130,10 +130,24 @@ pub enum Event {
         id: TimerId,
     },
     /// The window moved to a monitor with a different DPI.
+    ///
+    /// `dpi` is the new dots-per-inch (96 = 100%). A native backend that can
+    /// recommend new bounds — Windows passes them with `WM_DPICHANGED` — puts
+    /// them in `suggested`, a device-pixel rectangle in screen coordinates; a
+    /// backend with no suggestion (winit reports only the scale factor) passes
+    /// [`Rect::default()`].
+    ///
+    /// The front layer never moves the window itself: it hands the event to the
+    /// mapper installed with
+    /// [`Ui::on_dpi_changed`](crate::Ui::on_dpi_changed), and the application
+    /// decides whether to adopt the suggestion and re-lay-out. A window whose
+    /// DPI changed must repaint at the new value; read it back with
+    /// [`Backend::dpi`](super::Backend::dpi).
     DpiChanged {
         /// The new dots-per-inch.
         dpi: u32,
-        /// The rectangle the backend suggests the window occupy.
+        /// The window bounds the backend suggests, in device pixels in screen
+        /// coordinates, or [`Rect::default()`] when it has none.
         suggested: Rect,
     },
     /// The desktop resolution or monitor layout changed.

@@ -545,6 +545,23 @@ impl ApplicationHandler<UserEvent> for App {
             WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
                 let dpi = dpi_from_scale(scale_factor);
                 self.set_dpi(raw, dpi);
+                // `winit` may report the scale change before the matching
+                // `Resized`, so adopt the fresh backing size now; the next
+                // frame then presents at the new DPI.
+                if let Some(size) = self
+                    .shared
+                    .windows
+                    .borrow()
+                    .get(&raw)
+                    .and_then(|state| state.window.clone())
+                    .map(|window| window.inner_size())
+                    && let Some(state) = self.shared.windows.borrow_mut().get_mut(&raw)
+                {
+                    state.size = (size.width.max(1), size.height.max(1));
+                }
+                // `winit` gives only the scale factor, not the OS's suggested
+                // window rectangle, so the suggestion is empty and the app
+                // re-lays-out from `Ui::dpi` instead.
                 self.shared.deliver(
                     Self::window_id(raw),
                     WidgetId::NONE,

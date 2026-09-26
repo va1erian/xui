@@ -199,6 +199,49 @@ fn a_worker_thread_proxy_reaches_update() {
 }
 
 #[test]
+fn a_dpi_change_maps_to_a_message_with_the_new_dpi() {
+    let (_backend, _window, core, ui) = setup();
+    let seen = Rc::new(Cell::new(None));
+    let seen_for_callback = Rc::clone(&seen);
+    ui.on_dpi_changed(move |dpi, suggested| {
+        seen_for_callback.set(Some((dpi, suggested)));
+        Some(dpi)
+    });
+    let log = Rc::new(RefCell::new(Vec::new()));
+    let runtime = Runtime::primary(Rc::clone(&core), test_app(&log));
+
+    let suggested = Rect::new(10, 20, 810, 620);
+    assert!(runtime.deliver(
+        WidgetId::NONE,
+        &Event::DpiChanged {
+            dpi: 192,
+            suggested,
+        }
+    ));
+    runtime.deliver(WidgetId::NONE, &Event::Wake);
+
+    assert_eq!(*log.borrow(), vec![192]);
+    assert_eq!(seen.get(), Some((192, suggested)));
+}
+
+#[test]
+fn a_dpi_change_without_a_mapper_is_a_no_op() {
+    let (_backend, _window, core, _ui) = setup();
+    let log = Rc::new(RefCell::new(Vec::new()));
+    let runtime = Runtime::primary(Rc::clone(&core), test_app(&log));
+
+    assert!(runtime.deliver(
+        WidgetId::NONE,
+        &Event::DpiChanged {
+            dpi: 192,
+            suggested: Rect::default(),
+        }
+    ));
+    runtime.deliver(WidgetId::NONE, &Event::Wake);
+    assert!(log.borrow().is_empty(), "nothing was mapped");
+}
+
+#[test]
 fn geometry_queries_reach_the_backend() {
     let (_backend, _window, _core, ui) = setup();
     assert_eq!(ui.dpi(), 96);
