@@ -13,13 +13,13 @@ use std::rc::Rc;
 use std::time::Instant;
 
 use common::run_app_with_watchdog;
-use xui_win32::d2d::Interpolation;
 use windows::Win32::Foundation::{HWND, LPARAM, WPARAM};
 use windows::Win32::Graphics::Gdi::UpdateWindow;
 use windows::Win32::UI::WindowsAndMessaging::{
     GetScrollInfo, SB_LINEDOWN, SB_PAGEDOWN, SB_VERT, SCROLLINFO, SIF_RANGE, SendMessageW,
     WM_VSCROLL,
 };
+use xui_win32::d2d::Interpolation;
 use xui_win32::prelude::*;
 
 struct Tile(u32);

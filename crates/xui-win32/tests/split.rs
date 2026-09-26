@@ -14,12 +14,12 @@ use std::rc::Rc;
 use std::sync::Mutex;
 
 use common::run_app_with_watchdog;
-use xui_win32::prelude::*;
-use xui_win32::{column, split_col, split_row};
 use windows::Win32::Foundation::{HWND, LPARAM, RECT, WPARAM};
 use windows::Win32::UI::WindowsAndMessaging::{
     SendMessageW, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MOUSEMOVE,
 };
+use xui_win32::prelude::*;
+use xui_win32::{column, split_col, split_row};
 
 /// The divider child window class prefix (see `split::build_divider`; the
 /// registration appends a unique `::<sequence>`).

@@ -13,8 +13,6 @@ mod common;
 use common::run_app_with_watchdog;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use xui_win32::prelude::*;
-use xui_win32::{ColumnWidth, ListView, column, dip};
 use windows::Win32::Foundation::{HWND, RECT, WPARAM};
 use windows::Win32::UI::Input::KeyboardAndMouse::{
     MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP, mouse_event,
@@ -23,6 +21,8 @@ use windows::Win32::UI::WindowsAndMessaging::{
     GA_ROOT, GetAncestor, GetSystemMetrics, GetWindowRect, SM_CXSCREEN, SM_CYSCREEN, SendMessageW,
     SetCursorPos, SetForegroundWindow,
 };
+use xui_win32::prelude::*;
+use xui_win32::{ColumnWidth, ListView, column, dip};
 
 /// `LVM_GETHEADER`.
 const LVM_GETHEADER: u32 = 0x101F;
