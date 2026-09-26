@@ -315,20 +315,38 @@ impl NodeHandler {
             return Rect::default();
         };
         let hwnd = window.hwnd();
-        if let Some(paint) = Paint::begin(hwnd) {
-            let dirty = paint.paint_rect();
-            let dpi = sys::dpi::window_dpi(hwnd);
-            let mut canvas = Win32Canvas::new(paint.canvas(), self.bounds.get(), dpi);
-            painter(&mut canvas);
-            dirty
-        } else {
-            Rect::default()
+        let Some(paint) = Paint::begin(hwnd) else {
+            return Rect::default();
+        };
+        let dirty = paint.paint_rect();
+        let dpi = sys::dpi::window_dpi(hwnd);
+        let bounds = self.bounds.get();
+        // The double buffer starts with the stock `System` font; select the
+        // shared UI font so text matches the native controls and is
+        // anti-aliased rather than the Windows 3.1 bitmap face.
+        match crate::gdi::Font::shared_ui(dpi) {
+            Ok(font) => paint.canvas().with_font(&font, |canvas| {
+                let mut canvas = Win32Canvas::new(canvas, bounds, dpi);
+                painter(&mut canvas);
+            }),
+            Err(_) => {
+                let mut canvas = Win32Canvas::new(paint.canvas(), bounds, dpi);
+                painter(&mut canvas);
+            }
         }
+        dirty
     }
 }
 
 impl WindowHandler for NodeHandler {
     fn message(&self, window: &Window, message: Message) -> Option<LResult> {
+        // The class brush would flash the (light) background before every
+        // double-buffered paint, which reads as flicker on hover and while a
+        // slider or progress bar drags. The whole dirty rectangle is repainted
+        // on `WM_PAINT`, so claim the erase and skip the default fill.
+        if matches!(&message, Message::Other { code, .. } if *code == sys::d2d::WM_ERASEBKGND) {
+            return Some(1);
+        }
         match &message {
             Message::Paint => {
                 let dirty = self.paint(window);
