@@ -1,0 +1,29 @@
+[package]
+name = "xui-litehtml"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "An HTML view for xui: lays a page out with litehtml and paints it with Direct2D/DirectWrite through xui-win32"
+repository = "https://github.com/va1erian/xui"
+
+[dependencies]
+# The HTML/CSS engine. The `email` feature adds the email UA stylesheet this
+# view restates; `va1erian/litehtml-rs` carries the Windows/MSVC build fix and
+# an unreleased `element-tag-attr` branch, hence the git dep.
+litehtml = { git = "https://github.com/va1erian/litehtml-rs.git", branch = "element-tag-attr", features = ["email"] }
+# Inline/message images decoded on the worker thread; the same formats esMail
+# supports. Deliberately without litehtml's `pixbuf` feature.
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif"] }
+log = "0.4"
+
+# Windows-only: the Direct2D/DirectWrite backend and the widget host. On other
+# targets the crate compiles to an empty crate (the crate root is `#![cfg(windows)]`).
+[target.'cfg(windows)'.dependencies]
+xui-win32 = { path = "../xui-win32" }
+
+[dev-dependencies]
+env_logger = "0.11"
+# Only the example writes a PNG (screenshots); the library itself stays free of it.
+png = "0.17"
+# The example can also render a `.eml` fixture, extracting its `text/html` body.
+mailparse = "0.15"
