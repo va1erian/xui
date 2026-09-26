@@ -1,67 +1,29 @@
 #![forbid(unsafe_code)]
 
-//! Frame presentation: a `GlWidget` frame through the window's GL surface when
-//! the window has GL content and a context could be created, otherwise a
-//! `softbuffer` copy of the software composite.
+//! Frame presentation: the software composite, which includes the window's GL
+//! content rendered through the node painter model, copied to the window with
+//! `softbuffer`.
 
 use std::num::NonZeroU32;
-
-use xui_core::geometry::Rect;
 
 use super::super::render;
 use super::App;
 use crate::Surface;
 
 impl App<'_> {
-    /// Presents one frame of `raw`: an OpenGL frame when the window has GL
-    /// content and a context could be created, otherwise the software
-    /// composite (including a GL widget's fallback paint).
+    /// Presents one frame of `raw`: the software composite, including any GL
+    /// content rendered into it, and the GL widget's software fallback when no
+    /// context can be created.
     pub(super) fn redraw(&mut self, raw: u64) {
         let window_id = Self::window_id(raw);
-        let (width, height, background, gl, window) = match self.shared.windows.borrow().get(&raw) {
-            Some(state) => (
-                state.size.0,
-                state.size.1,
-                state.theme.background,
-                state.gl.clone(),
-                state.window.clone(),
-            ),
+        let (width, height, handle) = match self.shared.windows.borrow().get(&raw) {
+            Some(state) => (state.size.0, state.size.1, state.window.clone()),
             None => return,
         };
         let (Some(width), Some(height)) = (NonZeroU32::new(width), NonZeroU32::new(height)) else {
             return;
         };
 
-        if let (Some(widget), Some(window)) = (gl, window) {
-            let bounds = Rect::new(0, 0, width.get() as i32, height.get() as i32);
-            let painted = {
-                let mut windows = self.shared.windows.borrow_mut();
-                let Some(state) = windows.get_mut(&raw) else {
-                    return;
-                };
-                let theme = state.theme;
-                state.renderer.frame(
-                    &window,
-                    width.get(),
-                    height.get(),
-                    background,
-                    |gl| widget.paint_gl(gl, bounds, &theme),
-                    |gl| widget.gl_teardown(gl),
-                )
-            };
-            if painted {
-                return;
-            }
-            // The context failed: fall through to the software fallback, which
-            // paints the widget through `GlWidget::paint`.
-        }
-
-        let handle = self
-            .shared
-            .windows
-            .borrow()
-            .get(&raw)
-            .and_then(|state| state.window.clone());
         let Some(real) = self.windows.get_mut(&raw) else {
             return;
         };

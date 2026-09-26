@@ -7,7 +7,7 @@ use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use xui_core::app::{App, Ui, run_app};
-use xui_core::backend::{Backend, PlatformSpec};
+use xui_core::backend::{Backend, NodeKind, NodeSpec, ParentRef, PlatformSpec};
 use xui_core::{Canvas, Color, Dip, Rect, Theme};
 
 use crate::gl::GlWidget;
@@ -70,5 +70,39 @@ fn a_gl_widget_falls_back_to_software_offscreen() {
         image.pixel(0, 0),
         Some([255, 0, 0, 255]),
         "the fallback covers the whole client area, not a corner"
+    );
+}
+
+#[test]
+fn a_gl_widget_on_a_node_falls_back_inside_its_pane() {
+    let backend = OffscreenBackend::new();
+    let spec = PlatformSpec::new("gl pane").size(Dip(64.0), Dip(64.0));
+    let window = backend.open_window_at(&spec, 96).expect("a window");
+    let node = backend
+        .create(
+            ParentRef::Window(window),
+            &NodeSpec::new(NodeKind::Container, Rect::new(16, 16, 48, 48)),
+        )
+        .expect("a node");
+    let painted = Rc::new(Cell::new(false));
+    backend.set_gl_content_on(
+        node,
+        FallbackProbe {
+            painted: Rc::clone(&painted),
+        },
+    );
+
+    let image = backend.render(window).expect("a rendered window");
+    assert!(painted.get(), "the node's fallback paint did not run");
+    assert_eq!(
+        image.pixel(32, 32),
+        Some([255, 0, 0, 255]),
+        "the fallback filled the node's pane"
+    );
+    let background = Theme::light().background;
+    assert_eq!(
+        image.pixel(4, 4),
+        Some([background.r, background.g, background.b, 255]),
+        "outside the pane stays the window background"
     );
 }

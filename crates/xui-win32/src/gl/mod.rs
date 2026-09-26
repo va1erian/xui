@@ -8,7 +8,8 @@
 //! the viewport and clears the framebuffer, the widget issues its own GL calls
 //! through [`CustomWidget::paint_gl`](crate::CustomWidget::paint_gl) (given the
 //! [`glow`] context), and the surface swaps the buffers. WGL's `unsafe` is
-//! isolated in `src/sys/gl/`.
+//! isolated in `src/sys/gl/`; the surface lifecycle is shared with the canvas
+//! backend through [`xui_gpu`].
 
 mod surface;
 

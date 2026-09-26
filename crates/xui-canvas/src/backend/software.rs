@@ -11,9 +11,11 @@ use super::SharedWindow;
 
 /// A real window's software presentation surface.
 ///
-/// The `softbuffer` surface is created lazily, only when a software frame is
-/// actually presented: a window that uses GL content must not also hold a
-/// `softbuffer` swapchain, which would compete with OpenGL for the same `HWND`.
+/// Created lazily on the first presented frame. Even a window with GL content
+/// owns one now: the GL widget is rendered into an offscreen framebuffer and
+/// composited through this surface, and its context is never swapped, so
+/// `softbuffer` remains the sole presenter and the two do not compete for the
+/// `HWND`.
 pub(crate) struct RealWindow {
     context: Option<softbuffer::Context<SharedWindow>>,
     surface: Option<softbuffer::Surface<SharedWindow, SharedWindow>>,
@@ -28,8 +30,8 @@ impl RealWindow {
         }
     }
 
-    /// Creates the software surface on first use, so a GL-only window never has
-    /// one. Returns whether a surface is available.
+    /// Creates the software surface on first use. Returns whether a surface is
+    /// available.
     pub(crate) fn ensure_software(&mut self, window: &Rc<Window>) -> bool {
         if self.surface.is_some() {
             return true;

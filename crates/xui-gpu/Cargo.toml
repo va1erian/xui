@@ -1,0 +1,14 @@
+[package]
+name = "xui-gpu"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "Shared OpenGL surface seam for xui backends (context handle, frame lifecycle, offscreen readback)"
+repository = "https://github.com/va1erian/xui"
+readme = "README.md"
+
+[dependencies]
+xui-core = { path = "../xui-core" }
+# The safe OpenGL binding the seam is expressed in. Re-exported so an
+# implementor names the exact version this crate links against.
+glow = "0.16"

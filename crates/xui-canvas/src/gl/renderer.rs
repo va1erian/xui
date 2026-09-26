@@ -2,10 +2,11 @@
 
 //! The state machine behind a window's GL content: [`RendererState`] creates the
 //! [`GlSurface`] on the first frame and falls back to software for good when the
-//! context cannot be created or a frame cannot be presented.
+//! context cannot be created or a frame cannot be rendered.
 
 use winit::window::Window;
 use xui_core::color::Color;
+use xui_core::image::Image;
 
 use super::GlSurface;
 
@@ -20,17 +21,20 @@ pub(crate) enum RendererState {
 }
 
 impl RendererState {
-    /// Paints one OpenGL frame, creating the surface on first use. `draw`
-    /// receives the current [`glow::Context`] with the viewport set and the
-    /// framebuffer cleared to `background`.
+    /// Renders one OpenGL frame of `width` x `height` pixels into an image,
+    /// creating the surface on first use. `draw` receives the current
+    /// [`glow::Context`] with the viewport covering the offscreen texture and
+    /// the texture cleared to `background`.
     ///
-    /// When a frame cannot be presented, `teardown` runs with the context still
-    /// current before the surface is dropped and the renderer falls back to
-    /// software, so the widget can free its GPU resources.
+    /// The returned image is composited through the software painter model, so
+    /// GL content and CPU nodes share one frame. When no context or framebuffer
+    /// can be created, `teardown` runs with the context still current (when one
+    /// exists) before the renderer falls back to software, so the widget can
+    /// free its GPU resources.
     ///
-    /// Returns `false` when no frame was presented, so the caller paints the
+    /// Returns `None` when no GL image was rendered, so the caller paints the
     /// software fallback instead.
-    pub(crate) fn frame(
+    pub(crate) fn render(
         &mut self,
         window: &Window,
         width: u32,
@@ -38,7 +42,7 @@ impl RendererState {
         background: Color,
         draw: impl FnOnce(&glow::Context),
         teardown: impl FnOnce(&glow::Context),
-    ) -> bool {
+    ) -> Option<Image> {
         if matches!(self, RendererState::Untried) {
             *self = match GlSurface::new(window) {
                 Ok(surface) => RendererState::Gl(Box::new(surface)),
@@ -46,17 +50,28 @@ impl RendererState {
             };
         }
         let RendererState::Gl(surface) = self else {
-            return false;
+            return None;
         };
-        surface.resize(width as i32, height as i32);
-        let gl = surface.begin_frame(background);
-        draw(gl);
-        if surface.end_frame().is_err() {
-            surface.with_gl(teardown);
-            *self = RendererState::Software;
-            return false;
+        match surface.render_offscreen(width, height, background, draw) {
+            Some(pixels) => Image::from_rgba(width.max(1), height.max(1), pixels).ok(),
+            None => {
+                surface.with_gl(teardown);
+                *self = RendererState::Software;
+                None
+            }
         }
-        true
+    }
+
+    /// Runs `f` with the current [`glow::Context`] if a surface exists, without
+    /// dropping it. Use it to free one widget's GPU objects while other GL
+    /// content shares the same surface. Returns whether a context was available.
+    pub(crate) fn with_gl(&self, f: impl FnOnce(&glow::Context)) -> bool {
+        if let RendererState::Gl(surface) = self {
+            surface.with_gl(f);
+            true
+        } else {
+            false
+        }
     }
 
     /// Drops the OpenGL surface, if one exists, first running `teardown` with

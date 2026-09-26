@@ -95,10 +95,10 @@ pub enum Error {
     #[error(transparent)]
     Imaging(#[from] ImagingError),
 
-    /// An OpenGL (WGL) context could not be created on a window, so its widget
-    /// falls back to GDI.
-    #[error("could not create an OpenGL context: {0}")]
-    Gl(&'static str),
+    /// An OpenGL (WGL) context could not be created on a window, or a frame
+    /// could not be presented, so its widget falls back to GDI.
+    #[error("OpenGL error: {0}")]
+    Gl(String),
 
     /// The occlusion-proof `Windows.Graphics.Capture` path failed for a
     /// reason callers may want to distinguish. Other Win32 failures keep
