@@ -1,7 +1,35 @@
+use std::rc::Rc;
+
+use xui_core::app::{App, Ui, run_app};
+use xui_core::backend::{Backend, PlatformSpec};
 use xui_core::geometry::{Point, Rect};
+use xui_core::widget::{Button, CheckBox, Label, ProgressBar, Slider};
 use xui_core::{Canvas, Color, Dip, TextStyle};
 
-use crate::{RgbaImage, Surface, measure_text, to_skia};
+use crate::{OffscreenBackend, RgbaImage, Surface, measure_text, to_skia};
+
+/// Keeps the widgets alive for the duration of a `run_app` call.
+struct Widgets {
+    _button: Button<u32>,
+    _check: CheckBox<u32>,
+    _bar: ProgressBar<u32>,
+    _slider: Slider<u32>,
+    _label: Label<u32>,
+}
+
+impl App for Widgets {
+    type Msg = u32;
+    fn update(&mut self, _msg: u32, _ui: &mut Ui<u32>) {}
+}
+
+fn contains(image: &RgbaImage, color: [u8; 3]) -> bool {
+    image
+        .pixels
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .any(|pixel| pixel[..3] == color)
+}
 
 /// Writes `image` to `path` as a PNG under `target/ui`.
 fn save(path: &str, image: &RgbaImage) {
@@ -94,6 +122,47 @@ fn a_push_clip_limits_drawing() {
 fn skia_colour_is_opaque() {
     let color = to_skia(Color::rgb(0x12, 0x34, 0x56));
     assert_eq!(color.alpha(), 1.0);
+}
+
+#[test]
+fn portable_widgets_render_on_the_software_backend() {
+    let backend = Rc::new(OffscreenBackend::new());
+    let backend_for_run: Rc<dyn Backend> = backend.clone();
+    let accent = Color::hex(0x00_5F_B8);
+    let mut captured: Option<RgbaImage> = None;
+
+    let _ = run_app(
+        backend_for_run,
+        PlatformSpec::new("canvas widgets").size(Dip(420.0), Dip(200.0)),
+        |ui| {
+            let button = Button::new(ui, Rect::new(20, 20, 180, 52), "Click").unwrap();
+            let check = CheckBox::new(ui, Rect::new(20, 64, 240, 92), "Enabled").unwrap();
+            check.set_checked(true);
+            let bar = ProgressBar::new(ui, Rect::new(20, 104, 380, 112), 100).unwrap();
+            bar.set_value(60);
+            let slider = Slider::new(ui, Rect::new(20, 128, 380, 156), 0.0, 100.0).unwrap();
+            slider.set_value(40.0);
+            let label = Label::new(ui, Rect::new(20, 168, 380, 196), "xui on tiny-skia").unwrap();
+
+            let image = backend.render(ui.window()).expect("a rendered window");
+            assert!(
+                contains(&image, [accent.r, accent.g, accent.b]),
+                "the accent colour is on the surface"
+            );
+            save("canvas-widgets.png", &image);
+            captured = Some(image);
+
+            Widgets {
+                _button: button,
+                _check: check,
+                _bar: bar,
+                _slider: slider,
+                _label: label,
+            }
+        },
+    );
+
+    assert!(captured.is_some(), "the surface was rendered");
 }
 
 #[test]

@@ -8,9 +8,11 @@
 //! an offscreen renderer; the windowing shell and event loop build on it.
 
 mod canvas;
+mod offscreen;
 mod text;
 
 pub use canvas::SkiaCanvas;
+pub use offscreen::OffscreenBackend;
 pub use text::measure as measure_text;
 
 use tiny_skia::Pixmap;
