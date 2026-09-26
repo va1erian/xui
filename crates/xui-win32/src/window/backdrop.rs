@@ -16,6 +16,11 @@
 /// The extended title bar extends only the caption strip, and the window erases
 /// that strip to black itself; [`Canvas::clear_to_backdrop`](crate::gdi::Canvas::clear_to_backdrop)
 /// is the low-level seam for a widget that draws inside the strip.
+///
+/// The resize borders of a window with
+/// [`Decorations::None`](xui_core::backend::Decorations) are part of the client
+/// too, not a non-client frame, so the theme background and the material paint
+/// under them instead of DWM drawing an unthemed (black) band along each edge.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Backdrop {
     /// No material: the window paints its opaque theme background (the default).

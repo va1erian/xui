@@ -1,11 +1,14 @@
 //! Non-client handling for the extended title bar.
 //!
-//! `WM_NCCALCSIZE` removes the standard caption while keeping the resize
-//! borders (and insets a maximized window by the frame it overhangs the monitor
-//! with). `WM_NCHITTEST` gives DWM first refusal, so the caption buttons — and
-//! with them the Windows 11 snap layouts — keep working, then decides the rest
-//! of the strip: an interactive widget is client area, the free strip is the
-//! caption, and the borders resize.
+//! `WM_NCCALCSIZE` removes the standard caption and lets the client cover the
+//! resize borders too (a maximized window is still inset by the frame it
+//! overhangs the monitor with). Keeping the borders non-client left a band DWM
+//! filled with the unthemed frame colour — black in dark mode (#108) — so the
+//! app's content and backdrop now paint under them. `WM_NCHITTEST` gives DWM
+//! first refusal, so the caption buttons — and with them the Windows 11 snap
+//! layouts — keep working, then decides the rest of the strip: an interactive
+//! widget is client area, the free strip is the caption, and the borders
+//! resize.
 //!
 //! All `unsafe` in this crate lives under `sys`; every block below carries a
 //! `// SAFETY:` note. Only documented APIs are used.

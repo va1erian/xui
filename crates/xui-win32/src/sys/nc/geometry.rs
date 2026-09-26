@@ -18,21 +18,26 @@ pub(super) struct FrameInsets {
     pub(super) bottom: i32,
 }
 
-/// The client rectangle for a window whose caption has been removed: `window`
-/// inset by the frame on the left, right and bottom.
+/// The client rectangle for a window whose caption has been removed.
 ///
-/// A restored window's client starts at the window's top edge, so the caption
-/// strip (where DWM draws the caption buttons) is client area and the top
-/// resize band is hit-tested by the app. A maximized window overhangs the
-/// monitor by the frame on every side, so it is inset on top too, landing the
-/// client on the monitor. Pure, so the arithmetic is unit-tested.
+/// A restored window's client is the **whole window rectangle**: the resize
+/// borders stay hit-tested (from [`FrameInsets`]) but are no longer part of the
+/// non-client area, so the app's content and the theme/backdrop paint under
+/// them. Leaving them non-client let DWM fill the band along each edge with the
+/// frame colour — black in dark mode — which showed as a ribbon between the
+/// window edge and the content (#108). A maximized window overhangs the monitor
+/// by the frame on every side, so it is inset on every side, landing the client
+/// on the monitor. Pure, so the arithmetic is unit-tested.
 pub(super) fn extended_client_rect(window: Rect, frame: FrameInsets, maximized: bool) -> Rect {
-    Rect::new(
-        window.left + frame.left,
-        window.top + if maximized { frame.top } else { 0 },
-        window.right - frame.right,
-        window.bottom - frame.bottom,
-    )
+    if maximized {
+        return Rect::new(
+            window.left + frame.left,
+            window.top + frame.top,
+            window.right - frame.right,
+            window.bottom - frame.bottom,
+        );
+    }
+    window
 }
 
 /// What a hit-test point falls on.
@@ -110,12 +115,11 @@ mod tests {
     }
 
     #[test]
-    fn a_restored_client_keeps_the_top_edge_for_the_caption_strip() {
+    fn a_restored_client_is_the_whole_window_so_the_frame_is_app_painted() {
+        // The resize borders are hit-tested, not non-client, so the app's
+        // content/backdrop paints to the window edge and no black band shows.
         let window = Rect::new(0, 0, 800, 600);
-        assert_eq!(
-            extended_client_rect(window, frame(), false),
-            Rect::new(8, 0, 792, 592)
-        );
+        assert_eq!(extended_client_rect(window, frame(), false), window);
     }
 
     #[test]
@@ -130,7 +134,9 @@ mod tests {
 
     #[test]
     fn borders_win_over_the_caption_strip() {
-        let client = Rect::new(8, 4, 792, 592);
+        // A restored client is the whole window; the frame insets still decide
+        // the resize bands, so the window stays resizable.
+        let client = Rect::new(0, 0, 800, 600);
         let frame = frame();
         let height = 32;
         // The top-left corner is a resize handle, not the caption.
@@ -147,18 +153,18 @@ mod tests {
             Hit::Left
         );
         assert_eq!(
-            decide(Point::new(790, 300), client, frame, height, false),
+            decide(Point::new(795, 300), client, frame, height, false),
             Hit::Right
         );
         assert_eq!(
-            decide(Point::new(400, 590), client, frame, height, false),
+            decide(Point::new(400, 595), client, frame, height, false),
             Hit::Bottom
         );
     }
 
     #[test]
     fn free_strip_drags_and_widgets_stay_client() {
-        let client = Rect::new(8, 4, 792, 592);
+        let client = Rect::new(0, 0, 800, 600);
         let frame = frame();
         let height = 32;
         assert_eq!(

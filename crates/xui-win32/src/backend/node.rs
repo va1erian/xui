@@ -56,7 +56,7 @@ impl BackendNode {
         let painter = Rc::new(RefCell::new(None));
         let drag_region = Rc::new(Cell::new(false));
         let (hwnd, window) = if spec.kind == NodeKind::Edit {
-            create_native_edit(parent_hwnd, spec)?
+            create_native_edit(parent_hwnd, spec, shared.theme())?
         } else {
             create_painted(widget, parent_hwnd, shared, &painter, &drag_region, spec)?
         };
@@ -117,23 +117,26 @@ impl BackendNode {
 
 /// A real `EDIT` control: it edits itself (IME included) and reports changes to
 /// its parent.
-fn create_native_edit(parent_hwnd: Hwnd, spec: &NodeSpec) -> BackendResult<(Hwnd, Option<Window>)> {
-    use crate::controls::style::{WS_CHILD, WS_EX_CLIENTEDGE, WS_TABSTOP, WS_VISIBLE};
-    let mut style = WS_CHILD | WS_VISIBLE;
+///
+/// A plain `WS_BORDER` replaces the classic `WS_EX_CLIENTEDGE` bevel, which is
+/// light regardless of the theme; [`sys::edit_edge`] then strokes that one-pixel
+/// frame with `theme.border`/`theme.border_focused`, matching the portable
+/// `Edit`'s painted border.
+fn create_native_edit(
+    parent_hwnd: Hwnd,
+    spec: &NodeSpec,
+    theme: crate::theme::Theme,
+) -> BackendResult<(Hwnd, Option<Window>)> {
+    use crate::controls::style::{WS_BORDER, WS_CHILD, WS_TABSTOP, WS_VISIBLE};
+    let mut style = WS_CHILD | WS_VISIBLE | WS_BORDER;
     if spec.tab_stop {
         style |= WS_TABSTOP;
     }
     let id = crate::controls::next_id();
-    let hwnd = crate::controls::create_child(
-        "Edit",
-        "EDIT",
-        parent_hwnd,
-        style,
-        WS_EX_CLIENTEDGE,
-        id,
-        spec.bounds,
-    )
-    .map_err(|_| BackendError::CreateFailed("edit"))?;
+    let hwnd =
+        crate::controls::create_child("Edit", "EDIT", parent_hwnd, style, 0, id, spec.bounds)
+            .map_err(|_| BackendError::CreateFailed("edit"))?;
+    sys::edit_edge::install(hwnd, theme);
     if !spec.text.is_empty() {
         let _ = sys::window::set_title(hwnd, &spec.text);
     }
