@@ -1,69 +1,13 @@
 #![forbid(unsafe_code)]
 
-//! Compositing a window's nodes into a [`Surface`], and resolving a node's
-//! window-absolute bounds from its parent-relative ones.
+//! Compositing a window's nodes into a [`Surface`].
 
-use xui_core::backend::{Canvas as _, ParentRef, WidgetId};
+use xui_core::backend::Canvas as _;
 use xui_core::geometry::Rect;
 
-use super::{Node, Shared};
+use super::Shared;
+use super::geometry::{absolute_bounds, ancestor_clip, intersect};
 use crate::Surface;
-
-/// The window-absolute bounds of `id`, walking its parent chain.
-pub(super) fn absolute_bounds(nodes: &[(WidgetId, Node)], id: WidgetId) -> Option<Rect> {
-    let (_, node) = nodes.iter().find(|(node_id, _)| *node_id == id)?;
-    Some(match node.parent {
-        ParentRef::Window(_) => node.bounds,
-        ParentRef::Widget(parent) => {
-            let outer = absolute_bounds(nodes, parent)?;
-            node.bounds.offset(outer.left, outer.top)
-        }
-    })
-}
-
-/// The intersection of two rectangles.
-fn intersect(a: Rect, b: Rect) -> Rect {
-    Rect::new(
-        a.left.max(b.left),
-        a.top.max(b.top),
-        a.right.min(b.right),
-        a.bottom.min(b.bottom),
-    )
-}
-
-/// The clip on `id`'s painting from its ancestors' [`Node::clip`]s, in window
-/// coordinates, or `None` when no ancestor clips it.
-///
-/// A node's clip is in that node's own coordinate space, so it is lifted to
-/// window coordinates with the node's absolute origin; descendants intersect
-/// every ancestor's clip.
-fn ancestor_clip(nodes: &[(WidgetId, Node)], id: WidgetId) -> Option<Rect> {
-    let (_, node) = nodes.iter().find(|(node_id, _)| *node_id == id)?;
-    let mut clip: Option<Rect> = None;
-    let mut parent = node.parent;
-    while let ParentRef::Widget(parent_id) = parent {
-        let Some((_, ancestor)) = nodes.iter().find(|(node_id, _)| *node_id == parent_id) else {
-            break;
-        };
-        let Some(origin) = absolute_bounds(nodes, parent_id) else {
-            break;
-        };
-        if let Some(local) = ancestor.clip {
-            let rect = Rect::new(
-                origin.left + local.left,
-                origin.top + local.top,
-                origin.left + local.right,
-                origin.top + local.bottom,
-            );
-            clip = Some(match clip {
-                Some(current) => intersect(current, rect),
-                None => rect,
-            });
-        }
-        parent = ancestor.parent;
-    }
-    clip
-}
 
 /// Fills `surface` with the window's background and runs each visible node's
 /// painter at its absolute bounds, in creation order (later nodes on top),
@@ -119,7 +63,7 @@ pub(super) fn composite(
 mod tests {
     use super::*;
     use crate::backend::Node;
-    use xui_core::backend::{WidgetId, WindowId};
+    use xui_core::backend::{ParentRef, WidgetId, WindowId};
 
     fn node(window: WindowId, parent: ParentRef, bounds: Rect) -> Node {
         Node {

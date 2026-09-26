@@ -27,7 +27,8 @@ mod geometry;
 #[cfg(test)]
 mod tests;
 
-use geometry::{absolute_bounds, ancestor_clip, intersect, translate};
+use crate::backend::geometry::{absolute_bounds, ancestor_clip, intersect};
+use geometry::translate;
 
 /// The default dots-per-inch a surface is rendered at.
 const DEFAULT_DPI: u32 = 96;
