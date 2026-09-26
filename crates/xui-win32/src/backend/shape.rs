@@ -44,20 +44,11 @@ impl Win32Canvas<'_> {
             .map_or(mapped, |clip| intersect(mapped, clip.bounds))
     }
 
-    pub(crate) fn d2d(&self) -> Option<DcCanvas> {
-        self.canvas.d2d()
-    }
-
-    /// Re-applies every open rounded clip to `d2d` for the shape about to be
-    /// drawn. The portable canvas binds a fresh Direct2D frame per shape, so a
-    /// layer pushed by an earlier call would not survive; re-pushing the clip
-    /// keeps it in force for this shape.
-    pub(crate) fn push_rounded_clips(&self, d2d: &mut DcCanvas) {
-        for clip in &self.clips {
-            if let Some(corners) = clip.corners {
-                let _ = d2d.push_clip_rounded(rounded(clip.bounds, corners));
-            }
-        }
+    /// The painter's shared Direct2D frame, or `None` when Direct2D is
+    /// unavailable. Every shape draws into this one frame; clips were pushed to
+    /// it when they were opened, so a shape needs no re-application.
+    pub(crate) fn d2d(&mut self) -> Option<&mut DcCanvas> {
+        self.frame.as_mut()
     }
 
     /// GDI cannot draw a gradient; without Direct2D, fill with the gradient's

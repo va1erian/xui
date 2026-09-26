@@ -214,6 +214,52 @@ fn columns_with_a_fixed_and_a_fill_width_align() {
 }
 
 #[test]
+fn cell_text_is_clipped_to_its_column() {
+    let (backend, _core, ui) = setup();
+    let model: Vec<Vec<String>> = vec![
+        vec!["a title far too long for its column".into(), "b".into()],
+        vec!["short".into(), "c".into()],
+    ];
+    let list = ListView::with_model(&ui, Rect::new(0, 0, 200, 120), model)
+        .unwrap()
+        .column("A", Dip::new(60.0))
+        .column("B", super::Fill);
+
+    backend.render(list.id());
+    assert!(
+        every_text_is_clipped(&backend.ops(list.id())),
+        "a cell's text must sit inside the clip pushed for its column"
+    );
+}
+
+/// Whether every text op is inside the innermost clip open when it was drawn.
+fn every_text_is_clipped(ops: &[DrawOp]) -> bool {
+    let mut clips: Vec<Rect> = Vec::new();
+    for op in ops {
+        match op {
+            DrawOp::Clip(rect) => clips.push(*rect),
+            DrawOp::Unclip => {
+                clips.pop();
+            }
+            DrawOp::Text(rect, ..) => {
+                let Some(clip) = clips.last() else {
+                    return false;
+                };
+                if rect.left < clip.left
+                    || rect.right > clip.right
+                    || rect.top < clip.top
+                    || rect.bottom > clip.bottom
+                {
+                    return false;
+                }
+            }
+            _ => {}
+        }
+    }
+    true
+}
+
+#[test]
 fn multi_select_toggles_and_shift_extends_from_the_anchor() {
     let (_backend, core, ui) = setup();
     let items = ["a", "b", "c", "d", "e"];

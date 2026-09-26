@@ -78,7 +78,11 @@ fn paint_header(canvas: &mut dyn Canvas, state: &State, theme: &Theme, rect: Rec
         let cell = Rect::new(rect.left + left, rect.top, rect.left + right, rect.bottom);
         let text = Rect::new(cell.left + pad, cell.top, cell.right - pad, cell.bottom);
         let style = aligned(TextStyle::new(theme.text, TEXT_SIZE).middle(), column);
+        // A long title must not run into the next column: clip the cell. The
+        // clip is cheap now that the backend draws a whole node in one frame.
+        canvas.push_clip(cell);
         canvas.draw_text(&column.title, text, &style);
+        canvas.pop_clip();
         if state.sort.is_some_and(|(sorted, _)| sorted == index) {
             paint_sort_arrow(canvas, state.sort, cell, theme, dpi);
         }
@@ -147,7 +151,9 @@ fn paint_row(
         }
         let text = Rect::new(rect.left + pad, rect.top, rect.right - pad, rect.bottom);
         let style = TextStyle::new(color, TEXT_SIZE).middle();
+        canvas.push_clip(rect);
         canvas.draw_text(state.rows.cell(row, 0).unwrap_or(""), text, &style);
+        canvas.pop_clip();
         return;
     }
 
@@ -166,7 +172,10 @@ fn paint_row(
         let cell = Rect::new(rect.left + left, rect.top, rect.left + right, rect.bottom);
         let text = Rect::new(cell.left + pad, cell.top, cell.right - pad, cell.bottom);
         let style = aligned(TextStyle::new(color, TEXT_SIZE).middle(), column);
+        // Clip the cell so a long value cannot overlap the next column.
+        canvas.push_clip(cell);
         canvas.draw_text(state.rows.cell(row, index).unwrap_or(""), text, &style);
+        canvas.pop_clip();
     }
 }
 

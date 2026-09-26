@@ -14,6 +14,12 @@
 //! per draw, so a control pays no device-resource cost per paint. Call
 //! [`end_draw`](DcCanvas::end_draw) (or drop the canvas) before drawing with
 //! GDI on the same device context.
+//!
+//! Frames nest: the first [`DcCanvas::new`] on a context opens the frame and
+//! owns it; further calls on the **same** context while it is open return
+//! lightweight handles that draw into the same frame. Only the owner's
+//! [`end_draw`](DcCanvas::end_draw) ends it, so a whole painter can batch its
+//! shapes into one `BeginDraw`/`EndDraw` without every primitive paying a pair.
 
 use crate::color::Color;
 use crate::error::Result;
@@ -29,25 +35,40 @@ use super::{PointF, RectF, Stroke};
 /// a device loss is transparent (the target is rebuilt on the next bind).
 /// Coordinates are device pixels (matching GDI, so shapes line up with the
 /// text a control draws with `DrawTextW`), relative to the bound `rect`.
+///
+/// A canvas created while a frame is already open on the same device context is
+/// a nested handle: its [`end_draw`](DcCanvas::end_draw) is a no-op and the
+/// frame stays open for the owner.
 pub struct DcCanvas {
     rect: RectF,
     finished: bool,
+    /// Whether this canvas opened the frame and must end it. A nested handle
+    /// draws into the owner's open frame and never ends it.
+    owns: bool,
 }
 
 impl DcCanvas {
     /// Binds the thread's DC render target to `dc` over `rect` (device pixels)
-    /// and starts a frame. Fails when Direct2D is unavailable, so a caller can
-    /// fall back to GDI.
+    /// and starts a frame, or reuses the frame already open on `dc`. Fails when
+    /// Direct2D is unavailable, so a caller can fall back to GDI.
     pub fn new(dc: isize, rect: Rect) -> Result<DcCanvas> {
         if dc == 0 || rect.is_empty() {
             return Err(crate::error::Error::Direct2d(
                 "no device context to draw on",
             ));
         }
+        if sys::d2d::dc::is_open_for(dc) {
+            return Ok(DcCanvas {
+                rect: RectF::from_rect(rect),
+                finished: false,
+                owns: false,
+            });
+        }
         sys::d2d::dc::begin(dc, rect)?;
         Ok(DcCanvas {
             rect: RectF::from_rect(rect),
             finished: false,
+            owns: true,
         })
     }
 
@@ -132,6 +153,10 @@ impl DcCanvas {
 
     fn finish(&mut self) -> Result<()> {
         if std::mem::replace(&mut self.finished, true) {
+            return Ok(());
+        }
+        // A nested handle draws into a frame it does not own; the owner ends it.
+        if !self.owns {
             return Ok(());
         }
         match sys::d2d::dc::end()? {

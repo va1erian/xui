@@ -4,13 +4,16 @@
 //! GDI/Direct2D [`gdi::Canvas`], and the wrapper tracks the translation, scale
 //! and clip the core contract requires.
 //!
-//! An axis-aligned clip is applied by intersecting each shape's rectangle with
-//! the current clip; it is exact for the axis-aligned rectangles a widget
-//! draws, and a stroke that straddles the clip edge is not trimmed. A rounded
-//! clip is re-applied as a Direct2D layer around each shape drawn under it, so
-//! its corner arcs clip too.
+//! The Direct2D frame is opened once for the whole painter and every shape,
+//! text run and rounded clip draws into it, so a node costs one
+//! `BeginDraw`/`EndDraw` instead of one per primitive. An axis-aligned clip is
+//! applied both by intersecting each shape's rectangle with the current clip
+//! (exact for the rectangles a widget draws) and, while the frame is open, as a
+//! Direct2D clip, so text is clipped too. A rounded clip is a Direct2D layer.
+//! The rare GDI-only primitive (a bitmap) closes the frame first, because GDI
+//! and Direct2D cannot interleave inside one frame.
 
-use crate::d2d::{PointF, RectF, Stroke as D2dStroke};
+use crate::d2d::{DcCanvas, PointF, RectF, Stroke as D2dStroke};
 use crate::gdi;
 use xui_core::backend::{
     Canvas, Corner, LinearGradient, RadialGradient, Rgba, Stroke, TextLayout, TextStyle,
@@ -30,10 +33,17 @@ pub(crate) struct Win32Canvas<'a> {
     pub(crate) scale: f32,
     pub(crate) clips: Vec<Clip>,
     saved: Vec<(f32, f32, f32)>,
+    /// The Direct2D frame shared by every primitive in this painter, or `None`
+    /// when Direct2D is unavailable (GDI fallback).
+    pub(crate) frame: Option<DcCanvas>,
 }
 
 impl<'a> Win32Canvas<'a> {
     pub(crate) fn new(canvas: &'a gdi::Canvas, bounds: Rect, dpi: u32) -> Win32Canvas<'a> {
+        // Bind and begin the Direct2D frame once; every shape and text run in
+        // this painter reuses it. `None` when Direct2D is unavailable, so all
+        // primitives fall back to GDI.
+        let frame = canvas.d2d();
         Win32Canvas {
             canvas,
             bounds,
@@ -43,6 +53,23 @@ impl<'a> Win32Canvas<'a> {
             scale: 1.0,
             clips: Vec::new(),
             saved: Vec::new(),
+            frame,
+        }
+    }
+
+    /// Re-applies every open clip to `frame` after it was closed and reopened
+    /// (the Direct2D clip stack does not survive a frame boundary).
+    fn resync_clips(&mut self) {
+        let Some(frame) = self.frame.as_mut() else {
+            return;
+        };
+        for clip in &self.clips {
+            match clip.corners {
+                Some(corners) => {
+                    let _ = frame.push_clip_rounded(rounded(clip.bounds, corners));
+                }
+                None => frame.push_clip(RectF::from_rect(clip.bounds)),
+            }
         }
     }
 }
@@ -57,14 +84,22 @@ impl Canvas for Win32Canvas<'_> {
     }
 
     fn clear(&mut self, color: Color) {
-        self.canvas.fill_rect(self.bounds, color);
+        self.fill_rect(self.bounds, color);
     }
 
     fn fill_rect(&mut self, rect: Rect, color: Color) {
         let rect = self.rect(rect);
-        if !rect.is_empty() {
-            self.canvas.fill_rect(rect, color);
+        if rect.is_empty() {
+            return;
         }
+        // Draw through the shared frame when Direct2D is available, so opaque
+        // fills stay ordered with the anti-aliased shapes and text and never
+        // interleave with Direct2D, which does not support that inside a frame.
+        if let Some(frame) = self.frame.as_mut() {
+            frame.fill_rect(RectF::from_rect(rect), color);
+            return;
+        }
+        self.canvas.fill_rect(rect, color);
     }
 
     fn fill_rounded_rect(&mut self, rect: Rect, radius: f32, color: Color) {
@@ -80,16 +115,15 @@ impl Canvas for Win32Canvas<'_> {
         if self.ellipse_clipped_out(bounds) {
             return;
         }
-        if let Some(mut d2d) = self.d2d() {
-            self.push_rounded_clips(&mut d2d);
-            let center = self.point(center);
+        let center = self.point(center);
+        let scale = self.scale;
+        if let Some(d2d) = self.d2d() {
             d2d.fill_ellipse(
                 PointF::new(center.x as f32, center.y as f32),
-                radius_x * self.scale,
-                radius_y * self.scale,
+                radius_x * scale,
+                radius_y * scale,
                 color,
             );
-            let _ = d2d.end_draw();
             return;
         }
         // GDI has no anti-aliased ellipse: fill the clipped bounding rectangle.
@@ -115,14 +149,12 @@ impl Canvas for Win32Canvas<'_> {
         if rect.is_empty() {
             return;
         }
-        if let Some(mut d2d) = self.d2d() {
-            self.push_rounded_clips(&mut d2d);
+        if let Some(d2d) = self.d2d() {
             d2d.stroke_rect(
                 RectF::from_rect(rect),
                 color,
                 D2dStroke::solid(width.max(1.0)),
             );
-            let _ = d2d.end_draw();
             return;
         }
         self.canvas.outline(rect, color);
@@ -133,15 +165,13 @@ impl Canvas for Win32Canvas<'_> {
         if rect.is_empty() {
             return;
         }
-        if let Some(mut d2d) = self.d2d() {
-            self.push_rounded_clips(&mut d2d);
+        if let Some(d2d) = self.d2d() {
             d2d.stroke_rounded_rect(
                 RectF::from_rect(rect),
                 radius.max(1.0),
                 color,
                 D2dStroke::solid(width.max(1.0)),
             );
-            let _ = d2d.end_draw();
             return;
         }
         self.canvas.outline(rect, color);
@@ -160,17 +190,16 @@ impl Canvas for Win32Canvas<'_> {
         }
         // GDI has no anti-aliased ellipse outline, so without Direct2D there is
         // nothing to draw; every backend that can is expected to provide D2D.
-        if let Some(mut d2d) = self.d2d() {
-            self.push_rounded_clips(&mut d2d);
-            let center = self.point(center);
+        let center = self.point(center);
+        let scale = self.scale;
+        if let Some(d2d) = self.d2d() {
             d2d.stroke_ellipse(
                 PointF::new(center.x as f32, center.y as f32),
-                radius_x * self.scale,
-                radius_y * self.scale,
+                radius_x * scale,
+                radius_y * scale,
                 color,
                 D2dStroke::solid(width.max(1.0)),
             );
-            let _ = d2d.end_draw();
         }
     }
 
@@ -184,10 +213,8 @@ impl Canvas for Win32Canvas<'_> {
         if rect.is_empty() {
             return;
         }
-        if let Some(mut d2d) = self.d2d() {
-            self.push_rounded_clips(&mut d2d);
+        if let Some(d2d) = self.d2d() {
             d2d.fill_rect_rgba(RectF::from_rect(rect), rgba(color));
-            let _ = d2d.end_draw();
             return;
         }
         // GDI has no alpha; fall back to the opaque colour.
@@ -200,10 +227,8 @@ impl Canvas for Win32Canvas<'_> {
         if rect.is_empty() {
             return;
         }
-        if let Some(mut d2d) = self.d2d() {
-            self.push_rounded_clips(&mut d2d);
+        if let Some(d2d) = self.d2d() {
             d2d.fill_rounded(rounded(rect, corners), rgba(color));
-            let _ = d2d.end_draw();
             return;
         }
         let radius = corners
@@ -226,10 +251,8 @@ impl Canvas for Win32Canvas<'_> {
         if rect.is_empty() {
             return;
         }
-        if let Some(mut d2d) = self.d2d() {
-            self.push_rounded_clips(&mut d2d);
+        if let Some(d2d) = self.d2d() {
             d2d.stroke_rounded(rounded(rect, corners), rgba(color), d2d_stroke(stroke));
-            let _ = d2d.end_draw();
             return;
         }
         self.canvas
@@ -238,10 +261,8 @@ impl Canvas for Win32Canvas<'_> {
 
     fn draw_line_stroked(&mut self, from: Point, to: Point, color: Rgba, stroke: &Stroke) {
         let (from, to) = (self.point(from), self.point(to));
-        if let Some(mut d2d) = self.d2d() {
-            self.push_rounded_clips(&mut d2d);
+        if let Some(d2d) = self.d2d() {
             d2d.draw_line_rgba(point_f(from), point_f(to), rgba(color), d2d_stroke(stroke));
-            let _ = d2d.end_draw();
             return;
         }
         // GDI has no dash pattern; draw the line solid.
@@ -264,17 +285,16 @@ impl Canvas for Win32Canvas<'_> {
         if self.ellipse_clipped_out(self.ellipse_bounds(center, radius_x, radius_y)) {
             return;
         }
-        if let Some(mut d2d) = self.d2d() {
-            self.push_rounded_clips(&mut d2d);
-            let center = self.point(center);
+        let center = self.point(center);
+        let scale = self.scale;
+        if let Some(d2d) = self.d2d() {
             d2d.stroke_ellipse_rgba(
                 PointF::new(center.x as f32, center.y as f32),
-                radius_x * self.scale,
-                radius_y * self.scale,
+                radius_x * scale,
+                radius_y * scale,
                 rgba(color),
                 d2d_stroke(stroke),
             );
-            let _ = d2d.end_draw();
         }
     }
 
@@ -283,10 +303,8 @@ impl Canvas for Win32Canvas<'_> {
         if rect.is_empty() {
             return;
         }
-        if let Some(mut d2d) = self.d2d() {
-            self.push_rounded_clips(&mut d2d);
+        if let Some(d2d) = self.d2d() {
             d2d.fill_rect_linear(RectF::from_rect(rect), &linear(gradient));
-            let _ = d2d.end_draw();
             return;
         }
         self.fill_first_stop(rect, gradient.stops.first());
@@ -297,10 +315,9 @@ impl Canvas for Win32Canvas<'_> {
         if rect.is_empty() {
             return;
         }
-        if let Some(mut d2d) = self.d2d() {
-            self.push_rounded_clips(&mut d2d);
-            d2d.fill_rect_radial(RectF::from_rect(rect), &radial(gradient, self.scale));
-            let _ = d2d.end_draw();
+        let scale = self.scale;
+        if let Some(d2d) = self.d2d() {
+            d2d.fill_rect_radial(RectF::from_rect(rect), &radial(gradient, scale));
             return;
         }
         self.fill_first_stop(rect, gradient.stops.first());
@@ -350,7 +367,13 @@ impl Canvas for Win32Canvas<'_> {
         else {
             return;
         };
+        // GDI and Direct2D cannot interleave inside one frame, so close the
+        // frame for the bitmap and reopen it (restoring the clips) for the
+        // shapes that follow. An image is not a per-item draw, so this is rare.
+        self.frame = None;
         self.canvas.draw_bitmap(&bitmap, rect);
+        self.frame = self.canvas.d2d();
+        self.resync_clips();
     }
 
     fn push_clip(&mut self, rect: Rect) {
@@ -363,6 +386,9 @@ impl Canvas for Win32Canvas<'_> {
             bounds: clipped,
             corners: None,
         });
+        if let Some(frame) = self.frame.as_mut() {
+            frame.push_clip(RectF::from_rect(clipped));
+        }
     }
 
     fn push_clip_rounded(&mut self, rect: Rect, corners: [Corner; 4]) {
@@ -375,10 +401,17 @@ impl Canvas for Win32Canvas<'_> {
             bounds: clipped,
             corners: Some(corners),
         });
+        if let Some(frame) = self.frame.as_mut() {
+            let _ = frame.push_clip_rounded(rounded(clipped, corners));
+        }
     }
 
     fn pop_clip(&mut self) {
-        self.clips.pop();
+        if self.clips.pop().is_some()
+            && let Some(frame) = self.frame.as_mut()
+        {
+            let _ = frame.pop_clip();
+        }
     }
 
     fn save(&mut self) {

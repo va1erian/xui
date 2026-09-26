@@ -23,11 +23,31 @@ thread_local! {
     static DC_TARGET: RefCell<Option<Target>> = const { RefCell::new(None) };
     /// Whether a DC frame is open. Only one can be: the target is single.
     static DRAWING: Cell<bool> = const { Cell::new(false) };
+    /// The device context the open frame is bound to, so a nested draw can tell
+    /// "reuse the open frame" from "cannot begin a second one".
+    static BOUND_DC: Cell<isize> = const { Cell::new(0) };
+    /// How many frames have been started, for tests asserting that a whole
+    /// painter runs inside one `BeginDraw`/`EndDraw`.
+    #[cfg(test)]
+    static FRAMES: Cell<u64> = const { Cell::new(0) };
+}
+
+/// Whether a frame is open on exactly `hdc`, so a draw on that context can share
+/// it instead of starting (and being refused) a second one.
+pub(crate) fn is_open_for(hdc: isize) -> bool {
+    DRAWING.get() && BOUND_DC.get() == hdc
+}
+
+/// How many Direct2D frames have been started on this thread. Test-only.
+#[cfg(test)]
+pub(crate) fn frames_started() -> u64 {
+    FRAMES.get()
 }
 
 /// Binds the thread's DC target to `hdc`/`rect`, creating it on first use, and
-/// begins a frame. Fails when a frame is already open (a `DcCanvas` was not
-/// ended before another was created).
+/// begins a frame. Fails when a frame is already open on a different context (a
+/// `DcCanvas` was not ended before another was created); a draw on the same
+/// context reuses the open frame instead of calling this.
 pub(crate) fn begin(hdc: isize, rect: Rect) -> Result<()> {
     if DRAWING.get() {
         return Err(Error::Direct2d("begin while a DC frame is in progress"));
@@ -47,6 +67,9 @@ pub(crate) fn begin(hdc: isize, rect: Rect) -> Result<()> {
         }
         target.begin_draw();
         DRAWING.set(true);
+        BOUND_DC.set(hdc);
+        #[cfg(test)]
+        FRAMES.set(FRAMES.get() + 1);
         Ok(())
     })
 }
@@ -56,6 +79,7 @@ pub(crate) fn end() -> Result<EndDraw> {
     if !DRAWING.replace(false) {
         return Ok(EndDraw::Presented);
     }
+    BOUND_DC.set(0);
     let outcome = DC_TARGET.with(|cell| {
         cell.borrow_mut()
             .as_mut()
@@ -78,6 +102,7 @@ pub(crate) fn with<R>(draw: impl FnOnce(&mut Target) -> R) -> Option<R> {
 pub(crate) fn discard() {
     DC_TARGET.with(|cell| *cell.borrow_mut() = None);
     DRAWING.set(false);
+    BOUND_DC.set(0);
 }
 
 #[cfg(test)]
@@ -225,5 +250,84 @@ mod tests {
             let _ = canvas.end_draw();
         }
         assert_eq!(memory.pixel(4, 4), (0, 0, 0));
+    }
+
+    /// A nested `DcCanvas::new` reuses the owner's frame instead of starting
+    /// one, so a painter that draws many primitives pays a single
+    /// `BeginDraw`/`EndDraw`.
+    #[test]
+    fn nested_frames_reuse_the_open_one() {
+        const SIZE: i32 = 32;
+        let Some(memory) = MemoryDc::new(SIZE, SIZE) else {
+            return;
+        };
+        // Skip when Direct2D is unavailable (the GDI fallback has no frames).
+        let Some(probe) = DcCanvas::new(memory.dc.0 as isize, Rect::new(0, 0, SIZE, SIZE)).ok()
+        else {
+            return;
+        };
+        let _ = probe.end_draw();
+
+        let before = frames_started();
+        let owner = DcCanvas::new(memory.dc.0 as isize, Rect::new(0, 0, SIZE, SIZE))
+            .expect("the frame opens");
+        for _ in 0..64 {
+            let nested = DcCanvas::new(memory.dc.0 as isize, Rect::new(0, 0, SIZE, SIZE))
+                .expect("a nested handle reuses the frame");
+            let _ = nested.end_draw();
+        }
+        let _ = owner.end_draw();
+        assert_eq!(
+            frames_started() - before,
+            1,
+            "a nested draw must not open another frame"
+        );
+    }
+
+    /// A list-like painter (fills, per-cell clips and text, separators) opens
+    /// exactly one frame, the regression the batching fix targets.
+    #[test]
+    fn a_whole_painter_opens_one_frame() {
+        use xui_core::backend::{Canvas as _, TextStyle};
+        use xui_core::geometry::Point;
+        use xui_core::units::dip;
+
+        const SIZE: i32 = 64;
+        let Some(memory) = MemoryDc::new(SIZE, SIZE) else {
+            return;
+        };
+        let canvas = crate::gdi::Canvas::new(memory.dc);
+        // Skip when Direct2D is unavailable: the GDI fallback has no frames.
+        if canvas.d2d().is_none() {
+            return;
+        }
+        let before = frames_started();
+        {
+            let mut win =
+                crate::backend::canvas::Win32Canvas::new(&canvas, Rect::new(0, 0, SIZE, SIZE), 96);
+            win.clear(Color::rgb(0x10, 0x10, 0x10));
+            for row in 0..8 {
+                let rect = Rect::new(0, row * 8, SIZE, row * 8 + 8);
+                win.fill_rect(rect, Color::rgb(0x20, 0x20, 0x20));
+                for column in 0..4 {
+                    let cell = Rect::new(column * 16, rect.top, column * 16 + 16, rect.bottom);
+                    win.push_clip(cell);
+                    let style = TextStyle::new(Color::rgb(0xF0, 0xF0, 0xF0), dip(12.0));
+                    win.draw_text("a long cell value", cell, &style);
+                    win.pop_clip();
+                    win.draw_line(
+                        Point::new(cell.left, cell.top),
+                        Point::new(cell.left, cell.bottom),
+                        Color::rgb(0x40, 0x40, 0x40),
+                        1.0,
+                    );
+                }
+            }
+        }
+        assert_eq!(
+            frames_started() - before,
+            1,
+            "a whole painter must run in one BeginDraw/EndDraw"
+        );
     }
 }
