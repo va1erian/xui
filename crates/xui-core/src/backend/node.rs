@@ -117,6 +117,14 @@ pub struct NodeSpec {
     pub enabled: bool,
     /// Whether the node takes part in the Tab order.
     pub tab_stop: bool,
+    /// Whether the node is a transient popup surface that floats above every
+    /// other node in its window (a menu or combo drop-down).
+    ///
+    /// A backend may create such a node as an independent platform popup — a
+    /// Win32 owned top-level window — so it can overhang its host and draw the
+    /// platform's drop shadow. A backend without a separate popup surface
+    /// treats it as an ordinary node, so the flag is advisory.
+    pub popup: bool,
 }
 
 impl NodeSpec {
@@ -130,6 +138,7 @@ impl NodeSpec {
             visible: true,
             enabled: true,
             tab_stop: false,
+            popup: false,
         }
     }
 
@@ -148,6 +157,13 @@ impl NodeSpec {
     /// Includes the node in the Tab order.
     pub fn tab_stop(mut self) -> NodeSpec {
         self.tab_stop = true;
+        self
+    }
+
+    /// Creates the node as a transient popup surface that floats above the
+    /// window's other nodes. See [`NodeSpec::popup`].
+    pub fn popup(mut self) -> NodeSpec {
+        self.popup = true;
         self
     }
 }

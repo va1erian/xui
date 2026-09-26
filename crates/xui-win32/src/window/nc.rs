@@ -16,6 +16,10 @@ use crate::hwnd::Hwnd;
 #[derive(Default)]
 struct Entry {
     extended: bool,
+    /// Whether the window is a frameless popup: a `WS_THICKFRAME` window whose
+    /// non-client frame is removed by `WM_NCCALCSIZE`, keeping DWM's drop
+    /// shadow while the whole rectangle stays client area.
+    frameless_shadow: bool,
     /// The caption buttons' bounds in client coordinates (empty when unknown).
     caption_inset: Rect,
     /// The height of the extended strip (the caption incl. its top frame), in
@@ -50,6 +54,27 @@ pub(crate) fn set_extended(window: Hwnd, extended: bool) {
 /// Whether `window` uses the extended title bar.
 pub(crate) fn is_extended(window: Hwnd) -> bool {
     WINDOWS.with(|map| map.borrow().get(&window.raw()).is_some_and(|e| e.extended))
+}
+
+/// Records whether `window` is a frameless popup that keeps only DWM's drop
+/// shadow (a `WS_THICKFRAME` window whose non-client frame `WM_NCCALCSIZE`
+/// removes).
+pub(crate) fn set_frameless_shadow(window: Hwnd, frameless: bool) {
+    WINDOWS.with(|map| {
+        map.borrow_mut()
+            .entry(window.raw())
+            .or_default()
+            .frameless_shadow = frameless;
+    });
+}
+
+/// Whether `window` keeps only DWM's drop shadow without a visible frame.
+pub(crate) fn is_frameless_shadow(window: Hwnd) -> bool {
+    WINDOWS.with(|map| {
+        map.borrow()
+            .get(&window.raw())
+            .is_some_and(|e| e.frameless_shadow)
+    })
 }
 
 /// Records the caption buttons' bounds (client coordinates) for `window`.

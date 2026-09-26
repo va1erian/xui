@@ -42,6 +42,8 @@ struct Node {
     ///
     /// [`Backend::set_clip`]: super::Backend::set_clip
     clip: Option<Rect>,
+    /// Whether the node asked to be a transient popup surface.
+    popup: bool,
 }
 
 /// A window the headless backend recorded.
@@ -170,6 +172,15 @@ impl HeadlessBackend {
             .nodes
             .get(&id.raw())
             .and_then(|node| node.clip)
+    }
+
+    /// Whether `id` was created as a transient popup surface.
+    pub fn is_popup(&self, id: WidgetId) -> bool {
+        self.state
+            .borrow()
+            .nodes
+            .get(&id.raw())
+            .is_some_and(|node| node.popup)
     }
 
     /// The node the pointer is currently captured by, if any.

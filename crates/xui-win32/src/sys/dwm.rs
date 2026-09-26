@@ -187,6 +187,24 @@ fn set_color(hwnd: Hwnd, attribute: DWMWINDOWATTRIBUTE, colorref: u32) -> bool {
     .is_ok()
 }
 
+/// Forces DWM to render `hwnd`'s non-client frame, so a window whose frame is
+/// otherwise invisible (a popup) still gets DWM's drop shadow. Best-effort:
+/// older Windows reject the attribute and simply keep the solid background.
+pub(crate) fn enable_nc_rendering(hwnd: Hwnd) {
+    use windows::Win32::Graphics::Dwm::{DWMNCRP_ENABLED, DWMWA_NCRENDERING_POLICY};
+    let policy = DWMNCRP_ENABLED;
+    // SAFETY: `hwnd` is live; `policy` is a correctly-sized attribute value
+    // that outlives the call and is only read by DWM.
+    unsafe {
+        let _ = DwmSetWindowAttribute(
+            raw_hwnd(hwnd),
+            DWMWA_NCRENDERING_POLICY,
+            &policy as *const _ as *const c_void,
+            size_of::<i32>() as u32,
+        );
+    }
+}
+
 /// Turns off DWM's rounded corners for `hwnd` (Windows 11+), so a borderless
 /// fullscreen or popup window is truly square. Best-effort on older Windows.
 pub(crate) fn disable_rounding(hwnd: Hwnd) {

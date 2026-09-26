@@ -122,6 +122,7 @@ impl Backend for HeadlessBackend {
                 painter: None,
                 ops: Vec::new(),
                 clip: None,
+                popup: spec.popup,
             },
         );
         Ok(WidgetId::from_raw(id))

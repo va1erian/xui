@@ -295,6 +295,20 @@ fn opening_the_bar_menu_paints_its_entries() {
 }
 
 #[test]
+fn popups_are_created_as_transient_popup_surfaces() {
+    let (backend, _core, ui) = setup();
+    let menu = sample_bar(&ui);
+    let bar = menu.id().unwrap();
+    let popup = menu.popup_id(0).unwrap();
+
+    assert!(
+        backend.is_popup(popup),
+        "a dropdown is a transient surface the backend can float above the window"
+    );
+    assert!(!backend.is_popup(bar), "the bar itself is an ordinary node");
+}
+
+#[test]
 fn dropping_a_menu_unregisters_its_mappers() {
     let (_backend, core, ui) = setup();
     let menu = sample_bar(&ui);

@@ -236,10 +236,13 @@ impl<M: 'static> Menu<M> {
         };
         let mut popups = Vec::with_capacity(depth);
         for level in 0..depth {
-            let Ok(control) = Control::new(
-                &self.rt.ui,
-                &NodeSpec::new(NodeKind::Custom, Rect::default()),
-            ) else {
+            // A popup is a transient surface, so the backend may give it its
+            // own top-level window (a Win32 owned popup) to overhang the host
+            // and float above every sibling. It is created hidden and shown by
+            // `open`, so a native popup never flashes at its default position.
+            let mut spec = NodeSpec::new(NodeKind::Custom, Rect::default()).popup();
+            spec.visible = false;
+            let Ok(control) = Control::new(&self.rt.ui, &spec) else {
                 break;
             };
             self.rt.pool.borrow_mut().push(control.id());

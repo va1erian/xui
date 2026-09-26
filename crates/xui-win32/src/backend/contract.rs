@@ -11,7 +11,7 @@ use xui_core::backend::{
 };
 use xui_core::image::Image;
 use xui_core::router::WidgetHost;
-use xui_core::{Dip, Px, Rect, Theme};
+use xui_core::{Dip, Point, Px, Rect, Theme};
 
 use super::node::BackendNode;
 use super::{Win32Backend, cursor::cursor_shape, text};
@@ -176,6 +176,7 @@ impl Backend for Win32Backend {
     fn apply_moves(&self, _window: WindowId, moves: &[(WidgetId, Rect)]) {
         let os_moves: Vec<(crate::hwnd::Hwnd, Rect)> = {
             let nodes = self.nodes.borrow();
+            let windows = self.windows.borrow();
             for (id, rect) in moves {
                 if let Some(node) = nodes.get(&id.raw()) {
                     node.set_bounds(*rect);
@@ -183,20 +184,46 @@ impl Backend for Win32Backend {
             }
             moves
                 .iter()
-                .filter_map(|(id, rect)| nodes.get(&id.raw()).map(|node| (node.hwnd, *rect)))
+                .filter_map(|(id, rect)| {
+                    let node = nodes.get(&id.raw())?;
+                    // A popup is a top-level window: the core works in host
+                    // client coordinates, so convert its rect to the screen.
+                    let rect = if node.is_popup {
+                        let host = windows.get(&node.window_id.raw())?.window.hwnd();
+                        let at =
+                            sys::window::client_to_screen(host, Point::new(rect.left, rect.top));
+                        Rect::new(at.x, at.y, at.x + rect.width(), at.y + rect.height())
+                    } else {
+                        *rect
+                    };
+                    Some((node.hwnd, rect))
+                })
                 .collect()
         };
         sys::layout::apply(&os_moves);
     }
 
     fn set_visible(&self, id: WidgetId, visible: bool) {
-        if let Some((hwnd, _)) = self.node(id) {
-            let kind = if visible {
-                sys::window::ShowKind::Normal
+        let entry = self
+            .nodes
+            .borrow()
+            .get(&id.raw())
+            .map(|node| (node.hwnd, node.is_popup));
+        if let Some((hwnd, is_popup)) = entry {
+            if visible && is_popup {
+                // Paint the finished face before the popup is composed, so its
+                // first frame is never the class background.
+                sys::first_show::show_painted(hwnd, || {
+                    sys::window::show(hwnd, sys::window::ShowKind::Normal);
+                });
             } else {
-                sys::window::ShowKind::Hidden
-            };
-            sys::window::show(hwnd, kind);
+                let kind = if visible {
+                    sys::window::ShowKind::Normal
+                } else {
+                    sys::window::ShowKind::Hidden
+                };
+                sys::window::show(hwnd, kind);
+            }
         }
     }
 
@@ -320,36 +347,7 @@ impl Backend for Win32Backend {
     }
 
     fn set_theme(&self, window: WindowId, theme: &Theme) {
-        let hwnd = {
-            let windows = self.windows.borrow();
-            let Some(entry) = windows.get(&window.raw()) else {
-                return;
-            };
-            entry.theme.set(*theme);
-            entry.shared.set_theme(*theme);
-            entry.window.hwnd()
-        };
-        sys::set_class_background(hwnd, theme.background);
-        sys::set_titlebar_dark(hwnd, theme.is_dark);
-        if crate::window::nc::is_extended(hwnd) {
-            sys::apply_extended_colors(hwnd, theme, crate::theme::backdrop_active(hwnd));
-        }
-        // A native edit's `WM_CTLCOLOREDIT` follows the shared theme live, but
-        // its themed `WS_BORDER` frame is painted by a subclass, so re-colour it
-        // explicitly. Collect first: the update paints synchronously.
-        let edits: Vec<crate::hwnd::Hwnd> = self
-            .nodes
-            .borrow()
-            .values()
-            .filter(|node| node.window_id == window)
-            .map(|node| node.hwnd)
-            .collect();
-        for edit in edits {
-            sys::edit_edge::set_theme(edit, *theme);
-        }
-        // Painters read the shared theme live, but they only repaint when
-        // asked, so invalidate the whole tree (children included).
-        sys::window::redraw_children(hwnd);
+        self.apply_theme(window, theme);
     }
 
     fn set_timer(&self, window: WindowId, millis: u32) -> TimerId {
