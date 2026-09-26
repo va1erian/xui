@@ -10,8 +10,10 @@
 
 mod button;
 mod checkbox;
+mod colorpicker;
 mod combobox;
 mod control;
+mod dialog;
 mod edit;
 mod flow_text;
 mod gridview;
@@ -45,8 +47,10 @@ mod tests;
 
 pub use button::Button;
 pub use checkbox::CheckBox;
+pub use colorpicker::ColorPicker;
 pub use combobox::ComboBox;
 pub use control::{Control, HasText};
+pub use dialog::{Dialog, DialogAction};
 pub use edit::Edit;
 pub use flow_text::{FlowText, Run, RunStyle};
 pub use gridview::{GridModel, GridView, Tile, TilePaint, TileSize};
