@@ -21,21 +21,17 @@ const RADIUS: f32 = 4.0;
 /// The design size of an item's label.
 const TEXT_SIZE: Dip = Dip(12.0);
 
-/// The item an event `x` falls on, relative to `bounds`; `None` left of the
-/// first item or right of the last one.
+/// The item an event `x` (node-local) falls on; `None` left of the first item
+/// or right of the last one. `bounds` supplies the strip's total width.
 fn item_at(bounds: Rect, x: i32, count: usize) -> Option<usize> {
-    if count == 0 {
-        return None;
-    }
-    let rel = x - bounds.left;
-    if rel < 0 {
+    if count == 0 || x < 0 {
         return None;
     }
     let width = bounds.width() / count as i32;
     if width <= 0 {
         return None;
     }
-    let index = (rel / width) as usize;
+    let index = (x / width) as usize;
     (index < count).then_some(index)
 }
 

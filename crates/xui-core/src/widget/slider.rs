@@ -94,8 +94,8 @@ impl<M: 'static> Slider<M> {
                 let set_from_x = |x: i32| {
                     let dpi = ui.dpi();
                     let thumb = THUMB.to_px(dpi).value().max(1);
-                    let left = bounds.left + thumb;
-                    let right = bounds.right - thumb;
+                    let left = thumb;
+                    let right = bounds.width() - thumb;
                     let span = (right - left).max(1) as f64;
                     let fraction = ((x - left) as f64 / span).clamp(0.0, 1.0);
                     let new = min.get() + fraction * (max.get() - min.get());

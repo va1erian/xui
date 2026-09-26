@@ -40,6 +40,7 @@ impl<M: 'static> GroupBox<M> {
             let state = Rc::clone(&state);
             let theme = ui.theme_handle();
             let selected = control.selected_handle();
+            let ui = ui.clone();
             control.set_painter(Rc::new(move |canvas| {
                 let theme = theme.get();
                 let bounds = canvas.bounds();
@@ -51,9 +52,9 @@ impl<M: 'static> GroupBox<M> {
                 let frame = Rect::new(bounds.left, bounds.top + inset, bounds.right, bounds.bottom);
                 canvas.stroke_rect(frame, theme.border, 1.0);
 
-                let size = TEXT_SIZE.to_px(dpi).value() as f32;
                 let title = state.borrow();
-                let width = (title.chars().count() as f32 * size * 0.5).round() as i32;
+                let style = TextStyle::new(theme.text, TEXT_SIZE).middle();
+                let width = ui.measure_text(&title, &style, dpi).width.max(1);
                 let gap = Rect::new(
                     frame.left + pad,
                     bounds.top,
@@ -61,7 +62,6 @@ impl<M: 'static> GroupBox<M> {
                     bounds.top + inset * 2,
                 );
                 canvas.fill_rect(gap, theme.background);
-                let style = TextStyle::new(theme.text, TEXT_SIZE).middle();
                 canvas.draw_text(&title, gap, &style);
 
                 if selected.get() {

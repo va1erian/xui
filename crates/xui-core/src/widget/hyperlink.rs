@@ -7,7 +7,7 @@ use std::rc::Rc;
 
 use super::control::{Control, HasText};
 use crate::app::Ui;
-use crate::backend::{Event, NodeKind, NodeSpec, Result, TextStyle};
+use crate::backend::{Cursor, Event, NodeKind, NodeSpec, Result, TextStyle};
 use crate::geometry::{Point, Rect};
 use crate::message::MouseButton;
 use crate::property::{Properties, Property, Value};
@@ -38,6 +38,7 @@ impl<M: 'static> Hyperlink<M> {
     /// Creates a link labelled `text` at `bounds`.
     pub fn new(ui: &Ui<M>, bounds: Rect, text: &str) -> Result<Hyperlink<M>> {
         let control = Control::new(ui, &NodeSpec::new(NodeKind::Label, bounds).text(text))?;
+        ui.set_cursor(control.id(), Cursor::Hand);
         let state = Rc::new(RefCell::new(text.to_string()));
         let hovered = Rc::new(Cell::new(false));
         let enabled = Rc::new(Cell::new(true));

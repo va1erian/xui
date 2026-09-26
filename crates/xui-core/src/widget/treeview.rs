@@ -54,18 +54,16 @@ impl TreeRow {
     }
 }
 
-fn row_at(bounds: Rect, dpi: u32, y: i32, count: usize) -> Option<usize> {
-    let rel = y - bounds.top;
-    if rel < 0 {
+fn row_at(dpi: u32, y: i32, count: usize) -> Option<usize> {
+    if y < 0 {
         return None;
     }
-    let index = (rel / ROW.to_px(dpi).value().max(1)) as usize;
+    let index = (y / ROW.to_px(dpi).value().max(1)) as usize;
     (index < count).then_some(index)
 }
 
-fn chevron_hit(bounds: Rect, dpi: u32, row: &TreeRow, x: i32) -> bool {
-    let left =
-        bounds.left + Dip(4.0).to_px(dpi).value() + row.depth as i32 * Dip(16.0).to_px(dpi).value();
+fn chevron_hit(dpi: u32, row: &TreeRow, x: i32) -> bool {
+    let left = Dip(4.0).to_px(dpi).value() + row.depth as i32 * Dip(16.0).to_px(dpi).value();
     row.expandable && x >= left && x < left + Dip(16.0).to_px(dpi).value()
 }
 
@@ -173,8 +171,8 @@ impl<M: 'static> TreeView<M> {
                 match event {
                     Event::MouseDown { button, .. } if *button == MouseButton::Left => {
                         let (x, y) = event.position()?;
-                        let index = row_at(ui.bounds(id), ui.dpi(), y, rows.borrow().len())?;
-                        if chevron_hit(ui.bounds(id), ui.dpi(), &rows.borrow()[index], x) {
+                        let index = row_at(ui.dpi(), y, rows.borrow().len())?;
+                        if chevron_hit(ui.dpi(), &rows.borrow()[index], x) {
                             let expanded = !rows.borrow()[index].expanded;
                             set_expanded(index, expanded)
                         } else {
@@ -184,8 +182,11 @@ impl<M: 'static> TreeView<M> {
                         }
                     }
                     Event::MouseMove { y, .. } => {
-                        hover.set(row_at(ui.bounds(id), ui.dpi(), *y, rows.borrow().len()));
-                        ui.invalidate(id);
+                        let index = row_at(ui.dpi(), *y, rows.borrow().len());
+                        if hover.get() != index {
+                            hover.set(index);
+                            ui.invalidate(id);
+                        }
                         None
                     }
                     Event::MouseLeave => {

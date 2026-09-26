@@ -12,6 +12,7 @@
 //! operations the widget layer needs today rather than a speculative full API.
 
 mod canvas;
+mod cursor;
 mod event;
 mod ids;
 mod node;
@@ -20,6 +21,7 @@ mod node;
 pub(crate) mod headless;
 
 pub use canvas::{Canvas, TextAlign, TextMetrics, TextStyle, TextVAlign, TextWeight};
+pub use cursor::Cursor;
 pub use event::{Event, TimerId};
 pub use ids::{WidgetId, WindowId};
 pub use node::{ImplKind, NodeKind, NodeOptions, NodeSpec, ParentRef};
@@ -156,6 +158,18 @@ pub trait Backend {
 
     /// Enables or disables a node.
     fn set_enabled(&self, id: WidgetId, enabled: bool);
+
+    /// Raises a node above its siblings in the z-order. A backend with no
+    /// overlapping children may ignore it.
+    fn raise(&self, id: WidgetId) {
+        let _ = id;
+    }
+
+    /// Requests the pointer shape shown over a node. A backend that cannot
+    /// change cursors may ignore it.
+    fn set_cursor(&self, id: WidgetId, cursor: Cursor) {
+        let _ = (id, cursor);
+    }
 
     /// Gives a node the keyboard focus.
     fn focus(&self, id: WidgetId);

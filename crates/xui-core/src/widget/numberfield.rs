@@ -2,7 +2,7 @@
 //! [`NumberField`]: a numeric text field with steppers and a range.
 use super::control::Control;
 use crate::app::Ui;
-use crate::backend::{Canvas, Event, NodeKind, NodeSpec, Result, TextStyle};
+use crate::backend::{Canvas, Cursor, Event, NodeKind, NodeSpec, Result, TextStyle};
 use crate::color::Color;
 use crate::geometry::{Point, Rect};
 use crate::message::{Key, MouseButton};
@@ -94,6 +94,7 @@ impl<M: 'static> NumberField<M> {
     /// Creates a field for `min..=max` at its minimum; a non-positive `step` is `1`.
     pub fn new(ui: &Ui<M>, bounds: Rect, min: f64, max: f64, step: f64) -> Result<NumberField<M>> {
         let control = Control::new(ui, &NodeSpec::new(NodeKind::NumberField, bounds).tab_stop())?;
+        ui.set_cursor(control.id(), Cursor::Text);
         let (min, max) = if min <= max { (min, max) } else { (max, min) };
         let s = Rc::new(State {
             value: Cell::new(min),
@@ -193,8 +194,8 @@ impl<M: 'static> NumberField<M> {
                         redraw = true;
                         let b = ui.bounds(id);
                         let sw = STEP_W.to_px(ui.dpi()).value().max(1);
-                        if *x >= b.right - sw {
-                            let top = b.top + b.height() / 2;
+                        if *x >= b.width() - sw {
+                            let top = b.height() / 2;
                             changed = step_by(if *y < top { 1.0 } else { -1.0 });
                             commit = true;
                         }
