@@ -6,6 +6,8 @@ on:
   pull_request:
 
 jobs:
+  # The full toolkit on Windows: the platform backend, every widget, every UI
+  # test (windows are allowed on a runner), formatting and lints.
   check:
     runs-on: windows-latest
     steps:
@@ -34,12 +36,27 @@ jobs:
       - run: cargo clippy --all-targets --features wgc -- -D warnings
       - run: cargo test --features wgc
 
-  # The crate is Win32-only and compiles to an empty crate elsewhere; this
-  # keeps it buildable from a cross-platform workspace on Linux.
+  # The backend-agnostic core must build and its headless tests pass on Linux,
+  # proving the front layer has no Win32 dependency. The whole workspace is
+  # checked so the empty backend still compiles elsewhere.
   cross-check:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
       - run: cargo check --all-targets
+      - run: cargo clippy -p xui-core --all-targets -- -D warnings
+      - run: cargo test -p xui-core
+
+  # The same portable guarantee on macOS (the future home of a native backend).
+  cross-check-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo check --all-targets
+      - run: cargo test -p xui-core
