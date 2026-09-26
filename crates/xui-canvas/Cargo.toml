@@ -11,6 +11,15 @@ readme = "README.md"
 xui-core = { path = "../xui-core" }
 tiny-skia = "0.11"
 cosmic-text = "0.19"
+winit = "0.30"
+# Keep softbuffer off its default `kms`/libdrm backend so the Linux cross-check
+# does not need system graphics headers; X11 and Wayland are dlopen'd.
+softbuffer = { version = "0.4", default-features = false, features = [
+    "x11",
+    "x11-dlopen",
+    "wayland",
+    "wayland-dlopen",
+] }
 
 [dev-dependencies]
 png = "0.17"
