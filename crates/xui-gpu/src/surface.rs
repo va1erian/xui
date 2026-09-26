@@ -9,7 +9,7 @@ use std::cell::{Cell, RefCell};
 
 use xui_core::color::Color;
 
-use crate::sys::Offscreen;
+use crate::sys::{Offscreen, supports_framebuffers};
 use crate::{GlContext, GlError};
 
 /// How many distinct offscreen sizes a surface keeps framebuffers for. A window
@@ -114,6 +114,9 @@ impl GlSurface {
         let height = height.max(1);
         self.context.make_current();
         let gl = self.context.glow();
+        if !supports_framebuffers(gl) {
+            return None;
+        }
         let mut cache = self.offscreen.borrow_mut();
         let offscreen = match cache.iter().position(|o| o.size() == (width, height)) {
             Some(at) => &cache[at],

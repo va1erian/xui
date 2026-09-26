@@ -4,4 +4,4 @@
 
 mod offscreen;
 
-pub(crate) use offscreen::Offscreen;
+pub(crate) use offscreen::{Offscreen, supports_framebuffers};

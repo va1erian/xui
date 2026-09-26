@@ -5,6 +5,37 @@ use glow::HasContext;
 
 use xui_core::color::Color;
 
+/// Whether the current context supports framebuffer objects, which an offscreen
+/// frame needs.
+///
+/// The `winit` canvas backend can end up on a legacy OpenGL 1.1 context (the
+/// Microsoft software renderer on a machine with no GL driver, as on a CI
+/// runner), where `glGenFramebuffers` is not loaded; `glow` would panic on it.
+/// Reading `GL_VERSION` (an OpenGL 1.0 entry point) lets the caller fall back to
+/// the widget's software paint instead.
+pub(crate) fn supports_framebuffers(gl: &glow::Context) -> bool {
+    // SAFETY: `glGetString(GL_VERSION)` exists in every OpenGL version and the
+    // context is current.
+    let version = unsafe { gl.get_parameter_string(glow::VERSION) };
+    gl_major(&version) >= 3
+}
+
+/// The major version at the start of a `GL_VERSION` string, or `0` when it does
+/// not begin with one.
+fn gl_major(version: &str) -> u32 {
+    version
+        .split('.')
+        .next()
+        .and_then(|part| {
+            part.chars()
+                .take_while(char::is_ascii_digit)
+                .collect::<String>()
+                .parse()
+                .ok()
+        })
+        .unwrap_or(0)
+}
+
 /// A colour texture with a depth/stencil renderbuffer, sized to a widget.
 pub(crate) struct Offscreen {
     framebuffer: glow::Framebuffer,
@@ -173,5 +204,19 @@ impl Offscreen {
             gl.delete_texture(self.color);
             gl.delete_framebuffer(self.framebuffer);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::gl_major;
+
+    #[test]
+    fn the_version_major_is_read_from_the_gl_version_string() {
+        assert_eq!(gl_major("1.1.0"), 1);
+        assert_eq!(gl_major("3.3.0 - Build 32.0.101.6314"), 3);
+        assert_eq!(gl_major("4.6.0 NVIDIA 552.22"), 4);
+        assert_eq!(gl_major("not a version"), 0);
+        assert_eq!(gl_major(""), 0);
     }
 }
