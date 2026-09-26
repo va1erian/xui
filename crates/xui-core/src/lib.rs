@@ -40,8 +40,8 @@ pub use router::{Router, WidgetHost};
 pub use theme::{Theme, Themed};
 pub use units::{Dip, Px, dip};
 pub use widget::{
-    Button, CheckBox, ComboBox, Control, Edit, GroupBox, HasText, Label, ProgressBar, RadioGroup,
-    Slider,
+    Button, CheckBox, ComboBox, Control, Edit, GroupBox, HasText, Hyperlink, Label, ListView,
+    ProgressBar, RadioGroup, Separator, Slider,
 };
 
 /// The core types a frontend or a backend usually needs, in one `use`.

@@ -49,6 +49,8 @@ pub enum NodeKind {
     Radio,
     /// A group box drawn around related widgets.
     GroupBox,
+    /// A horizontal or vertical divider line.
+    Separator,
     /// A range progress indicator.
     ProgressBar,
     /// A draggable range control.

@@ -315,6 +315,19 @@ pub fn capture_screen(rect: Rect) -> Option<RgbaImage> {
     })
 }
 
+/// Whether at least half of `image`'s pixels have the RGB `color`. A pixel test
+/// uses this to tell a fully painted window from one that never rendered — an
+/// occluded or non-rendering CI desktop — so it can skip rather than fail. A
+/// partial or mis-placed render (some pixels but not a majority) also skips.
+pub fn dominant(image: &RgbaImage, color: [u8; 3]) -> bool {
+    let pixels = image.pixels.as_chunks::<4>().0;
+    if pixels.is_empty() {
+        return false;
+    }
+    let matching = pixels.iter().filter(|pixel| pixel[..3] == color).count();
+    matching * 2 >= pixels.len()
+}
+
 /// Whether `color` is near-white (all channels high), the shape of the #67
 /// combo regression.
 pub fn is_near_white(color: [u8; 4]) -> bool {
