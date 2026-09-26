@@ -171,11 +171,14 @@ impl App {
     /// Shows the cursor requested for the node under the pointer.
     fn apply_cursor(&self, raw: u64, target: Option<WidgetId>) {
         let icon = match target {
-            Some(id) => match self.shared.cursors.borrow().get(&id.raw()) {
-                Some(xui_core::backend::Cursor::Hand) => CursorIcon::Pointer,
-                Some(xui_core::backend::Cursor::Text) => CursorIcon::Text,
-                _ => CursorIcon::Default,
-            },
+            Some(id) => self
+                .shared
+                .cursors
+                .borrow()
+                .get(&id.raw())
+                .copied()
+                .map(cursor_icon)
+                .unwrap_or(CursorIcon::Default),
             None => CursorIcon::Default,
         };
         let handle = self
@@ -193,6 +196,23 @@ impl App {
         self.cursor = (x, y);
         let window = Self::window_id(raw);
         let (x, y) = (x as i32, y as i32);
+        // A captured node keeps receiving moves (and the cursor) even outside
+        // its bounds, so a drag survives leaving it.
+        if let Some(captured) = *self.shared.captured.borrow() {
+            if let Some((lx, ly)) = self.shared.local_point(captured, x, y) {
+                self.shared.deliver(
+                    window,
+                    captured,
+                    &Event::MouseMove {
+                        x: lx,
+                        y: ly,
+                        modifiers: self.modifiers,
+                    },
+                );
+            }
+            self.apply_cursor(raw, Some(captured));
+            return;
+        }
         let target = self.shared.hit_test(window, x, y);
         let target_id = target.map(|(id, _, _)| id);
         let previous = self
@@ -223,7 +243,15 @@ impl App {
     fn mouse_input(&mut self, raw: u64, state: ElementState, button: WinitButton) {
         let window = Self::window_id(raw);
         let (x, y) = (self.cursor.0 as i32, self.cursor.1 as i32);
-        let Some((id, lx, ly)) = self.shared.hit_test(window, x, y) else {
+        let captured = *self.shared.captured.borrow();
+        let target = match captured {
+            Some(id) => self
+                .shared
+                .local_point(id, x, y)
+                .map(|(lx, ly)| (id, lx, ly)),
+            None => self.shared.hit_test(window, x, y),
+        };
+        let Some((id, lx, ly)) = target else {
             return;
         };
         let Some(button) = mouse_button(button) else {
@@ -233,6 +261,7 @@ impl App {
         // title bar's empty area does, instead of reaching the node.
         if state == ElementState::Pressed
             && button == MouseButton::Left
+            && captured.is_none()
             && self.shared.is_drag_region(id)
         {
             let handle = self
@@ -409,6 +438,18 @@ fn rescale_nodes(shared: &Shared, raw: u64, ratio: f32) {
         if node.window.raw() == raw {
             node.bounds = scale_rect(node.bounds, ratio);
         }
+    }
+}
+
+/// The `winit` icon for a portable pointer shape.
+fn cursor_icon(cursor: xui_core::backend::Cursor) -> CursorIcon {
+    use xui_core::backend::Cursor;
+    match cursor {
+        Cursor::Default => CursorIcon::Default,
+        Cursor::Hand => CursorIcon::Pointer,
+        Cursor::Text => CursorIcon::Text,
+        Cursor::SizeHorizontal => CursorIcon::EwResize,
+        Cursor::SizeVertical => CursorIcon::NsResize,
     }
 }
 
@@ -621,6 +662,14 @@ mod tests {
             Some(Key::DIGIT7)
         );
         assert_eq!(virtual_key(&WinitKey::Character("-".into())), None);
+    }
+
+    #[test]
+    fn the_resize_cursors_map_to_their_winit_icons() {
+        use xui_core::backend::Cursor;
+        assert_eq!(cursor_icon(Cursor::Hand), CursorIcon::Pointer);
+        assert_eq!(cursor_icon(Cursor::SizeHorizontal), CursorIcon::EwResize);
+        assert_eq!(cursor_icon(Cursor::SizeVertical), CursorIcon::NsResize);
     }
 
     #[test]

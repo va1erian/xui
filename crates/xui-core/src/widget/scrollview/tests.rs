@@ -124,7 +124,7 @@ fn a_wheel_and_a_key_scroll_and_raise_the_message() {
 
 #[test]
 fn dragging_the_thumb_scrolls() {
-    let (_backend, core, ui) = setup();
+    let (backend, core, ui) = setup();
     let view = ScrollView::new(&ui, Rect::new(0, 0, 100, 80)).unwrap();
     let a = Label::new(view.ui(), Rect::new(0, 0, 10, 10), "a").unwrap();
     view.add(a.id(), dip(800.0));
@@ -134,6 +134,11 @@ fn dragging_the_thumb_scrolls() {
     let thumb = thumb_rect(&view.shared, track, ui.dpi()).expect("a thumb");
     let middle = thumb.top + thumb.height() / 2;
     runtime.deliver(view.shared.bar_id, &down(middle));
+    assert_eq!(
+        backend.captured(),
+        Some(view.shared.bar_id),
+        "the thumb drag captures the pointer"
+    );
     runtime.deliver(view.shared.bar_id, &at(middle + 40));
     assert!(
         view.offset().value() > 0,
@@ -148,9 +153,24 @@ fn dragging_the_thumb_scrolls() {
             modifiers: Modifiers::NONE,
         },
     );
+    assert_eq!(backend.captured(), None, "the release drops the capture");
     let settled = view.offset();
     runtime.deliver(view.shared.bar_id, &at(middle + 80));
     assert_eq!(view.offset(), settled, "a released thumb stops following");
+}
+
+#[test]
+fn the_view_clips_its_content_to_its_bounds() {
+    let (backend, _core, ui) = setup();
+    let view = ScrollView::new(&ui, Rect::new(0, 0, 100, 80)).unwrap();
+    let a = Label::new(view.ui(), Rect::new(0, 0, 10, 10), "a").unwrap();
+    view.add(a.id(), dip(200.0));
+
+    assert_eq!(
+        backend.clip(view.id()),
+        Some(Rect::new(0, 0, 100, 80)),
+        "the view clips its descendants to its own bounds"
+    );
 }
 
 #[test]

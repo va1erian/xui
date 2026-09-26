@@ -113,6 +113,7 @@ impl<M: 'static> Slider<M> {
                         ..
                     } => {
                         dragging.set(true);
+                        ui.set_capture(id);
                         set_from_x(*x)
                     }
                     Event::MouseMove { x, .. } if dragging.get() => set_from_x(*x),
@@ -121,11 +122,13 @@ impl<M: 'static> Slider<M> {
                         ..
                     } => {
                         dragging.set(false);
+                        ui.release_capture();
                         commit = true;
                         false
                     }
                     Event::MouseLeave if dragging.get() => {
                         dragging.set(false);
+                        ui.release_capture();
                         true
                     }
                     Event::KeyDown {
@@ -255,5 +258,60 @@ impl<M: 'static> Properties for Slider<M> {
             }
             _ => false,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::rc::Rc;
+
+    use super::Slider;
+    use crate::app::{App, Core, Runtime, Ui};
+    use crate::backend::headless::HeadlessBackend;
+    use crate::backend::{Backend, Event, PlatformSpec};
+    use crate::geometry::Rect;
+    use crate::message::{Modifiers, MouseButton};
+
+    struct Noop;
+
+    impl App for Noop {
+        type Msg = ();
+        fn update(&mut self, _msg: (), _ui: &mut Ui<()>) {}
+    }
+
+    #[test]
+    fn a_thumb_drag_takes_pointer_capture_until_release() {
+        let backend = Rc::new(HeadlessBackend::new());
+        let window = backend.open_window(&PlatformSpec::new("slider")).unwrap();
+        let core = Core::new(backend.clone(), window);
+        let ui = Ui::new(Rc::clone(&core));
+        let slider = Slider::new(&ui, Rect::new(0, 0, 100, 20), 0.0, 100.0).unwrap();
+        let runtime = Runtime::primary(core, Noop);
+
+        runtime.deliver(
+            slider.id(),
+            &Event::MouseDown {
+                x: 10,
+                y: 10,
+                button: MouseButton::Left,
+                modifiers: Modifiers::NONE,
+            },
+        );
+        assert_eq!(
+            backend.captured(),
+            Some(slider.id()),
+            "the drag captures the pointer"
+        );
+
+        runtime.deliver(
+            slider.id(),
+            &Event::MouseUp {
+                x: 10,
+                y: 10,
+                button: MouseButton::Left,
+                modifiers: Modifiers::NONE,
+            },
+        );
+        assert_eq!(backend.captured(), None, "the release drops the capture");
     }
 }

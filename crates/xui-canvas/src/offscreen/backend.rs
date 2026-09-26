@@ -1,14 +1,7 @@
 #![forbid(unsafe_code)]
 
-//! An offscreen [`Backend`] that composites the portable widgets into a
-//! software [`Surface`] instead of a window.
-//!
-//! It runs on every platform with no UI toolkit, so the same widget code that
-//! the Win32 backend hosts can be rendered and snapshot-tested here (including
-//! on headless CI runners). The windowing shell builds on the same surface.
+//! The [`Backend`] contract over the offscreen compositor.
 
-use std::cell::{OnceCell, RefCell};
-use std::collections::HashMap;
 use std::rc::Rc;
 
 use xui_core::backend::{
@@ -20,149 +13,8 @@ use xui_core::router::WidgetHost;
 use xui_core::{Rect, Theme};
 
 use crate::text_layout::CosmicShaper;
-use crate::{RgbaImage, Surface};
 
-/// The default dots-per-inch a surface is rendered at.
-const DEFAULT_DPI: u32 = 96;
-
-struct OffscreenWindow {
-    surface: Surface,
-    sink: Option<Rc<dyn WidgetHost>>,
-    background: xui_core::Color,
-    dpi: u32,
-    width: i32,
-    height: i32,
-}
-
-struct Node {
-    window: WindowId,
-    parent: ParentRef,
-    bounds: Rect,
-    visible: bool,
-    enabled: bool,
-    text: String,
-    painter: Option<Painter>,
-}
-
-/// A backend that renders into a software surface.
-pub struct OffscreenBackend {
-    windows: RefCell<HashMap<u64, OffscreenWindow>>,
-    nodes: RefCell<Vec<(WidgetId, Node)>>,
-    next_window: std::cell::Cell<u64>,
-    next_widget: std::cell::Cell<u64>,
-    text: OnceCell<CosmicShaper>,
-}
-
-impl Default for OffscreenBackend {
-    fn default() -> OffscreenBackend {
-        OffscreenBackend::new()
-    }
-}
-
-impl OffscreenBackend {
-    /// A backend with no windows.
-    pub fn new() -> OffscreenBackend {
-        OffscreenBackend {
-            windows: RefCell::new(HashMap::new()),
-            nodes: RefCell::new(Vec::new()),
-            next_window: std::cell::Cell::new(1),
-            next_widget: std::cell::Cell::new(1),
-            text: OnceCell::new(),
-        }
-    }
-
-    fn allocate(cell: &std::cell::Cell<u64>) -> u64 {
-        let id = cell.get();
-        cell.set(id + 1);
-        id
-    }
-
-    /// Opens a window rendered at `dpi`, so a test can exercise high-DPI
-    /// layouts. [`Backend::open_window`] uses [`DEFAULT_DPI`].
-    pub fn open_window_at(&self, spec: &PlatformSpec, dpi: u32) -> BackendResult<WindowId> {
-        let id = WindowId::from_raw(Self::allocate(&self.next_window));
-        let width = spec.width.to_px(dpi).value().max(1) as u32;
-        let height = spec.height.to_px(dpi).value().max(1) as u32;
-        self.windows.borrow_mut().insert(
-            id.raw(),
-            OffscreenWindow {
-                surface: Surface::new(width, height),
-                sink: None,
-                background: Theme::light().background,
-                dpi,
-                width: width as i32,
-                height: height as i32,
-            },
-        );
-        Ok(id)
-    }
-
-    /// Renders `window`'s visible nodes, in creation order, into an image.
-    pub fn render(&self, window: WindowId) -> Option<RgbaImage> {
-        let mut windows = self.windows.borrow_mut();
-        let entry = windows.get_mut(&window.raw())?;
-        entry.surface.fill(entry.background);
-        let dpi = entry.dpi;
-        let paints: Vec<(Rect, Painter)> = self
-            .nodes
-            .borrow()
-            .iter()
-            .filter(|(_, node)| node.window == window && node.visible)
-            .filter_map(|(_, node)| node.painter.clone().map(|painter| (node.bounds, painter)))
-            .collect();
-        for (bounds, painter) in paints {
-            entry
-                .surface
-                .with_canvas_at(bounds, dpi, |canvas| painter(canvas));
-        }
-        Some(entry.surface.to_image())
-    }
-
-    /// Delivers `event` to the topmost node under its position, as a window
-    /// system would, returning whether it was consumed.
-    pub fn inject(&self, window: WindowId, event: Event) -> bool {
-        let Some((x, y)) = event.position() else {
-            return false;
-        };
-        let target = self
-            .nodes
-            .borrow()
-            .iter()
-            .rev()
-            .find(|(_, node)| {
-                node.window == window
-                    && node.visible
-                    && node.enabled
-                    && node.bounds.contains(xui_core::Point::new(x, y))
-            })
-            .map(|(id, _)| *id);
-        let Some(target) = target else {
-            return false;
-        };
-        let sink = self
-            .windows
-            .borrow()
-            .get(&window.raw())
-            .and_then(|entry| entry.sink.clone());
-        sink.is_some_and(|sink| sink.deliver(target, &event))
-    }
-
-    /// The dots-per-inch `window` is rendered at.
-    pub fn dpi_of(&self, window: WindowId) -> u32 {
-        self.windows
-            .borrow()
-            .get(&window.raw())
-            .map_or(DEFAULT_DPI, |entry| entry.dpi)
-    }
-
-    fn with_node<R>(&self, id: WidgetId, f: impl FnOnce(&mut Node) -> R) -> Option<R> {
-        self.nodes
-            .borrow_mut()
-            .iter_mut()
-            .find(|(node_id, _)| *node_id == id)
-            .map(|(_, node)| f(node))
-    }
-}
+use super::{DEFAULT_DPI, Node, OffscreenBackend};
 
 impl Backend for OffscreenBackend {
     fn run(&self) -> i32 {
@@ -208,7 +60,7 @@ impl Backend for OffscreenBackend {
         if !self.windows.borrow().contains_key(&window.raw()) {
             return Err(xui_core::backend::BackendError::CreateFailed("window"));
         }
-        let id = WidgetId::from_raw(Self::allocate(&self.next_widget));
+        let id = WidgetId::from_raw(OffscreenBackend::allocate(&self.next_widget));
         self.nodes.borrow_mut().push((
             id,
             Node {
@@ -219,6 +71,7 @@ impl Backend for OffscreenBackend {
                 enabled: spec.enabled,
                 text: spec.text.clone(),
                 painter: None,
+                clip: None,
             },
         ));
         Ok(id)
@@ -259,6 +112,38 @@ impl Backend for OffscreenBackend {
 
     fn set_enabled(&self, id: WidgetId, enabled: bool) {
         self.with_node(id, |node| node.enabled = enabled);
+    }
+
+    fn set_clip(&self, id: WidgetId, rect: Option<Rect>) {
+        self.with_node(id, |node| node.clip = rect);
+    }
+
+    fn set_capture(&self, id: WidgetId) {
+        *self.captured.borrow_mut() = Some(id);
+    }
+
+    fn release_capture(&self) {
+        let previous = self.captured.borrow_mut().take();
+        let Some(id) = previous else {
+            return;
+        };
+        let window = self
+            .nodes
+            .borrow()
+            .iter()
+            .find(|(node_id, _)| *node_id == id)
+            .map(|(_, node)| node.window);
+        let Some(window) = window else {
+            return;
+        };
+        let sink = self
+            .windows
+            .borrow()
+            .get(&window.raw())
+            .and_then(|entry| entry.sink.clone());
+        if let Some(sink) = sink {
+            sink.deliver(id, &Event::CaptureChanged);
+        }
     }
 
     fn focus(&self, _id: WidgetId) {}

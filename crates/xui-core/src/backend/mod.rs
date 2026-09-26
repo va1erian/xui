@@ -269,6 +269,25 @@ pub trait Backend {
         let _ = (id, cursor);
     }
 
+    /// Clips a node's descendants to `rect`, in the node's own coordinate
+    /// space (relative to its top-left). `None` clears the clip. The node's own
+    /// painting is not clipped. A backend whose painted nodes are native child
+    /// windows already clips each child to its parent and may ignore it.
+    fn set_clip(&self, id: WidgetId, rect: Option<Rect>) {
+        let _ = (id, rect);
+    }
+
+    /// Routes subsequent pointer move and release events to `id`, even when the
+    /// pointer leaves the node, so a drag survives the pointer leaving it. A
+    /// backend that cannot capture may ignore it.
+    fn set_capture(&self, id: WidgetId) {
+        let _ = id;
+    }
+
+    /// Releases the pointer capture taken with [`Backend::set_capture`]. A
+    /// backend that does not capture may ignore it.
+    fn release_capture(&self) {}
+
     /// Gives a node the keyboard focus.
     fn focus(&self, id: WidgetId);
 

@@ -15,7 +15,7 @@ use std::rc::Rc;
 
 use super::control::Control;
 use crate::app::Ui;
-use crate::backend::{Canvas, Event, NodeKind, NodeSpec, Result, WidgetId};
+use crate::backend::{Canvas, Cursor, Event, NodeKind, NodeSpec, Result, WidgetId};
 use crate::geometry::{Point, Rect};
 use crate::layout::{Stack, StackSlot};
 use crate::message::{Key, MouseButton};
@@ -101,6 +101,15 @@ impl<M: 'static> Split<M> {
             let theme = ui.theme_handle();
             divider.set_painter(Rc::new(move |canvas| paint_divider(canvas, theme.get())));
         }
+        // The divider shows the resize cursor that matches the drag axis.
+        ui.set_cursor(
+            divider.id(),
+            if horizontal {
+                Cursor::SizeHorizontal
+            } else {
+                Cursor::SizeVertical
+            },
+        );
         {
             let shared = Rc::clone(&shared);
             let ui = ui.clone();
@@ -334,6 +343,7 @@ fn divider_event<M>(s: &Shared<M>, ui: &Ui<M>, event: &Event) -> Option<M> {
         } => {
             s.drag.set(Some(if s.horizontal { *x } else { *y }));
             s.drag_start.set(s.current.get());
+            ui.set_capture(s.divider_id);
         }
         Event::MouseMove { x, y, .. } => {
             if let Some(start) = s.drag.get() {
@@ -346,7 +356,10 @@ fn divider_event<M>(s: &Shared<M>, ui: &Ui<M>, event: &Event) -> Option<M> {
             button: MouseButton::Left,
             ..
         }
-        | Event::CaptureChanged => s.drag.set(None),
+        | Event::CaptureChanged => {
+            s.drag.set(None);
+            ui.release_capture();
+        }
         Event::KeyDown { key, .. } => {
             let step = ARROW_STEP.to_px(dpi).value();
             let delta = match *key {

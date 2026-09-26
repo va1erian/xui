@@ -132,6 +132,7 @@ pub(super) fn bar_event<M>(s: &Shared<M>, ui: &Ui<M>, event: &Event) -> Option<M
                 if *y >= thumb.top && *y < thumb.bottom {
                     s.drag.set(Some(*y));
                     s.drag_offset.set(s.offset.get());
+                    ui.set_capture(s.bar_id);
                 } else {
                     let view = s.viewport.get().height().max(1);
                     let target = if *y < thumb.top {
@@ -158,7 +159,10 @@ pub(super) fn bar_event<M>(s: &Shared<M>, ui: &Ui<M>, event: &Event) -> Option<M
             button: MouseButton::Left,
             ..
         }
-        | Event::CaptureChanged => s.drag.set(None),
+        | Event::CaptureChanged => {
+            s.drag.set(None);
+            ui.release_capture();
+        }
         _ => {}
     }
     None

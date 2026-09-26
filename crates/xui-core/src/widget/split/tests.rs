@@ -84,7 +84,7 @@ fn the_panes_clamp_to_their_minimums() {
 
 #[test]
 fn dragging_the_divider_resizes_and_raises_the_message() {
-    let (_backend, core, ui) = setup();
+    let (backend, core, ui) = setup();
     let split = Split::row(&ui, Rect::new(0, 0, 300, 100)).unwrap();
     let a = Label::new(split.ui(), Rect::new(0, 0, 10, 10), "a").unwrap();
     split.pane_a(&[a.id()]);
@@ -94,6 +94,11 @@ fn dragging_the_divider_resizes_and_raises_the_message() {
     let split = split.on_moved(|position| Some(position.value() as i32));
 
     runtime.deliver(split.shared.divider_id, &mouse_down(2));
+    assert_eq!(
+        backend.captured(),
+        Some(split.shared.divider_id),
+        "the divider drag captures the pointer"
+    );
     runtime.deliver(split.shared.divider_id, &mouse_move(102));
     runtime.deliver(WidgetId::NONE, &Event::Wake);
     assert!(
@@ -111,6 +116,7 @@ fn dragging_the_divider_resizes_and_raises_the_message() {
             modifiers: Modifiers::NONE,
         },
     );
+    assert_eq!(backend.captured(), None, "the release drops the capture");
     runtime.deliver(split.shared.divider_id, &mouse_move(50));
     assert!(
         (split.position().value() - 200.0).abs() < 0.01,
