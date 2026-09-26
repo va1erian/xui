@@ -212,7 +212,7 @@ impl Backend for OffscreenBackend {
 
     fn set_theme(&self, window: WindowId, theme: &Theme) {
         if let Some(entry) = self.windows.borrow_mut().get_mut(&window.raw()) {
-            entry.background = theme.background;
+            entry.theme = *theme;
         }
     }
 

@@ -18,6 +18,7 @@ use xui_core::backend::{
 use xui_core::router::WidgetHost;
 use xui_core::{Rect, Theme};
 
+use crate::gl::GlWidget;
 use crate::text_layout::CosmicShaper;
 use crate::{RgbaImage, Surface};
 
@@ -34,10 +35,13 @@ const DEFAULT_DPI: u32 = 96;
 struct OffscreenWindow {
     surface: Surface,
     sink: Option<Rc<dyn WidgetHost>>,
-    background: xui_core::Color,
+    theme: Theme,
     dpi: u32,
     width: i32,
     height: i32,
+    /// Window-level GL content, painted through its software fallback (the
+    /// offscreen backend never has a GL context).
+    gl: Option<Rc<dyn GlWidget>>,
 }
 
 struct Node {
@@ -100,10 +104,11 @@ impl OffscreenBackend {
             OffscreenWindow {
                 surface: Surface::new(width, height),
                 sink: None,
-                background: Theme::light().background,
+                theme: Theme::light(),
                 dpi,
                 width: width as i32,
                 height: height as i32,
+                gl: None,
             },
         );
         Ok(id)
@@ -113,7 +118,7 @@ impl OffscreenBackend {
     pub fn render(&self, window: WindowId) -> Option<RgbaImage> {
         let mut windows = self.windows.borrow_mut();
         let entry = windows.get_mut(&window.raw())?;
-        entry.surface.fill(entry.background);
+        entry.surface.fill(entry.theme.background);
         let dpi = entry.dpi;
         let nodes = self.nodes.borrow();
         let paints: Vec<(Rect, Option<Rect>, Painter)> = nodes
@@ -139,7 +144,31 @@ impl OffscreenBackend {
                 painter(canvas);
             });
         }
+        if let Some(widget) = entry.gl.clone() {
+            let bounds = Rect::new(0, 0, entry.width, entry.height);
+            let theme = entry.theme;
+            entry
+                .surface
+                .with_canvas_at(bounds, dpi, |canvas| widget.paint(canvas, bounds, &theme));
+        }
         Some(entry.surface.to_image())
+    }
+
+    /// Installs `widget` as `window`'s GL content. The offscreen backend has no
+    /// GPU, so [`OffscreenBackend::render`] paints the widget's software
+    /// fallback; this mirrors the windowed backend's seam and lets a headless
+    /// test exercise the fallback.
+    pub fn set_gl_content<W: GlWidget + 'static>(&self, window: WindowId, widget: W) {
+        if let Some(entry) = self.windows.borrow_mut().get_mut(&window.raw()) {
+            entry.gl = Some(Rc::new(widget));
+        }
+    }
+
+    /// Removes `window`'s GL content.
+    pub fn clear_gl_content(&self, window: WindowId) {
+        if let Some(entry) = self.windows.borrow_mut().get_mut(&window.raw()) {
+            entry.gl = None;
+        }
     }
 
     /// Delivers `event` to the topmost node under its position, as a window

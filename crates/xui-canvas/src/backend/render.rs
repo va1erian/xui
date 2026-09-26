@@ -73,14 +73,14 @@ pub(super) fn composite(
     window: xui_core::backend::WindowId,
     surface: &mut Surface,
 ) {
-    let (background, dpi) = {
+    let (theme, dpi, size, gl) = {
         let windows = shared.windows.borrow();
         let Some(state) = windows.get(&window.raw()) else {
             return;
         };
-        (state.theme.background, state.dpi)
+        (state.theme, state.dpi, state.size, state.gl.clone())
     };
-    surface.fill(background);
+    surface.fill(theme.background);
     let paints: Vec<(Rect, Option<Rect>, xui_core::backend::Painter)> = {
         let nodes = shared.nodes.borrow();
         nodes
@@ -106,6 +106,12 @@ pub(super) fn composite(
             }
             painter(canvas);
         });
+    }
+    // A GL widget has no painter node; its software fallback covers the whole
+    // client area, because installing GL content takes over the window.
+    if let Some(widget) = gl {
+        let bounds = Rect::new(0, 0, size.0 as i32, size.1 as i32);
+        surface.with_canvas_at(bounds, dpi, |canvas| widget.paint(canvas, bounds, &theme));
     }
 }
 

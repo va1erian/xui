@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use std::rc::Rc;
 
 use xui_core::app::{App, Ui, run_app};

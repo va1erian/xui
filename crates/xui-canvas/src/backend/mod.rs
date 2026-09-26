@@ -13,7 +13,9 @@
 
 mod app;
 mod contract;
+mod gl;
 mod render;
+mod software;
 #[cfg(test)]
 mod tests;
 
@@ -34,6 +36,7 @@ use xui_core::backend::{
 use xui_core::router::WidgetHost;
 use xui_core::{Dip, Rect, Theme};
 
+use crate::gl::{GlWidget, RendererState};
 use crate::text_layout::CosmicShaper;
 
 /// A cloneable window handle for `softbuffer`. `winit::Window` is not `Clone`,
@@ -94,6 +97,11 @@ pub(crate) struct WindowState {
     pub(crate) hover: Option<WidgetId>,
     /// The node with the keyboard focus.
     pub(crate) focused: Option<WidgetId>,
+    /// The window-level GPU renderer, when the app installed one. Takes over
+    /// the whole client area.
+    pub(crate) gl: Option<Rc<dyn GlWidget>>,
+    /// The GL surface state for the content in `gl`.
+    pub(crate) renderer: RendererState,
 }
 
 impl WindowState {
@@ -112,6 +120,8 @@ impl WindowState {
             caption_inset: spec.caption_inset,
             hover: None,
             focused: None,
+            gl: None,
+            renderer: RendererState::Untried,
         }
     }
 }

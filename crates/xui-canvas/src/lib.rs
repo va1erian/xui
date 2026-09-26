@@ -1,5 +1,3 @@
-#![forbid(unsafe_code)]
-
 //! The cross-platform, software-rendered backend for xui.
 //!
 //! It rasterises the portable widgets with `tiny-skia` into an RGBA buffer, so
@@ -7,18 +5,30 @@
 //! platform UI toolkit. A [`WinitBackend`] presents the surface in a real
 //! `winit` window through `softbuffer`; an [`OffscreenBackend`] renders the
 //! same widgets headlessly for tests and snapshots.
+//!
+//! A window can also hand its client area to a GPU renderer: install a
+//! [`GlWidget`] with [`WinitBackend::set_gl_content`] and the backend presents
+//! `glow` OpenGL frames through a [`GlSurface`] instead of the software copy.
+//! Every module but `sys::gl` forbids `unsafe`; the GL context and loader's
+//! `unsafe` is isolated there.
 
 mod backend;
 mod canvas;
+mod gl;
 mod offscreen;
 mod paint;
+mod sys;
 mod text;
 mod text_layout;
 
 pub use backend::WinitBackend;
 pub use canvas::SkiaCanvas;
+pub use gl::{GlError, GlSurface, GlWidget};
 pub use offscreen::OffscreenBackend;
 pub use text::measure as measure_text;
+
+/// The OpenGL binding a [`GlWidget`] draws with.
+pub use glow;
 
 use tiny_skia::Pixmap;
 use xui_core::color::Color;

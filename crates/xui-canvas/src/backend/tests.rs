@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 //! Unit tests for the window backend that do not need a live window.
 
 use super::{Decorations, PlatformSpec, WindowState};

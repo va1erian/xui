@@ -18,6 +18,9 @@ native frontend.
 - `xui-core` — the backend-agnostic front layer (geometry, units, colour,
   layout, theme tokens, input vocabulary, accessibility model). No platform
   dependency, no `unsafe`.
+- `xui-canvas` — the cross-platform, software-rendered backend (winit +
+  tiny-skia), with headless snapshot rendering and a window-level `glow` OpenGL
+  `GlWidget` through `glutin` (software fallback).
 - `xui-win32` — the Win32 backend: native common controls, GDI/Direct2D/OpenGL,
   the Windows-only window features.
 
@@ -125,6 +128,7 @@ already retained), and closures that capture shared mutable app state.
 | `Dock`/`Stack` layout arithmetic | exists |
 | Owner-drawn dark `ListView`, `TreeView`, `Toolbar`, `StatusBar`; `Label` | exist (widget-layer API) |
 | Widget layer: `App`/`Ui`, `Msg` mapping, `ControlExt`, `run_app` | exists |
+| Portable backend: `xui-canvas` (winit + tiny-skia), headless snapshots, and a window-level `glow`/`glutin` OpenGL `GlWidget` with a software fallback (`unsafe` isolated in `sys/gl/`) | exists |
 | Secondary windows: `Ui::open_window` (non-modal) and `Ui::open_modal` (modal), `WindowHandle` (`placement`/`set_placement`, `show`/`hide`, `is_visible`), close interception with `Ui::on_close` + `Ui::hide` so a window keeps its state; hosts a `Custom<W>` including `Renderer::Gl` | exists (#45, #163) |
 | Borderless fullscreen: `Window::enter_fullscreen(&MonitorInfo)`/`leave_fullscreen` (topmost `WS_POPUP` covering the monitor's full rect, saved style/placement restored), events delivered normally, and `hide_cursor_when_idle` | exists (#162) |
 | Window placement: new windows centred on the owner's monitor (primary for a standalone window), `Ui::placement`/`set_placement` for persisting geometry, `centered_in_work_area` | exists (#157) |
