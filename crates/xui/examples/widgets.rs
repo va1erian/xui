@@ -19,9 +19,9 @@ use std::rc::Rc;
 use xui_core::app::{App, Ui, run_app};
 use xui_core::backend::{Backend, PlatformSpec};
 use xui_core::widget::{
-    Button, CheckBox, ComboBox, Edit, GroupBox, HasText, Hyperlink, Label, ListView, MultilineEdit,
-    NumberField, Panel, ProgressBar, RadioGroup, Separator, Slider, StatusBar, ToggleButton,
-    Toolbar, TreeRow, TreeView,
+    Button, CheckBox, ComboBox, Edit, Glyph, GroupBox, HasText, Hyperlink, Label, ListView,
+    MaterialStatusBar, MultilineEdit, NumberField, Panel, ProgressBar, RadioGroup, Separator,
+    Slider, StatusBar, ToggleButton, Toolbar, TopBar, TopBarId, TreeRow, TreeView,
 };
 use xui_core::{Dip, Rect, Theme};
 
@@ -86,6 +86,10 @@ enum Msg {
     List(usize),
     Tree(usize),
     Tool(usize),
+    TopBarNew,
+    TopBarSearch,
+    TopBarStar(bool),
+    TopBarVolume(f64),
     Link,
     Click,
     Theme(usize),
@@ -116,6 +120,8 @@ struct Gallery {
     _panel: Panel<Msg>,
     _inside: Label<Msg>,
     _toolbar: Toolbar<Msg>,
+    _topbar: TopBar<Msg>,
+    _material: MaterialStatusBar<Msg>,
     _sep: Separator<Msg>,
     _theme: RadioGroup<Msg>,
     _button: Button<Msg>,
@@ -143,6 +149,10 @@ impl App for Gallery {
             Msg::List(index) => format!("list row #{index}"),
             Msg::Tree(index) => format!("tree row #{index}"),
             Msg::Tool(index) => format!("toolbar #{index}"),
+            Msg::TopBarNew => "topbar: new".to_string(),
+            Msg::TopBarSearch => "topbar: search".to_string(),
+            Msg::TopBarStar(checked) => format!("topbar star: {checked}"),
+            Msg::TopBarVolume(value) => format!("topbar volume: {value:.0}"),
             Msg::Link => "link clicked".to_string(),
             Msg::Click => "button clicked".to_string(),
             Msg::Theme(choice) => match choice {
@@ -275,11 +285,33 @@ fn run(renderer: Renderer, switch: Rc<Cell<Option<Renderer>>>) {
             )
             .unwrap()
             .on_click(|index| Some(Msg::Tool(index)));
+
+            let new_id = TopBarId::new(1);
+            let star_id = TopBarId::new(2);
+            let volume_id = TopBarId::new(3);
+            let search_id = TopBarId::new(4);
+            let topbar = TopBar::new(ui, rect(16.0, 424.0, 380.0, 452.0))
+                .unwrap()
+                .icon(new_id, Glyph::Menu)
+                .toggle(star_id, Glyph::Star)
+                .label(TopBarId::new(5), "xui")
+                .spacer()
+                .slider(volume_id, 0.0, 100.0)
+                .icon(search_id, Glyph::Search)
+                .on_click(move |id| match id {
+                    id if id == new_id => Some(Msg::TopBarNew),
+                    id if id == search_id => Some(Msg::TopBarSearch),
+                    _ => None,
+                })
+                .on_toggle(move |id, checked| (id == star_id).then_some(Msg::TopBarStar(checked)))
+                .on_change(move |id, value| (id == volume_id).then_some(Msg::TopBarVolume(value)));
             let sep = Separator::new(ui, rect(16.0, 552.0, 764.0, 554.0)).unwrap();
             let status =
                 StatusBar::new(ui, rect(16.0, 560.0, 764.0, 584.0), &["Ready", ""]).unwrap();
-
-            let echo = Label::new(ui, rect(16.0, 590.0, 764.0, 618.0), "Edit: ").unwrap();
+            let material =
+                MaterialStatusBar::new(ui, rect(16.0, 588.0, 764.0, 610.0), &["Native", "light"])
+                    .unwrap();
+            let echo = Label::new(ui, rect(16.0, 612.0, 764.0, 634.0), "Edit: ").unwrap();
 
             // Both smoke hooks fire through one timer mapper, told apart by id.
             let switch_at = Rc::new(Cell::new(None));
@@ -329,6 +361,8 @@ fn run(renderer: Renderer, switch: Rc<Cell<Option<Renderer>>>) {
                 _panel: panel,
                 _inside: inside,
                 _toolbar: toolbar,
+                _topbar: topbar,
+                _material: material,
                 _sep: sep,
                 _theme: theme,
                 _button: button,
