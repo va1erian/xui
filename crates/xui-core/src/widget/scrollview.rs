@@ -212,6 +212,10 @@ fn relayout<M>(ui: &Ui<M>, s: &Shared<M>) {
     // Children are parented to the view, so they are placed in its own
     // coordinates: start the viewport at the origin.
     let bounds = Rect::from_size(node.size());
+    // Content rows can ride outside the view while scrolling; clip the view's
+    // descendants to it so only what fits is painted (Win32 does this for a
+    // child window already).
+    ui.set_clip(s.id, Some(bounds));
     let dpi = ui.dpi();
     let content: i32 = s
         .rows

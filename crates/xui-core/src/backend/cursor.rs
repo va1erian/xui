@@ -12,4 +12,9 @@ pub enum Cursor {
     Hand,
     /// An I-beam, for editable text.
     Text,
+    /// A horizontal (west-east) resize arrow, for dragging a vertical divider.
+    SizeHorizontal,
+    /// A vertical (north-south) resize arrow, for dragging a horizontal
+    /// divider.
+    SizeVertical,
 }

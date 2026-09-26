@@ -3,6 +3,7 @@ use crate::image::Image;
 use crate::{Cap, Corner, Dash, GradientStop, LinearGradient, RadialGradient, Rgba, Stroke};
 
 use super::*;
+use crate::backend::{Backend, Event, FontSpec, NodeKind, NodeSpec, ParentRef};
 use crate::geometry::Point;
 use crate::message::MouseButton;
 use crate::router::Router;

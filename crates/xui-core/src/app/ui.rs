@@ -110,6 +110,23 @@ impl<M: 'static> Ui<M> {
         self.core.backend().set_cursor(id, cursor);
     }
 
+    /// Clips a node's descendants to `rect`, in the node's own coordinates;
+    /// `None` clears the clip.
+    pub fn set_clip(&self, id: WidgetId, rect: Option<Rect>) {
+        self.core.backend().set_clip(id, rect);
+    }
+
+    /// Routes subsequent pointer moves and releases to `id`, even outside it,
+    /// so a drag that began on it survives the pointer leaving.
+    pub fn set_capture(&self, id: WidgetId) {
+        self.core.backend().set_capture(id);
+    }
+
+    /// Releases the pointer capture taken with [`Ui::set_capture`].
+    pub fn release_capture(&self) {
+        self.core.backend().release_capture();
+    }
+
     /// Gives a node the keyboard focus.
     pub fn focus(&self, id: WidgetId) {
         self.core.backend().focus(id);
