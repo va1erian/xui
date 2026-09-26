@@ -20,6 +20,7 @@ mod handler;
 mod node;
 mod shape;
 mod text;
+mod theme;
 mod window_ops;
 
 use std::cell::{Cell, RefCell};
