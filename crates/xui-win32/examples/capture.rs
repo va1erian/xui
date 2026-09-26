@@ -12,7 +12,7 @@
 //! should use instead of a screen capture. Window lookup by title/pid is only
 //! performed when the matching flag is passed.
 
-#[cfg(feature = "wgc")]
+#[cfg(all(feature = "wgc", windows))]
 mod tool {
     use std::fs::File;
     use std::io::BufWriter;
@@ -248,13 +248,15 @@ mod tool {
     }
 }
 
-#[cfg(feature = "wgc")]
+#[cfg(all(feature = "wgc", windows))]
 fn main() {
     tool::run()
 }
 
-#[cfg(not(feature = "wgc"))]
+#[cfg(not(all(feature = "wgc", windows)))]
 fn main() {
-    eprintln!("capture: rebuild with `--features wgc` to enable composited window capture");
+    eprintln!(
+        "capture: rebuild with `--features wgc` on Windows to enable composited window capture"
+    );
     std::process::exit(2);
 }
