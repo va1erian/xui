@@ -32,6 +32,10 @@ name = "gridview"
 required-features = ["canvas"]
 
 [[example]]
+name = "top_bar"
+required-features = ["canvas"]
+
+[[example]]
 name = "control_button"
 path = "examples/controls/button.rs"
 required-features = ["canvas"]
