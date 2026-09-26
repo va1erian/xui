@@ -18,6 +18,8 @@ pub enum Value {
     Bool(bool),
     /// A whole number (a progress value or range).
     Integer(i64),
+    /// A real number (a slider's value).
+    Float(f64),
     /// A string (a label, an edit's text).
     Text(String),
 }

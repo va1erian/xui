@@ -39,7 +39,7 @@ pub use property::{Properties, Property, Value};
 pub use router::{Router, WidgetHost};
 pub use theme::{Theme, Themed};
 pub use units::{Dip, Px, dip};
-pub use widget::{Button, CheckBox, Control, Edit, HasText, Label, ProgressBar};
+pub use widget::{Button, CheckBox, Control, Edit, HasText, Label, ProgressBar, Slider};
 
 /// The core types a frontend or a backend usually needs, in one `use`.
 pub mod prelude {

@@ -14,6 +14,7 @@ mod control;
 mod edit;
 mod label;
 mod progressbar;
+mod slider;
 
 #[cfg(test)]
 mod tests;
@@ -24,3 +25,4 @@ pub use control::{Control, HasText};
 pub use edit::Edit;
 pub use label::Label;
 pub use progressbar::ProgressBar;
+pub use slider::Slider;
