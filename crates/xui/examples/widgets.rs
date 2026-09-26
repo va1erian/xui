@@ -20,10 +20,10 @@ use xui_core::app::{App, Ui, run_app};
 use xui_core::backend::{Backend, PlatformSpec};
 use xui_core::widget::{
     Button, CheckBox, ComboBox, Edit, Glyph, GroupBox, HasText, Hyperlink, Label, ListView,
-    MaterialStatusBar, MultilineEdit, NumberField, Panel, ProgressBar, RadioGroup, Separator,
-    Slider, StatusBar, ToggleButton, Toolbar, TopBar, TopBarId, TreeRow, TreeView,
+    MaterialStatusBar, Menu, MenuId, MultilineEdit, NumberField, Panel, ProgressBar, RadioGroup,
+    Separator, Slider, StatusBar, ToggleButton, Toolbar, TopBar, TopBarId, TreeRow, TreeView,
 };
-use xui_core::{Dip, Rect, Theme};
+use xui_core::{Dip, Properties, Rect, Theme, Value};
 
 /// Which backend the gallery runs on.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -90,8 +90,10 @@ enum Msg {
     TopBarSearch,
     TopBarStar(bool),
     TopBarVolume(f64),
+    BarMenu(&'static str),
+    BarToggle(&'static str, bool),
+    ContextMenu,
     Link,
-    Click,
     Theme(usize),
     Switch,
     Autoclose,
@@ -121,6 +123,8 @@ struct Gallery {
     _inside: Label<Msg>,
     _toolbar: Toolbar<Msg>,
     _topbar: TopBar<Msg>,
+    _menu: Menu<Msg>,
+    _context: Menu<Msg>,
     _material: MaterialStatusBar<Msg>,
     _sep: Separator<Msg>,
     _theme: RadioGroup<Msg>,
@@ -153,8 +157,14 @@ impl App for Gallery {
             Msg::TopBarSearch => "topbar: search".to_string(),
             Msg::TopBarStar(checked) => format!("topbar star: {checked}"),
             Msg::TopBarVolume(value) => format!("topbar volume: {value:.0}"),
+            Msg::BarMenu(name) => format!("menu: {name}"),
+            Msg::BarToggle(name, checked) => format!("menu {name}: {checked}"),
+            Msg::ContextMenu => {
+                let at = |value: f32| Dip(value).to_px(ui.dpi()).value();
+                self._context.show_context(at(400.0), at(60.0));
+                "context menu".to_string()
+            }
             Msg::Link => "link clicked".to_string(),
-            Msg::Click => "button clicked".to_string(),
             Msg::Theme(choice) => match choice {
                 1 => {
                     ui.set_theme(Theme::dark());
@@ -226,9 +236,9 @@ fn run(renderer: Renderer, switch: Rc<Cell<Option<Renderer>>>) {
             let link = Hyperlink::new(ui, rect(16.0, 336.0, 380.0, 364.0), "Open docs")
                 .unwrap()
                 .on_click(|| Some(Msg::Link));
-            let button = Button::new(ui, rect(16.0, 458.0, 190.0, 486.0), "Click me")
+            let button = Button::new(ui, rect(16.0, 458.0, 190.0, 486.0), "Context menu")
                 .unwrap()
-                .on_click(|| Some(Msg::Click));
+                .on_click(|| Some(Msg::ContextMenu));
             let theme = RadioGroup::new(ui, rect(16.0, 366.0, 190.0, 420.0), &["Light", "Dark"])
                 .unwrap()
                 .on_select(|index| Some(Msg::Theme(index)));
@@ -305,6 +315,109 @@ fn run(renderer: Renderer, switch: Rc<Cell<Option<Renderer>>>) {
                 })
                 .on_toggle(move |id, checked| (id == star_id).then_some(Msg::TopBarStar(checked)))
                 .on_change(move |id, value| (id == volume_id).then_some(Msg::TopBarVolume(value)));
+            let new_id = MenuId::new(1);
+            let open_id = MenuId::new(2);
+            let save_id = MenuId::new(3);
+            let recent_id = MenuId::new(4);
+            let undo_id = MenuId::new(10);
+            let redo_id = MenuId::new(11);
+            let left_id = MenuId::new(12);
+            let right_id = MenuId::new(13);
+            let menu = Menu::bar(ui, rect(400.0, 12.0, 764.0, 40.0))
+                .unwrap()
+                .on_select(move |id| {
+                    let name = if id == new_id {
+                        "new"
+                    } else if id == open_id {
+                        "open"
+                    } else if id == recent_id {
+                        "recent"
+                    } else if id == undo_id {
+                        "undo"
+                    } else if id == redo_id {
+                        "redo"
+                    } else {
+                        "command"
+                    };
+                    Some(Msg::BarMenu(name))
+                })
+                .on_toggle(move |id, checked| {
+                    let name = if id == save_id {
+                        "auto save"
+                    } else if id == left_id {
+                        "left"
+                    } else if id == right_id {
+                        "right"
+                    } else {
+                        "toggle"
+                    };
+                    Some(Msg::BarToggle(name, checked))
+                })
+                .build(|m| {
+                    m.submenu(MenuId::new(0), "&File", |f| {
+                        f.item(new_id, "&New");
+                        f.item(open_id, "&Open");
+                        f.separator();
+                        f.check(save_id, "Auto &Save", true);
+                        f.separator();
+                        f.submenu(recent_id, "&Recent", |r| {
+                            r.item(MenuId::new(5), "Report 1");
+                            r.item(MenuId::new(6), "Report 2");
+                        });
+                    });
+                    m.submenu(MenuId::new(7), "&Edit", |e| {
+                        e.item(undo_id, "&Undo");
+                        e.item(redo_id, "&Redo");
+                        e.separator();
+                        e.radio(left_id, "Align &Left", true);
+                        e.radio(right_id, "Align &Right", false);
+                    });
+                });
+            menu.set_enabled(undo_id, false);
+
+            let cut_id = MenuId::new(20);
+            let copy_id = MenuId::new(21);
+            let paste_id = MenuId::new(22);
+            let wrap_id = MenuId::new(23);
+            let more_id = MenuId::new(24);
+            let context = Menu::context(ui)
+                .on_select(move |id| {
+                    let name = if id == cut_id {
+                        "cut"
+                    } else if id == copy_id {
+                        "copy"
+                    } else if id == paste_id {
+                        "paste"
+                    } else if id == more_id {
+                        "more"
+                    } else {
+                        "command"
+                    };
+                    Some(Msg::BarMenu(name))
+                })
+                .on_toggle(move |id, checked| {
+                    (id == wrap_id).then_some(Msg::BarToggle("word wrap", checked))
+                })
+                .build(|m| {
+                    m.item(cut_id, "Cu&t");
+                    m.item(copy_id, "&Copy");
+                    m.item(paste_id, "&Paste");
+                    m.separator();
+                    m.check(wrap_id, "&Word wrap", false);
+                    m.separator();
+                    m.submenu(more_id, "&More", |s| {
+                        s.item(MenuId::new(25), "Item &A");
+                        s.item(MenuId::new(26), "Item &B");
+                    });
+                });
+            if std::env::var("XUI_GALLERY_MENU").is_ok() {
+                let _ = menu.set_property("open", Value::Bool(true));
+            }
+            if std::env::var("XUI_GALLERY_CONTEXT").is_ok() {
+                let at = |value: f32| Dip(value).to_px(ui.dpi()).value();
+                context.show_context(at(60.0), at(250.0));
+            }
+
             let sep = Separator::new(ui, rect(16.0, 552.0, 764.0, 554.0)).unwrap();
             let status =
                 StatusBar::new(ui, rect(16.0, 560.0, 764.0, 584.0), &["Ready", ""]).unwrap();
@@ -362,6 +475,8 @@ fn run(renderer: Renderer, switch: Rc<Cell<Option<Renderer>>>) {
                 _inside: inside,
                 _toolbar: toolbar,
                 _topbar: topbar,
+                _menu: menu,
+                _context: context,
                 _material: material,
                 _sep: sep,
                 _theme: theme,

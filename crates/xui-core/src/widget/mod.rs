@@ -18,6 +18,7 @@ mod hyperlink;
 mod label;
 mod listview;
 mod materialstatusbar;
+mod menu;
 mod multilineedit;
 mod numberfield;
 mod panel;
@@ -46,6 +47,7 @@ pub use listview::{
     CellData, Column, ColumnWidth, Fill, ListModel, ListView, SelectionMode, SortDirection,
 };
 pub use materialstatusbar::MaterialStatusBar;
+pub use menu::{Menu, MenuId, MenuScope};
 pub use multilineedit::MultilineEdit;
 pub use numberfield::NumberField;
 pub use panel::Panel;
