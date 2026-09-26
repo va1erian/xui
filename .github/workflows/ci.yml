@@ -68,3 +68,6 @@ jobs:
       - run: cargo check --all-targets
       - run: cargo test -p xui-core
       - run: cargo test -p xui-canvas
+      # The software backend and its gallery must build for a Mac (winit +
+      # softbuffer + tiny-skia); the app itself only runs in a GUI session.
+      - run: cargo check -p xui --features canvas --example widgets
