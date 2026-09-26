@@ -21,7 +21,8 @@ use xui_core::backend::{Backend, PlatformSpec};
 use xui_core::widget::{
     Button, CheckBox, ComboBox, Edit, Glyph, GroupBox, HasText, Hyperlink, Label, ListView,
     MaterialStatusBar, Menu, MenuId, MultilineEdit, NumberField, Panel, ProgressBar, RadioGroup,
-    Separator, Slider, StatusBar, ToggleButton, Toolbar, TopBar, TopBarId, TreeRow, TreeView,
+    Separator, Slider, StatusBar, ToggleButton, Toolbar, Tooltip, TopBar, TopBarId, TreeRow,
+    TreeView,
 };
 use xui_core::{Dip, Properties, Rect, Theme, Value};
 
@@ -130,6 +131,8 @@ struct Gallery {
     _theme: RadioGroup<Msg>,
     _button: Button<Msg>,
     _switch: Option<Button<Msg>>,
+    _tip_link: Tooltip<Msg>,
+    _tip_bar: Tooltip<Msg>,
 }
 
 impl App for Gallery {
@@ -236,6 +239,10 @@ fn run(renderer: Renderer, switch: Rc<Cell<Option<Renderer>>>) {
             let link = Hyperlink::new(ui, rect(16.0, 336.0, 380.0, 364.0), "Open docs")
                 .unwrap()
                 .on_click(|| Some(Msg::Link));
+            // A tooltip observes the widget's hover without taking over its
+            // own click handling; the bar gets one too.
+            let tip_link = Tooltip::attach(ui, link.id(), "Open the documentation").unwrap();
+            let tip_bar = Tooltip::attach(ui, bar.id(), "Scan progress").unwrap();
             let button = Button::new(ui, rect(16.0, 458.0, 190.0, 486.0), "Context menu")
                 .unwrap()
                 .on_click(|| Some(Msg::ContextMenu));
@@ -451,6 +458,12 @@ fn run(renderer: Renderer, switch: Rc<Cell<Option<Renderer>>>) {
                 }
             });
 
+            // A screenshot run cannot hover, so show one tip outright. Show it
+            // last, after every sibling exists, so `raise` puts it on top.
+            if std::env::var("XUI_GALLERY_TOOLTIP").is_ok() {
+                tip_link.show();
+            }
+
             Gallery {
                 echo,
                 status,
@@ -482,6 +495,8 @@ fn run(renderer: Renderer, switch: Rc<Cell<Option<Renderer>>>) {
                 _theme: theme,
                 _button: button,
                 _switch: switch_button,
+                _tip_link: tip_link,
+                _tip_bar: tip_bar,
             }
         },
     );

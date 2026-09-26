@@ -45,8 +45,8 @@ pub use widget::{
     Button, CellData, CheckBox, CheckState, Column, ColumnWidth, ComboBox, Control, Edit, Fill,
     Glyph, GroupBox, HasText, Hyperlink, Label, ListModel, ListView, MaterialStatusBar, Menu,
     MenuId, MenuScope, MultilineEdit, NodeId, NumberField, Panel, ProgressBar, RadioGroup,
-    SelectionMode, Separator, Slider, SortDirection, StatusBar, ToggleButton, Toolbar, TopBar,
-    TopBarId, TreeModel, TreeNode, TreeRow, TreeView,
+    SelectionMode, Separator, Slider, SortDirection, StatusBar, ToggleButton, Toolbar, Tooltip,
+    TopBar, TopBarId, TreeModel, TreeNode, TreeRow, TreeView,
 };
 
 /// The core types a frontend or a backend usually needs, in one `use`.

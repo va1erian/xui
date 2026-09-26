@@ -186,6 +186,32 @@ impl<M: 'static> Ui<M> {
         self.core.router().unregister(id);
     }
 
+    /// Adds an event listener to `id` alongside any handler already there,
+    /// returning a token that [`Ui::remove_events`] uses to remove it. A
+    /// side feature (a tooltip) uses this so it can observe a widget without
+    /// displacing the widget's own handler.
+    pub(crate) fn add_events(
+        &self,
+        id: WidgetId,
+        mapper: impl Fn(&Event) -> Option<M> + 'static,
+    ) -> usize {
+        let weak = Rc::downgrade(&self.core);
+        self.core.router().add(id, move |event| {
+            let Some(msg) = mapper(event) else {
+                return false;
+            };
+            if let Some(core) = weak.upgrade() {
+                core.enqueue(msg);
+            }
+            true
+        })
+    }
+
+    /// Removes the listener `token` returned by [`Ui::add_events`].
+    pub(crate) fn remove_events(&self, id: WidgetId, token: usize) {
+        self.core.router().remove(id, token);
+    }
+
     /// The window's dots-per-inch.
     pub fn dpi(&self) -> u32 {
         self.core.backend().dpi(self.core.window())
@@ -223,9 +249,23 @@ impl<M: 'static> Ui<M> {
         self.core.backend().kill_timer(self.core.window(), id);
     }
 
-    /// Maps a timer tick to a message. Only one mapping can be installed.
+    /// Maps a timer tick to a message. Only one mapping can be installed;
+    /// a widget that needs its own timer adds a listener instead.
     pub fn on_timer(&self, f: impl Fn(TimerId) -> Option<M> + 'static) {
         self.core.set_on_timer(f);
+    }
+
+    /// Adds a timer listener alongside the app's mapping, returning a token
+    /// that [`Ui::remove_timer_listener`] uses to remove it. A widget that
+    /// starts its own timer (a tooltip's show delay) observes the tick without
+    /// taking over [`Ui::on_timer`].
+    pub(crate) fn add_timer_listener(&self, f: impl Fn(TimerId) -> Option<M> + 'static) -> usize {
+        self.core.add_timer_listener(f)
+    }
+
+    /// Removes the listener `token` returned by [`Ui::add_timer_listener`].
+    pub(crate) fn remove_timer_listener(&self, token: usize) {
+        self.core.remove_timer_listener(token);
     }
 
     /// Intercepts the close request: `Some(msg)` lets the app decide, `None`
