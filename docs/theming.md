@@ -21,6 +21,7 @@ Win32-native layer share the same token set.
 | `border`, `border_focused` | Separators and focus rings |
 | `shadow` | Popup elevation |
 | `input_background` | Text fields and other inputs |
+| `input_border` | Border around inputs (fields, check boxes) |
 | `scrollbar`, `scrollbar_track` | Scrollbars |
 
 `Theme::light()` and `Theme::dark()` sample Windows 11 Explorer/Settings/WinUI
