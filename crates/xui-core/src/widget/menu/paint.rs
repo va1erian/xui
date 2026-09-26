@@ -9,6 +9,7 @@
 use crate::backend::{Canvas, TextStyle};
 use crate::geometry::{Point, Rect};
 use crate::theme::Theme;
+use crate::widget::popup;
 
 use super::View;
 use super::layout;
@@ -53,8 +54,7 @@ pub(super) fn popup(
     theme: Theme,
 ) {
     let bounds = canvas.bounds();
-    canvas.clear(theme.raised);
-    canvas.stroke_rect(bounds, theme.border, 1.0);
+    popup::paint(canvas, theme, theme.raised);
     let Some(level) = view.levels.get(depth) else {
         return;
     };

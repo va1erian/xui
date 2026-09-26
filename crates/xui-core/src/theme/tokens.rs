@@ -57,6 +57,11 @@ pub struct Theme {
     pub border: Color,
     /// Focused border (accent outline: matches [`Theme::accent`]).
     pub border_focused: Color,
+    /// Drop shadow cast by an elevated, transient surface (menus, combo popups,
+    /// tooltips). It is the shadow's base colour; the popup painter supplies
+    /// the soft alpha falloff, so the token stays opaque. WinUI draws these
+    /// shadows in black at a low opacity (light/dark `#000000`).
+    pub shadow: Color,
     /// Input background: edits, address bar (light `#FFFFFF`, dark `#2D2D2D`).
     pub input_background: Color,
     /// Scrollbar thumb (WinUI thumb: light `#C8C6C4`, dark `#605E5C`).
@@ -86,6 +91,7 @@ impl Theme {
             pressed: Color::hex(0xD6_D6_D6),
             border: Color::hex(0xE1_E1_E1),
             border_focused: Color::hex(0x00_5F_B8),
+            shadow: Color::hex(0x00_00_00),
             input_background: Color::hex(0xFF_FF_FF),
             scrollbar: Color::hex(0xC8_C6_C4),
             scrollbar_track: Color::hex(0xF3_F3_F3),
@@ -112,6 +118,7 @@ impl Theme {
             pressed: Color::hex(0x29_29_29),
             border: Color::hex(0x30_30_30),
             border_focused: Color::hex(0x4C_C2_FF),
+            shadow: Color::hex(0x00_00_00),
             input_background: Color::hex(0x2D_2D_2D),
             scrollbar: Color::hex(0x60_5E_5C),
             scrollbar_track: Color::hex(0x20_20_20),
@@ -153,5 +160,12 @@ mod tests {
     fn status_fills_differ_between_variants() {
         assert_ne!(Theme::light().warning, Theme::dark().warning);
         assert_ne!(Theme::light().danger, Theme::dark().danger);
+    }
+
+    #[test]
+    fn the_shadow_is_black_in_both_variants() {
+        for theme in [Theme::light(), Theme::dark()] {
+            assert_eq!(theme.shadow, crate::Color::rgb(0, 0, 0));
+        }
     }
 }
