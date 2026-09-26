@@ -16,7 +16,7 @@ use std::rc::Rc;
 use xui_core::app::{App, Ui, run_app};
 use xui_core::backend::{Backend, PlatformSpec};
 use xui_core::widget::{Fill, ListModel, ListView, SortDirection, StatusBar};
-use xui_core::{Dip, Rect, Theme};
+use xui_core::{Dip, Point, Rect, Theme};
 
 /// One row of mock data; the numeric columns are pre-formatted so the
 /// model's accessors can borrow `&str`.
@@ -53,8 +53,9 @@ impl ListModel for TrackModel {
 enum Msg {
     Select(Vec<usize>),
     Play(usize),
-    Context(usize),
+    Context(usize, Point),
     Sort(usize),
+    Resize(usize, Dip),
     Autoclose,
 }
 
@@ -115,12 +116,17 @@ impl App for Library {
         match msg {
             Msg::Select(rows) => self.status.set_text(1, &format!("{} selected", rows.len())),
             Msg::Play(row) => self.status.set_text(1, &format!("Play row {row}")),
-            Msg::Context(row) => self.status.set_text(1, &format!("Context row {row}")),
+            Msg::Context(row, at) => self
+                .status
+                .set_text(1, &format!("Context row {row} at {},{}", at.x, at.y)),
             Msg::Sort(column) => {
                 self.sort_by(column);
                 self.status
                     .set_text(1, &format!("Sorted by column {column}"));
             }
+            Msg::Resize(column, width) => self
+                .status
+                .set_text(1, &format!("Column {column} is now {}px", width.value())),
             Msg::Autoclose => ui.quit(),
         }
     }
@@ -179,8 +185,9 @@ fn main() {
             .multi_select(true)
             .on_selection(|rows| Some(Msg::Select(rows.to_vec())))
             .on_activate(|row| Some(Msg::Play(row)))
-            .on_context(|row| Some(Msg::Context(row)))
-            .on_sort(|column| Some(Msg::Sort(column)));
+            .on_context(|row, at| Some(Msg::Context(row, at)))
+            .on_sort(|column| Some(Msg::Sort(column)))
+            .on_resize(|column, width| Some(Msg::Resize(column, width)));
             list.set_selection(&[1, 2, 3]);
 
             let status = StatusBar::new(

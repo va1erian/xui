@@ -55,6 +55,20 @@ impl Rows {
     }
 }
 
+/// A live drag of a column's right boundary.
+pub(crate) struct Resize {
+    /// The column whose width the drag changes.
+    pub(crate) column: usize,
+    /// The pointer x when the drag started.
+    pub(crate) start_x: i32,
+    /// The column's width in pixels when the drag started.
+    pub(crate) start_px: i32,
+    /// The column's width in design values when the drag started.
+    pub(crate) original: Dip,
+    /// The column's width in design values after the latest move.
+    pub(crate) width: Dip,
+}
+
 /// Everything the list view reads on paint and writes on input.
 pub(crate) struct State {
     pub(crate) rows: Rows,
@@ -71,6 +85,8 @@ pub(crate) struct State {
     pub(crate) offset: usize,
     /// `(column, direction)` of the header sort arrow.
     pub(crate) sort: Option<(usize, SortDirection)>,
+    /// The column boundary the pointer is dragging, if any.
+    pub(crate) resize: Option<Resize>,
     pub(crate) enabled: bool,
 }
 
