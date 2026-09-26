@@ -37,7 +37,6 @@ mod gallery {
         Link,
         Click,
         Theme(usize),
-        Design(bool),
         Autoclose,
     }
 
@@ -63,7 +62,6 @@ mod gallery {
         _inside: Label<Msg>,
         _toolbar: Toolbar<Msg>,
         _sep: Separator<Msg>,
-        _design: ToggleButton<Msg>,
         _theme: RadioGroup<Msg>,
         _button: Button<Msg>,
     }
@@ -105,10 +103,6 @@ mod gallery {
                         "theme: light".to_string()
                     }
                 },
-                Msg::Design(on) => {
-                    ui.set_design_mode(on);
-                    format!("design mode: {on}")
-                }
                 Msg::Autoclose => {
                     ui.quit();
                     return;
@@ -179,10 +173,6 @@ mod gallery {
                     ui.set_theme(Theme::dark());
                     theme.select(1);
                 }
-                let design = ToggleButton::new(ui, rect(198.0, 372.0, 380.0, 400.0), "Design mode")
-                    .unwrap()
-                    .on_toggle(|on| Some(Msg::Design(on)));
-
                 let list = ListView::new(
                     ui,
                     rect(400.0, 48.0, 764.0, 160.0),
@@ -256,7 +246,6 @@ mod gallery {
                     _inside: inside,
                     _toolbar: toolbar,
                     _sep: sep,
-                    _design: design,
                     _theme: theme,
                     _button: button,
                 }
