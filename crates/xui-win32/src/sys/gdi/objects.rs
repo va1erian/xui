@@ -8,7 +8,8 @@ use windows::Win32::Graphics::Gdi::{
     BI_RGB, BITMAPINFO, BITMAPINFOHEADER, CreateDIBSection, CreateFontW, CreatePen,
     CreateSolidBrush, DIB_RGB_COLORS, DeleteObject, FONT_CHARSET, FONT_CLIP_PRECISION,
     FONT_OUTPUT_PRECISION, FONT_QUALITY, GetDC, GetStockObject, GetTextExtentPoint32W, HBITMAP,
-    HBRUSH, HDC, HFONT, HGDIOBJ, HPEN, NULL_PEN, PS_SOLID, ReleaseDC, SelectObject,
+    HBRUSH, HDC, HFONT, HGDIOBJ, HPEN, NULL_PEN, PS_SOLID, ReleaseDC, SelectObject, SetBkColor,
+    SetTextColor,
 };
 use windows::Win32::UI::HiDpi::SystemParametersInfoForDpi;
 use windows::Win32::UI::WindowsAndMessaging::{NONCLIENTMETRICSW, SPI_GETNONCLIENTMETRICS};
@@ -55,6 +56,19 @@ pub(crate) fn create_font(family: &str, height: i32, weight: i32) -> Result<HFON
 }
 
 /// Creates a solid brush.
+/// Sets the text colour of `hdc` (`WM_CTLCOLOR*`), returning the previous one.
+pub(crate) fn set_text_color(hdc: HDC, color: Color) -> COLORREF {
+    // SAFETY: `hdc` is a device context supplied by Windows for the message.
+    unsafe { SetTextColor(hdc, COLORREF(color.to_colorref())) }
+}
+
+/// Sets the background colour of `hdc` (`WM_CTLCOLOR*`), returning the previous
+/// one.
+pub(crate) fn set_bk_color(hdc: HDC, color: Color) -> COLORREF {
+    // SAFETY: `hdc` is a device context supplied by Windows for the message.
+    unsafe { SetBkColor(hdc, COLORREF(color.to_colorref())) }
+}
+
 pub(crate) fn solid_brush(color: Color) -> Result<HBRUSH> {
     // SAFETY: `CreateSolidBrush` takes a plain colour value.
     let brush = unsafe { CreateSolidBrush(COLORREF(color.to_colorref())) };

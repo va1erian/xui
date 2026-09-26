@@ -55,8 +55,12 @@ pub enum NodeKind {
     ProgressBar,
     /// A draggable range control.
     Slider,
-    /// A text-entry field.
+    /// A single-line text-entry field.
     Edit,
+    /// A multi-line text area.
+    MultilineEdit,
+    /// A numeric field with steppers.
+    NumberField,
     /// A drop-down list.
     ComboBox,
     /// A virtualized report list.
