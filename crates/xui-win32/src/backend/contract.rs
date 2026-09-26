@@ -282,6 +282,12 @@ impl Backend for Win32Backend {
         }
     }
 
+    fn set_cue(&self, id: WidgetId, cue: &str) {
+        if let Some(node) = self.nodes.borrow().get(&id.raw()) {
+            node.set_cue(cue);
+        }
+    }
+
     fn text(&self, id: WidgetId) -> String {
         self.nodes
             .borrow()

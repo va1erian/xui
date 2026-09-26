@@ -182,6 +182,12 @@ impl<M: 'static> Ui<M> {
         self.core.backend().set_text(id, text);
     }
 
+    /// Sets a node's cue banner (placeholder shown while a field is empty);
+    /// a painted field draws its own cue instead.
+    pub fn set_cue(&self, id: WidgetId, cue: &str) {
+        self.core.backend().set_cue(id, cue);
+    }
+
     /// A node's current text (a native control answers from its own state).
     pub fn text(&self, id: WidgetId) -> String {
         self.core.backend().text(id)

@@ -253,6 +253,14 @@ pub trait Backend {
     /// Replaces a node's text.
     fn set_text(&self, id: WidgetId, text: &str);
 
+    /// Sets a node's cue banner: the placeholder a text field shows while it
+    /// is empty. A backend hosting a native control forwards it (the Win32
+    /// `EDIT`'s `EM_SETCUEBANNER`); a painted field draws its own cue, so the
+    /// default does nothing.
+    fn set_cue(&self, id: WidgetId, cue: &str) {
+        let _ = (id, cue);
+    }
+
     /// A node's current text; empty for a node that has none. A native control
     /// answers from its own state.
     fn text(&self, id: WidgetId) -> String {

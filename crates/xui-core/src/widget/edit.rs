@@ -36,6 +36,9 @@ pub struct Edit<M: 'static> {
     control: Control<M>,
     text: Rc<RefCell<String>>,
     caret: Rc<Cell<usize>>,
+    /// The cue banner drawn while the text is empty (a native control shows
+    /// its own).
+    cue: Rc<RefCell<String>>,
     /// Whether the backend hosts a native control that edits itself.
     native: bool,
     /// Set while the widget itself sets the native text, so the resulting
@@ -55,6 +58,7 @@ impl<M: 'static> Edit<M> {
         ui.set_cursor(control.id(), Cursor::Text);
         let state = Rc::new(RefCell::new(text.to_string()));
         let caret = Rc::new(Cell::new(text.chars().count()));
+        let cue = Rc::new(RefCell::new(String::new()));
         let focused = Rc::new(Cell::new(false));
         let setting = Rc::new(Cell::new(false));
         let on_change: ChangeMapper<M> = Rc::new(RefCell::new(None));
@@ -62,6 +66,7 @@ impl<M: 'static> Edit<M> {
         if !native {
             let text = Rc::clone(&state);
             let caret = Rc::clone(&caret);
+            let cue = Rc::clone(&cue);
             let focused = Rc::clone(&focused);
             let theme = ui.theme_handle();
             let selected = control.selected_handle();
@@ -79,9 +84,16 @@ impl<M: 'static> Edit<M> {
 
                 let pad = PADDING.to_px(canvas.dpi()).value();
                 let inner = bounds.shrink(pad);
-                let style = TextStyle::new(theme.text, TEXT_SIZE).middle();
                 let value = text.borrow();
-                canvas.draw_text(&value, inner, &style);
+                // Empty shows the cue instead, dimmed like a native banner.
+                let cue = cue.borrow();
+                let (shown, color) = if value.is_empty() {
+                    (cue.as_str(), theme.text_disabled)
+                } else {
+                    (value.as_str(), theme.text)
+                };
+                let style = TextStyle::new(color, TEXT_SIZE).middle();
+                canvas.draw_text(shown, inner, &style);
 
                 if focused.get() {
                     let prefix: String = value.chars().take(caret.get()).collect();
@@ -196,10 +208,23 @@ impl<M: 'static> Edit<M> {
             control,
             text: state,
             caret,
+            cue,
             native,
             setting,
             on_change,
         })
+    }
+
+    /// Shows `cue` as a placeholder while the field is empty (a native cue
+    /// banner where the backend hosts one). Chainable.
+    pub fn cue(self, cue: &str) -> Edit<M> {
+        *self.cue.borrow_mut() = cue.to_string();
+        if self.native {
+            self.control.ui().set_cue(self.control.id(), cue);
+        } else {
+            self.control.invalidate();
+        }
+        self
     }
 
     /// Maps a change to the app's message: the closure returns `Some(msg)` to
@@ -267,5 +292,63 @@ impl<M: 'static> Properties for Edit<M> {
             }
             _ => false,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::rc::Rc;
+
+    use super::*;
+    use crate::app::{App, Core, Runtime};
+    use crate::backend::headless::{DrawOp, HeadlessBackend};
+    use crate::backend::{Backend, PlatformSpec};
+    use crate::theme::Theme;
+    use crate::widget::HasText;
+
+    struct TestApp;
+
+    impl App for TestApp {
+        type Msg = u32;
+
+        fn update(&mut self, _msg: u32, _ui: &mut Ui<u32>) {}
+    }
+
+    #[test]
+    fn an_empty_field_paints_its_cue_dimmed() {
+        let backend = Rc::new(HeadlessBackend::new());
+        let window = backend.open_window(&PlatformSpec::new("t")).unwrap();
+        let core = Core::new(backend.clone(), window);
+        let ui = Ui::new(Rc::clone(&core));
+        let _runtime = Runtime::primary(core, TestApp);
+
+        let edit = Edit::new(&ui, Rect::new(0, 0, 120, 22), "")
+            .unwrap()
+            .cue("Search…");
+        backend.render(edit.id());
+        let ops = backend.ops(edit.id());
+        let theme = Theme::light();
+        assert!(
+            ops.iter().any(|op| matches!(
+                op,
+                DrawOp::Text(_, text, color)
+                    if text == "Search…" && *color == theme.text_disabled
+            )),
+            "an empty field draws its cue in the disabled colour: {ops:?}"
+        );
+
+        edit.set_text("Réverie");
+        backend.render(edit.id());
+        let ops = backend.ops(edit.id());
+        assert!(
+            ops.iter()
+                .any(|op| matches!(op, DrawOp::Text(_, text, _) if text == "Réverie")),
+            "text replaces the cue: {ops:?}"
+        );
+        assert!(
+            !ops.iter()
+                .any(|op| matches!(op, DrawOp::Text(_, text, _) if text == "Search…")),
+            "no cue once the field has text: {ops:?}"
+        );
     }
 }
