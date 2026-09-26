@@ -7,6 +7,7 @@
 //! Coordinates are device pixels unless a method says otherwise; the front
 //! layer converts its [`Dip`] design values once, at the boundary.
 
+use super::paint::{Corner, LinearGradient, RadialGradient, Rgba, Stroke};
 use crate::color::Color;
 use crate::geometry::{Point, Rect};
 use crate::image::Image;
@@ -160,6 +161,48 @@ pub trait Canvas {
     /// Draws a straight line.
     fn draw_line(&mut self, from: Point, to: Point, color: Color, width: f32);
 
+    /// Fills an axis-aligned rectangle with an RGBA colour, alpha included.
+    fn fill_rect_rgba(&mut self, rect: Rect, color: Rgba);
+
+    /// Fills a rectangle whose corners carry their own elliptical radii. The
+    /// corners are ordered top-left, top-right, bottom-right, bottom-left.
+    fn fill_rounded_rect_corners(&mut self, rect: Rect, corners: [Corner; 4], color: Rgba);
+
+    /// Strokes a rectangle whose corners carry their own elliptical radii.
+    fn stroke_rounded_rect_corners(
+        &mut self,
+        rect: Rect,
+        corners: [Corner; 4],
+        color: Rgba,
+        stroke: &Stroke,
+    );
+
+    /// Draws a line with the full stroke vocabulary (width, dash, cap) and an
+    /// RGBA colour.
+    ///
+    /// This is the RGBA/dashed counterpart of [`Canvas::draw_line`]; a trait
+    /// cannot overload a method by its argument types, so the two carry
+    /// different names.
+    fn draw_line_stroked(&mut self, from: Point, to: Point, color: Rgba, stroke: &Stroke);
+
+    /// Strokes an ellipse outline with the full stroke vocabulary.
+    ///
+    /// The RGBA/dashed counterpart of [`Canvas::stroke_ellipse`].
+    fn stroke_ellipse_stroked(
+        &mut self,
+        center: Point,
+        radius_x: f32,
+        radius_y: f32,
+        color: Rgba,
+        stroke: &Stroke,
+    );
+
+    /// Fills an axis-aligned rectangle with a linear gradient.
+    fn fill_rect_linear(&mut self, rect: Rect, gradient: &LinearGradient);
+
+    /// Fills an axis-aligned rectangle with a radial gradient.
+    fn fill_rect_radial(&mut self, rect: Rect, gradient: &RadialGradient);
+
     /// Draws `text` inside `rect` using `style`.
     fn draw_text(&mut self, text: &str, rect: Rect, style: &TextStyle);
 
@@ -174,6 +217,14 @@ pub trait Canvas {
     /// scale; the clip is untouched. Pop every clip you push and restore every
     /// save you make, in order.
     fn push_clip(&mut self, rect: Rect);
+
+    /// Clips subsequent drawing to the rounded rectangle `rect`/`corners`,
+    /// with per-corner elliptical radii, until the matching
+    /// [`Canvas::pop_clip`].
+    ///
+    /// Uses the same clip stack as [`Canvas::push_clip`], so a rounded clip and
+    /// an axis-aligned one may nest freely.
+    fn push_clip_rounded(&mut self, rect: Rect, corners: [Corner; 4]);
 
     /// Removes the most recent clip.
     fn pop_clip(&mut self);

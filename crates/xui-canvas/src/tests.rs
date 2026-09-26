@@ -5,7 +5,10 @@ use xui_core::backend::{Backend, PlatformSpec};
 use xui_core::geometry::{Point, Rect};
 use xui_core::image::Image;
 use xui_core::widget::{Button, CheckBox, Label, ProgressBar, Slider};
-use xui_core::{Canvas, Color, Dip, TextStyle};
+use xui_core::{
+    Canvas, Color, Corner, Dash, Dip, GradientStop, LinearGradient, RadialGradient, Rgba, Stroke,
+    TextStyle,
+};
 
 use crate::{OffscreenBackend, RgbaImage, Surface, measure_text, to_skia};
 
@@ -117,6 +120,146 @@ fn a_push_clip_limits_drawing() {
     let image = surface.to_image();
     assert_eq!(image.pixel(16, 32), Some([255, 255, 0, 255]), "inside clip");
     assert_eq!(image.pixel(48, 32), Some([0, 0, 0, 255]), "outside clip");
+}
+
+#[test]
+fn an_alpha_fill_blends_with_the_background() {
+    let mut surface = Surface::new(64, 64);
+    surface.fill(Color::rgb(255, 255, 255));
+    surface.with_canvas(Rect::new(0, 0, 64, 64), |canvas| {
+        canvas.fill_rect_rgba(Rect::new(0, 0, 64, 64), Rgba::with_alpha(255, 0, 0, 128));
+    });
+
+    let image = surface.to_image();
+    let [r, g, b, a] = image.pixel(32, 32).unwrap();
+    assert_eq!((r, a), (255, 255), "red stays red and opaque: {image:?}");
+    for (channel, value) in [("green", g), ("blue", b)] {
+        assert!(
+            (100..=170).contains(&value),
+            "the white background lightened the {channel} channel: {value}"
+        );
+    }
+}
+
+#[test]
+fn a_rounded_corner_is_clipped() {
+    let mut surface = Surface::new(64, 64);
+    surface.fill(Color::rgb(0, 0, 0));
+    surface.with_canvas(Rect::new(0, 0, 64, 64), |canvas| {
+        canvas.fill_rounded_rect_corners(
+            Rect::new(16, 16, 48, 48),
+            [Corner::uniform(12.0); 4],
+            Rgba::rgb(255, 0, 0),
+        );
+    });
+
+    let image = surface.to_image();
+    assert_eq!(image.pixel(32, 32), Some([255, 0, 0, 255]), "centre filled");
+    assert_eq!(
+        image.pixel(17, 17),
+        Some([0, 0, 0, 255]),
+        "the corner is clipped away"
+    );
+}
+
+#[test]
+fn a_rounded_clip_rounds_off_its_corners() {
+    let mut surface = Surface::new(64, 64);
+    surface.fill(Color::rgb(0, 0, 0));
+    surface.with_canvas(Rect::new(0, 0, 64, 64), |canvas| {
+        canvas.push_clip_rounded(Rect::new(8, 8, 56, 56), [Corner::uniform(16.0); 4]);
+        canvas.fill_rect(Rect::new(0, 0, 64, 64), Color::rgb(0, 255, 0));
+        canvas.pop_clip();
+    });
+
+    let image = surface.to_image();
+    assert_eq!(image.pixel(32, 32), Some([0, 255, 0, 255]), "inside clip");
+    assert_eq!(
+        image.pixel(9, 9),
+        Some([0, 0, 0, 255]),
+        "the rounded corner stays clear"
+    );
+}
+
+#[test]
+fn a_dashed_line_leaves_gaps() {
+    let mut surface = Surface::new(64, 64);
+    surface.fill(Color::rgb(0, 0, 0));
+    surface.with_canvas(Rect::new(0, 0, 64, 64), |canvas| {
+        canvas.draw_line_stroked(
+            Point::new(2, 32),
+            Point::new(62, 32),
+            Rgba::rgb(255, 255, 255),
+            &Stroke::new(2.0).dash(Dash::Dashed),
+        );
+    });
+
+    let image = surface.to_image();
+    let lit = (2..62)
+        .filter(|x| image.pixel(*x, 32).unwrap()[0] > 128)
+        .count();
+    let dark = (2..62)
+        .filter(|x| image.pixel(*x, 32).unwrap()[0] <= 128)
+        .count();
+    assert!(
+        lit > 0 && dark > 0,
+        "a dashed line has both dashes ({lit}) and gaps ({dark})"
+    );
+}
+
+#[test]
+fn a_two_stop_gradient_varies_across_the_rect() {
+    let mut surface = Surface::new(64, 64);
+    surface.fill(Color::rgb(255, 0, 255));
+    surface.with_canvas(Rect::new(0, 0, 64, 64), |canvas| {
+        canvas.fill_rect_linear(
+            Rect::new(0, 0, 64, 64),
+            &LinearGradient::new(
+                Point::new(0, 0),
+                Point::new(64, 0),
+                vec![
+                    GradientStop::new(0.0, Rgba::rgb(0, 0, 0)),
+                    GradientStop::new(1.0, Rgba::rgb(255, 255, 255)),
+                ],
+            ),
+        );
+    });
+
+    let image = surface.to_image();
+    let left = image.pixel(4, 32).unwrap()[0];
+    let right = image.pixel(60, 32).unwrap()[0];
+    assert!(
+        left < right,
+        "the gradient runs dark to light: {left} vs {right}"
+    );
+}
+
+#[test]
+fn a_radial_gradient_fades_from_the_centre() {
+    let mut surface = Surface::new(64, 64);
+    surface.fill(Color::rgb(0, 0, 0));
+    surface.with_canvas(Rect::new(0, 0, 64, 64), |canvas| {
+        canvas.fill_rect_radial(
+            Rect::new(0, 0, 64, 64),
+            &RadialGradient::new(
+                Point::new(32, 32),
+                24.0,
+                24.0,
+                vec![
+                    GradientStop::new(0.0, Rgba::rgb(255, 255, 255)),
+                    GradientStop::new(1.0, Rgba::rgb(0, 0, 0)),
+                ],
+            ),
+        );
+    });
+
+    let image = surface.to_image();
+    let centre = image.pixel(32, 32).unwrap()[0];
+    let edge = image.pixel(9, 9).unwrap()[0];
+    assert!(
+        centre > edge,
+        "the radial gradient is bright at the centre: {centre} vs {edge}"
+    );
 }
 
 #[test]

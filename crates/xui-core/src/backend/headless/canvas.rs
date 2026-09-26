@@ -3,6 +3,7 @@
 //! The headless backend's recording canvas and its draw-op log.
 
 use crate::backend::canvas::{Canvas, TextStyle};
+use crate::backend::paint::{Corner, LinearGradient, RadialGradient, Rgba, Stroke};
 use crate::color::Color;
 use crate::geometry::{Point, Rect};
 use crate::image::Image;
@@ -27,12 +28,28 @@ pub enum DrawOp {
     StrokeEllipse(Point, f32, f32, Color, f32),
     /// Draws a line.
     Line(Point, Point, Color, f32),
+    /// Fills a rectangle with an RGBA colour.
+    FillRgba(Rect, Rgba),
+    /// Fills a rectangle with per-corner elliptical radii.
+    RoundedCorners(Rect, [Corner; 4], Rgba),
+    /// Strokes a rectangle with per-corner elliptical radii.
+    StrokeRoundedCorners(Rect, [Corner; 4], Rgba, Stroke),
+    /// Draws a line with the full stroke vocabulary.
+    LineStroked(Point, Point, Rgba, Stroke),
+    /// Strokes an ellipse with the full stroke vocabulary.
+    StrokeEllipseStroked(Point, f32, f32, Rgba, Stroke),
+    /// Fills a rectangle with a linear gradient.
+    FillLinear(Rect, LinearGradient),
+    /// Fills a rectangle with a radial gradient.
+    FillRadial(Rect, RadialGradient),
     /// Draws text.
     Text(Rect, String, Color),
     /// Draws an image scaled into the rectangle.
     Image(Rect, Image),
     /// Pushes a clip.
     Clip(Rect),
+    /// Pushes a rounded clip.
+    ClipRounded(Rect, [Corner; 4]),
     /// Pops a clip.
     Unclip,
 }
@@ -77,6 +94,10 @@ impl RecordingCanvas {
             (self.tx + rect.right as f32 * self.scale).round() as i32,
             (self.ty + rect.bottom as f32 * self.scale).round() as i32,
         )
+    }
+
+    fn corners(&self, corners: [Corner; 4]) -> [Corner; 4] {
+        corners.map(|corner| Corner::new(corner.x * self.scale, corner.y * self.scale))
     }
 }
 
@@ -157,6 +178,77 @@ impl Canvas for RecordingCanvas {
         self.ops.push(DrawOp::Line(from, to, color, width));
     }
 
+    fn fill_rect_rgba(&mut self, rect: Rect, color: Rgba) {
+        let rect = self.rect(rect);
+        self.ops.push(DrawOp::FillRgba(rect, color));
+    }
+
+    fn fill_rounded_rect_corners(&mut self, rect: Rect, corners: [Corner; 4], color: Rgba) {
+        let rect = self.rect(rect);
+        self.ops
+            .push(DrawOp::RoundedCorners(rect, self.corners(corners), color));
+    }
+
+    fn stroke_rounded_rect_corners(
+        &mut self,
+        rect: Rect,
+        corners: [Corner; 4],
+        color: Rgba,
+        stroke: &Stroke,
+    ) {
+        let rect = self.rect(rect);
+        self.ops.push(DrawOp::StrokeRoundedCorners(
+            rect,
+            self.corners(corners),
+            color,
+            *stroke,
+        ));
+    }
+
+    fn draw_line_stroked(&mut self, from: Point, to: Point, color: Rgba, stroke: &Stroke) {
+        let (from, to) = (self.point(from), self.point(to));
+        self.ops.push(DrawOp::LineStroked(from, to, color, *stroke));
+    }
+
+    fn stroke_ellipse_stroked(
+        &mut self,
+        center: Point,
+        radius_x: f32,
+        radius_y: f32,
+        color: Rgba,
+        stroke: &Stroke,
+    ) {
+        let center = self.point(center);
+        self.ops.push(DrawOp::StrokeEllipseStroked(
+            center,
+            radius_x * self.scale,
+            radius_y * self.scale,
+            color,
+            *stroke,
+        ));
+    }
+
+    fn fill_rect_linear(&mut self, rect: Rect, gradient: &LinearGradient) {
+        let rect = self.rect(rect);
+        let gradient = LinearGradient::new(
+            self.point(gradient.start),
+            self.point(gradient.end),
+            gradient.stops.clone(),
+        );
+        self.ops.push(DrawOp::FillLinear(rect, gradient));
+    }
+
+    fn fill_rect_radial(&mut self, rect: Rect, gradient: &RadialGradient) {
+        let rect = self.rect(rect);
+        let gradient = RadialGradient::new(
+            self.point(gradient.center),
+            gradient.radius_x * self.scale,
+            gradient.radius_y * self.scale,
+            gradient.stops.clone(),
+        );
+        self.ops.push(DrawOp::FillRadial(rect, gradient));
+    }
+
     fn draw_text(&mut self, text: &str, rect: Rect, style: &TextStyle) {
         let rect = self.rect(rect);
         self.ops
@@ -176,6 +268,17 @@ impl Canvas for RecordingCanvas {
             .map_or(rect, |outer| intersect(*outer, rect));
         self.clip.push(clipped);
         self.ops.push(DrawOp::Clip(clipped));
+    }
+
+    fn push_clip_rounded(&mut self, rect: Rect, corners: [Corner; 4]) {
+        let rect = self.rect(rect);
+        let clipped = self
+            .clip
+            .last()
+            .map_or(rect, |outer| intersect(*outer, rect));
+        self.clip.push(clipped);
+        self.ops
+            .push(DrawOp::ClipRounded(clipped, self.corners(corners)));
     }
 
     fn pop_clip(&mut self) {

@@ -16,6 +16,7 @@ mod cursor;
 mod event;
 mod ids;
 mod node;
+mod paint;
 
 #[cfg(test)]
 pub(crate) mod headless;
@@ -25,6 +26,7 @@ pub use cursor::Cursor;
 pub use event::{Event, TimerId};
 pub use ids::{WidgetId, WindowId};
 pub use node::{ImplKind, NodeKind, NodeOptions, NodeSpec, ParentRef};
+pub use paint::{Cap, Corner, Dash, GradientStop, LinearGradient, RadialGradient, Rgba, Stroke};
 
 use std::fmt;
 use std::rc::Rc;
