@@ -37,10 +37,10 @@ jobs:
       # Compilation of every example is covered by `--all-targets`; run the
       # runnable ones with an auto-close so a panic-on-startup or a paint
       # regression is visible rather than only a compile error.
+      # (The `gl` example is left to the opt-in GL test: a runner without a real
+      # driver can hand back a half-loaded context that the example, unlike the
+      # test, does not guard against.)
       - run: cargo run -p xui --features canvas --example widgets
-        env:
-          XUI_DEMO_AUTOCLOSE_MS: "4000"
-      - run: cargo run -p xui-canvas --example gl
         env:
           XUI_DEMO_AUTOCLOSE_MS: "4000"
       - run: cargo run -p xui-win32 --example demo
