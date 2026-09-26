@@ -17,6 +17,7 @@ mod event;
 mod ids;
 mod node;
 mod paint;
+mod text;
 
 #[cfg(test)]
 pub(crate) mod headless;
@@ -27,6 +28,7 @@ pub use event::{Event, TimerId};
 pub use ids::{WidgetId, WindowId};
 pub use node::{ImplKind, NodeKind, NodeOptions, NodeSpec, ParentRef};
 pub use paint::{Cap, Corner, Dash, GradientStop, LinearGradient, RadialGradient, Rgba, Stroke};
+pub use text::{FontSpec, TextHit, TextLayout, TextShaper};
 
 use std::fmt;
 use std::rc::Rc;
@@ -298,6 +300,29 @@ pub trait Backend {
 
     /// Measures a run of text in device pixels.
     fn measure_text(&self, text: &str, style: &TextStyle, dpi: u32) -> TextMetrics;
+
+    /// A `Send + Sync` handle that shapes text for this backend.
+    ///
+    /// Obtain one on the UI thread and use it from a worker: the handle shapes,
+    /// hit-tests and selects, and the layout it returns is `Send + Sync`, so a
+    /// shaped document can be sent back and drawn with
+    /// [`Canvas::draw_layout`](canvas::Canvas::draw_layout). A backend that
+    /// cannot shape returns a handle that produces empty layouts.
+    fn text_shaper(&self) -> Box<dyn TextShaper> {
+        Box::new(text::UnsupportedShaper)
+    }
+
+    /// Shapes `text` at `max_width` device pixels (or `f32::INFINITY` for one
+    /// unwrapped line) at `dpi`.
+    fn layout_text(
+        &self,
+        text: &str,
+        spec: &FontSpec,
+        max_width: f32,
+        dpi: u32,
+    ) -> Box<dyn TextLayout> {
+        self.text_shaper().layout(text, spec, max_width, dpi)
+    }
 
     /// A window's dots-per-inch.
     fn dpi(&self, window: WindowId) -> u32;

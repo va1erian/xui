@@ -29,9 +29,10 @@ pub mod widget;
 pub use app::{App, Proxy, Ui, run_app};
 
 pub use backend::{
-    Backend, BackendError, Canvas, Cap, Corner, Dash, Event, GradientStop, ImplKind,
+    Backend, BackendError, Canvas, Cap, Corner, Dash, Event, FontSpec, GradientStop, ImplKind,
     LinearGradient, NodeKind, NodeOptions, NodeSpec, Painter, ParentRef, RadialGradient, Rgba,
-    Stroke, TextMetrics, TextStyle, TextVAlign, TimerId, WidgetId, WindowId,
+    Stroke, TextHit, TextLayout, TextMetrics, TextShaper, TextStyle, TextVAlign, TimerId, WidgetId,
+    WindowId,
 };
 pub use color::Color;
 pub use geometry::{Point, Rect, Size};

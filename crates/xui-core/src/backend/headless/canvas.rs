@@ -4,6 +4,7 @@
 
 use crate::backend::canvas::{Canvas, TextStyle};
 use crate::backend::paint::{Corner, LinearGradient, RadialGradient, Rgba, Stroke};
+use crate::backend::text::TextLayout;
 use crate::color::Color;
 use crate::geometry::{Point, Rect};
 use crate::image::Image;
@@ -44,6 +45,8 @@ pub enum DrawOp {
     FillRadial(Rect, RadialGradient),
     /// Draws text.
     Text(Rect, String, Color),
+    /// Draws a shaped layout at a top-left origin, in an RGBA colour.
+    ShapedText(Point, Rgba),
     /// Draws an image scaled into the rectangle.
     Image(Rect, Image),
     /// Pushes a clip.
@@ -253,6 +256,11 @@ impl Canvas for RecordingCanvas {
         let rect = self.rect(rect);
         self.ops
             .push(DrawOp::Text(rect, text.to_string(), style.color));
+    }
+
+    fn draw_layout(&mut self, _layout: &dyn TextLayout, origin: Point, color: Rgba) {
+        let origin = self.point(origin);
+        self.ops.push(DrawOp::ShapedText(origin, color));
     }
 
     fn draw_image(&mut self, image: &Image, rect: Rect) {

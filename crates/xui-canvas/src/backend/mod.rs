@@ -15,7 +15,7 @@ mod render;
 #[cfg(test)]
 mod tests;
 
-use std::cell::{Cell, RefCell};
+use std::cell::{Cell, OnceCell, RefCell};
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::time::Instant;
@@ -27,12 +27,14 @@ use winit::raw_window_handle::{
 use winit::window::Window;
 
 use xui_core::backend::{
-    Backend, BackendError, Cursor, Decorations, ImplKind, NodeKind, NodeSpec, Painter, ParentRef,
-    PlatformSpec, Result as BackendResult, TextMetrics, TextStyle, TimerId, Waker, WidgetId,
-    WindowId,
+    Backend, BackendError, Cursor, Decorations, FontSpec, ImplKind, NodeKind, NodeSpec, Painter,
+    ParentRef, PlatformSpec, Result as BackendResult, TextLayout, TextMetrics, TextShaper,
+    TextStyle, TimerId, Waker, WidgetId, WindowId,
 };
 use xui_core::router::WidgetHost;
 use xui_core::{Dip, Rect, Theme};
+
+use crate::text_layout::CosmicShaper;
 
 /// A cloneable window handle for `softbuffer`. `winit::Window` is not `Clone`,
 /// so the display and window handles share one `Rc`.
@@ -186,6 +188,7 @@ impl Shared {
 pub struct WinitBackend {
     shared: Rc<Shared>,
     event_loop: RefCell<Option<EventLoop<UserEvent>>>,
+    text: OnceCell<CosmicShaper>,
 }
 
 impl Default for WinitBackend {
@@ -216,6 +219,7 @@ impl WinitBackend {
                 quit: Cell::new(false),
             }),
             event_loop: RefCell::new(Some(event_loop)),
+            text: OnceCell::new(),
         }
     }
 
@@ -454,6 +458,22 @@ impl Backend for WinitBackend {
 
     fn measure_text(&self, text: &str, style: &TextStyle, dpi: u32) -> TextMetrics {
         crate::text::measure(text, style, dpi, i32::MAX)
+    }
+
+    fn text_shaper(&self) -> Box<dyn TextShaper> {
+        Box::new(self.text.get_or_init(CosmicShaper::new).clone())
+    }
+
+    fn layout_text(
+        &self,
+        text: &str,
+        spec: &FontSpec,
+        max_width: f32,
+        dpi: u32,
+    ) -> Box<dyn TextLayout> {
+        self.text
+            .get_or_init(CosmicShaper::new)
+            .layout(text, spec, max_width, dpi)
     }
 
     fn dpi(&self, window: WindowId) -> u32 {

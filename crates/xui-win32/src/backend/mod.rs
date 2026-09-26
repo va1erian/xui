@@ -20,8 +20,9 @@ use std::collections::HashMap;
 use std::rc::Rc;
 
 use xui_core::backend::{
-    Backend, BackendError, Cursor, ImplKind, NodeKind, NodeSpec, Painter, ParentRef, PlatformSpec,
-    Result as BackendResult, TextMetrics, TextStyle, TimerId, Waker, WidgetId, WindowId,
+    Backend, BackendError, Cursor, FontSpec, ImplKind, NodeKind, NodeSpec, Painter, ParentRef,
+    PlatformSpec, Result as BackendResult, TextLayout, TextMetrics, TextShaper, TextStyle, TimerId,
+    Waker, WidgetId, WindowId,
 };
 use xui_core::router::WidgetHost;
 use xui_core::{Dip, Px, Rect, Theme};
@@ -410,6 +411,20 @@ impl Backend for Win32Backend {
 
     fn measure_text(&self, text: &str, style: &TextStyle, dpi: u32) -> TextMetrics {
         text::measure_d2d(text, style, dpi).unwrap_or_else(|| text::measure_gdi(text, style, dpi))
+    }
+
+    fn text_shaper(&self) -> Box<dyn TextShaper> {
+        Box::new(text::Win32TextShaper::new())
+    }
+
+    fn layout_text(
+        &self,
+        text: &str,
+        spec: &FontSpec,
+        max_width: f32,
+        dpi: u32,
+    ) -> Box<dyn TextLayout> {
+        text::layout_text(text, spec, max_width, dpi)
     }
 
     fn dpi(&self, window: WindowId) -> u32 {

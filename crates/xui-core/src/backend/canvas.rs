@@ -8,6 +8,7 @@
 //! layer converts its [`Dip`] design values once, at the boundary.
 
 use super::paint::{Corner, LinearGradient, RadialGradient, Rgba, Stroke};
+use super::text::TextLayout;
 use crate::color::Color;
 use crate::geometry::{Point, Rect};
 use crate::image::Image;
@@ -257,6 +258,16 @@ pub trait Canvas {
 
     /// Draws `text` inside `rect` using `style`.
     fn draw_text(&mut self, text: &str, rect: Rect, style: &TextStyle);
+
+    /// Draws a shaped [`TextLayout`] with its top-left corner at `origin`, in
+    /// `color`. A backend whose text path cannot blend treats the colour as
+    /// opaque.
+    ///
+    /// The layout must have been shaped by this backend (through
+    /// [`Backend::layout_text`](super::Backend::layout_text) or its
+    /// [`TextShaper`](super::TextShaper)); a foreign layout draws nothing. The
+    /// painted widths match the ones the layout reports.
+    fn draw_layout(&mut self, layout: &dyn TextLayout, origin: Point, color: Rgba);
 
     /// Draws `image` scaled into `rect`, honouring the current clip. The image
     /// fills the rectangle exactly; its aspect ratio is not preserved.

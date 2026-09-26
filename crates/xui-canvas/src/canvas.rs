@@ -12,7 +12,9 @@ use tiny_skia::{
     FilterQuality, Mask, Paint, Path, PathBuilder, Pattern, Pixmap, Shader, SpreadMode, Transform,
 };
 
-use xui_core::backend::{Canvas, Corner, LinearGradient, RadialGradient, Rgba, Stroke, TextStyle};
+use xui_core::backend::{
+    Canvas, Corner, LinearGradient, RadialGradient, Rgba, Stroke, TextLayout, TextStyle,
+};
 use xui_core::color::Color;
 use xui_core::geometry::{Point, Rect};
 use xui_core::image::Image;
@@ -333,6 +335,16 @@ impl Canvas for SkiaCanvas<'_> {
         let rect = self.rect(rect);
         let dpi = self.dpi;
         crate::text::draw(self.pixmap, text, rect, style, dpi);
+    }
+
+    fn draw_layout(&mut self, layout: &dyn TextLayout, origin: Point, color: Rgba) {
+        let Some(cosmic) = layout
+            .as_any()
+            .downcast_ref::<crate::text_layout::CosmicLayout>()
+        else {
+            return;
+        };
+        crate::text_layout::draw_layout(self.pixmap, cosmic, self.point(origin), color);
     }
 
     fn draw_image(&mut self, image: &Image, rect: Rect) {

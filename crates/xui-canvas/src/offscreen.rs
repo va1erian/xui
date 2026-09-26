@@ -7,17 +7,19 @@
 //! the Win32 backend hosts can be rendered and snapshot-tested here (including
 //! on headless CI runners). The windowing shell builds on the same surface.
 
-use std::cell::RefCell;
+use std::cell::{OnceCell, RefCell};
 use std::collections::HashMap;
 use std::rc::Rc;
 
 use xui_core::backend::{
-    Backend, Event, ImplKind, NodeKind, NodeSpec, Painter, ParentRef, PlatformSpec,
-    Result as BackendResult, TextMetrics, TextStyle, TimerId, Waker, WidgetId, WindowId,
+    Backend, Event, FontSpec, ImplKind, NodeKind, NodeSpec, Painter, ParentRef, PlatformSpec,
+    Result as BackendResult, TextLayout, TextMetrics, TextShaper, TextStyle, TimerId, Waker,
+    WidgetId, WindowId,
 };
 use xui_core::router::WidgetHost;
 use xui_core::{Rect, Theme};
 
+use crate::text_layout::CosmicShaper;
 use crate::{RgbaImage, Surface};
 
 /// The default dots-per-inch a surface is rendered at.
@@ -48,6 +50,7 @@ pub struct OffscreenBackend {
     nodes: RefCell<Vec<(WidgetId, Node)>>,
     next_window: std::cell::Cell<u64>,
     next_widget: std::cell::Cell<u64>,
+    text: OnceCell<CosmicShaper>,
 }
 
 impl Default for OffscreenBackend {
@@ -64,6 +67,7 @@ impl OffscreenBackend {
             nodes: RefCell::new(Vec::new()),
             next_window: std::cell::Cell::new(1),
             next_widget: std::cell::Cell::new(1),
+            text: OnceCell::new(),
         }
     }
 
@@ -290,6 +294,22 @@ impl Backend for OffscreenBackend {
 
     fn measure_text(&self, text: &str, style: &TextStyle, dpi: u32) -> TextMetrics {
         crate::text::measure(text, style, dpi, i32::MAX)
+    }
+
+    fn text_shaper(&self) -> Box<dyn TextShaper> {
+        Box::new(self.text.get_or_init(CosmicShaper::new).clone())
+    }
+
+    fn layout_text(
+        &self,
+        text: &str,
+        spec: &FontSpec,
+        max_width: f32,
+        dpi: u32,
+    ) -> Box<dyn TextLayout> {
+        self.text
+            .get_or_init(CosmicShaper::new)
+            .layout(text, spec, max_width, dpi)
     }
 
     fn dpi(&self, window: WindowId) -> u32 {
