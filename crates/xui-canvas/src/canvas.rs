@@ -19,6 +19,7 @@ use xui_core::color::Color;
 use xui_core::geometry::{Point, Rect};
 use xui_core::image::Image;
 
+use crate::image_cache::ImageCache;
 use crate::paint::{
     Clip, FILL_RULE, corners_path, intersect, linear_shader, paint, radial_shader, rect_path,
     sk_rect, skia_stroke, solid_shader,
@@ -28,6 +29,8 @@ use crate::{to_skia, to_skia_rgba};
 /// A drawing surface over a `tiny-skia` pixmap, clipped to `bounds`.
 pub struct SkiaCanvas<'a> {
     pixmap: &'a mut Pixmap,
+    /// The surface's decoded images, so a repeat draw is a cached blit.
+    images: &'a mut ImageCache,
     bounds: Rect,
     dpi: u32,
     tx: f32,
@@ -39,9 +42,15 @@ pub struct SkiaCanvas<'a> {
 }
 
 impl<'a> SkiaCanvas<'a> {
-    pub(crate) fn new(pixmap: &'a mut Pixmap, bounds: Rect, dpi: u32) -> SkiaCanvas<'a> {
+    pub(crate) fn new(
+        pixmap: &'a mut Pixmap,
+        images: &'a mut ImageCache,
+        bounds: Rect,
+        dpi: u32,
+    ) -> SkiaCanvas<'a> {
         SkiaCanvas {
             pixmap,
+            images,
             bounds,
             dpi,
             tx: 0.0,
@@ -119,30 +128,6 @@ impl<'a> SkiaCanvas<'a> {
         self.pixmap
             .stroke_path(path, &paint, &stroke, Transform::identity(), mask);
     }
-}
-
-/// Uploads `image` to a tiny-skia pixmap, premultiplying its straight alpha.
-///
-/// This allocates a pixmap per call; an image cache would remove that, but an
-/// image is not drawn once per list row.
-fn premultiplied(image: &Image) -> Option<Pixmap> {
-    let mut pixmap = Pixmap::new(image.width(), image.height())?;
-    let source = image.pixels().as_chunks::<4>().0;
-    for (destination, pixel) in pixmap
-        .data_mut()
-        .as_chunks_mut::<4>()
-        .0
-        .iter_mut()
-        .zip(source)
-    {
-        let alpha = pixel[3] as u32;
-        let scale = |channel: u8| ((channel as u32 * alpha + 127) / 255) as u8;
-        destination[0] = scale(pixel[0]);
-        destination[1] = scale(pixel[1]);
-        destination[2] = scale(pixel[2]);
-        destination[3] = pixel[3];
-    }
-    Some(pixmap)
 }
 
 impl Canvas for SkiaCanvas<'_> {
@@ -352,9 +337,13 @@ impl Canvas for SkiaCanvas<'_> {
         if rect.is_empty() {
             return;
         }
-        let Some(pixmap) = premultiplied(image) else {
+        // The premultiplied upload is cached on the surface (LRU over bytes,
+        // keyed by the image's identity, which clones keep), so the same row
+        // icon costs one pattern blit per repaint instead of a fresh pixmap.
+        let Some(pixmap) = self.images.pixmap(image) else {
             return;
         };
+        let pixmap: &Pixmap = &pixmap;
         // Map the image's own pixel rectangle onto the destination rectangle.
         let scale_x = rect.width() as f32 / image.width() as f32;
         let scale_y = rect.height() as f32 / image.height() as f32;

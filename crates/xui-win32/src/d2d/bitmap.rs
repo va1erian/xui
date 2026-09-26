@@ -2,10 +2,12 @@
 
 //! RGBA bitmap uploads and drawing.
 //!
-//! [`D2dCanvas::image`] uploads an [`RgbaImage`](crate::RgbaImage) and returns
-//! an [`ImageId`]; the image is cached on the surface (LRU, bounded by bytes)
+//! [`D2dCanvas::image`] uploads an [`RgbaImage`] and returns an
+//! [`ImageId`]; the image is cached on the surface (LRU, bounded by bytes)
 //! and re-uploaded to the device lazily after a device loss. The RGBA data is
 //! kept in an [`Arc`](std::sync::Arc) so the device copy can be rebuilt.
+//! [`DcCanvas::draw_image`] draws a portable [`Image`] through the same
+//! device-bitmap cache, keyed by the image's identity instead.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -18,8 +20,37 @@ use super::surface::D2dSurface;
 
 /// A handle to an image uploaded with [`D2dCanvas::image`], valid for the life
 /// of the surface it was uploaded to (or until [`D2dSurface::forget_image`]).
+/// A portable [`Image`](xui_core::image::Image) drawn through
+/// [`DcCanvas::draw_image`](super::DcCanvas::draw_image) is keyed by its own
+/// identity instead.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct ImageId(pub(crate) usize);
+pub struct ImageId(pub(crate) u64);
+
+/// A borrowed straight-alpha RGBA raster: the shape an upload reads. Both an
+/// uploaded [`RgbaImage`] and a portable
+/// [`Image`](xui_core::image::Image) lend one, so the upload path reads
+/// either without copying pixels.
+pub(crate) struct Raster<'a> {
+    pub(crate) width: u32,
+    pub(crate) height: u32,
+    pub(crate) pixels: &'a [u8],
+}
+
+impl<'a> Raster<'a> {
+    /// The raster of a `width` x `height` image in tightly packed `pixels`.
+    pub(crate) fn new(width: u32, height: u32, pixels: &'a [u8]) -> Raster<'a> {
+        debug_assert_eq!(
+            pixels.len(),
+            width as usize * height as usize * 4,
+            "tightly packed RGBA"
+        );
+        Raster {
+            width,
+            height,
+            pixels,
+        }
+    }
+}
 
 /// How an image is resampled when drawn scaled.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
@@ -48,7 +79,7 @@ struct Entry {
 /// re-uploaded from memory, bounded by an LRU eviction over bytes.
 pub(super) struct ImageCache {
     images: HashMap<ImageId, Entry>,
-    next_id: usize,
+    next_id: u64,
     clock: u64,
     bytes: usize,
     budget: usize,
@@ -152,7 +183,8 @@ impl<'a> D2dCanvas<'a> {
     ) {
         let data = self.surface.images.borrow_mut().touch(id);
         if let Some(data) = data {
-            self.with(|target| target.draw_image(id, &data, dest, src, opacity, interpolation));
+            let raster = Raster::new(data.width, data.height, &data.pixels);
+            self.with(|target| target.draw_image(id, raster, dest, src, opacity, interpolation));
         }
     }
 
@@ -167,7 +199,8 @@ impl<'a> D2dCanvas<'a> {
     ) {
         let data = self.surface.images.borrow_mut().touch(id);
         if let Some(data) = data {
-            self.with(|target| target.fill_image_tiled(id, &data, dest, opacity, interpolation));
+            let raster = Raster::new(data.width, data.height, &data.pixels);
+            self.with(|target| target.fill_image_tiled(id, raster, dest, opacity, interpolation));
         }
     }
 

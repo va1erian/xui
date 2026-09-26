@@ -5,13 +5,13 @@
 //! and clip the core contract requires.
 //!
 //! The Direct2D frame is opened once for the whole painter and every shape,
-//! text run and rounded clip draws into it, so a node costs one
+//! text run and image draws into it, so a node costs one
 //! `BeginDraw`/`EndDraw` instead of one per primitive. An axis-aligned clip is
 //! applied both by intersecting each shape's rectangle with the current clip
 //! (exact for the rectangles a widget draws) and, while the frame is open, as a
 //! Direct2D clip, so text is clipped too. A rounded clip is a Direct2D layer.
-//! The rare GDI-only primitive (a bitmap) closes the frame first, because GDI
-//! and Direct2D cannot interleave inside one frame.
+//! Without Direct2D the whole painter falls back to GDI for good, including
+//! images, which then pay a WIC resample and a DIB per draw.
 
 use crate::d2d::{DcCanvas, PointF, RectF, Stroke as D2dStroke};
 use crate::gdi;
@@ -21,7 +21,7 @@ use xui_core::backend::{
 use xui_core::image::Image;
 use xui_core::{Color, Point, Rect};
 
-use super::shape::{Clip, d2d_stroke, intersect, linear, point_f, radial, rgba, rounded};
+use super::shape::{d2d_stroke, intersect, linear, point_f, radial, rgba, rounded};
 
 /// A portable canvas over a Win32 GDI [`gdi::Canvas`].
 pub(crate) struct Win32Canvas<'a> {
@@ -31,7 +31,10 @@ pub(crate) struct Win32Canvas<'a> {
     pub(crate) tx: f32,
     pub(crate) ty: f32,
     pub(crate) scale: f32,
-    pub(crate) clips: Vec<Clip>,
+    /// The clip stack in device-space bounds, for culling and the exact
+    /// intersection of an axis-aligned shape; the Direct2D frame carries the
+    /// same clips itself, rounded ones included.
+    pub(crate) clips: Vec<Rect>,
     saved: Vec<(f32, f32, f32)>,
     /// The Direct2D frame shared by every primitive in this painter, or `None`
     /// when Direct2D is unavailable (GDI fallback).
@@ -40,9 +43,9 @@ pub(crate) struct Win32Canvas<'a> {
 
 impl<'a> Win32Canvas<'a> {
     pub(crate) fn new(canvas: &'a gdi::Canvas, bounds: Rect, dpi: u32) -> Win32Canvas<'a> {
-        // Bind and begin the Direct2D frame once; every shape and text run in
-        // this painter reuses it. `None` when Direct2D is unavailable, so all
-        // primitives fall back to GDI.
+        // Bind and begin the Direct2D frame once; every shape, text run and
+        // image in this painter reuses it. `None` when Direct2D is
+        // unavailable, so all primitives fall back to GDI.
         let frame = canvas.d2d();
         Win32Canvas {
             canvas,
@@ -54,22 +57,6 @@ impl<'a> Win32Canvas<'a> {
             clips: Vec::new(),
             saved: Vec::new(),
             frame,
-        }
-    }
-
-    /// Re-applies every open clip to `frame` after it was closed and reopened
-    /// (the Direct2D clip stack does not survive a frame boundary).
-    fn resync_clips(&mut self) {
-        let Some(frame) = self.frame.as_mut() else {
-            return;
-        };
-        for clip in &self.clips {
-            match clip.corners {
-                Some(corners) => {
-                    let _ = frame.push_clip_rounded(rounded(clip.bounds, corners));
-                }
-                None => frame.push_clip(RectF::from_rect(clip.bounds)),
-            }
         }
     }
 }
@@ -130,7 +117,7 @@ impl Canvas for Win32Canvas<'_> {
         let rect = self
             .clips
             .last()
-            .map_or(bounds, |clip| intersect(bounds, clip.bounds));
+            .map_or(bounds, |clip| intersect(bounds, *clip));
         if !rect.is_empty() {
             self.canvas.fill_rect(rect, color);
         }
@@ -344,10 +331,17 @@ impl Canvas for Win32Canvas<'_> {
         if rect.is_empty() {
             return;
         }
-        // Reuse the platform layer's RGBA buffer and WIC resampler so the
-        // DIB's per-pixel alpha matches what the rest of the crate uploads.
-        // Uploading allocates a DIB (and a WIC resample when scaling); an
-        // image cache would remove that, but an image is not a per-item draw.
+        // Draw through the shared Direct2D frame, from the DC target's cached
+        // device bitmap: the first draw of an image uploads it once and every
+        // later draw — the same row icon on every repaint — is one cached
+        // DrawBitmap inside the open frame, instead of a WIC resample, a GDI
+        // DIB and a frame close/reopen per draw.
+        if let Some(frame) = self.frame.as_mut() {
+            frame.draw_image(image, RectF::from_rect(rect));
+            return;
+        }
+        // Direct2D unavailable: the GDI fallback still pays a copy, a WIC
+        // resample and a DIB per draw, with no frame that could stay open.
         let rgba = crate::RgbaImage {
             width: image.width(),
             height: image.height(),
@@ -367,13 +361,7 @@ impl Canvas for Win32Canvas<'_> {
         else {
             return;
         };
-        // GDI and Direct2D cannot interleave inside one frame, so close the
-        // frame for the bitmap and reopen it (restoring the clips) for the
-        // shapes that follow. An image is not a per-item draw, so this is rare.
-        self.frame = None;
         self.canvas.draw_bitmap(&bitmap, rect);
-        self.frame = self.canvas.d2d();
-        self.resync_clips();
     }
 
     fn push_clip(&mut self, rect: Rect) {
@@ -381,11 +369,8 @@ impl Canvas for Win32Canvas<'_> {
         let clipped = self
             .clips
             .last()
-            .map_or(rect, |outer| intersect(outer.bounds, rect));
-        self.clips.push(Clip {
-            bounds: clipped,
-            corners: None,
-        });
+            .map_or(rect, |outer| intersect(*outer, rect));
+        self.clips.push(clipped);
         if let Some(frame) = self.frame.as_mut() {
             frame.push_clip(RectF::from_rect(clipped));
         }
@@ -396,11 +381,8 @@ impl Canvas for Win32Canvas<'_> {
         let clipped = self
             .clips
             .last()
-            .map_or(rect, |outer| intersect(outer.bounds, rect));
-        self.clips.push(Clip {
-            bounds: clipped,
-            corners: Some(corners),
-        });
+            .map_or(rect, |outer| intersect(*outer, rect));
+        self.clips.push(clipped);
         if let Some(frame) = self.frame.as_mut() {
             let _ = frame.push_clip_rounded(rounded(clipped, corners));
         }

@@ -271,6 +271,10 @@ pub trait Canvas {
 
     /// Draws `image` scaled into `rect`, honouring the current clip. The image
     /// fills the rectangle exactly; its aspect ratio is not preserved.
+    ///
+    /// Backends cache the decoded (and uploaded) form of an image keyed by its
+    /// identity ([`Image::id`](crate::image::Image::id)), so drawing the same
+    /// image on every repaint — a row icon, a tile's art — is cheap.
     fn draw_image(&mut self, image: &Image, rect: Rect);
 
     /// Clips subsequent drawing to `rect` until the matching `pop_clip`.

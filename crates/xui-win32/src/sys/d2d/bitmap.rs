@@ -2,6 +2,8 @@
 //! premultiplied from a retained `Arc` copy (owned by the surface), so they
 //! can be re-uploaded lazily after a device loss.
 
+#[cfg(test)]
+use core::cell::Cell;
 use std::collections::HashMap;
 
 use windows::Win32::Graphics::Direct2D::Common::{
@@ -14,10 +16,22 @@ use windows::Win32::Graphics::Direct2D::{
 };
 use windows::Win32::Graphics::Dxgi::Common::DXGI_FORMAT_R8G8B8A8_UNORM;
 
-use crate::capture::RgbaImage;
-use crate::d2d::{BASE_DPI, ImageId, Interpolation, RectF};
+use crate::d2d::{BASE_DPI, ImageId, Interpolation, Raster, RectF};
 
 use super::target::{Target, rect_f};
+
+thread_local! {
+    /// How many device bitmaps this thread created, for tests asserting that
+    /// a repeat draw hits the cache.
+    #[cfg(test)]
+    static CREATED: Cell<u64> = const { Cell::new(0) };
+}
+
+/// How many device bitmaps the thread's targets created. Test-only.
+#[cfg(test)]
+pub(crate) fn bitmaps_created() -> u64 {
+    CREATED.with(Cell::get)
+}
 
 /// The default device-bitmap budget, in bytes of premultiplied RGBA. The
 /// surface's retained-image cache is what a lost device re-uploads from; this
@@ -34,7 +48,9 @@ struct DeviceBitmap {
 
 /// Bitmaps and tiled bitmap brushes, cached per render target, bounded by an
 /// LRU over the bitmaps' bytes. A bitmap evicted here is re-created from the
-/// surface's retained image on its next use (or skipped if that is gone too).
+/// pixel data its caller hands each draw — a surface's retained image, or the
+/// portable image a [`DcCanvas::draw_image`](crate::d2d::DcCanvas::draw_image)
+/// caller passes per paint — on its next use.
 pub(crate) struct Images {
     bitmaps: HashMap<ImageId, DeviceBitmap>,
     tiled: HashMap<ImageId, ID2D1BitmapBrush>,
@@ -90,20 +106,22 @@ impl Images {
         }
     }
 
-    /// The bitmap for `id`, creating (and premultiplying) it from `image` on
-    /// first use.
+    /// The bitmap for `id`, creating (and premultiplying) it from `raster` on
+    /// first use; a repeat draw reads no pixels at all.
     fn bitmap(
         &mut self,
         render: &ID2D1RenderTarget,
         id: ImageId,
-        image: &RgbaImage,
+        raster: Raster<'_>,
     ) -> Option<ID2D1Bitmap> {
         let last_used = self.tick();
         if let Some(entry) = self.bitmaps.get_mut(&id) {
             entry.last_used = last_used;
             return Some(entry.bitmap.clone());
         }
-        let pixels = premultiply(image);
+        #[cfg(test)]
+        CREATED.with(|created| created.set(created.get() + 1));
+        let pixels = premultiply(raster.pixels);
         let properties = D2D1_BITMAP_PROPERTIES {
             pixelFormat: D2D1_PIXEL_FORMAT {
                 format: DXGI_FORMAT_R8G8B8A8_UNORM,
@@ -117,16 +135,16 @@ impl Images {
         let bitmap = unsafe {
             render.CreateBitmap(
                 D2D_SIZE_U {
-                    width: image.width,
-                    height: image.height,
+                    width: raster.width,
+                    height: raster.height,
                 },
                 Some(pixels.as_ptr().cast()),
-                image.width * 4,
+                raster.width * 4,
                 &properties,
             )
         }
         .ok()?;
-        let bytes = image.pixels.len();
+        let bytes = raster.pixels.len();
         self.bitmaps.insert(
             id,
             DeviceBitmap {
@@ -145,13 +163,13 @@ impl Images {
         &mut self,
         render: &ID2D1RenderTarget,
         id: ImageId,
-        image: &RgbaImage,
+        raster: Raster<'_>,
         interpolation: Interpolation,
     ) -> Option<ID2D1BitmapBrush> {
         if let Some(brush) = self.tiled.get(&id) {
             return Some(brush.clone());
         }
-        let bitmap = self.bitmap(render, id, image)?;
+        let bitmap = self.bitmap(render, id, raster)?;
         let properties = D2D1_BITMAP_BRUSH_PROPERTIES {
             extendModeX: D2D1_EXTEND_MODE_WRAP,
             extendModeY: D2D1_EXTEND_MODE_WRAP,
@@ -177,9 +195,9 @@ fn interpolation_mode(
 }
 
 /// Converts straight-alpha RGBA to the premultiplied form Direct2D bitmaps use.
-fn premultiply(image: &RgbaImage) -> Vec<u8> {
-    let mut out = Vec::with_capacity(image.pixels.len());
-    let (chunks, _) = image.pixels.as_chunks::<4>();
+fn premultiply(pixels: &[u8]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(pixels.len());
+    let (chunks, _) = pixels.as_chunks::<4>();
     for &[r, g, b, a] in chunks {
         let alpha = u32::from(a);
         let channel = |c: u8| ((u32::from(c) * alpha + 127) / 255) as u8;
@@ -192,13 +210,13 @@ impl Target {
     pub(crate) fn draw_image(
         &mut self,
         id: ImageId,
-        image: &RgbaImage,
+        raster: Raster<'_>,
         dest: RectF,
         src: Option<RectF>,
         opacity: f32,
         interpolation: Interpolation,
     ) {
-        if let Some(bitmap) = self.images.bitmap(&self.render, id, image) {
+        if let Some(bitmap) = self.images.bitmap(&self.render, id, raster) {
             let dest_rect = rect_f(dest);
             let src_rect = src.map(rect_f);
             // SAFETY: valid bitmap (from this target) and rectangles; drawing
@@ -218,12 +236,12 @@ impl Target {
     pub(crate) fn fill_image_tiled(
         &mut self,
         id: ImageId,
-        image: &RgbaImage,
+        raster: Raster<'_>,
         dest: RectF,
         opacity: f32,
         interpolation: Interpolation,
     ) {
-        if let Some(brush) = self.images.tiled(&self.render, id, image, interpolation) {
+        if let Some(brush) = self.images.tiled(&self.render, id, raster, interpolation) {
             // SAFETY: the brush is from this target; drawing is active.
             unsafe {
                 brush.SetOpacity(opacity);

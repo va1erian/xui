@@ -18,6 +18,7 @@ use std::rc::Rc;
 
 use xui_core::app::{App, Ui, run_app};
 use xui_core::backend::{Backend, PlatformSpec};
+use xui_core::image::Image;
 use xui_core::widget::{
     Button, CheckBox, ColorPicker, ComboBox, Dialog, DialogAction, Edit, Glyph, GroupBox, HasText,
     Hyperlink, Label, ListView, MaterialStatusBar, Menu, MenuId, MultilineEdit, NumberField, Panel,
@@ -25,6 +26,23 @@ use xui_core::widget::{
     Toolbar, Tooltip, TopBar, TopBarId, TreeRow, TreeView,
 };
 use xui_core::{Color, Dip, Properties, Rect, Theme, Value};
+
+/// A 16x16 two-tone artwork icon built in memory, so the gallery exercises an
+/// `Image` row icon (and the backend's decoded-image cache) beside the glyphs.
+fn art_image() -> Image {
+    let mut pixels = Vec::new();
+    for y in 0..16 {
+        for x in 0..16 {
+            let (r, g, b) = if (x / 4 + y / 4) % 2 == 0 {
+                (0x7A, 0xC8, 0xE8)
+            } else {
+                (0x2A, 0x62, 0xA8)
+            };
+            pixels.extend_from_slice(&[r, g, b, 255]);
+        }
+    }
+    Image::from_rgba(16, 16, pixels).expect("16x16 RGBA")
+}
 
 /// Which backend the gallery runs on.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -308,7 +326,7 @@ fn run(renderer: Renderer, switch: Rc<Cell<Option<Renderer>>>) {
                         .expanded(true)
                         .icon(Glyph::Folder),
                     TreeRow::new("Work", 1).icon(Glyph::Tag),
-                    TreeRow::new("Home", 1).icon(Glyph::Folder),
+                    TreeRow::new("Home", 1).icon(art_image()),
                     TreeRow::new("Archive", 0)
                         .expandable(true)
                         .icon(Glyph::History),

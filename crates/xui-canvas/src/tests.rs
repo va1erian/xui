@@ -294,6 +294,38 @@ fn a_drawn_image_lands_on_the_surface() {
 }
 
 #[test]
+fn a_repeat_draw_reuses_the_cached_upload() {
+    // A 4x4 checkerboard, so a scaled blit has real pixels to land.
+    let mut pixels = Vec::new();
+    for y in 0..4 {
+        for x in 0..4 {
+            let channel = if (x + y) % 2 == 0 { 0xF0 } else { 0x10 };
+            pixels.extend_from_slice(&[channel, channel, channel, 255]);
+        }
+    }
+    let image = Image::from_rgba(4, 4, pixels).expect("image");
+
+    // Repaint the same surface twice: the second draw must come from the
+    // cached upload and land exactly the same pixels.
+    let mut surface = Surface::new(16, 16);
+    let paint = |surface: &mut Surface| {
+        surface.fill(Color::rgb(0, 0, 0));
+        surface.with_canvas(Rect::new(0, 0, 16, 16), |canvas| {
+            canvas.draw_image(&image, Rect::new(0, 0, 16, 16));
+        });
+        surface.to_image()
+    };
+    let first = paint(&mut surface);
+    let second = paint(&mut surface);
+
+    assert!(first.pixel(0, 0).is_some_and(|p| p[0] > 0xC0));
+    assert_eq!(
+        first.pixels, second.pixels,
+        "the cached draw must land the same pixels"
+    );
+}
+
+#[test]
 fn portable_widgets_render_on_the_software_backend() {
     let backend = Rc::new(OffscreenBackend::new());
     let backend_for_run: Rc<dyn Backend> = backend.clone();
