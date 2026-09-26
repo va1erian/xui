@@ -14,9 +14,12 @@ mod combobox;
 mod control;
 mod edit;
 mod groupbox;
+mod hyperlink;
 mod label;
+mod listview;
 mod progressbar;
 mod radiogroup;
+mod separator;
 mod slider;
 
 #[cfg(test)]
@@ -28,7 +31,10 @@ pub use combobox::ComboBox;
 pub use control::{Control, HasText};
 pub use edit::Edit;
 pub use groupbox::GroupBox;
+pub use hyperlink::Hyperlink;
 pub use label::Label;
+pub use listview::ListView;
 pub use progressbar::ProgressBar;
 pub use radiogroup::RadioGroup;
+pub use separator::Separator;
 pub use slider::Slider;

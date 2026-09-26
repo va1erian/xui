@@ -17,7 +17,8 @@ use std::rc::Rc;
 use xui_core::app::{App, Ui, run_app};
 use xui_core::backend::{Backend, PlatformSpec};
 use xui_core::widget::{
-    Button, CheckBox, ComboBox, Edit, GroupBox, HasText, Label, ProgressBar, RadioGroup, Slider,
+    Button, CheckBox, ComboBox, Edit, GroupBox, HasText, Hyperlink, Label, ListView, ProgressBar,
+    RadioGroup, Separator, Slider,
 };
 use xui_core::{Rect, Theme, TimerId, WidgetId};
 use xui_win32::Win32Backend;
@@ -46,6 +47,9 @@ struct WidgetsApp {
     _radios: RadioGroup<Msg>,
     _group: GroupBox<Msg>,
     _combo: ComboBox<Msg>,
+    _list: ListView<Msg>,
+    _link: Hyperlink<Msg>,
+    _sep: Separator<Msg>,
 }
 
 impl App for WidgetsApp {
@@ -172,6 +176,15 @@ fn run(theme: Theme, file: &str) {
                 )
                 .unwrap();
                 combo.select(1);
+                let list = ListView::new(
+                    ui,
+                    Rect::new(340, 240, 620, 344),
+                    &["Inbox", "Sent", "Drafts", "Archive"],
+                )
+                .unwrap();
+                list.select(Some(1));
+                let link = Hyperlink::new(ui, Rect::new(20, 352, 320, 380), "See docs").unwrap();
+                let sep = Separator::new(ui, Rect::new(20, 392, 620, 394)).unwrap();
                 let window = backend.window_hwnd(ui.window()).expect("window handle");
 
                 // A worker types into the field and then clicks the button with
@@ -227,6 +240,9 @@ fn run(theme: Theme, file: &str) {
                     _radios: radios,
                     _group: group,
                     _combo: combo,
+                    _list: list,
+                    _link: link,
+                    _sep: sep,
                 }
             },
         )
