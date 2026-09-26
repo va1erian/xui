@@ -18,7 +18,7 @@ use xui_core::app::{App, Ui, run_app};
 use xui_core::backend::{Backend, PlatformSpec};
 use xui_core::widget::{
     Button, CheckBox, ComboBox, Edit, GroupBox, HasText, Hyperlink, Label, ListView, ProgressBar,
-    RadioGroup, Separator, Slider,
+    RadioGroup, Separator, Slider, StatusBar, ToggleButton, Toolbar,
 };
 use xui_core::{Color, Rect, Theme, TimerId, WidgetId};
 use xui_win32::Win32Backend;
@@ -51,6 +51,9 @@ struct WidgetsApp {
     _list: ListView<Msg>,
     _link: Hyperlink<Msg>,
     _sep: Separator<Msg>,
+    _toolbar: Toolbar<Msg>,
+    _status: StatusBar<Msg>,
+    _toggle: ToggleButton<Msg>,
 }
 
 impl App for WidgetsApp {
@@ -190,6 +193,14 @@ fn run(theme: Theme, file: &str) {
                 list.select(Some(1));
                 let link = Hyperlink::new(ui, Rect::new(20, 352, 320, 380), "See docs").unwrap();
                 let sep = Separator::new(ui, Rect::new(20, 392, 620, 394)).unwrap();
+                let toggle = ToggleButton::new(ui, Rect::new(340, 356, 460, 384), "Bold").unwrap();
+                toggle.set_checked(true);
+                let toolbar =
+                    Toolbar::new(ui, Rect::new(20, 410, 620, 442), &["New", "Open", "Save"])
+                        .unwrap();
+                let status =
+                    StatusBar::new(ui, Rect::new(20, 452, 620, 476), &["Ready", "3 items"])
+                        .unwrap();
                 let window = backend.window_hwnd(ui.window()).expect("window handle");
 
                 // A worker types into the field and then clicks the button with
@@ -248,6 +259,9 @@ fn run(theme: Theme, file: &str) {
                     _list: list,
                     _link: link,
                     _sep: sep,
+                    _toolbar: toolbar,
+                    _status: status,
+                    _toggle: toggle,
                     expected,
                 }
             },
