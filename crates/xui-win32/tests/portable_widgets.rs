@@ -81,7 +81,7 @@ impl App for WidgetsApp {
                     && let Some(image) = common::capture_screen(rect)
                     // Only sample when the button actually painted; a
                     // non-rendering CI desktop leaves no hover colour.
-                    && common::contains(&image, expected)
+                    && common::dominant(&image, expected)
                     // Sample above the vertically-centred text, where the face
                     // fill shows cleanly.
                     && let Some(pixel) = image.pixel(image.width / 2, image.height / 6)

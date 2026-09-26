@@ -80,7 +80,7 @@ fn a_painted_node_shows_the_colour_its_painter_drew() {
     let image = common::capture_screen(rect).expect("the node was captured");
     // A non-rendering CI desktop never paints the accent; skip rather than
     // fail (the pipeline itself is still exercised).
-    if !common::contains(&image, [ACCENT.r, ACCENT.g, ACCENT.b]) {
+    if !common::dominant(&image, [ACCENT.r, ACCENT.g, ACCENT.b]) {
         return;
     }
     let center = image
