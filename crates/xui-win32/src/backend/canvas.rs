@@ -164,6 +164,14 @@ impl Canvas for Win32Canvas<'_> {
         }
     }
 
+    fn fill_polygon(&mut self, points: &[Point], color: Color) {
+        if points.len() < 3 {
+            return;
+        }
+        let points: Vec<Point> = points.iter().map(|point| self.point(*point)).collect();
+        self.canvas.polygon(&points, color);
+    }
+
     fn stroke_rect(&mut self, rect: Rect, color: Color, width: f32) {
         let rect = self.rect(rect);
         if rect.is_empty() {

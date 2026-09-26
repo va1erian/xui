@@ -254,6 +254,28 @@ impl Canvas {
         sys::gdi::select_object(self.dc, previous_brush);
     }
 
+    /// Fills the polygon through `points`.
+    pub fn polygon(&self, points: &[Point], color: Color) {
+        if points.len() < 3 {
+            return;
+        }
+        if let Some(mut d2d) = self.d2d()
+            && let Some(path) = polygon_path(points)
+        {
+            d2d.fill_path(&path, color.into());
+            let _ = d2d.end_draw();
+            return;
+        }
+        let Some(brush) = cache::solid_brush(color) else {
+            return;
+        };
+        let previous_brush = sys::gdi::select_brush(self.dc, brush);
+        let previous_pen = sys::gdi::select_object(self.dc, sys::gdi::null_pen());
+        sys::gdi::polygon(self.dc, points);
+        sys::gdi::select_object(self.dc, previous_pen);
+        sys::gdi::select_object(self.dc, previous_brush);
+    }
+
     /// Draws `text` inside `rect`.
     pub fn draw_text(&self, rect: Rect, text: &str, color: Color, format: TextFormat) -> i32 {
         sys::gdi::draw_text(self.dc, rect, text, color, format.bits())
@@ -276,6 +298,18 @@ impl Canvas {
         sys::gdi::select_object(self.dc, previous);
         result
     }
+}
+
+/// The Direct2D path for a polygon through `points`.
+fn polygon_path(points: &[Point]) -> Option<crate::d2d::Path> {
+    let (first, rest) = points.split_first()?;
+    let mut builder = PathBuilder::new().ok()?;
+    builder.move_to(PointF::new(first.x as f32, first.y as f32));
+    for point in rest {
+        builder.line_to(PointF::new(point.x as f32, point.y as f32));
+    }
+    builder.close();
+    builder.build().ok()
 }
 
 /// The Direct2D path for a sort-arrow triangle inside `rect`.

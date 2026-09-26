@@ -16,6 +16,8 @@ pub enum DrawOp {
     Rounded(Rect, f32, Color),
     /// Fills an ellipse.
     Ellipse(Point, f32, f32, Color),
+    /// Fills a polygon through the given points.
+    Polygon(Vec<Point>, Color),
     /// Strokes a rectangle.
     Stroke(Rect, Color, f32),
     /// Strokes a rounded rectangle.
@@ -107,6 +109,11 @@ impl Canvas for RecordingCanvas {
             radius_y * self.scale,
             color,
         ));
+    }
+
+    fn fill_polygon(&mut self, points: &[Point], color: Color) {
+        let points: Vec<Point> = points.iter().map(|point| self.point(*point)).collect();
+        self.ops.push(DrawOp::Polygon(points, color));
     }
 
     fn stroke_rect(&mut self, rect: Rect, color: Color, width: f32) {
