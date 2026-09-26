@@ -5,7 +5,9 @@ The integration tests create real top-level windows, move focus
 steals focus while you type, and your typing can make tests flaky.
 `scripts/sandbox/run.ps1` runs them inside **Windows Sandbox**, a throwaway
 Hyper-V VM that ships with Windows. It has its own desktop, input queue and
-foreground window.
+foreground window, so synthetic events stay in the sandbox — with one caveat:
+the desktop is presented over RDP and shares the host *pointer* with it (see
+[Pointer and input](#pointer-and-input)).
 
 ## One-time setup (Windows 10/11 Pro, Enterprise or Education)
 
@@ -38,13 +40,41 @@ How it works:
 4. Prints the logs. It exits with code 1 if any executable failed.
 
 A cold start takes about 15–30 s on top of the build. The sandbox window opens
-once. You can leave it behind your other windows, because nothing inside it
-touches the host's focus or input. If you minimize it, Windows may stop
-rendering the VM's desktop, which breaks capture tests. Use `-Keep` to leave the
-sandbox open afterwards so you can look around.
+once. You can leave it behind your other windows: keyboard and click events stay
+in the guest. If you minimize it, Windows may stop rendering the VM's desktop,
+which breaks capture tests. Use `-Keep` to leave the sandbox open afterwards so
+you can look around.
 
 Limitations: only one sandbox can run at a time, and it needs hardware
 virtualization. Windows Home doesn't include it (see the alternatives below).
+
+## Pointer and input
+
+Windows Sandbox presents its desktop over an RDP session and shares the host
+pointer with it. Synthetic *events* are delivered only to the guest — a click
+never lands on a host window — but a test that moves the cursor
+(`SetCursorPos`/`mouse_event`) moves the guest cursor, and the session mirrors
+that onto your physical pointer.
+
+Some suites deliberately move the pointer, and one of those moves is load
+bearing:
+
+- Before injecting synthetic messages, the tests **park** the real pointer in the
+  screen corner (`park_real_pointer` in `slider`, `flow_text`,
+  `listview_header_resize`). This is not cosmetic: while the physical pointer
+  rests over a test window, the pointer moves the OS generates are genuine input
+  and get counted by the assertions. The full suite fails without it — for
+  example `slider::hovering_reports_the_value_under_the_pointer` sees extra
+  `Hover` events.
+- The ListView header drag (`listview_header_resize`) injects a real drag, and
+  the opt-in screenshot suites (`flow_text_shots`, `slider_shots`) position the
+  cursor for hover states.
+
+Because the sandbox shares one pointer, those moves are visible on your physical
+mouse while the suite runs. A click stays in the guest; only the pointer moves.
+There is no way to keep the physical pointer still while running tests that need
+real input; if that matters, use a VM with its own pointer (see
+*Alternatives*).
 
 ## Screenshots
 

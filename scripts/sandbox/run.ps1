@@ -76,20 +76,39 @@ New-Item -ItemType Directory $bin, $out | Out-Null
 
 # --- Build on the host ------------------------------------------------------
 if ($Exe.Count -eq 0) {
+    $prevTarget = $env:CARGO_TARGET_DIR
+    $prevRustFlags = $env:RUSTFLAGS
     $env:CARGO_TARGET_DIR = $targetDir
     # The sandbox has no vcruntime140.dll; a static CRT makes the binaries self-contained.
-    $env:RUSTFLAGS = "$env:RUSTFLAGS -C target-feature=+crt-static".Trim()
+    $env:RUSTFLAGS = "$prevRustFlags -C target-feature=+crt-static".Trim()
     # @() keeps a one-element array from collapsing to a string, which `@cmd`
     # would then splat character by character.
     $cmd = @(if ($Build) { 'build' } else { 'test'; '--no-run' })
-    $cargoOut = & cargo @cmd --manifest-path $manifest --message-format=json-render-diagnostics @CargoArgs
-    if ($LASTEXITCODE -ne 0) { throw "cargo $($cmd -join ' ') failed" }
+    # Windows PowerShell 5.1 turns a native command's stderr into a terminating
+    # error while $ErrorActionPreference is 'Stop', and cargo writes progress to
+    # stderr, so the build would abort on the first "Compiling ...". Relax the
+    # preference for the call, merge stderr into the pipeline and restore it.
+    $prevEap = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    $cargoOut = & cargo @cmd --manifest-path $manifest --message-format=json-render-diagnostics @CargoArgs 2>&1
+    $cargoExit = $LASTEXITCODE
+    $ErrorActionPreference = $prevEap
+    if ($cargoExit -ne 0) {
+        $cargoOut |
+            Where-Object { $_ -isnot [System.Management.Automation.ErrorRecord] } |
+            ForEach-Object { Write-Host $_ }
+        throw "cargo $($cmd -join ' ') failed"
+    }
     $Exe = @($cargoOut | ForEach-Object {
-        if ($_ -notmatch '^\{') { return }
-        $msg = $_ | ConvertFrom-Json
+        $line = if ($_ -is [System.Management.Automation.ErrorRecord]) { $_.ToString() } else { $_ }
+        if ($line -notmatch '^\{') { return }
+        $msg = $line | ConvertFrom-Json
         if ($msg.reason -eq 'compiler-artifact' -and $msg.executable -and
             ($Build -or $msg.profile.test)) { $msg.executable }
     } | Sort-Object -Unique)
+    # Leave the caller's cargo environment as we found it.
+    $env:CARGO_TARGET_DIR = $prevTarget
+    $env:RUSTFLAGS = $prevRustFlags
 }
 if ($Exe.Count -eq 0) { throw 'Nothing to run.' }
 foreach ($e in $Exe) { Copy-Item $e $bin }
