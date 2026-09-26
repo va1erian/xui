@@ -17,7 +17,6 @@ pub(crate) mod clipboard;
 pub(crate) mod colorpicker;
 pub(crate) mod combobox;
 pub(crate) mod control;
-pub(crate) mod cursor;
 pub(crate) mod cursor_idle;
 pub(crate) mod d2d;
 pub(crate) mod dispatch;

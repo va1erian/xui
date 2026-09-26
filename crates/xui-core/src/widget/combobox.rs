@@ -118,7 +118,7 @@ fn paint_popup<M: 'static>(s: &Shared<M>, canvas: &mut dyn Canvas, theme: Theme)
         let rect = Rect::new(b.left, top, b.right, top + row);
         let hot = index == s.selected.get() || s.hover.get() == Some(index);
         if hot {
-            canvas.fill_rect(rect, theme.selection);
+            canvas.fill_rect(rect, theme.accent);
         }
         let hot_color = pick(hot, theme.text_on_accent, theme.text);
         let color = pick(s.enabled.get(), hot_color, theme.text_disabled);
