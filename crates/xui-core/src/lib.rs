@@ -42,9 +42,9 @@ pub use router::{Router, WidgetHost};
 pub use theme::{Theme, Themed};
 pub use units::{Dip, Px, dip};
 pub use widget::{
-    Button, CheckBox, ComboBox, Control, Edit, GroupBox, HasText, Hyperlink, Label, ListView,
-    MultilineEdit, NumberField, Panel, ProgressBar, RadioGroup, Separator, Slider, StatusBar,
-    ToggleButton, Toolbar, TreeRow, TreeView,
+    Button, CheckBox, ComboBox, Control, Edit, Glyph, GroupBox, HasText, Hyperlink, Label,
+    ListView, MaterialStatusBar, MultilineEdit, NumberField, Panel, ProgressBar, RadioGroup,
+    Separator, Slider, StatusBar, ToggleButton, Toolbar, TopBar, TopBarId, TreeRow, TreeView,
 };
 
 /// The core types a frontend or a backend usually needs, in one `use`.
