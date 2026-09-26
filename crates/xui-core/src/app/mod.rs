@@ -28,6 +28,7 @@ use proxy::Inbox;
 use crate::theme::Theme;
 
 use crate::backend::{Backend, Event, PlatformSpec, Result, TimerId, WidgetId, WindowId};
+use crate::geometry::Rect;
 use crate::router::{Router, WidgetHost};
 
 /// A widget-layer application.
@@ -52,6 +53,9 @@ type TimerMapper<M> = Box<dyn Fn(TimerId) -> Option<M>>;
 type TimerListener<M> = Rc<dyn Fn(TimerId) -> Option<M>>;
 /// A display-layout change mapped to an optional app message.
 type DisplayMapper<M> = Box<dyn Fn() -> Option<M>>;
+/// A DPI change mapped to an optional app message, with the new dots-per-inch
+/// and the backend's suggested window bounds in device pixels.
+type DpiMapper<M> = Box<dyn Fn(u32, Rect) -> Option<M>>;
 
 /// The shared, interior-mutable state behind a window's [`Ui`].
 pub(crate) struct Core<M> {
@@ -71,6 +75,7 @@ pub(crate) struct Core<M> {
     timer_listeners: RefCell<Vec<(usize, TimerListener<M>)>>,
     next_timer_listener: Cell<usize>,
     on_display_change: RefCell<Option<DisplayMapper<M>>>,
+    on_dpi_changed: RefCell<Option<DpiMapper<M>>>,
 }
 
 impl<M> Core<M> {
@@ -89,6 +94,7 @@ impl<M> Core<M> {
             timer_listeners: RefCell::new(Vec::new()),
             next_timer_listener: Cell::new(0),
             on_display_change: RefCell::new(None),
+            on_dpi_changed: RefCell::new(None),
         })
     }
 
@@ -180,6 +186,11 @@ impl<M> Core<M> {
         self.on_display_change.replace(Some(Box::new(f)));
     }
 
+    /// Records the DPI-change mapper.
+    pub(crate) fn set_on_dpi_changed(&self, f: impl Fn(u32, Rect) -> Option<M> + 'static) {
+        self.on_dpi_changed.replace(Some(Box::new(f)));
+    }
+
     fn pop(&self) -> Option<M> {
         self.queue.borrow_mut().pop_front()
     }
@@ -265,6 +276,18 @@ impl<A: App> Runtime<A> {
                         .borrow()
                         .as_ref()
                         .and_then(|f| f());
+                    if let Some(msg) = mapped {
+                        self.core.enqueue(msg);
+                    }
+                    return true;
+                }
+                Event::DpiChanged { dpi, suggested } => {
+                    let mapped = self
+                        .core
+                        .on_dpi_changed
+                        .borrow()
+                        .as_ref()
+                        .and_then(|f| f(*dpi, *suggested));
                     if let Some(msg) = mapped {
                         self.core.enqueue(msg);
                     }

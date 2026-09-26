@@ -72,11 +72,15 @@ impl Backend for Win32Backend {
         let id = WindowId::from_raw(Self::allocate(&self.next_window));
         let shared = WindowShared::new();
         let background = Theme::light().background;
+        // The spec is in Dip and the window does not exist yet, so convert at
+        // the process-wide system DPI; once it exists `dpi()` reads the
+        // monitor it landed on.
+        let dpi = sys::dpi::system_dpi();
         let bounds = Rect::new(
             0,
             0,
-            spec.width.to_px(96).value(),
-            spec.height.to_px(96).value(),
+            spec.width.to_px(dpi).value(),
+            spec.height.to_px(dpi).value(),
         );
         let class = WindowClass::register("xui.backend", background)
             .map_err(|_| BackendError::CreateFailed("window class"))?;

@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use xui_core::app::{App, Ui, run_app};
-use xui_core::backend::{Backend, PlatformSpec};
+use xui_core::backend::{Backend, NodeKind, NodeSpec, ParentRef, PlatformSpec};
 use xui_core::geometry::{Point, Rect};
 use xui_core::image::Image;
 use xui_core::widget::{Button, CheckBox, Label, ProgressBar, Slider};
@@ -330,6 +330,45 @@ fn portable_widgets_render_on_the_software_backend() {
     );
 
     assert!(captured.is_some(), "the surface was rendered");
+}
+
+#[test]
+fn a_design_length_is_converted_once_at_each_dpi() {
+    let backend = OffscreenBackend::new();
+    // A 10 DIP square is 10px at 100% and 20px at 200%. If the boundary scaled
+    // it twice it would cover 40px at 200%, so probing 25px catches that.
+    for (dpi, covered, outside) in [(96u32, 5u32, 15u32), (192u32, 15u32, 25u32)] {
+        let window = backend
+            .open_window_at(&PlatformSpec::new("dpi"), dpi)
+            .unwrap();
+        assert_eq!(backend.dpi(window), dpi, "the window renders at {dpi}");
+
+        let node = backend
+            .create(
+                ParentRef::Window(window),
+                &NodeSpec::new(NodeKind::Custom, backend.client_rect(window)),
+            )
+            .unwrap();
+        backend.set_painter(
+            node,
+            Rc::new(move |canvas| {
+                let side = Dip(10.0).to_px(canvas.dpi()).value();
+                canvas.fill_rect(Rect::new(0, 0, side, side), Color::rgb(255, 0, 0));
+            }),
+        );
+
+        let image = backend.render(window).expect("a rendered window");
+        assert_eq!(
+            image.pixel(covered, covered),
+            Some([255, 0, 0, 255]),
+            "a 10 DIP square covers {covered}px at {dpi} DPI"
+        );
+        assert_ne!(
+            image.pixel(outside, outside),
+            Some([255, 0, 0, 255]),
+            "and not {outside}px, so the DIP was scaled exactly once"
+        );
+    }
 }
 
 #[test]

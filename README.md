@@ -129,6 +129,7 @@ already retained), and closures that capture shared mutable app state.
 | Borderless fullscreen: `Window::enter_fullscreen(&MonitorInfo)`/`leave_fullscreen` (topmost `WS_POPUP` covering the monitor's full rect, saved style/placement restored), events delivered normally, and `hide_cursor_when_idle` | exists (#162) |
 | Window placement: new windows centred on the owner's monitor (primary for a standalone window), `Ui::placement`/`set_placement` for persisting geometry, `centered_in_work_area` | exists (#157) |
 | Monitor enumeration: `MonitorInfo` (device and friendly name, rect, work area, primary, DPI), `monitors`, `monitor_of`/`Window::monitor`, and `Ui::on_display_change` for `WM_DISPLAYCHANGE` | exists (#161) |
+| DPI: every backend reports `Backend::dpi` and raises `Event::DpiChanged`; `Ui::on_dpi_changed` maps the new DPI and the backend's suggested bounds to a `Msg`, and `Dip` is converted to `Px` once at the backend boundary | exists (#15) |
 | Layout tree (`column!`/`row!`, `fill`/`width`, relayout on resize/DPI) | exists |
 | Theming foundation: tokens, `Themed`, live switching, central `WM_CTLCOLOR*` | #30 |
 | Owner-drawn `ProgressBar` (range/value/state/marquee), typed `TaskDialog` | exist (#18) |
@@ -522,9 +523,12 @@ while it is blocked in `SendMessage`; it also skips an empty text, because
 - The native status bar exposes no text colour, so `StatusBar` is owner-drawn
   too.
 - DPI: `win32ui::init()` opts into per-monitor-v2 awareness; design values are
-  written as `Dip` and converted once with `Dip::to_px(dpi)`. The example
-  binaries embed a Common Controls v6 + DPI manifest (`win32ui.rc` /
-  `win32ui.manifest`, via `build.rs`).
+  written as `Dip` and converted once with `Dip::to_px(dpi)`. A window moved to
+  a monitor with another scale factor raises `Event::DpiChanged`; the app
+  receives it through `Ui::on_dpi_changed(dpi, suggested)` — the new DPI and
+  the backend's suggested device-pixel bounds — and re-lays-out. The runtime
+  never moves the window itself. The example binaries embed a Common Controls
+  v6 + DPI manifest (`win32ui.rc` / `win32ui.manifest`, via `build.rs`).
 
 ## Screenshots and capture
 
