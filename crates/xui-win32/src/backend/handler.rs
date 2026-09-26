@@ -6,16 +6,19 @@
 
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
+use std::ffi::c_void;
 use std::rc::Rc;
 
-use xui_core::Rect;
+use windows::Win32::Graphics::Gdi::{HBRUSH, HDC, HGDIOBJ};
+use windows::Win32::UI::WindowsAndMessaging::{EN_CHANGE, WM_CTLCOLOREDIT, WM_CTLCOLORSTATIC};
+
 use xui_core::backend::{Event, Painter, WidgetId, WindowId};
 use xui_core::router::WidgetHost;
+use xui_core::{Color, Rect, Theme};
 
 use crate::backend::canvas::Win32Canvas;
 use crate::gdi::Paint;
 use crate::hwnd::Hwnd;
-use windows::Win32::UI::WindowsAndMessaging::EN_CHANGE;
 
 use crate::message::{CommandNotification, LResult, Message};
 use crate::sys;
@@ -27,6 +30,12 @@ pub(crate) struct WindowShared {
     /// Child handles mapped to their node, so a native control's `WM_COMMAND`
     /// (sent to the parent) reaches the widget that owns it.
     nodes: RefCell<HashMap<usize, WidgetId>>,
+    /// The window's theme, so a native control's `WM_CTLCOLOR*` is answered
+    /// with the right text and background.
+    theme: Cell<Theme>,
+    /// The brush last returned for `WM_CTLCOLOR*`, kept alive for the control
+    /// to paint with.
+    brush: RefCell<Option<(Color, HBRUSH)>>,
 }
 
 impl WindowShared {
@@ -35,7 +44,40 @@ impl WindowShared {
         Rc::new(WindowShared {
             sink: RefCell::new(None),
             nodes: RefCell::new(HashMap::new()),
+            theme: Cell::new(Theme::light()),
+            brush: RefCell::new(None),
         })
+    }
+
+    /// Records the window's theme.
+    pub(crate) fn set_theme(&self, theme: Theme) {
+        self.theme.set(theme);
+    }
+
+    /// The window's theme.
+    pub(crate) fn theme(&self) -> Theme {
+        self.theme.get()
+    }
+
+    /// The brush for a `background` colour, created once and reused.
+    fn control_brush(&self, background: Color) -> isize {
+        let mut brush = self.brush.borrow_mut();
+        if let Some((color, handle)) = brush.as_ref()
+            && *color == background
+        {
+            return handle.0 as isize;
+        }
+        if let Some((_, old)) = brush.take() {
+            sys::gdi::delete_object(HGDIOBJ(old.0));
+        }
+        match sys::gdi::solid_brush(background) {
+            Ok(handle) => {
+                let raw = handle.0 as isize;
+                *brush = Some((background, handle));
+                raw
+            }
+            Err(_) => 0,
+        }
     }
 
     /// Replaces the event sink.
@@ -188,6 +230,28 @@ impl TopHandler {
 impl WindowHandler for TopHandler {
     fn message(&self, _window: &Window, message: Message) -> Option<LResult> {
         let _ = self.window;
+        // A native control asks its parent how to paint its background; answer
+        // with the window's theme so a native `EDIT` is dark in dark mode.
+        if let Message::Other {
+            code,
+            wparam,
+            lparam,
+        } = &message
+            && matches!(*code, WM_CTLCOLOREDIT | WM_CTLCOLORSTATIC)
+            && *lparam != 0
+        {
+            let hwnd = Hwnd::from_raw(*lparam as usize);
+            if self.shared.nodes.borrow().contains_key(&hwnd.raw()) {
+                let theme = self.shared.theme();
+                let background = theme.input_background;
+                // SAFETY-free: `set_*_color` are safe `sys` wrappers; the DC is
+                // only valid for this message.
+                let hdc = HDC(*wparam as *mut c_void);
+                sys::gdi::set_text_color(hdc, theme.text);
+                sys::gdi::set_bk_color(hdc, background);
+                return Some(self.shared.control_brush(background));
+            }
+        }
         // A native control sends its notifications to the parent, so route a
         // child's `WM_COMMAND` to the node that owns it.
         if let Message::Command(command) = &message
@@ -251,20 +315,38 @@ impl NodeHandler {
             return Rect::default();
         };
         let hwnd = window.hwnd();
-        if let Some(paint) = Paint::begin(hwnd) {
-            let dirty = paint.paint_rect();
-            let dpi = sys::dpi::window_dpi(hwnd);
-            let mut canvas = Win32Canvas::new(paint.canvas(), self.bounds.get(), dpi);
-            painter(&mut canvas);
-            dirty
-        } else {
-            Rect::default()
+        let Some(paint) = Paint::begin(hwnd) else {
+            return Rect::default();
+        };
+        let dirty = paint.paint_rect();
+        let dpi = sys::dpi::window_dpi(hwnd);
+        let bounds = self.bounds.get();
+        // The double buffer starts with the stock `System` font; select the
+        // shared UI font so text matches the native controls and is
+        // anti-aliased rather than the Windows 3.1 bitmap face.
+        match crate::gdi::Font::shared_ui(dpi) {
+            Ok(font) => paint.canvas().with_font(&font, |canvas| {
+                let mut canvas = Win32Canvas::new(canvas, bounds, dpi);
+                painter(&mut canvas);
+            }),
+            Err(_) => {
+                let mut canvas = Win32Canvas::new(paint.canvas(), bounds, dpi);
+                painter(&mut canvas);
+            }
         }
+        dirty
     }
 }
 
 impl WindowHandler for NodeHandler {
     fn message(&self, window: &Window, message: Message) -> Option<LResult> {
+        // The class brush would flash the (light) background before every
+        // double-buffered paint, which reads as flicker on hover and while a
+        // slider or progress bar drags. The whole dirty rectangle is repainted
+        // on `WM_PAINT`, so claim the erase and skip the default fill.
+        if matches!(&message, Message::Other { code, .. } if *code == sys::d2d::WM_ERASEBKGND) {
+            return Some(1);
+        }
         match &message {
             Message::Paint => {
                 let dirty = self.paint(window);

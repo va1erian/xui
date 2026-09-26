@@ -21,7 +21,7 @@ mod gallery {
         ToggleButton, Toolbar, TreeRow, TreeView,
     };
     use xui_core::{Dip, Rect, Theme};
-    use xui_win32::Win32Backend;
+    use xui_win32::{SystemTheme, Win32Backend};
 
     enum Msg {
         Edit(String),
@@ -36,8 +36,7 @@ mod gallery {
         Tool(usize),
         Link,
         Click,
-        Theme(bool),
-        Design(bool),
+        Theme(usize),
         Autoclose,
     }
 
@@ -63,8 +62,7 @@ mod gallery {
         _inside: Label<Msg>,
         _toolbar: Toolbar<Msg>,
         _sep: Separator<Msg>,
-        _design: ToggleButton<Msg>,
-        _dark: ToggleButton<Msg>,
+        _theme: RadioGroup<Msg>,
         _button: Button<Msg>,
     }
 
@@ -91,14 +89,20 @@ mod gallery {
                 Msg::Tool(index) => format!("toolbar #{index}"),
                 Msg::Link => "link clicked".to_string(),
                 Msg::Click => "button clicked".to_string(),
-                Msg::Theme(dark) => {
-                    ui.set_theme(if dark { Theme::dark() } else { Theme::light() });
-                    format!("theme: {}", if dark { "dark" } else { "light" })
-                }
-                Msg::Design(on) => {
-                    ui.set_design_mode(on);
-                    format!("design mode: {on}")
-                }
+                Msg::Theme(choice) => match choice {
+                    1 => {
+                        ui.set_theme(Theme::dark());
+                        "theme: dark".to_string()
+                    }
+                    2 => {
+                        ui.set_theme(Theme::system());
+                        "theme: system".to_string()
+                    }
+                    _ => {
+                        ui.set_theme(Theme::light());
+                        "theme: light".to_string()
+                    }
+                },
                 Msg::Autoclose => {
                     ui.quit();
                     return;
@@ -155,16 +159,20 @@ mod gallery {
                 let link = Hyperlink::new(ui, rect(16.0, 336.0, 380.0, 364.0), "Open docs")
                     .unwrap()
                     .on_click(|| Some(Msg::Link));
-                let button = Button::new(ui, rect(16.0, 408.0, 190.0, 436.0), "Click me")
+                let button = Button::new(ui, rect(16.0, 458.0, 190.0, 486.0), "Click me")
                     .unwrap()
                     .on_click(|| Some(Msg::Click));
-                let dark = ToggleButton::new(ui, rect(16.0, 372.0, 190.0, 400.0), "Dark mode")
-                    .unwrap()
-                    .on_toggle(|on| Some(Msg::Theme(on)));
-                let design = ToggleButton::new(ui, rect(198.0, 372.0, 380.0, 400.0), "Design mode")
-                    .unwrap()
-                    .on_toggle(|on| Some(Msg::Design(on)));
-
+                let theme = RadioGroup::new(
+                    ui,
+                    rect(16.0, 366.0, 190.0, 450.0),
+                    &["Light", "Dark", "System"],
+                )
+                .unwrap()
+                .on_select(|index| Some(Msg::Theme(index)));
+                if std::env::var("WIN32UI_GALLERY_THEME").as_deref() == Ok("dark") {
+                    ui.set_theme(Theme::dark());
+                    theme.select(1);
+                }
                 let list = ListView::new(
                     ui,
                     rect(400.0, 48.0, 764.0, 160.0),
@@ -238,8 +246,7 @@ mod gallery {
                     _inside: inside,
                     _toolbar: toolbar,
                     _sep: sep,
-                    _design: design,
-                    _dark: dark,
+                    _theme: theme,
                     _button: button,
                 }
             },

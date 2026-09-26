@@ -172,8 +172,11 @@ fn popup_event<M: 'static>(
         return None;
     }
     if let Event::MouseMove { y, .. } = event {
-        s.hover.set(row_at(ui, popup, *y, s.items.len()));
-        ui.invalidate(popup);
+        let hover = row_at(ui, popup, *y, s.items.len());
+        if s.hover.get() != hover {
+            s.hover.set(hover);
+            ui.invalidate(popup);
+        }
         return None;
     }
     let Event::MouseDown { y, button, .. } = event else {

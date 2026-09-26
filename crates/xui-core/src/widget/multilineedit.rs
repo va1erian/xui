@@ -71,7 +71,10 @@ pub struct MultilineEdit<M: 'static> {
 impl<M: 'static> MultilineEdit<M> {
     /// Creates a text area showing `text` at `bounds`.
     pub fn new(ui: &Ui<M>, bounds: Rect, text: &str) -> Result<MultilineEdit<M>> {
-        let control = Control::new(ui, &NodeSpec::new(NodeKind::Edit, bounds).tab_stop())?;
+        let control = Control::new(
+            ui,
+            &NodeSpec::new(NodeKind::MultilineEdit, bounds).tab_stop(),
+        )?;
         let state = Rc::new(RefCell::new(text.to_string()));
         let caret = Rc::new(Cell::new(text.chars().count()));
         let focused = Rc::new(Cell::new(false));

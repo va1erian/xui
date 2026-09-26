@@ -93,7 +93,7 @@ pub struct NumberField<M: 'static> {
 impl<M: 'static> NumberField<M> {
     /// Creates a field for `min..=max` at its minimum; a non-positive `step` is `1`.
     pub fn new(ui: &Ui<M>, bounds: Rect, min: f64, max: f64, step: f64) -> Result<NumberField<M>> {
-        let control = Control::new(ui, &NodeSpec::new(NodeKind::Edit, bounds).tab_stop())?;
+        let control = Control::new(ui, &NodeSpec::new(NodeKind::NumberField, bounds).tab_stop())?;
         let (min, max) = if min <= max { (min, max) } else { (max, min) };
         let s = Rc::new(State {
             value: Cell::new(min),
