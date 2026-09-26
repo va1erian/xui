@@ -25,6 +25,12 @@ jobs:
       - run: cargo check -p xui --features canvas --all-targets
       - run: cargo clippy -p xui --features canvas --all-targets -- -D warnings
       - run: cargo test -p xui-canvas
+      # The window-level GL path is opt-in (it needs an OpenGL driver). Run it
+      # explicitly so a regression is CI-visible; on a runner without a driver
+      # the test skips cleanly, but the step still attempts it.
+      - run: cargo test -p xui-canvas --test gl
+        env:
+          XUI_CANVAS_GL_TEST: "1"
 
   # The occlusion-proof capture backend is behind the off-by-default `wgc`
   # feature, so it needs its own build and test pass. Tests that require a real

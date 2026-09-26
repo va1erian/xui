@@ -1,8 +1,10 @@
 //! Shared scaffolding for the integration tests: class registration, a
 //! watchdog timer and the run loop, so each test only describes its handler.
 //!
-//! If the CI session cannot create windows at all, [`run_with_watchdog`]
-//! returns `None` and the test skips rather than fails.
+//! A session that cannot create windows at all would let a suite pass having
+//! asserted nothing, so [`run_with_watchdog`] fails the test unless
+//! [`ALLOW_HEADLESS_ENV`] is set; only then does it return `None` and let the
+//! test skip.
 
 // Each test binary compiles this module separately, so a helper used by one
 // test is "dead" in the others.
@@ -14,6 +16,21 @@ use std::rc::Rc;
 use xui_win32::prelude::*;
 
 pub mod uia;
+
+/// Set to any value to let a genuinely headless run skip its window tests
+/// instead of failing: `XUI_TESTS_ALLOW_HEADLESS=1`.
+pub const ALLOW_HEADLESS_ENV: &str = "XUI_TESTS_ALLOW_HEADLESS";
+
+/// Returns `None` so the caller skips, but only after failing the test unless
+/// the headless escape hatch is set: a session that cannot create windows must
+/// not let a suite pass having exercised no window.
+fn skip_window<T>() -> Option<T> {
+    assert!(
+        std::env::var_os(ALLOW_HEADLESS_ENV).is_some(),
+        "no window could be created; set {ALLOW_HEADLESS_ENV}=1 to allow a headless run"
+    );
+    None
+}
 
 /// Milliseconds after which the watchdog gives up on a handler.
 const WATCHDOG_MS: u32 = 5000;
@@ -44,7 +61,7 @@ where
 
     let theme = Theme::light();
     let Ok(class) = WindowClass::register(name, theme.background) else {
-        return None;
+        return skip_window();
     };
     let timed_out = Rc::new(Cell::new(false));
     let watchdog = Rc::new(Cell::new(None));
@@ -62,7 +79,7 @@ where
         name,
         handler,
     ) else {
-        return None;
+        return skip_window();
     };
 
     window.show();
@@ -172,7 +189,9 @@ where
         make(ui)
     });
 
-    result.ok()?;
+    if result.is_err() {
+        return skip_window();
+    }
     Some(RunApp {
         timed_out: timed_out.get(),
         watchdog: watchdog.get(),
