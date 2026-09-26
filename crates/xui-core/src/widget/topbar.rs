@@ -12,12 +12,17 @@ use crate::geometry::Rect;
 use crate::units::Dip;
 
 mod events;
+mod glyph;
 mod icon;
 mod items;
+mod nav_glyph;
 mod paint;
 
 #[cfg(test)]
 mod tests;
+
+pub use glyph::Glyph;
+pub(crate) use icon::draw_glyph;
 
 use events::{ChangeMapper, ClickMapper, Events, ToggleMapper};
 use items::{Item, Kind};
@@ -35,47 +40,6 @@ impl TopBarId {
 
 /// The sentinel id of an anonymous [`spacer`](TopBar::spacer).
 const SPACER: TopBarId = TopBarId(usize::MAX);
-
-/// A dependency-free icon.
-///
-/// The set is deliberately small: the bar carries it without an image
-/// dependency (see issue #35), drawing each shape with the portable
-/// [`Canvas`] and any other short mark as a text glyph. The transport shapes
-/// ([`Play`](Glyph::Play), [`Pause`](Glyph::Pause), [`Stop`](Glyph::Stop),
-/// [`Previous`](Glyph::Previous), [`Next`](Glyph::Next),
-/// [`Repeat`](Glyph::Repeat), [`Shuffle`](Glyph::Shuffle)) are drawn as
-/// vectors, so a media bar needs no icon font and renders the same on every
-/// backend. A caller that needs a richer set can pass text, e.g.
-/// `Glyph::Text("+")`.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Glyph {
-    /// Three stacked bars (a menu).
-    Menu,
-    /// A magnifier (search).
-    Search,
-    /// An X (close).
-    Close,
-    /// Three dots (more).
-    More,
-    /// A five-pointed star (a favourite).
-    Star,
-    /// A right-pointing triangle (play).
-    Play,
-    /// Two vertical bars (pause).
-    Pause,
-    /// A filled square (stop).
-    Stop,
-    /// A bar and a left-pointing triangle (previous track).
-    Previous,
-    /// A right-pointing triangle and a bar (next track).
-    Next,
-    /// A loop with two arrow heads (repeat).
-    Repeat,
-    /// Two crossing arrows (shuffle).
-    Shuffle,
-    /// A short text run drawn as the icon, e.g. `"+"` or `"A"`.
-    Text(&'static str),
-}
 
 /// A horizontal material band of icon buttons, toggles, labels, sliders and
 /// spacers.

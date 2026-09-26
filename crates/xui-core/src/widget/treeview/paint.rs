@@ -5,6 +5,7 @@
 
 use super::flatten::{self, State};
 use super::model::{CheckState, NodeId};
+use crate::Color;
 use crate::backend::{Canvas, TextStyle};
 use crate::geometry::{Point, Rect};
 use crate::theme::Theme;
@@ -35,10 +36,15 @@ pub(crate) fn paint(canvas: &mut dyn Canvas, state: &State, theme: &Theme, optio
         slot += 1;
         let rect = Rect::new(bounds.left, top, bounds.right, top + row_height);
         let is_current = options.current == Some(node.id);
-        if is_current {
-            canvas.fill_rect(rect, theme.accent);
+        let fill = if is_current {
+            Some(theme.accent)
         } else if options.hover == Some(node.id) {
-            canvas.fill_rect(rect, theme.hover);
+            Some(theme.hover)
+        } else {
+            None
+        };
+        if let Some(fill) = fill {
+            canvas.fill_rect(rect, fill);
         }
         let color = match (options.enabled, is_current) {
             (false, _) => theme.text_disabled,
@@ -46,6 +52,7 @@ pub(crate) fn paint(canvas: &mut dyn Canvas, state: &State, theme: &Theme, optio
             (true, false) => theme.text,
         };
 
+        let guide = guide_color(theme, fill);
         for level in 0..node.depth {
             if !flatten::guide_continues(&state.rows, index, level) {
                 continue;
@@ -54,7 +61,7 @@ pub(crate) fn paint(canvas: &mut dyn Canvas, state: &State, theme: &Theme, optio
             canvas.draw_line(
                 Point::new(x, top),
                 Point::new(x, top + row_height),
-                theme.border,
+                guide,
                 1.0,
             );
         }
@@ -67,9 +74,20 @@ pub(crate) fn paint(canvas: &mut dyn Canvas, state: &State, theme: &Theme, optio
             let square = flatten::checkbox_rect(dpi, bounds.left, top, node.depth);
             draw_check(canvas, square, node.checked, options.enabled, theme);
         }
+        if let Some(icon) = &node.icon {
+            let icon_box =
+                flatten::icon_rect(dpi, bounds.left, top, node.depth, options.checkboxes);
+            super::icon::draw(canvas, icon, icon_box, color, dpi);
+        }
 
         let label = Rect::new(
-            flatten::label_x(dpi, bounds.left, node.depth, options.checkboxes),
+            flatten::label_x(
+                dpi,
+                bounds.left,
+                node.depth,
+                options.checkboxes,
+                node.icon.is_some(),
+            ),
             top,
             bounds.right - flatten::pad(dpi),
             top + row_height,
@@ -80,6 +98,17 @@ pub(crate) fn paint(canvas: &mut dyn Canvas, state: &State, theme: &Theme, optio
 
     if options.outline {
         canvas.stroke_rect(bounds, theme.accent, 2.0);
+    }
+}
+
+/// The indent-guide colour for a row: [`Theme::border`] on a plain row, but
+/// blended toward the row's own fill on a selected or hovered row, so the
+/// guide stays a subtle hint instead of a high-contrast line across the
+/// highlight (issue #121).
+pub(crate) fn guide_color(theme: &Theme, fill: Option<Color>) -> Color {
+    match fill {
+        Some(fill) => theme.border.lerp(fill, 0.6),
+        None => theme.border,
     }
 }
 

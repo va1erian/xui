@@ -10,7 +10,7 @@
 use xui_core::Dip;
 use xui_core::app::{App, Ui, run_app};
 use xui_core::backend::PlatformSpec;
-use xui_core::widget::{HasText, Label, TreeRow, TreeView};
+use xui_core::widget::{Glyph, HasText, Label, TreeRow, TreeView};
 
 #[path = "support.rs"]
 mod support;
@@ -56,9 +56,14 @@ fn main() -> xui_core::backend::Result<()> {
                 ui,
                 l.rect(16.0, 64.0, 504.0, 240.0),
                 &[
-                    TreeRow::new("Inbox", 0).expandable(true).expanded(true),
-                    TreeRow::new("Work", 1),
-                    TreeRow::new("Archive", 0).expandable(true),
+                    TreeRow::new("Inbox", 0)
+                        .expandable(true)
+                        .expanded(true)
+                        .icon(Glyph::Folder),
+                    TreeRow::new("Work", 1).icon(Glyph::Tag),
+                    TreeRow::new("Archive", 0)
+                        .expandable(true)
+                        .icon(Glyph::History),
                 ],
             )
             .unwrap()

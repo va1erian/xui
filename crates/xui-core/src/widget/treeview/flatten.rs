@@ -9,6 +9,7 @@
 
 use std::rc::Rc;
 
+use super::icon::RowIcon;
 use super::model::{CheckState, NodeId, TreeModel, TreeRow};
 use crate::geometry::Rect;
 use crate::units::Dip;
@@ -25,6 +26,10 @@ const CHEVRON: Dip = Dip(16.0);
 const CHECK: Dip = Dip(16.0);
 /// The design gap between a checkbox and its label.
 const CHECK_GAP: Dip = Dip(6.0);
+/// The design side of a row's leading icon.
+const ICON: Dip = Dip(16.0);
+/// The design gap between a leading icon and its label.
+const ICON_GAP: Dip = Dip(6.0);
 /// The design size of a row's label text.
 pub(crate) const TEXT: Dip = Dip(12.0);
 
@@ -37,6 +42,7 @@ pub(crate) struct FlatNode {
     pub(crate) expandable: bool,
     pub(crate) expanded: bool,
     pub(crate) checked: CheckState,
+    pub(crate) icon: Option<RowIcon>,
     /// Whether a model node's children have been read; always set for flat rows.
     loaded: bool,
 }
@@ -50,6 +56,7 @@ impl FlatNode {
             expandable: row.expandable,
             expanded: row.expanded,
             checked: row.checked,
+            icon: row.icon.clone(),
             loaded: true,
         }
     }
@@ -62,6 +69,7 @@ impl FlatNode {
             expandable: node.has_children,
             expanded: false,
             checked: node.checked,
+            icon: node.icon,
             loaded: !node.has_children,
         }
     }
@@ -172,11 +180,26 @@ pub(crate) fn checkbox_x(dpi: u32, left: i32, depth: u16) -> i32 {
     level_x(dpi, left, depth) + px(CHEVRON, dpi)
 }
 
-/// The x where a row's label starts, reserving the checkbox slot when shown.
-pub(crate) fn label_x(dpi: u32, left: i32, depth: u16, checkboxes: bool) -> i32 {
+/// The x where a row's content starts, just past the checkbox when shown.
+pub(crate) fn content_x(dpi: u32, left: i32, depth: u16, checkboxes: bool) -> i32 {
     let start = checkbox_x(dpi, left, depth);
     if checkboxes {
         start + px(CHECK, dpi) + px(CHECK_GAP, dpi)
+    } else {
+        start
+    }
+}
+
+/// The x where a row's leading icon starts, just past the checkbox.
+pub(crate) fn icon_x(dpi: u32, left: i32, depth: u16, checkboxes: bool) -> i32 {
+    content_x(dpi, left, depth, checkboxes)
+}
+
+/// The x where a row's label starts, reserving the icon slot when shown.
+pub(crate) fn label_x(dpi: u32, left: i32, depth: u16, checkboxes: bool, icon: bool) -> i32 {
+    let start = content_x(dpi, left, depth, checkboxes);
+    if icon {
+        start + px(ICON, dpi) + px(ICON_GAP, dpi)
     } else {
         start
     }
@@ -186,6 +209,14 @@ pub(crate) fn label_x(dpi: u32, left: i32, depth: u16, checkboxes: bool) -> i32 
 pub(crate) fn checkbox_rect(dpi: u32, left: i32, top: i32, depth: u16) -> Rect {
     let side = px(CHECK, dpi);
     let x = checkbox_x(dpi, left, depth);
+    let y = top + (px(ROW, dpi) - side) / 2;
+    Rect::new(x, y, x + side, y + side)
+}
+
+/// The icon box of the row at `depth` whose top is `top`.
+pub(crate) fn icon_rect(dpi: u32, left: i32, top: i32, depth: u16, checkboxes: bool) -> Rect {
+    let side = px(ICON, dpi);
+    let x = icon_x(dpi, left, depth, checkboxes);
     let y = top + (px(ROW, dpi) - side) / 2;
     Rect::new(x, y, x + side, y + side)
 }

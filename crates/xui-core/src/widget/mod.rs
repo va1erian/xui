@@ -78,4 +78,4 @@ pub use togglebutton::ToggleButton;
 pub use toolbar::Toolbar;
 pub use tooltip::Tooltip;
 pub use topbar::{Glyph, TopBar, TopBarId};
-pub use treeview::{CheckState, NodeId, TreeModel, TreeNode, TreeRow, TreeView};
+pub use treeview::{CheckState, NodeId, RowIcon, TreeModel, TreeNode, TreeRow, TreeView};

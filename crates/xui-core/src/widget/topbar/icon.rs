@@ -14,6 +14,7 @@ use crate::geometry::{Point, Rect};
 use crate::units::Dip;
 
 use super::Glyph;
+use super::nav_glyph;
 
 /// The design size of a drawn glyph box.
 const GLYPH: Dip = Dip(16.0);
@@ -25,7 +26,7 @@ const TEXT_SIZE: Dip = Dip(14.0);
 /// A [`Glyph::Text`] run goes through [`Canvas::draw_text`]; every other glyph
 /// is composed from lines, ellipses, rectangles and polygons, so the icon set
 /// needs no image dependency and no font.
-pub(super) fn draw_glyph(
+pub(crate) fn draw_glyph(
     canvas: &mut dyn Canvas,
     glyph: Glyph,
     rect: Rect,
@@ -103,19 +104,28 @@ pub(super) fn draw_glyph(
                 stroke,
             );
         }
-        Glyph::Star => {
-            let mut points = [Point::default(); 10];
-            let inner = half as f32 * 0.4;
-            for (index, point) in points.iter_mut().enumerate() {
-                let angle =
-                    -std::f32::consts::FRAC_PI_2 + index as f32 * std::f32::consts::PI / 5.0;
-                let radius = if index % 2 == 0 { half as f32 } else { inner };
-                *point = Point::new(
-                    center_x + (radius * angle.cos()).round() as i32,
-                    center_y + (radius * angle.sin()).round() as i32,
-                );
-            }
-            canvas.fill_polygon(&points, color);
+        Glyph::Star
+        | Glyph::StarFilled
+        | Glyph::Audio
+        | Glyph::Album
+        | Glyph::People
+        | Glyph::Tag
+        | Glyph::Folder
+        | Glyph::History
+        | Glyph::Monitor
+        | Glyph::Settings => {
+            nav_glyph::draw(
+                canvas,
+                glyph,
+                nav_glyph::Frame {
+                    cx: center_x,
+                    cy: center_y,
+                    half,
+                    size,
+                    stroke,
+                },
+                color,
+            );
         }
         Glyph::Play => {
             // A right-pointing triangle nudged right, so its optical centre

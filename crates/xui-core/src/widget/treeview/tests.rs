@@ -6,15 +6,19 @@ use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use super::flatten::{
-    checkbox_rect, chevron_hit, guide_continues, guide_x, is_visible, label_x, level_x,
-    slot_to_index,
+    checkbox_rect, chevron_hit, guide_continues, guide_x, icon_rect, icon_x, is_visible, label_x,
+    level_x, slot_to_index,
 };
+use super::paint::guide_color;
 use super::*;
+use crate::Image;
 use crate::app::{App, Core, Runtime};
-use crate::backend::headless::HeadlessBackend;
+use crate::backend::headless::{DrawOp, HeadlessBackend};
 use crate::backend::{Backend, Event, PlatformSpec, WidgetId};
 use crate::geometry::Point;
 use crate::message::{Key, Modifiers, MouseButton};
+use crate::theme::Theme;
+use crate::widget::Glyph;
 
 thread_local! {
     static LOG: RefCell<Vec<u32>> = const { RefCell::new(Vec::new()) };
@@ -38,7 +42,10 @@ impl TreeModel for Folders {
     fn children(&self, parent: Option<NodeId>) -> Vec<TreeNode> {
         self.loads.set(self.loads.get() + 1);
         match parent {
-            None => vec![TreeNode::branch(1, "Inbox"), TreeNode::leaf(2, "Sent")],
+            None => vec![
+                TreeNode::branch(1, "Inbox").icon(Glyph::Folder),
+                TreeNode::leaf(2, "Sent"),
+            ],
             Some(1) => vec![TreeNode::leaf(11, "Work"), TreeNode::leaf(12, "Home")],
             _ => Vec::new(),
         }
@@ -314,16 +321,44 @@ fn indent_and_chevron_geometry_is_consistent() {
         "a leaf has no chevron to hit"
     );
 
-    assert_eq!(label_x(96, 0, 1, false), 36, "the label clears the chevron");
     assert_eq!(
-        label_x(96, 0, 1, true),
+        label_x(96, 0, 1, false, false),
+        36,
+        "the label clears the chevron"
+    );
+    assert_eq!(
+        label_x(96, 0, 1, true, false),
         36 + 16 + 6,
         "a checkbox and its gap push the label right"
+    );
+    assert_eq!(
+        label_x(96, 0, 1, false, true),
+        36 + 16 + 6,
+        "an icon and its gap push the label right"
+    );
+    assert_eq!(
+        label_x(96, 0, 1, true, true),
+        36 + 16 + 6 + 16 + 6,
+        "a checkbox then an icon stack before the label"
     );
 
     let square = checkbox_rect(96, 0, 22, 1);
     assert_eq!((square.left, square.top), (36, 25));
     assert!(square.contains(Point::new(44, 33)), "inside the checkbox");
+
+    let icon = icon_rect(96, 0, 22, 1, false);
+    assert_eq!(
+        (icon.left, icon.top),
+        (36, 25),
+        "without a checkbox the icon starts past the chevron"
+    );
+    assert_eq!(icon_x(96, 0, 1, false), 36);
+    let checked_icon = icon_rect(96, 0, 22, 1, true);
+    assert_eq!(
+        checked_icon.left,
+        36 + 16 + 6,
+        "a checkbox pushes the icon right"
+    );
 
     assert_eq!(guide_x(96, 0, 1), 20 + 8, "a guide is under its chevron");
 }
@@ -350,5 +385,78 @@ fn an_indent_guide_stops_after_the_last_child() {
     assert!(
         !guide_continues(&state.rows, 2, 1),
         "Home is the last child at its level"
+    );
+}
+
+#[test]
+fn a_model_node_keeps_its_icon() {
+    let (_runtime, tree, _) = harness_model(false);
+    let state = tree.state.borrow();
+    assert_eq!(
+        state.rows[0].icon,
+        Some(RowIcon::Glyph(Glyph::Folder)),
+        "the model's icon reaches the materialized row"
+    );
+}
+
+#[test]
+fn guides_blend_into_the_row_highlight() {
+    for theme in [Theme::light(), Theme::dark()] {
+        assert_eq!(
+            guide_color(&theme, None),
+            theme.border,
+            "a plain row keeps the border guide"
+        );
+        let on_accent = guide_color(&theme, Some(theme.accent));
+        assert_ne!(on_accent, theme.border, "a selected row blends the guide");
+        assert!(
+            on_accent.contrast_ratio(theme.accent) < theme.border.contrast_ratio(theme.accent),
+            "the blend lowers the guide's contrast over the selection"
+        );
+        let on_hover = guide_color(&theme, Some(theme.hover));
+        assert!(
+            on_hover.contrast_ratio(theme.hover) < theme.border.contrast_ratio(theme.hover),
+            "and over the hover fill"
+        );
+    }
+}
+
+#[test]
+fn a_row_icon_paints_before_the_label() {
+    let backend = Rc::new(HeadlessBackend::new());
+    let window = backend.open_window(&PlatformSpec::new("t")).unwrap();
+    let core = Core::new(backend.clone(), window);
+    let ui = Ui::new(Rc::clone(&core));
+    let _runtime = Runtime::primary(core, TestApp);
+
+    let image = Image::from_rgba(1, 1, vec![255, 0, 0, 255]).unwrap();
+    let plain = TreeView::new(&ui, Rect::new(0, 0, 120, 22), &[TreeRow::new("Folder", 0)]).unwrap();
+    let glyph = TreeView::new(
+        &ui,
+        Rect::new(0, 24, 120, 46),
+        &[TreeRow::new("Folder", 0).icon(Glyph::Folder)],
+    )
+    .unwrap();
+    let bitmap = TreeView::new(
+        &ui,
+        Rect::new(0, 48, 120, 70),
+        &[TreeRow::new("Art", 0).icon(image)],
+    )
+    .unwrap();
+
+    backend.render(plain.id());
+    backend.render(glyph.id());
+    backend.render(bitmap.id());
+
+    assert!(
+        backend.ops(glyph.id()).len() > backend.ops(plain.id()).len(),
+        "a glyph row paints more than a text-only row"
+    );
+    assert!(
+        backend
+            .ops(bitmap.id())
+            .iter()
+            .any(|op| matches!(op, DrawOp::Image(..))),
+        "a bitmap row icon draws the image"
     );
 }

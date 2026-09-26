@@ -97,11 +97,11 @@ list.set_items(&["A", "B", "C"]);
 `TreeView<M>` is keyed and lazy, with checkboxes optional:
 
 ```rust
-use xui_core::widget::{TreeRow, TreeView};
+use xui_core::widget::{Glyph, TreeRow, TreeView};
 
 let tree = TreeView::new(ui, rect, &[
-    TreeRow::new("Inbox", 0).expandable(true).expanded(true),
-    TreeRow::new("Work", 1),
+    TreeRow::new("Inbox", 0).expandable(true).expanded(true).icon(Glyph::Folder),
+    TreeRow::new("Work", 1).icon(Glyph::Tag),
 ])
 .unwrap()
 .on_select(|id| Some(Msg::Open(id)))
@@ -110,6 +110,12 @@ let tree = TreeView::new(ui, rect, &[
 
 - `on_select(NodeId)`, `on_toggle(NodeId, bool)`, `on_check(NodeId, CheckState)`,
   `checkboxes(bool)`, `tri_state(bool)`.
+- `icon(impl Into<RowIcon>)` puts a leading icon before a row's label:
+  `RowIcon::Glyph(Glyph::Folder)` draws a themed vector shape (pass a `Glyph`
+  directly), and `RowIcon::Image(Image)` draws a decoded bitmap in its own
+  colours.
+- Indent guides are selection-aware: they blend into the selected or hovered
+  row's fill instead of crossing it with a high-contrast `border` line.
 - Runtime: `selected`, `select`, `checked`, `set_checked`, `set_rows`,
   `set_model`.
 - `with_model(ui, rect, impl TreeModel)`: only roots are read up front; a
@@ -183,7 +189,7 @@ panel.set_bounds(Rect::new(0, 0, 336, 120)); // move/resize the panel node
 | `Toolbar<M>` | `Toolbar::new(ui, rect, &[labels])` | `on_click(usize)` |
 | `StatusBar<M>` | `StatusBar::new(ui, rect, &[parts])` | `set_text(part, text)`, `set_parts` |
 | `MaterialStatusBar<M>` | `MaterialStatusBar::new(ui, rect, &[parts])` | status bar drawn on a material band |
-| `TopBar<M>` | `TopBar::new(ui, rect)` | `icon`/`toggle`/`label`/`slider`/`spacer`, keyed by `TopBarId`; `width`/`expand` resize an item; `on_click`/`on_toggle`/`on_change`. `Glyph` includes the vector transport set (`Play`, `Pause`, `Stop`, `Previous`, `Next`, `Repeat`, `Shuffle`) |
+| `TopBar<M>` | `TopBar::new(ui, rect)` | `icon`/`toggle`/`label`/`slider`/`spacer`, keyed by `TopBarId`; `width`/`expand` resize an item; `on_click`/`on_toggle`/`on_change`. `Glyph` includes the vector transport set (`Play`, `Pause`, `Stop`, `Previous`, `Next`, `Repeat`, `Shuffle`) and navigation set (`Audio`, `Album`, `People`, `Tag`, `Folder`, `Star`, `StarFilled`, `History`, `Monitor`, `Settings`) |
 
 ### Dialogs and tooltips
 

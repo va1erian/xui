@@ -105,17 +105,25 @@ fn build(ui: &Ui<()>) -> Vec<Box<dyn Any>> {
     keep.push(Box::new(
         ListView::new(ui, rect(400, 48, 764, 160), &["Inbox", "Sent", "Drafts"]).unwrap(),
     ));
-    keep.push(Box::new(
-        TreeView::new(
-            ui,
-            rect(400, 168, 764, 264),
-            &[
-                TreeRow::new("Inbox", 0).expandable(true).expanded(true),
-                TreeRow::new("Work", 1),
-            ],
-        )
-        .unwrap(),
-    ));
+    let tree = TreeView::new(
+        ui,
+        rect(400, 168, 764, 264),
+        &[
+            TreeRow::new("Inbox", 0)
+                .expandable(true)
+                .expanded(true)
+                .icon(Glyph::Folder),
+            TreeRow::new("Work", 1).icon(Glyph::Tag),
+            TreeRow::new("Home", 1).icon(Glyph::People),
+            TreeRow::new("Archive", 0)
+                .expandable(true)
+                .icon(Glyph::History),
+        ],
+    )
+    .unwrap();
+    // Select a nested row so the selection-aware indent guide is exercised.
+    tree.select(Some(1));
+    keep.push(Box::new(tree));
     keep.push(Box::new(
         GridView::with_model(
             ui,

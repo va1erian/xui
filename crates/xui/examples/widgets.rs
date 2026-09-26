@@ -303,10 +303,15 @@ fn run(renderer: Renderer, switch: Rc<Cell<Option<Renderer>>>) {
                 ui,
                 rect(400.0, 168.0, 764.0, 264.0),
                 &[
-                    TreeRow::new("Inbox", 0).expandable(true).expanded(true),
-                    TreeRow::new("Work", 1),
-                    TreeRow::new("Home", 1),
-                    TreeRow::new("Archive", 0).expandable(true),
+                    TreeRow::new("Inbox", 0)
+                        .expandable(true)
+                        .expanded(true)
+                        .icon(Glyph::Folder),
+                    TreeRow::new("Work", 1).icon(Glyph::Tag),
+                    TreeRow::new("Home", 1).icon(Glyph::Folder),
+                    TreeRow::new("Archive", 0)
+                        .expandable(true)
+                        .icon(Glyph::History),
                 ],
             )
             .unwrap()
