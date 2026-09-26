@@ -10,12 +10,14 @@
 
 /// A property's value.
 ///
-/// More variants (a slider's number, a colour) join when a widget reports them;
-/// the set stays small so every widget that reports a property can act on it.
+/// More variants (a colour) join when a widget reports them; the set stays
+/// small so every widget that reports a property can act on it.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Value {
     /// A boolean (enabled, visible, checked).
     Bool(bool),
+    /// A whole number (a progress value or range).
+    Integer(i64),
     /// A string (a label, an edit's text).
     Text(String),
 }

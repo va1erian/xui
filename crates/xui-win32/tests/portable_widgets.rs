@@ -16,7 +16,7 @@ use std::rc::Rc;
 
 use xui_core::app::{App, Ui, run_app};
 use xui_core::backend::{Backend, PlatformSpec};
-use xui_core::widget::{Button, Edit, HasText, Label};
+use xui_core::widget::{Button, CheckBox, Edit, HasText, Label, ProgressBar};
 use xui_core::{Rect, Theme, TimerId, WidgetId};
 use xui_win32::Win32Backend;
 
@@ -38,6 +38,8 @@ struct WidgetsApp {
     _label: Label<Msg>,
     edit: Edit<Msg>,
     button: Button<Msg>,
+    _check: CheckBox<Msg>,
+    _bar: ProgressBar<Msg>,
 }
 
 impl App for WidgetsApp {
@@ -146,6 +148,10 @@ fn run(theme: Theme, file: &str) {
                     .unwrap()
                     .on_click(|| Some(Msg::Clicked));
                 let button_id: WidgetId = button.id();
+                let check = CheckBox::new(ui, Rect::new(20, 156, 320, 184), "Enabled").unwrap();
+                check.set_checked(true);
+                let bar = ProgressBar::new(ui, Rect::new(20, 196, 320, 204), 100).unwrap();
+                bar.set_value(60);
                 let window = backend.window_hwnd(ui.window()).expect("window handle");
 
                 // A worker types into the field and then clicks the button with
@@ -195,6 +201,8 @@ fn run(theme: Theme, file: &str) {
                     _label: label,
                     edit,
                     button,
+                    _check: check,
+                    _bar: bar,
                 }
             },
         )

@@ -9,14 +9,18 @@
 //! eventually delegated to a native control where the backend offers one.
 
 mod button;
+mod checkbox;
 mod control;
 mod edit;
 mod label;
+mod progressbar;
 
 #[cfg(test)]
 mod tests;
 
 pub use button::Button;
+pub use checkbox::CheckBox;
 pub use control::{Control, HasText};
 pub use edit::Edit;
 pub use label::Label;
+pub use progressbar::ProgressBar;
