@@ -19,12 +19,12 @@ use std::rc::Rc;
 use xui_core::app::{App, Ui, run_app};
 use xui_core::backend::{Backend, PlatformSpec};
 use xui_core::widget::{
-    Button, CheckBox, ComboBox, Edit, Glyph, GroupBox, HasText, Hyperlink, Label, ListView,
-    MaterialStatusBar, Menu, MenuId, MultilineEdit, NumberField, Panel, ProgressBar, RadioGroup,
-    ScrollView, Separator, Slider, Split, StatusBar, Tabs, ToggleButton, Toolbar, Tooltip, TopBar,
-    TopBarId, TreeRow, TreeView,
+    Button, CheckBox, ColorPicker, ComboBox, Dialog, DialogAction, Edit, Glyph, GroupBox, HasText,
+    Hyperlink, Label, ListView, MaterialStatusBar, Menu, MenuId, MultilineEdit, NumberField, Panel,
+    ProgressBar, RadioGroup, ScrollView, Separator, Slider, Split, StatusBar, Tabs, ToggleButton,
+    Toolbar, Tooltip, TopBar, TopBarId, TreeRow, TreeView,
 };
-use xui_core::{Dip, Properties, Rect, Theme, Value};
+use xui_core::{Color, Dip, Properties, Rect, Theme, Value};
 
 /// Which backend the gallery runs on.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -99,6 +99,9 @@ enum Msg {
     Scroll(i32),
     Tab(usize),
     SplitPane(f32),
+    Swatch(Color),
+    DialogOpen,
+    DialogAction(DialogAction),
     Switch,
     Autoclose,
 }
@@ -139,6 +142,9 @@ struct Gallery {
     _scroll: ScrollView<Msg>,
     _tabs: Tabs<Msg>,
     _split: Split<Msg>,
+    _swatches: ColorPicker<Msg>,
+    _dialog: Dialog<Msg>,
+    _dialog_button: Button<Msg>,
     _content: Vec<Label<Msg>>,
 }
 
@@ -178,6 +184,16 @@ impl App for Gallery {
             Msg::Scroll(offset) => format!("scroll: {offset}px"),
             Msg::Tab(index) => format!("tab #{index}"),
             Msg::SplitPane(position) => format!("split: {position:.0}"),
+            Msg::Swatch(color) => format!("accent #{:02X}{:02X}{:02X}", color.r, color.g, color.b),
+            Msg::DialogOpen => {
+                self._dialog.open();
+                "dialog: open".to_string()
+            }
+            Msg::DialogAction(action) => match action {
+                DialogAction::Accept(text) if text.is_empty() => "dialog: accepted".to_string(),
+                DialogAction::Accept(text) => format!("dialog: accepted {text}"),
+                DialogAction::Cancel => "dialog: cancelled".to_string(),
+            },
             Msg::Theme(choice) => match choice {
                 1 => {
                     ui.set_theme(Theme::dark());
@@ -207,7 +223,7 @@ fn run(renderer: Renderer, switch: Rc<Cell<Option<Renderer>>>) {
     let title = format!("xui widgets ({})", renderer.label());
     let _ = run_app(
         backend_for(renderer),
-        PlatformSpec::new(&title).size(Dip(1300.0), Dip(800.0)),
+        PlatformSpec::new(&title).size(Dip(1760.0), Dip(940.0)),
         move |ui| {
             let dpi = ui.dpi();
             let p = move |value: f32| Dip(value).to_px(dpi).value();
@@ -477,6 +493,29 @@ fn run(renderer: Renderer, switch: Rc<Cell<Option<Renderer>>>) {
             split.set_position(Dip(110.0));
             let split = split.on_moved(|position| Some(Msg::SplitPane(position.value())));
 
+            let palette = [
+                Color::hex(0x00_78_D4),
+                Color::hex(0x00_B2_94),
+                Color::hex(0x10_7C_10),
+                Color::hex(0xFF_B9_00),
+                Color::hex(0xFF_8C_00),
+                Color::hex(0xE8_11_23),
+                Color::hex(0x87_64_B8),
+                Color::hex(0x4C_4A_48),
+            ];
+            let swatches = ColorPicker::new(ui, rect(1040.0, 48.0, 1280.0, 120.0), &palette)
+                .unwrap()
+                .columns(4)
+                .selected(palette[0])
+                .on_select(|color| Some(Msg::Swatch(color)));
+            let dialog_button = Button::new(ui, rect(1040.0, 132.0, 1280.0, 160.0), "Show dialog")
+                .unwrap()
+                .on_click(|| Some(Msg::DialogOpen));
+            let dialog = Dialog::confirm(ui, "Save changes?", "Your edits will be lost otherwise.")
+                .unwrap()
+                .accept_label("Save")
+                .on_action(|action| Some(Msg::DialogAction(action)));
+
             let sep = Separator::new(ui, rect(16.0, 552.0, 764.0, 554.0)).unwrap();
             let status =
                 StatusBar::new(ui, rect(16.0, 560.0, 764.0, 584.0), &["Ready", ""]).unwrap();
@@ -488,6 +527,7 @@ fn run(renderer: Renderer, switch: Rc<Cell<Option<Renderer>>>) {
             // Both smoke hooks fire through one timer mapper, told apart by id.
             let switch_at = Rc::new(Cell::new(None));
             let autoclose_at = Rc::new(Cell::new(None));
+            let dialog_at = Rc::new(Cell::new(None));
             if CAN_SWITCH && let Ok(millis) = std::env::var("XUI_AUTOSWITCH_MS") {
                 let _ = millis
                     .parse::<u32>()
@@ -498,13 +538,21 @@ fn run(renderer: Renderer, switch: Rc<Cell<Option<Renderer>>>) {
                     .parse::<u32>()
                     .map(|ms| autoclose_at.set(Some(ui.set_timer(ms))));
             }
+            // A screenshot cannot press a button: open the dialog from a timer
+            // once the window is live.
+            if std::env::var("XUI_GALLERY_DIALOG").is_ok() {
+                dialog_at.set(Some(ui.set_timer(500)));
+            }
             let switch_at_for_timer = Rc::clone(&switch_at);
             let autoclose_at_for_timer = Rc::clone(&autoclose_at);
+            let dialog_at_for_timer = Rc::clone(&dialog_at);
             ui.on_timer(move |fired| {
                 if switch_at_for_timer.get() == Some(fired) {
                     Some(Msg::Switch)
                 } else if autoclose_at_for_timer.get() == Some(fired) {
                     Some(Msg::Autoclose)
+                } else if dialog_at_for_timer.get() == Some(fired) {
+                    Some(Msg::DialogOpen)
                 } else {
                     None
                 }
@@ -552,6 +600,9 @@ fn run(renderer: Renderer, switch: Rc<Cell<Option<Renderer>>>) {
                 _scroll: scroll,
                 _tabs: tabs,
                 _split: split,
+                _swatches: swatches,
+                _dialog: dialog,
+                _dialog_button: dialog_button,
                 _content: content,
             }
         },
