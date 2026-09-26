@@ -117,7 +117,7 @@ fn paint_into(hwnd: HWND, dc: HDC) {
     let color = if unsafe { GetFocus() } == hwnd {
         theme.border_focused
     } else {
-        theme.border
+        theme.input_border
     };
     let Some(brush) = crate::gdi::cache_brush(color) else {
         return;
@@ -277,7 +277,7 @@ mod tests {
         install(hwnd_from(edit), Theme::dark());
 
         let pixels = render_frame(edit);
-        let border = Theme::dark().border.to_colorref();
+        let border = Theme::dark().input_border.to_colorref();
         assert_eq!(
             pixels[0] & 0x00FF_FFFF,
             border,

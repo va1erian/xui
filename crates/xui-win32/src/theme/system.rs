@@ -85,6 +85,7 @@ fn from_high_contrast(colors: HighContrastColors) -> Theme {
         border_focused: colors.hotlight,
         shadow: colors.window_frame,
         input_background: colors.window,
+        input_border: colors.window_frame,
         scrollbar: colors.window_frame,
         scrollbar_track: colors.window,
     }

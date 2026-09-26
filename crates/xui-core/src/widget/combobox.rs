@@ -88,7 +88,7 @@ fn paint_field<M: 'static>(s: &Shared<M>, canvas: &mut dyn Canvas, theme: Theme,
     let (pad, arrow) = (PADDING.to_px(dpi).value(), ARROW.to_px(dpi).value());
     canvas.clear(theme.input_background);
     let color = pick(s.enabled.get(), theme.text, theme.text_disabled);
-    let border = pick(s.open.get(), theme.border_focused, theme.border);
+    let border = pick(s.open.get(), theme.border_focused, theme.input_border);
     canvas.stroke_rect(b, border, 1.0);
     let i = b.shrink(pad);
     let text = Rect::new(i.left, i.top, (i.right - arrow).max(i.left), i.bottom);

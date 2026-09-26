@@ -122,7 +122,7 @@ fn draw_check(
     canvas.stroke_rect(
         square,
         if enabled {
-            theme.border
+            theme.input_border
         } else {
             theme.text_disabled
         },

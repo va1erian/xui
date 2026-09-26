@@ -73,7 +73,7 @@ impl<M: 'static> Edit<M> {
                 let border = if focused.get() {
                     theme.border_focused
                 } else {
-                    theme.border
+                    theme.input_border
                 };
                 canvas.stroke_rect(bounds, border, 1.0);
 

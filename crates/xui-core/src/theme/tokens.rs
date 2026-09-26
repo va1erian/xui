@@ -62,8 +62,13 @@ pub struct Theme {
     /// the soft alpha falloff, so the token stays opaque. WinUI draws these
     /// shadows in black at a low opacity (light/dark `#000000`).
     pub shadow: Color,
-    /// Input background: edits, address bar (light `#FFFFFF`, dark `#2D2D2D`).
+    /// Input background: edits, address bar (light `#FFFFFF`, dark `#1F1F1F`).
     pub input_background: Color,
+    /// Border around inputs: edits, combo fields, spin fields, check boxes
+    /// (WinUI `ControlStrokeColorDefault`: light `#E1E1E1`, dark `#3F3F3F`).
+    /// Distinct from [`Theme::border`] (card stroke), which is too faint to
+    /// outline a field on the dark surface.
+    pub input_border: Color,
     /// Scrollbar thumb (WinUI thumb: light `#C8C6C4`, dark `#605E5C`).
     pub scrollbar: Color,
     /// Scrollbar track (matches [`Theme::background`]).
@@ -93,6 +98,7 @@ impl Theme {
             border_focused: Color::hex(0x00_5F_B8),
             shadow: Color::hex(0x00_00_00),
             input_background: Color::hex(0xFF_FF_FF),
+            input_border: Color::hex(0xE1_E1_E1),
             scrollbar: Color::hex(0xC8_C6_C4),
             scrollbar_track: Color::hex(0xF3_F3_F3),
         }
@@ -119,7 +125,8 @@ impl Theme {
             border: Color::hex(0x30_30_30),
             border_focused: Color::hex(0x4C_C2_FF),
             shadow: Color::hex(0x00_00_00),
-            input_background: Color::hex(0x2D_2D_2D),
+            input_background: Color::hex(0x1F_1F_1F),
+            input_border: Color::hex(0x3F_3F_3F),
             scrollbar: Color::hex(0x60_5E_5C),
             scrollbar_track: Color::hex(0x20_20_20),
         }
@@ -160,6 +167,27 @@ mod tests {
     fn status_fills_differ_between_variants() {
         assert_ne!(Theme::light().warning, Theme::dark().warning);
         assert_ne!(Theme::light().danger, Theme::dark().danger);
+    }
+
+    /// A field must stand out from every surface it can sit on, and its border
+    /// must outline it against its own fill (#119).
+    #[test]
+    fn dark_inputs_read_as_fields() {
+        let theme = Theme::dark();
+        for surface in [theme.background, theme.surface, theme.raised] {
+            assert_ne!(
+                theme.input_background, surface,
+                "the dark input fill must differ from every surface"
+            );
+        }
+        assert!(
+            theme.input_border.contrast_ratio(theme.input_background) > 1.3,
+            "the dark input border must be visible over the field fill"
+        );
+        assert!(
+            theme.input_border.contrast_ratio(theme.surface) > 1.3,
+            "the dark input border must be visible over the surrounding surface"
+        );
     }
 
     #[test]

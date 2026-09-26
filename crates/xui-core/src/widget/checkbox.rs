@@ -67,7 +67,7 @@ impl<M: 'static> CheckBox<M> {
                 canvas.stroke_rect(
                     square,
                     if enabled {
-                        theme.border
+                        theme.input_border
                     } else {
                         theme.text_disabled
                     },

@@ -123,7 +123,7 @@ impl<M: 'static> NumberField<M> {
                 let border = if s.focused.get() {
                     theme.border_focused
                 } else {
-                    theme.border
+                    theme.input_border
                 };
                 canvas.stroke_rect(b, border, 1.0);
                 canvas.draw_line(Point::new(sl, b.top), Point::new(sl, b.bottom), border, 1.0);
