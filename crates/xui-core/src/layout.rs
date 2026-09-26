@@ -19,9 +19,11 @@
 //! assert_eq!(areas.fill, Rect::new(200, 40, 800, 576));
 //! ```
 
+mod anchor;
 mod dock;
 mod stack;
 
+pub use anchor::{Anchor, MIN_ANCHOR_PX, anchored};
 pub use dock::{Dock, DockLayout};
 pub use stack::{Stack, StackDirection, StackSlot};
 
@@ -76,7 +78,7 @@ impl Insets {
 
 /// The layout-arithmetic types a frontend usually needs.
 pub mod prelude {
-    pub use super::{Dock, DockLayout, Insets, Stack, StackDirection, StackSlot};
+    pub use super::{Anchor, Dock, DockLayout, Insets, Stack, StackDirection, StackSlot, anchored};
 }
 
 #[cfg(test)]

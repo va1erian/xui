@@ -33,7 +33,7 @@ pub use backend::{
 };
 pub use color::Color;
 pub use geometry::{Point, Rect, Size};
-pub use layout::{Dock, DockLayout, Insets, Stack, StackDirection, StackSlot};
+pub use layout::{Anchor, Dock, DockLayout, Insets, Stack, StackDirection, StackSlot, anchored};
 pub use message::{HitTest, Key, Modifiers, MouseButton};
 pub use property::{Properties, Property, Value};
 pub use router::{Router, WidgetHost};
