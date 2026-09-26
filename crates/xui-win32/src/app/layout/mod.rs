@@ -10,13 +10,14 @@
 //! parent rectangle to one rectangle per visible leaf, using the existing
 //! [`Stack`] arithmetic.
 
-use crate::geometry::Rect;
+use crate::geometry::{Rect, Size};
 use crate::layout::{Insets, Stack, StackDirection};
 use crate::units::Dip;
 
 #[cfg(test)]
 mod tests;
 
+mod free;
 mod item;
 pub(crate) mod split;
 pub(crate) mod tabs;
@@ -24,17 +25,22 @@ pub(crate) mod tabs;
 pub(crate) use item::{Content, Placed, Sizing, WidgetHandle};
 pub use item::{IntoLayoutItem, LayoutExt, LayoutItem};
 
-/// A row or column of items, laid out as a tree the window owns.
+/// A row, column or absolute (free) arrangement of items, laid out as a tree
+/// the window owns.
 ///
-/// Build one with [`row!`](crate::row) / [`column!`](crate::column) or
-/// [`Layout::row`] / [`Layout::column`], and install it with
-/// [`Ui::set_layout`](crate::Ui::set_layout).
+/// Build a stack with [`row!`](crate::row) / [`column!`](crate::column) or
+/// [`Layout::row`] / [`Layout::column`], and an absolute layout with
+/// [`Layout::free`]; install either with [`Ui::set_layout`](crate::Ui::set_layout).
 #[derive(Clone)]
 pub struct Layout {
     direction: StackDirection,
     spacing: Dip,
     margins: Insets,
     slots: Vec<LayoutItem>,
+    /// `Some(design origin)` for a free layout: items are placed by their
+    /// [`Anchor`] instead of being stacked. The origin is the parent's design
+    /// size in device pixels at 96 DPI.
+    origin: Option<Size>,
 }
 
 impl Layout {
@@ -45,6 +51,7 @@ impl Layout {
             spacing: Dip(0.0),
             margins: Insets::new(Dip(0.0), Dip(0.0), Dip(0.0), Dip(0.0)),
             slots: Vec::new(),
+            origin: None,
         }
     }
 
@@ -55,6 +62,25 @@ impl Layout {
             spacing: Dip(0.0),
             margins: Insets::new(Dip(0.0), Dip(0.0), Dip(0.0), Dip(0.0)),
             slots: Vec::new(),
+            origin: None,
+        }
+    }
+
+    /// An absolute layout: each item keeps the bounds it had when the layout
+    /// was installed and follows the parent's resize per its
+    /// [`LayoutExt::anchor`].
+    ///
+    /// `origin` is the parent's *design* client size in device pixels at 96 DPI
+    /// (the window it was designed against); it is scaled to the window's DPI
+    /// on every relayout, so the anchors are DPI-independent. Spacing and
+    /// margins do not apply to a free layout.
+    pub const fn free(origin: Size) -> Layout {
+        Layout {
+            direction: StackDirection::Vertical,
+            spacing: Dip(0.0),
+            margins: Insets::new(Dip(0.0), Dip(0.0), Dip(0.0), Dip(0.0)),
+            slots: Vec::new(),
+            origin: Some(origin),
         }
     }
 
@@ -115,6 +141,10 @@ impl Layout {
 
     /// Lays the tree out inside `rect`, returning one entry per visible leaf.
     pub(crate) fn compute(&self, rect: Rect, dpi: u32) -> Vec<Placed> {
+        if let Some(origin) = self.origin {
+            return free::compute(self, origin, rect, dpi);
+        }
+
         let visible: Vec<&LayoutItem> =
             self.slots.iter().filter(|item| item.is_visible()).collect();
         if visible.is_empty() {

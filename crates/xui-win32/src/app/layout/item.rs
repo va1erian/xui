@@ -10,7 +10,7 @@ use std::rc::Rc;
 use crate::controls::control::{AsControl, Control};
 use crate::geometry::Rect;
 use crate::hwnd::Hwnd;
-use crate::layout::{StackDirection, StackSlot};
+use crate::layout::{Anchor, StackDirection, StackSlot};
 use crate::sys;
 use crate::units::{Dip, Px};
 
@@ -35,6 +35,10 @@ pub(crate) enum Sizing {
     Width(Dip),
     /// Exactly this many design units along the height axis.
     Height(Dip),
+    /// An absolute placement in a [`Layout::free`](super::Layout::free) parent:
+    /// the widget keeps its bounds and follows the parent per its [`Anchor`].
+    /// Ignored by a stack layout, where it sizes as `Auto`.
+    Anchored(Anchor),
 }
 
 /// A widget the layout can move: its handle plus the shared cells that keep the
@@ -49,6 +53,11 @@ pub(crate) struct WidgetHandle {
     /// shrinking resized does not feed its shrunken size back in as the new
     /// natural size (which would ratchet the layout down on every relayout).
     natural: Rc<Cell<[Option<i32>; 2]>>,
+    /// The widget's design bounds (device pixels at 96 DPI), captured the first
+    /// time a free layout anchors it. The anchor maths must run against the
+    /// *design* bounds, not the current, already-resized ones, and in
+    /// DPI-independent units so a `WM_DPICHANGED` re-scales rather than re-reads.
+    design: Rc<Cell<Option<Rect>>>,
 }
 
 impl WidgetHandle {
@@ -58,6 +67,7 @@ impl WidgetHandle {
             bounds: control.bounds_handle(),
             visible: control.visible_handle(),
             natural: Rc::new(Cell::new([None, None])),
+            design: Rc::new(Cell::new(None)),
         }
     }
 
@@ -69,6 +79,7 @@ impl WidgetHandle {
             bounds,
             visible,
             natural: Rc::new(Cell::new([None, None])),
+            design: Rc::new(Cell::new(None)),
         }
     }
 
@@ -96,6 +107,25 @@ impl WidgetHandle {
         cache[axis] = Some(extent);
         self.natural.set(cache);
         extent
+    }
+
+    /// The widget's design bounds, in device pixels at 96 DPI, captured from
+    /// its current bounds at `dpi` the first time a free layout needs them.
+    /// Later relayouts (a resize, a DPI change) reuse the capture, so the
+    /// anchor always grows the *original* control rather than the last result.
+    pub(crate) fn design_bounds(&self, dpi: u32) -> Rect {
+        if let Some(design) = self.design.get() {
+            return design;
+        }
+        let bounds = self.bounds.get();
+        let design = Rect::new(
+            Px(bounds.left).to_dip(dpi).to_px(96).value(),
+            Px(bounds.top).to_dip(dpi).to_px(96).value(),
+            Px(bounds.right).to_dip(dpi).to_px(96).value(),
+            Px(bounds.bottom).to_dip(dpi).to_px(96).value(),
+        );
+        self.design.set(Some(design));
+        design
     }
 
     /// Records the bounds the layout assigned (the OS move is batched).
@@ -216,11 +246,24 @@ impl LayoutItem {
             }
             Sizing::Height(size) if direction == StackDirection::Vertical => StackSlot::Fixed(size),
             // A named-axis size that does not match the main axis sizes the
-            // cross axis instead, so the main axis keeps its natural size.
-            Sizing::Auto | Sizing::Width(_) | Sizing::Height(_) => match &self.content {
-                Content::Widget(handle) => StackSlot::FixedPx(Px(handle.natural(direction))),
-                Content::Nested(_) | Content::Split(_) | Content::Tabs(_) => StackSlot::Fill(1),
-            },
+            // cross axis instead, so the main axis keeps its natural size. An
+            // anchored item in a stack parent is not absolute, so it also keeps
+            // its natural size.
+            Sizing::Auto | Sizing::Width(_) | Sizing::Height(_) | Sizing::Anchored(_) => {
+                match &self.content {
+                    Content::Widget(handle) => StackSlot::FixedPx(Px(handle.natural(direction))),
+                    Content::Nested(_) | Content::Split(_) | Content::Tabs(_) => StackSlot::Fill(1),
+                }
+            }
+        }
+    }
+
+    /// The item's absolute [`Anchor`] in a free layout, or
+    /// [`Anchor::TopLeft`] when it has none.
+    pub(crate) fn anchor(&self) -> Anchor {
+        match self.sizing {
+            Sizing::Anchored(anchor) => anchor,
+            _ => Anchor::TopLeft,
         }
     }
 
@@ -307,6 +350,12 @@ pub trait LayoutExt: AsControl {
     /// A minimum size along the parent's main axis.
     fn min(&self, size: Dip) -> LayoutItem {
         widget_item(self.control(), Sizing::Min(size))
+    }
+
+    /// Places the widget absolutely in a [`Layout::free`](super::Layout::free)
+    /// parent: it keeps its current bounds and follows the parent per `anchor`.
+    fn anchor(&self, anchor: Anchor) -> LayoutItem {
+        widget_item(self.control(), Sizing::Anchored(anchor))
     }
 }
 

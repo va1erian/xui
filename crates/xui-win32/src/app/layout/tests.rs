@@ -7,7 +7,9 @@ use std::rc::Rc;
 use super::split::Split;
 use super::tabs::Tabs;
 use super::*;
+use crate::geometry::Size;
 use crate::hwnd::Hwnd;
+use crate::layout::Anchor;
 use crate::units::dip;
 
 /// A fake widget at `bounds`, for pure tree-to-rects tests.
@@ -311,6 +313,90 @@ fn auto_slots_do_not_ratchet_under_overflow() {
             placed.handle.set_bounds(placed.rect);
         }
     }
+}
+
+#[test]
+fn free_layout_anchors_widgets_when_the_parent_grows() {
+    let mut layout = Layout::free(Size::new(400, 300));
+    layout.slots.push(widget(
+        leaf(Rect::new(10, 20, 60, 60)),
+        Sizing::Anchored(Anchor::BottomRight),
+    ));
+    // The design bounds are captured at the origin size (device pixels at 96
+    // DPI, matching `free`'s contract).
+    let at_origin = layout.compute(Rect::new(0, 0, 400, 300), 96);
+    assert_eq!(at_origin[0].rect, Rect::new(10, 20, 60, 60));
+    let grown = layout.compute(Rect::new(0, 0, 500, 400), 96);
+    assert_eq!(grown[0].rect, Rect::new(110, 120, 160, 160));
+}
+
+#[test]
+fn free_layout_stretches_and_fills() {
+    let mut layout = Layout::free(Size::new(400, 300));
+    layout.slots.push(widget(
+        leaf(Rect::new(10, 20, 60, 60)),
+        Sizing::Anchored(Anchor::StretchHorizontal),
+    ));
+    layout.slots.push(widget(
+        leaf(Rect::new(10, 200, 60, 260)),
+        Sizing::Anchored(Anchor::Fill),
+    ));
+    let _ = layout.compute(Rect::new(0, 0, 400, 300), 96);
+    let grown = layout.compute(Rect::new(0, 0, 500, 400), 96);
+    assert_eq!(grown[0].rect, Rect::new(10, 20, 160, 60));
+    assert_eq!(grown[1].rect, Rect::new(10, 200, 160, 360));
+}
+
+#[test]
+fn free_layout_keeps_widgets_positive_and_inside_a_shrunk_parent() {
+    let mut layout = Layout::free(Size::new(400, 300));
+    layout.slots.push(widget(
+        leaf(Rect::new(300, 220, 380, 280)),
+        Sizing::Anchored(Anchor::BottomRight),
+    ));
+    layout.slots.push(widget(
+        leaf(Rect::new(0, 0, 380, 280)),
+        Sizing::Anchored(Anchor::Fill),
+    ));
+    let _ = layout.compute(Rect::new(0, 0, 400, 300), 96);
+    let tiny = layout.compute(Rect::new(0, 0, 60, 40), 96);
+    for placed in &tiny {
+        assert!(placed.rect.width() > 0 && placed.rect.height() > 0);
+        assert!(placed.rect.left >= 0 && placed.rect.top >= 0);
+        assert!(placed.rect.right <= 60 && placed.rect.bottom <= 40);
+    }
+}
+
+#[test]
+fn free_layout_re_scales_on_a_dpi_change() {
+    // Capture the design bounds at 96, then lay out for a doubled client at
+    // 192: the arrangement doubles, so a DPI change re-scales rather than
+    // re-reading the already-resized controls.
+    let mut layout = Layout::free(Size::new(400, 300));
+    layout.slots.push(widget(
+        leaf(Rect::new(10, 20, 60, 60)),
+        Sizing::Anchored(Anchor::Fill),
+    ));
+    let _ = layout.compute(Rect::new(0, 0, 400, 300), 96);
+    let scaled = layout.compute(Rect::new(0, 0, 1000, 800), 192);
+    assert_eq!(scaled[0].rect, Rect::new(20, 40, 320, 320));
+}
+
+#[test]
+fn an_anchored_item_in_a_stack_keeps_its_natural_size() {
+    // `anchor` does not turn a stack parent into an absolute one; the item
+    // sizes as `Auto` rather than being silently dropped.
+    let mut layout = Layout::column();
+    layout.slots.push(widget(
+        leaf(Rect::new(0, 0, 0, 30)),
+        Sizing::Anchored(Anchor::Fill),
+    ));
+    layout
+        .slots
+        .push(widget(leaf(Rect::default()), Sizing::Fill(1)));
+    let placed = layout.compute(Rect::new(0, 0, 100, 100), 96);
+    assert_eq!(placed[0].rect, Rect::new(0, 0, 100, 30));
+    assert_eq!(placed[1].rect, Rect::new(0, 30, 100, 100));
 }
 
 #[test]

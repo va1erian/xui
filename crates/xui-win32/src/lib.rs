@@ -84,7 +84,7 @@ pub use geometry::{Point, Rect, Size};
 /// implementor names the exact version this crate links against.
 pub use glow;
 pub use hwnd::Hwnd;
-pub use layout::{Dock, DockLayout, Insets, Stack, StackDirection, StackSlot};
+pub use layout::{Anchor, Dock, DockLayout, Insets, Stack, StackDirection, StackSlot};
 pub use message::{
     Command, CommandNotification, HitTest, Key, LResult, Message, MinMaxInfo, Modifiers,
     MouseButton, Notify, TimerId,
