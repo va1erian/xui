@@ -1,0 +1,276 @@
+#![forbid(unsafe_code)]
+
+//! The list view's event mapper: pointer and keyboard input to selection,
+//! scrolling and the app's `Msg`.
+
+use std::cell::RefCell;
+use std::rc::Rc;
+
+use super::Mappers;
+use super::model::SelectionMode;
+use super::state::{
+    ROW, State, WHEEL_ROWS, column_at, column_widths, header_px, row_at, toggled_sort,
+};
+use crate::app::Ui;
+use crate::backend::{Event, WidgetId};
+use crate::message::{Key, Modifiers, MouseButton};
+
+/// Builds the event closure a [`ListView`](super::ListView) registers.
+pub(crate) fn mapper<M: 'static>(
+    ui: Ui<M>,
+    id: WidgetId,
+    state: Rc<RefCell<State>>,
+    mappers: Rc<Mappers<M>>,
+) -> impl Fn(&Event) -> Option<M> + 'static {
+    move |event| {
+        // In design mode the editor handles input, not the widget.
+        if (ui.is_design_mode() && event.is_input()) || !state.borrow().enabled {
+            return None;
+        }
+        handle(&ui, id, &state, &mappers, event)
+    }
+}
+
+fn handle<M: 'static>(
+    ui: &Ui<M>,
+    id: WidgetId,
+    state: &Rc<RefCell<State>>,
+    mappers: &Mappers<M>,
+    event: &Event,
+) -> Option<M> {
+    let dpi = ui.dpi();
+    match event {
+        Event::MouseDown {
+            x,
+            y,
+            button,
+            modifiers,
+        } => {
+            let (x, y, button, modifiers) = (*x, *y, *button, *modifiers);
+            let (header, header_h) = {
+                let state = state.borrow();
+                let header = state.has_header();
+                (header, header_px(header, dpi))
+            };
+            if header && y < header_h {
+                if button != MouseButton::Left {
+                    return None;
+                }
+                let local = x - ui.bounds(id).left;
+                let column = {
+                    let state = state.borrow();
+                    let widths = column_widths(dpi, ui.bounds(id).width(), &state.columns);
+                    column_at(&widths, local)
+                };
+                let column = column?;
+                {
+                    let mut state = state.borrow_mut();
+                    state.sort = Some(toggled_sort(state.sort, column));
+                }
+                ui.invalidate(id);
+                return mappers.sort.borrow().as_ref().and_then(|sort| sort(column));
+            }
+            let row = {
+                let state = state.borrow();
+                row_at(
+                    ROW.to_px(dpi).value().max(1),
+                    state.offset,
+                    state.len(),
+                    header_h,
+                    y,
+                )
+            };
+            let row = row?;
+            match button {
+                MouseButton::Right => {
+                    state.borrow_mut().focused = Some(row);
+                    ui.invalidate(id);
+                    mappers
+                        .context
+                        .borrow()
+                        .as_ref()
+                        .and_then(|context| context(row))
+                }
+                MouseButton::Left => {
+                    {
+                        let mut state = state.borrow_mut();
+                        apply_click(&mut state, row, modifiers);
+                        let visible = visible_rows(ui, id, header, dpi);
+                        state.ensure_visible(row, visible);
+                    }
+                    ui.invalidate(id);
+                    selection_message(mappers, &state.borrow())
+                }
+                _ => None,
+            }
+        }
+        Event::MouseMove { y, .. } => {
+            let header_h = {
+                let state = state.borrow();
+                header_px(state.has_header(), dpi)
+            };
+            let row = {
+                let state = state.borrow();
+                row_at(
+                    ROW.to_px(dpi).value().max(1),
+                    state.offset,
+                    state.len(),
+                    header_h,
+                    *y,
+                )
+            };
+            let changed = {
+                let mut state = state.borrow_mut();
+                let changed = state.hover != row;
+                state.hover = row;
+                changed
+            };
+            if changed {
+                ui.invalidate(id);
+            }
+            None
+        }
+        Event::MouseLeave => {
+            let mut state = state.borrow_mut();
+            if state.hover.take().is_some() {
+                drop(state);
+                ui.invalidate(id);
+            }
+            None
+        }
+        Event::MouseWheel {
+            delta, horizontal, ..
+        } if !*horizontal => {
+            let header = state.borrow().has_header();
+            let visible = visible_rows(ui, id, header, dpi);
+            let mut state = state.borrow_mut();
+            let max = state.len().saturating_sub(visible);
+            let step = i64::from(*delta) * WHEEL_ROWS as i64;
+            let next = (state.offset as i64 - step).clamp(0, max as i64) as usize;
+            if next != state.offset {
+                state.offset = next;
+                drop(state);
+                ui.invalidate(id);
+            }
+            None
+        }
+        Event::KeyDown {
+            key,
+            modifiers,
+            repeat,
+            system,
+        } if *repeat <= 1 && !*system => handle_key(ui, id, state, mappers, *key, *modifiers),
+        _ => None,
+    }
+}
+
+fn handle_key<M: 'static>(
+    ui: &Ui<M>,
+    id: WidgetId,
+    state: &Rc<RefCell<State>>,
+    mappers: &Mappers<M>,
+    key: Key,
+    modifiers: Modifiers,
+) -> Option<M> {
+    let header = state.borrow().has_header();
+    let visible = visible_rows(ui, id, header, ui.dpi());
+    let len = state.borrow().len();
+    if len == 0 {
+        return None;
+    }
+    if key == Key::MENU || (key == Key::F10 && modifiers.shift) {
+        let row = state.borrow().primary()?;
+        return mappers
+            .context
+            .borrow()
+            .as_ref()
+            .and_then(|context| context(row));
+    }
+
+    let before = state.borrow().selected.clone();
+    {
+        let mut state = state.borrow_mut();
+        let current = state.focused.unwrap_or(0);
+        match key {
+            Key::UP => move_focus(&mut state, current.saturating_sub(1), modifiers.shift),
+            Key::DOWN => move_focus(&mut state, (current + 1).min(len - 1), modifiers.shift),
+            Key::HOME => move_focus(&mut state, 0, modifiers.shift),
+            Key::END => move_focus(&mut state, len - 1, modifiers.shift),
+            Key::PAGE_UP => {
+                move_focus(&mut state, current.saturating_sub(visible), modifiers.shift)
+            }
+            Key::PAGE_DOWN => move_focus(
+                &mut state,
+                (current + visible).min(len - 1),
+                modifiers.shift,
+            ),
+            Key::SPACE if state.mode == SelectionMode::Multi => {
+                let row = state.focused?;
+                state.toggle(row);
+            }
+            Key::RETURN => {
+                let row = state.focused?;
+                return mappers
+                    .activate
+                    .borrow()
+                    .as_ref()
+                    .and_then(|activate| activate(row));
+            }
+            _ => return None,
+        }
+        if let Some(row) = state.focused {
+            state.ensure_visible(row, visible);
+        }
+    }
+    ui.invalidate(id);
+    if state.borrow().selected == before {
+        None
+    } else {
+        selection_message(mappers, &state.borrow())
+    }
+}
+
+/// Applies a click's modifiers to the selection according to the mode.
+fn apply_click(state: &mut State, row: usize, modifiers: Modifiers) {
+    match state.mode {
+        SelectionMode::Single => state.set_single(row),
+        SelectionMode::Multi if modifiers.ctrl => state.toggle(row),
+        SelectionMode::Multi if modifiers.shift => state.extend(row),
+        SelectionMode::Multi => state.set_single(row),
+        SelectionMode::Range if modifiers.shift => state.extend(row),
+        SelectionMode::Range => state.set_single(row),
+    }
+}
+
+/// Moves the focus; Shift extends the selection instead of replacing it.
+fn move_focus(state: &mut State, row: usize, shift: bool) {
+    if shift && state.mode != SelectionMode::Single {
+        state.extend(row);
+    } else {
+        state.set_single(row);
+    }
+}
+
+/// Maps the current selection to the app's message. `on_selection` sees the
+/// whole set; otherwise `on_select` sees the focused row.
+fn selection_message<M: 'static>(mappers: &Mappers<M>, state: &State) -> Option<M> {
+    let rows = state.selection();
+    if let Some(selection) = mappers.selection.borrow().as_ref() {
+        return selection(&rows);
+    }
+    match state.primary() {
+        Some(primary) => mappers
+            .select
+            .borrow()
+            .as_ref()
+            .and_then(|select| select(primary)),
+        None => None,
+    }
+}
+
+/// How many whole rows fit in the body below the header.
+fn visible_rows<M: 'static>(ui: &Ui<M>, id: WidgetId, header: bool, dpi: u32) -> usize {
+    let bounds = ui.bounds(id);
+    let body = (bounds.height() - header_px(header, dpi)).max(0);
+    ((body / ROW.to_px(dpi).value().max(1)) as usize).max(1)
+}

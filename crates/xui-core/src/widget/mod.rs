@@ -42,7 +42,9 @@ pub use edit::Edit;
 pub use groupbox::GroupBox;
 pub use hyperlink::Hyperlink;
 pub use label::Label;
-pub use listview::ListView;
+pub use listview::{
+    CellData, Column, ColumnWidth, Fill, ListModel, ListView, SelectionMode, SortDirection,
+};
 pub use materialstatusbar::MaterialStatusBar;
 pub use multilineedit::MultilineEdit;
 pub use numberfield::NumberField;

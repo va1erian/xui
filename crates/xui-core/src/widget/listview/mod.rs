@@ -1,0 +1,220 @@
+#![forbid(unsafe_code)]
+
+//! [`ListView`]: a virtual report list with columns, a header, a sort arrow,
+//! single/multi/range selection and a context hook.
+//!
+//! The list stores no rows of its own when one is installed with
+//! [`ListView::with_model`]: it asks the [`ListModel`] for the text of the
+//! visible cells only, so a model of any size costs the same to paint. The
+//! simple [`ListView::new`] constructor keeps a plain `&[&str]` list working.
+//!
+//! Events map to the app's `Msg` through the closures given at construction:
+//! [`on_select`](ListView::on_select)/[`on_selection`](ListView::on_selection),
+//! [`on_activate`](ListView::on_activate),
+//! [`on_context`](ListView::on_context) and [`on_sort`](ListView::on_sort).
+
+use std::cell::RefCell;
+use std::collections::BTreeSet;
+use std::rc::Rc;
+
+use super::control::Control;
+use crate::app::Ui;
+use crate::backend::{NodeKind, NodeSpec, Result};
+use crate::geometry::Rect;
+
+mod api;
+mod events;
+mod model;
+mod paint;
+mod state;
+
+#[cfg(test)]
+mod tests;
+
+pub use self::model::{
+    CellData, Column, ColumnWidth, Fill, ListModel, SelectionMode, SortDirection,
+};
+use self::state::{Rows, State};
+
+/// Maps a row index to the app's message.
+type RowMapper<M> = Box<dyn Fn(usize) -> Option<M>>;
+/// Maps the whole selection to the app's message.
+type SelectionMapper<M> = Box<dyn Fn(&[usize]) -> Option<M>>;
+
+/// The app-level events a [`ListView`] maps to `Msg`.
+pub(crate) struct Mappers<M> {
+    pub(crate) select: RefCell<Option<RowMapper<M>>>,
+    pub(crate) selection: RefCell<Option<SelectionMapper<M>>>,
+    pub(crate) activate: RefCell<Option<RowMapper<M>>>,
+    pub(crate) context: RefCell<Option<RowMapper<M>>>,
+    pub(crate) sort: RefCell<Option<RowMapper<M>>>,
+}
+
+impl<M> Mappers<M> {
+    fn new() -> Mappers<M> {
+        Mappers {
+            select: RefCell::new(None),
+            selection: RefCell::new(None),
+            activate: RefCell::new(None),
+            context: RefCell::new(None),
+            sort: RefCell::new(None),
+        }
+    }
+}
+
+/// A list of rows with a header, columns and a selection.
+///
+/// The selection and activation map to the app's `Msg` through
+/// [`on_select`](ListView::on_select) and
+/// [`on_activate`](ListView::on_activate); a header click maps through
+/// [`on_sort`](ListView::on_sort) and a right click through
+/// [`on_context`](ListView::on_context).
+pub struct ListView<M: 'static> {
+    control: Control<M>,
+    state: Rc<RefCell<State>>,
+    mappers: Rc<Mappers<M>>,
+}
+
+impl<M: 'static> ListView<M> {
+    /// Creates a list of `items` at `bounds`, with the first row selected (or
+    /// no selection when empty). It has one full-width column and no header.
+    pub fn new(ui: &Ui<M>, bounds: Rect, items: &[&str]) -> Result<ListView<M>> {
+        let rows = Rows::Simple(items.iter().map(|item| item.to_string()).collect());
+        Self::build(ui, bounds, rows)
+    }
+
+    /// Creates a virtual list backed by `model` at `bounds`. Add columns with
+    /// [`column`](ListView::column)/[`add_column`](ListView::add_column); a
+    /// list with at least one column draws a header.
+    pub fn with_model(
+        ui: &Ui<M>,
+        bounds: Rect,
+        model: impl ListModel + 'static,
+    ) -> Result<ListView<M>> {
+        Self::build(ui, bounds, Rows::Model(Rc::new(model)))
+    }
+
+    fn build(ui: &Ui<M>, bounds: Rect, rows: Rows) -> Result<ListView<M>> {
+        let control = Control::new(ui, &NodeSpec::new(NodeKind::ListView, bounds).tab_stop())?;
+        let mut selected = BTreeSet::new();
+        let focused = if rows.len() == 0 {
+            None
+        } else {
+            selected.insert(0);
+            Some(0)
+        };
+        let state = Rc::new(RefCell::new(State {
+            rows,
+            columns: Vec::new(),
+            mode: SelectionMode::Single,
+            selected,
+            focused,
+            anchor: focused,
+            hover: None,
+            offset: 0,
+            sort: None,
+            enabled: true,
+        }));
+        let mappers = Rc::new(Mappers::new());
+
+        {
+            let state = Rc::clone(&state);
+            let theme = ui.theme_handle();
+            let outline = control.selected_handle();
+            control.set_painter(Rc::new(move |canvas| {
+                let theme = theme.get();
+                let state = state.borrow();
+                paint::paint(canvas, &state, &theme, outline.get());
+            }));
+        }
+        {
+            let mapper = events::mapper(
+                ui.clone(),
+                control.id(),
+                Rc::clone(&state),
+                Rc::clone(&mappers),
+            );
+            control.on_events(mapper);
+        }
+
+        Ok(ListView {
+            control,
+            state,
+            mappers,
+        })
+    }
+
+    /// Adds a left-aligned column of `width`.
+    pub fn column(self, title: impl Into<String>, width: impl Into<ColumnWidth>) -> ListView<M> {
+        self.add_column(Column::new(title, width))
+    }
+
+    /// Adds a right-aligned column of `width`.
+    pub fn column_right(
+        self,
+        title: impl Into<String>,
+        width: impl Into<ColumnWidth>,
+    ) -> ListView<M> {
+        self.add_column(Column::right(title, width))
+    }
+
+    /// Adds a pre-built [`Column`], e.g. one that is centred.
+    pub fn add_column(self, column: Column) -> ListView<M> {
+        self.state.borrow_mut().columns.push(column);
+        self.control.invalidate();
+        self
+    }
+
+    /// Sets how clicks and the keyboard select rows.
+    pub fn selection_mode(self, mode: SelectionMode) -> ListView<M> {
+        self.state.borrow_mut().mode = mode;
+        self
+    }
+
+    /// A shortcut for [`selection_mode`](ListView::selection_mode): multi
+    /// select, or single select.
+    pub fn multi_select(self, multi: bool) -> ListView<M> {
+        self.selection_mode(if multi {
+            SelectionMode::Multi
+        } else {
+            SelectionMode::Single
+        })
+    }
+
+    /// Maps selecting the primary row to the app's message. When
+    /// [`on_selection`](ListView::on_selection) is set it takes over and this
+    /// one is not called.
+    pub fn on_select(self, mapper: impl Fn(usize) -> Option<M> + 'static) -> ListView<M> {
+        *self.mappers.select.borrow_mut() = Some(Box::new(mapper));
+        self
+    }
+
+    /// Maps a selection change to the app's message. The slice holds every
+    /// selected row, ascending â€” empty when the selection was cleared.
+    pub fn on_selection(self, mapper: impl Fn(&[usize]) -> Option<M> + 'static) -> ListView<M> {
+        *self.mappers.selection.borrow_mut() = Some(Box::new(mapper));
+        self
+    }
+
+    /// Maps activating the focused row (Return or a double-click) to the app's
+    /// message.
+    pub fn on_activate(self, mapper: impl Fn(usize) -> Option<M> + 'static) -> ListView<M> {
+        *self.mappers.activate.borrow_mut() = Some(Box::new(mapper));
+        self
+    }
+
+    /// Maps a right click (or the Menu key) on a row to the app's message.
+    pub fn on_context(self, mapper: impl Fn(usize) -> Option<M> + 'static) -> ListView<M> {
+        *self.mappers.context.borrow_mut() = Some(Box::new(mapper));
+        self
+    }
+
+    /// Maps a header click to the app's message. The list toggles its own sort
+    /// arrow; the app sorts the model and calls
+    /// [`set_sort_indicator`](ListView::set_sort_indicator) for a programmatic
+    /// indicator.
+    pub fn on_sort(self, mapper: impl Fn(usize) -> Option<M> + 'static) -> ListView<M> {
+        *self.mappers.sort.borrow_mut() = Some(Box::new(mapper));
+        self
+    }
+}
