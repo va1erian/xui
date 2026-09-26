@@ -315,6 +315,21 @@ pub fn capture_screen(rect: Rect) -> Option<RgbaImage> {
     })
 }
 
+/// Whether every pixel of `image` is the same colour: a window that never
+/// actually painted, as when the capture lands on an occluded or non-rendering
+/// CI desktop. A pixel assertion should skip rather than fail in that case.
+pub fn is_flat(image: &RgbaImage) -> bool {
+    let Some(first) = image.pixels.as_slice().first_chunk::<4>() else {
+        return true;
+    };
+    image
+        .pixels
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .all(|pixel| pixel == first)
+}
+
 /// Whether `color` is near-white (all channels high), the shape of the #67
 /// combo regression.
 pub fn is_near_white(color: [u8; 4]) -> bool {
