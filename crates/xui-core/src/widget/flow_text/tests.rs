@@ -128,3 +128,40 @@ fn a_narrower_line_wraps_taller() {
         "the line wrapped to more than one row"
     );
 }
+
+/// The number of distinct rows the painted fragments sit on.
+fn painted_rows(backend: &HeadlessBackend, id: WidgetId) -> usize {
+    let mut tops: Vec<i32> = backend
+        .ops(id)
+        .into_iter()
+        .filter_map(|op| match op {
+            DrawOp::Text(rect, _, _) => Some(rect.top),
+            _ => None,
+        })
+        .collect();
+    tops.sort_unstable();
+    tops.dedup();
+    tops.len()
+}
+
+#[test]
+fn a_move_that_resizes_the_node_rewraps() {
+    let (backend, _core, ui) = setup();
+    let flow = FlowText::new(&ui, Rect::new(0, 0, 400, 40))
+        .unwrap()
+        .run(Run::normal("one two three four five six"));
+    backend.render(flow.id());
+    assert_eq!(
+        painted_rows(&backend, flow.id()),
+        1,
+        "the wide line is a single row"
+    );
+
+    // A container that narrows the node without a backend `Resize` event.
+    ui.apply_moves(&[(flow.id(), Rect::new(0, 0, 60, 40))]);
+    backend.render(flow.id());
+    assert!(
+        painted_rows(&backend, flow.id()) > 1,
+        "the narrowed line re-wrapped"
+    );
+}

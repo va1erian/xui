@@ -5,7 +5,7 @@ use super::ColorPicker;
 use crate::app::{App, Core, Runtime, Ui};
 use crate::backend::headless::{DrawOp, HeadlessBackend};
 use crate::backend::{Backend, Event, PlatformSpec, WidgetId};
-use crate::geometry::Rect;
+use crate::geometry::{Point, Rect};
 use crate::message::{Key, Modifiers, MouseButton};
 
 struct TestApp {
@@ -144,4 +144,33 @@ fn every_swatch_is_painted() {
             "the swatch {color:?} was painted: {ops:?}"
         );
     }
+}
+
+#[test]
+fn the_selected_check_is_not_stretched_on_a_wide_swatch() {
+    let (backend, _core, ui) = setup();
+    let palette = [crate::Color::rgb(10, 20, 30)];
+    let picker = ColorPicker::new(&ui, Rect::new(0, 0, 200, 40), &palette)
+        .unwrap()
+        .columns(1)
+        .selected(palette[0]);
+
+    backend.render(picker.id());
+    let lines: Vec<(Point, Point)> = backend
+        .ops(picker.id())
+        .into_iter()
+        .filter_map(|op| match op {
+            DrawOp::Line(a, b, _, _) => Some((a, b)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(lines.len(), 2, "the check mark is two line segments");
+    let xs: Vec<i32> = lines.iter().flat_map(|(a, b)| [a.x, b.x]).collect();
+    let ys: Vec<i32> = lines.iter().flat_map(|(a, b)| [a.y, b.y]).collect();
+    let span_x = xs.iter().max().unwrap() - xs.iter().min().unwrap();
+    let span_y = ys.iter().max().unwrap() - ys.iter().min().unwrap();
+    assert!(
+        span_x <= span_y + 4,
+        "the check stretched to {span_x}x{span_y} on the wide swatch"
+    );
 }

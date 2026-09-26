@@ -13,7 +13,7 @@ use std::cell::Cell;
 use std::rc::Rc;
 
 use xui_core::backend::{Backend, Event, NodeKind, NodeSpec, ParentRef, PlatformSpec};
-use xui_core::{Color, Rect, Router, WidgetId};
+use xui_core::{Color, Dip, Rect, Router, WidgetId};
 use xui_win32::Win32Backend;
 
 /// The colour the node paints, chosen to be unmistakable in a capture.
@@ -116,6 +116,37 @@ fn the_backend_exposes_a_title_native_handle_and_capture() {
     assert_eq!(
         image.pixels().len(),
         image.width() as usize * image.height() as usize * 4
+    );
+
+    backend.close_window(window);
+}
+
+#[test]
+fn the_requested_size_is_the_client_area() {
+    let backend = Win32Backend::new();
+    backend.init();
+    let Some(window) = backend
+        .open_window(&PlatformSpec::new("xui.backend.client").size(Dip(320.0), Dip(200.0)))
+        .ok()
+    else {
+        return; // no desktop; skip
+    };
+
+    let dpi = backend.dpi(window);
+    let client = backend.client_rect(window);
+    // The window may land on a monitor whose DPI differs from the system DPI
+    // the open call sized against, so allow a couple of pixels.
+    let expected_w = Dip(320.0).to_px(dpi).value();
+    let expected_h = Dip(200.0).to_px(dpi).value();
+    assert!(
+        (client.width() - expected_w).abs() <= 2,
+        "the client width matches the requested size: {} vs {expected_w}",
+        client.width()
+    );
+    assert!(
+        (client.height() - expected_h).abs() <= 2,
+        "the client height matches the requested size: {} vs {expected_h}",
+        client.height()
     );
 
     backend.close_window(window);
