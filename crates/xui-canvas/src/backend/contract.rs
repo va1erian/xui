@@ -63,6 +63,7 @@ impl Backend for WinitBackend {
     }
 
     fn close_window(&self, window: WindowId) {
+        self.teardown_window_gl(window);
         self.shared.windows.borrow_mut().remove(&window.raw());
         self.shared
             .nodes

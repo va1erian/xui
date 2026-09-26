@@ -20,6 +20,20 @@ softbuffer = { version = "0.4", default-features = false, features = [
     "wayland",
     "wayland-dlopen",
 ] }
+# The safe OpenGL binding a `GlWidget` draws with. Re-exported as
+# `xui_canvas::glow` so an implementor names the same version this crate loads.
+glow = "0.16"
+# Cross-platform OpenGL context creation on the winit window. The default
+# feature set keeps EGL/GLX/X11/Wayland/WGL dlopen-based, so the Linux
+# cross-check needs no system graphics headers beyond what winit already needs.
+glutin = "0.32"
 
 [dev-dependencies]
 png = "0.17"
+
+# `winit` needs its event loop on the main thread (a hard panic on Windows),
+# which the libtest harness cannot provide, so the GL integration test runs
+# from `main` with `harness = false`.
+[[test]]
+name = "gl"
+harness = false

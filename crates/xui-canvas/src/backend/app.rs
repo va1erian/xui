@@ -1,8 +1,9 @@
 #![forbid(unsafe_code)]
 
 //! The `winit` [`ApplicationHandler`] that drives [`WinitBackend`]: it creates
-//! the real windows and their `softbuffer` surfaces, translates platform input
-//! into portable events, and presents a composited frame on redraw.
+//! the real windows, translates platform input into portable events, and
+//! presents a frame on redraw — an OpenGL frame when the window has GL content,
+//! otherwise a `softbuffer` copy of the software composite.
 
 use std::collections::HashMap;
 use std::num::NonZeroU32;
@@ -20,14 +21,9 @@ use xui_core::backend::{Decorations, Event, TimerId, WidgetId, WindowId};
 use xui_core::geometry::Rect;
 use xui_core::message::{Key, Modifiers, MouseButton};
 
-use super::{Shared, SharedWindow, UserEvent, render};
+use super::software::RealWindow;
+use super::{Shared, UserEvent, render};
 use crate::Surface;
-
-/// A real window and its software presentation surface.
-struct RealWindow {
-    _context: softbuffer::Context<SharedWindow>,
-    surface: softbuffer::Surface<SharedWindow, SharedWindow>,
-}
 
 /// Drives one `winit` event loop for a [`super::WinitBackend`].
 struct App {
@@ -44,7 +40,8 @@ impl App {
         WindowId::from_raw(raw)
     }
 
-    /// Creates the OS window and surface for any backend window that lacks one.
+    /// Creates the OS window for any backend window that lacks one. Its
+    /// presentation surface is created lazily on the first frame.
     fn create_windows(&mut self, event_loop: &ActiveEventLoop) {
         let ids: Vec<u64> = self.shared.windows.borrow().keys().copied().collect();
         for raw in ids {
@@ -69,26 +66,13 @@ impl App {
                 continue;
             };
             let window = Rc::new(window);
-            let Ok(context) = softbuffer::Context::new(SharedWindow(Rc::clone(&window))) else {
-                continue;
-            };
-            let Ok(surface) = softbuffer::Surface::new(&context, SharedWindow(Rc::clone(&window)))
-            else {
-                continue;
-            };
             let metrics = window_metrics(&window);
             if let Some(state) = self.shared.windows.borrow_mut().get_mut(&raw) {
                 state.size = metrics.0;
                 state.window = Some(Rc::clone(&window));
             }
             self.set_dpi(raw, metrics.1);
-            self.windows.insert(
-                raw,
-                RealWindow {
-                    _context: context,
-                    surface,
-                },
-            );
+            self.windows.insert(raw, RealWindow::new());
             self.redraw(raw);
         }
     }
@@ -117,26 +101,71 @@ impl App {
         }
     }
 
-    /// Composites and presents one frame of `raw`.
+    /// Presents one frame of `raw`: an OpenGL frame when the window has GL
+    /// content and a context could be created, otherwise the software
+    /// composite (including a GL widget's fallback paint).
     fn redraw(&mut self, raw: u64) {
         let window_id = Self::window_id(raw);
-        let (width, height) = match self.shared.windows.borrow().get(&raw) {
-            Some(state) => state.size,
+        let (width, height, background, gl, window) = match self.shared.windows.borrow().get(&raw) {
+            Some(state) => (
+                state.size.0,
+                state.size.1,
+                state.theme.background,
+                state.gl.clone(),
+                state.window.clone(),
+            ),
             None => return,
         };
         let (Some(width), Some(height)) = (NonZeroU32::new(width), NonZeroU32::new(height)) else {
             return;
         };
+
+        if let (Some(widget), Some(window)) = (gl, window) {
+            let bounds = Rect::new(0, 0, width.get() as i32, height.get() as i32);
+            let painted = {
+                let mut windows = self.shared.windows.borrow_mut();
+                let Some(state) = windows.get_mut(&raw) else {
+                    return;
+                };
+                let theme = state.theme;
+                state.renderer.frame(
+                    &window,
+                    width.get(),
+                    height.get(),
+                    background,
+                    |gl| widget.paint_gl(gl, bounds, &theme),
+                    |gl| widget.gl_teardown(gl),
+                )
+            };
+            if painted {
+                return;
+            }
+            // The context failed: fall through to the software fallback, which
+            // paints the widget through `GlWidget::paint`.
+        }
+
+        let handle = self
+            .shared
+            .windows
+            .borrow()
+            .get(&raw)
+            .and_then(|state| state.window.clone());
         let Some(real) = self.windows.get_mut(&raw) else {
             return;
         };
-        if real.surface.resize(width, height).is_err() {
+        if !handle.is_some_and(|handle| real.ensure_software(&handle)) {
+            return;
+        }
+        let Some(software) = real.surface_mut() else {
+            return;
+        };
+        if software.resize(width, height).is_err() {
             return;
         }
         let mut surface = Surface::new(width.get(), height.get());
         render::composite(&self.shared, window_id, &mut surface);
         let image = surface.to_image();
-        let Ok(mut buffer) = real.surface.buffer_mut() else {
+        let Ok(mut buffer) = software.buffer_mut() else {
             return;
         };
         for (destination, pixel) in buffer.iter_mut().zip(image.pixels.as_chunks::<4>().0) {
