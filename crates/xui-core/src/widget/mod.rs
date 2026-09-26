@@ -21,6 +21,9 @@ mod progressbar;
 mod radiogroup;
 mod separator;
 mod slider;
+mod statusbar;
+mod togglebutton;
+mod toolbar;
 
 #[cfg(test)]
 mod tests;
@@ -38,3 +41,6 @@ pub use progressbar::ProgressBar;
 pub use radiogroup::RadioGroup;
 pub use separator::Separator;
 pub use slider::Slider;
+pub use statusbar::StatusBar;
+pub use togglebutton::ToggleButton;
+pub use toolbar::Toolbar;
