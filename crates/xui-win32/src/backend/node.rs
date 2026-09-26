@@ -122,6 +122,13 @@ impl BackendNode {
         let _ = sys::window::set_title(self.hwnd, text);
         *self.text.borrow_mut() = text.to_string();
     }
+
+    /// Sets the cue banner of a native edit; other kinds have no cue.
+    pub(super) fn set_cue(&self, cue: &str) {
+        if self.kind == NodeKind::Edit {
+            sys::edit::set_cue(self.hwnd, cue, true);
+        }
+    }
 }
 
 /// A real `EDIT` control: it edits itself (IME included) and reports changes to
