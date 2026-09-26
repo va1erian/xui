@@ -1,9 +1,11 @@
 #![warn(missing_docs)]
 
-//! Native Windows UI for Rust: small, fast, idiomatic, and themed. Dark mode is
-//! first-class. Two layers: a safe platform layer over Win32 (windows, typed
-//! messages, GDI) and a widget layer where widget events are mapped to the
-//! application's own message type (see the README's *Architecture* section).
+//! The Win32 layer for xui. It contains two things: [`Win32Backend`], the Win32
+//! implementation of [`xui_core::backend::Backend`] (which runs the portable
+//! xui-core widgets), and a mature Win32-native widget layer built directly on a
+//! safe platform layer over Win32 (windows, typed messages, GDI). Widget events
+//! are mapped to the application's own message type; dark mode is first-class.
+//! See the workspace docs, *The Win32 layer*.
 //!
 //! The crate is deliberately split so that `unsafe` is confined to [`sys`]:
 //! every other module starts with `#![forbid(unsafe_code)]` and talks to

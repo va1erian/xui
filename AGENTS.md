@@ -1,7 +1,9 @@
 # Agent conventions
 
-Read this and [README.md](README.md) before writing any code. The README's
-"Invariants" and "Adding a control" sections are part of these rules.
+Read this and [README.md](README.md) before writing any code. The docs'
+[Architecture](docs/architecture.md) invariants and
+[Development](docs/development.md) ("Adding a portable widget",
+"Adding a Win32-native control") sections are part of these rules.
 
 ## Invariants (non-negotiable)
 
@@ -9,7 +11,7 @@ Read this and [README.md](README.md) before writing any code. The README's
   `#![forbid(unsafe_code)]`. Each `unsafe` block carries a `// SAFETY:` comment
   explaining why its contract holds.
 - **No `windows` types in the public API.** They may be private fields; callers
-  only ever see `win32ui` types.
+  only ever see xui types.
 - **Controls own their child `HWND`** and destroy it (and unregister from
   `controls::registry`) in `Drop`.
 - **Small files.** Aim under 300 lines, hard limit 400. If a change would push a
@@ -31,11 +33,12 @@ Read this and [README.md](README.md) before writing any code. The README's
   this is a general-purpose library.
 - Every new control or message is exercised in `examples/demo/` and has a
   test in `tests/` or a unit test.
-- **Widgets follow the widget layer** (README → *Architecture*): events map to
+- **Widgets follow the widget layer** (docs → *Architecture*): events map to
   the app's `Msg` through closures given at construction, there are no numeric
-  control ids in the public API, shared behaviour comes from `AsControl`/`ControlExt`
-  and capability traits (never a base type, `Deref` or downcasting), and design
-  values are `Dip`.
+  control ids in the public API, shared behaviour comes from capability traits
+  (never a base type, `Deref` or downcasting), and design values are `Dip`.
+  Portable widgets live in `xui-core`; Win32-native controls use
+  `AsControl`/`ControlExt` in `xui-win32`.
 - **Dark mode is first-class**: widgets implement `Themed`, use semantic theme
   tokens only, and owner-draw any native part that ignores dark mode (documented
   APIs only). UI PRs attach one light and one dark screenshot.
