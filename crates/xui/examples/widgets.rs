@@ -21,8 +21,8 @@ use xui_core::backend::{Backend, PlatformSpec};
 use xui_core::widget::{
     Button, CheckBox, ComboBox, Edit, Glyph, GroupBox, HasText, Hyperlink, Label, ListView,
     MaterialStatusBar, Menu, MenuId, MultilineEdit, NumberField, Panel, ProgressBar, RadioGroup,
-    Separator, Slider, StatusBar, ToggleButton, Toolbar, Tooltip, TopBar, TopBarId, TreeRow,
-    TreeView,
+    ScrollView, Separator, Slider, Split, StatusBar, Tabs, ToggleButton, Toolbar, Tooltip, TopBar,
+    TopBarId, TreeRow, TreeView,
 };
 use xui_core::{Dip, Properties, Rect, Theme, Value};
 
@@ -96,6 +96,9 @@ enum Msg {
     ContextMenu,
     Link,
     Theme(usize),
+    Scroll(i32),
+    Tab(usize),
+    SplitPane(f32),
     Switch,
     Autoclose,
 }
@@ -133,6 +136,10 @@ struct Gallery {
     _switch: Option<Button<Msg>>,
     _tip_link: Tooltip<Msg>,
     _tip_bar: Tooltip<Msg>,
+    _scroll: ScrollView<Msg>,
+    _tabs: Tabs<Msg>,
+    _split: Split<Msg>,
+    _content: Vec<Label<Msg>>,
 }
 
 impl App for Gallery {
@@ -168,6 +175,9 @@ impl App for Gallery {
                 "context menu".to_string()
             }
             Msg::Link => "link clicked".to_string(),
+            Msg::Scroll(offset) => format!("scroll: {offset}px"),
+            Msg::Tab(index) => format!("tab #{index}"),
+            Msg::SplitPane(position) => format!("split: {position:.0}"),
             Msg::Theme(choice) => match choice {
                 1 => {
                     ui.set_theme(Theme::dark());
@@ -197,7 +207,7 @@ fn run(renderer: Renderer, switch: Rc<Cell<Option<Renderer>>>) {
     let title = format!("xui widgets ({})", renderer.label());
     let _ = run_app(
         backend_for(renderer),
-        PlatformSpec::new(&title).size(Dip(780.0), Dip(640.0)),
+        PlatformSpec::new(&title).size(Dip(1300.0), Dip(800.0)),
         move |ui| {
             let dpi = ui.dpi();
             let p = move |value: f32| Dip(value).to_px(dpi).value();
@@ -425,6 +435,48 @@ fn run(renderer: Renderer, switch: Rc<Cell<Option<Renderer>>>) {
                 context.show_context(at(60.0), at(250.0));
             }
 
+            // The containers' content widgets are held here: a container moves
+            // its children but does not own them, so the app keeps them alive.
+            let mut content: Vec<Label<Msg>> = Vec::new();
+
+            let scroll = ScrollView::new(ui, rect(788.0, 48.0, 1024.0, 232.0)).unwrap();
+            for row in 1..=6 {
+                let label = Label::new(
+                    scroll.ui(),
+                    Rect::new(0, 0, 10, 10),
+                    &format!("Scroll row {row}"),
+                )
+                .unwrap();
+                scroll.add(label.id(), Dip(40.0));
+                content.push(label);
+            }
+            let scroll = scroll.on_scroll(|offset| Some(Msg::Scroll(offset.value())));
+
+            let tabs = Tabs::new(ui, rect(788.0, 244.0, 1024.0, 420.0)).unwrap();
+            let general =
+                Label::new(tabs.ui(), Rect::new(0, 0, 10, 10), "General settings").unwrap();
+            let advanced =
+                Label::new(tabs.ui(), Rect::new(0, 0, 10, 10), "Advanced settings").unwrap();
+            let (general_id, advanced_id) = (general.id(), advanced.id());
+            content.push(general);
+            content.push(advanced);
+            let tabs = tabs
+                .page("General", &[general_id])
+                .page("Advanced", &[advanced_id])
+                .on_change(|index| Some(Msg::Tab(index)));
+
+            let split = Split::row(ui, rect(788.0, 432.0, 1024.0, 600.0)).unwrap();
+            let left = Label::new(split.ui(), Rect::new(0, 0, 10, 10), "Left pane").unwrap();
+            let right = Label::new(split.ui(), Rect::new(0, 0, 10, 10), "Right pane").unwrap();
+            let (left_id, right_id) = (left.id(), right.id());
+            content.push(left);
+            content.push(right);
+            split.pane_a(&[left_id]);
+            split.pane_b(&[right_id]);
+            split.set_min(Dip(60.0), Dip(60.0));
+            split.set_position(Dip(110.0));
+            let split = split.on_moved(|position| Some(Msg::SplitPane(position.value())));
+
             let sep = Separator::new(ui, rect(16.0, 552.0, 764.0, 554.0)).unwrap();
             let status =
                 StatusBar::new(ui, rect(16.0, 560.0, 764.0, 584.0), &["Ready", ""]).unwrap();
@@ -497,6 +549,10 @@ fn run(renderer: Renderer, switch: Rc<Cell<Option<Renderer>>>) {
                 _switch: switch_button,
                 _tip_link: tip_link,
                 _tip_bar: tip_bar,
+                _scroll: scroll,
+                _tabs: tabs,
+                _split: split,
+                _content: content,
             }
         },
     );
