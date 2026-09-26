@@ -53,7 +53,19 @@ impl Font {
         // A negative height asks for a character height; the 96/72 factor turns
         // points into logical units at the given DPI.
         let height = -((point_size * dpi as f32 / 72.0).round() as i32).max(1);
-        let handle = sys::gdi::create_font(family, height, weight.value())?;
+        Font::from_height(family, height, weight.value(), false)
+    }
+
+    /// Creates a upright font of `pixel_height` device pixels for a portable
+    /// [`TextStyle`](xui_core::backend::TextStyle) at an arbitrary numeric
+    /// weight, used by the styled-text fallback when DirectWrite is absent.
+    pub fn styled(family: &str, pixel_height: i32, weight: u16, italic: bool) -> Result<Font> {
+        Font::from_height(family, -pixel_height.max(1), i32::from(weight), italic)
+    }
+
+    /// Creates a font from an explicit (negative) device-pixel height.
+    fn from_height(family: &str, height: i32, weight: i32, italic: bool) -> Result<Font> {
+        let handle = sys::gdi::create_font(family, height, weight, italic)?;
         Ok(Font {
             handle,
             ascent: height.abs(),

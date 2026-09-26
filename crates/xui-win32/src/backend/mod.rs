@@ -12,6 +12,7 @@ mod canvas;
 mod handler;
 mod node;
 mod shape;
+mod text;
 
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
@@ -24,7 +25,6 @@ use xui_core::backend::{
 use xui_core::router::WidgetHost;
 use xui_core::{Rect, Theme};
 
-use crate::gdi::Font;
 use crate::sys;
 use crate::window::{CursorShape, Window, WindowClass, WindowExStyle, WindowStyle};
 
@@ -142,10 +142,9 @@ impl Win32Backend {
 
 /// The contract over painted child windows.
 ///
-/// Text is measured and drawn with the shared UI font for now;
-/// [`TextStyle`]'s size and weight are not honoured yet, so measurement and
-/// drawing stay consistent until native font selection lands with the
-/// controls.
+/// A node's text is measured and drawn with the same styled-text path, so
+/// [`TextStyle`]'s family, size, weight, slant and colour are honoured and
+/// measurement agrees with painting.
 impl Backend for Win32Backend {
     fn init(&self) {
         crate::init();
@@ -365,16 +364,8 @@ impl Backend for Win32Backend {
         }
     }
 
-    fn measure_text(&self, text: &str, _style: &TextStyle, dpi: u32) -> TextMetrics {
-        let size = Font::shared_ui(dpi)
-            .map(|font| sys::gdi::measure_text(font.raw(), text))
-            .unwrap_or_default();
-        TextMetrics {
-            width: size.width,
-            height: size.height,
-            ascent: size.height * 3 / 4,
-            descent: size.height / 4,
-        }
+    fn measure_text(&self, text: &str, style: &TextStyle, dpi: u32) -> TextMetrics {
+        text::measure_d2d(text, style, dpi).unwrap_or_else(|| text::measure_gdi(text, style, dpi))
     }
 
     fn dpi(&self, window: WindowId) -> u32 {

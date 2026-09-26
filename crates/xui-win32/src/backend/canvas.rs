@@ -306,8 +306,14 @@ impl Canvas for Win32Canvas<'_> {
 
     fn draw_text(&mut self, text: &str, rect: Rect, style: &TextStyle) {
         let rect = self.rect(rect);
-        self.canvas
-            .draw_text(rect, text, style.color, Self::text_format(style));
+        super::text::draw(
+            self.canvas,
+            text,
+            rect,
+            style,
+            self.dpi,
+            Self::text_format(style),
+        );
     }
 
     fn draw_image(&mut self, image: &Image, rect: Rect) {

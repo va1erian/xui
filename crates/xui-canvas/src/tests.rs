@@ -36,7 +36,7 @@ fn contains(image: &RgbaImage, color: [u8; 3]) -> bool {
 }
 
 /// Writes `image` to `path` as a PNG under `target/ui`.
-fn save(path: &str, image: &RgbaImage) {
+pub(crate) fn save(path: &str, image: &RgbaImage) {
     let path = std::path::Path::new("target/ui").join(path);
     let _ = std::fs::create_dir_all(path.parent().unwrap());
     let Ok(file) = std::fs::File::create(&path) else {
@@ -50,7 +50,7 @@ fn save(path: &str, image: &RgbaImage) {
     }
 }
 
-fn dark_pixels(image: &RgbaImage) -> usize {
+pub(crate) fn dark_pixels(image: &RgbaImage) -> usize {
     image
         .pixels
         .as_chunks::<4>()

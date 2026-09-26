@@ -105,4 +105,6 @@ pub(crate) fn to_skia_rgba(color: xui_core::backend::Rgba) -> tiny_skia::Color {
 }
 
 #[cfg(test)]
+mod styled_tests;
+#[cfg(test)]
 mod tests;
