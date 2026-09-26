@@ -1,0 +1,12 @@
+[package]
+name = "xui-canvas"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "Cross-platform software-rendered backend for xui (tiny-skia)"
+repository = "https://github.com/va1erian/xui"
+readme = "README.md"
+
+[dependencies]
+xui-core = { path = "../xui-core" }
+tiny-skia = "0.11"
