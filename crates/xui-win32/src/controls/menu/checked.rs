@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 //! Runtime tick changes for keyed menu items.
 
 use crate::sys;

@@ -1,4 +1,5 @@
 #![forbid(unsafe_code)]
+#![warn(missing_docs)]
 
 //! Cross-platform UI for Rust: **small, fast, idiomatic and properly themed**.
 //!

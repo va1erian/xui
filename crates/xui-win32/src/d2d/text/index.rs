@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 //! Conversions between UTF-8 byte offsets (the public unit) and the UTF-16
 //! code units DirectWrite works in.
 

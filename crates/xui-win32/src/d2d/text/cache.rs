@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 //! A bounded least-recently-used cache of measured widths.
 
 use std::collections::HashMap;
