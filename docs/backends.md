@@ -64,8 +64,10 @@ let backend: Rc<dyn Backend> = Rc::new(WinitBackend::new());
 - `supports` always returns `ImplKind::Painted`; there are no native controls.
 - Nodes are kept in creation order (later draws on top; `raise` moves a node
   last). Input is hit-tested and translated into the node's own coordinates.
-- DPI comes from the window's `scale_factor` (`round(scale × 96)`); when the
-  scale changes the backend rescales node bounds to the backing pixels.
+- DPI comes from the window's `scale_factor` (`round(scale × 96)`). The app is
+  built only after the real window exists (`Backend::run_with`), so widgets lay
+  out at that scale from the start; when the scale changes later the backend
+  rescales node bounds to the backing pixels.
 - Text is shaped with `cosmic-text`, which also gives hit-testing and selection
   geometry through the `TextShaper`/`TextLayout` seam.
 - `capture` composites into an offscreen surface.
