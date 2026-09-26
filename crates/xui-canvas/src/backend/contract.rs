@@ -11,12 +11,14 @@ use xui_core::backend::{
     PlatformSpec, Result as BackendResult, TextLayout, TextMetrics, TextShaper, TextStyle, TimerId,
     Waker, WidgetId, WindowId,
 };
+use xui_core::image::Image;
 use xui_core::router::WidgetHost;
 use xui_core::{Dip, Rect, Theme};
 
+use crate::Surface;
 use crate::text_layout::CosmicShaper;
 
-use super::{DEFAULT_DPI, Node, UserEvent, WindowState, WinitBackend, app};
+use super::{DEFAULT_DPI, Node, UserEvent, WindowState, WinitBackend, app, render};
 
 impl Backend for WinitBackend {
     fn run(&self) -> i32 {
@@ -55,10 +57,9 @@ impl Backend for WinitBackend {
 
     fn open_window(&self, spec: &PlatformSpec) -> BackendResult<WindowId> {
         let id = WindowId::from_raw(Self::allocate(&self.shared.next_window));
-        self.shared
-            .windows
-            .borrow_mut()
-            .insert(id.raw(), WindowState::new(spec));
+        let mut state = WindowState::new(spec);
+        state.primary = self.shared.windows.borrow().is_empty();
+        self.shared.windows.borrow_mut().insert(id.raw(), state);
         Ok(id)
     }
 
@@ -69,6 +70,29 @@ impl Backend for WinitBackend {
             .nodes
             .borrow_mut()
             .retain(|(_, node)| node.window != window);
+    }
+
+    fn set_window_title(&self, window: WindowId, title: &str) {
+        let title = title.to_string();
+        if let Some(state) = self.shared.windows.borrow_mut().get_mut(&window.raw()) {
+            state.title = title.clone();
+        }
+        self.window_handle(window, |handle| handle.set_title(&title));
+    }
+
+    fn capture(&self, window: WindowId) -> BackendResult<Image> {
+        let (width, height) = self
+            .shared
+            .windows
+            .borrow()
+            .get(&window.raw())
+            .map(|state| state.size)
+            .ok_or_else(|| BackendError::Other("no such window".into()))?;
+        let mut surface = Surface::new(width.max(1), height.max(1));
+        render::composite(&self.shared, window, &mut surface);
+        let image = surface.to_image();
+        Image::from_rgba(image.width, image.height, image.pixels)
+            .map_err(|error| BackendError::Other(error.to_string()))
     }
 
     fn minimize(&self, window: WindowId) {

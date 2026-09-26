@@ -4,12 +4,13 @@
 
 use std::rc::Rc;
 
-use super::{Core, Proxy};
+use super::{App, Core, Proxy, WindowHandle, secondary};
 use crate::backend::{
-    Cursor, Event, ImplKind, NodeKind, NodeSpec, Painter, ParentRef, Result, TextMetrics,
-    TextStyle, TimerId, WidgetId,
+    Cursor, Event, ImplKind, NativeWindowHandle, NodeKind, NodeSpec, Painter, ParentRef,
+    PlatformSpec, Result, TextMetrics, TextStyle, TimerId, WidgetId,
 };
 use crate::geometry::Rect;
+use crate::image::Image;
 use crate::theme::Theme;
 
 /// The widget layer's handle to a top-level window.
@@ -45,6 +46,50 @@ impl<M: 'static> Ui<M> {
     /// The window this handle drives.
     pub fn window(&self) -> crate::backend::WindowId {
         self.core.window()
+    }
+
+    /// Opens a non-modal secondary window that runs its own [`App`].
+    ///
+    /// The child inherits this window's theme. The returned [`WindowHandle`]
+    /// sends messages to the child, retitles, captures and closes it.
+    pub fn open_window<B, F>(&self, spec: PlatformSpec, make: F) -> Result<WindowHandle<B::Msg>>
+    where
+        B: App + 'static,
+        F: FnOnce(&mut Ui<B::Msg>) -> B,
+    {
+        secondary::open_secondary(self.core.backend(), self.core.theme().get(), &spec, make)
+    }
+
+    /// Opens a modal secondary window that runs its own [`App`], disabling this
+    /// window and blocking until the child closes.
+    ///
+    /// The child closes with a value through [`Ui::close_with_result`]; `None`
+    /// is returned on a backend that cannot run a modal loop, or when the child
+    /// closed without a result.
+    pub fn open_modal<B, F, R>(&self, spec: PlatformSpec, make: F) -> Option<R>
+    where
+        B: App + 'static,
+        F: FnOnce(&mut Ui<B::Msg>) -> B,
+        R: 'static,
+    {
+        secondary::open_modal(
+            self.core.backend(),
+            self.core.window(),
+            self.core.theme().get(),
+            &spec,
+            make,
+        )
+    }
+
+    /// The backend's native handle for this window, for an OS integration that
+    /// needs one (COM, the shell). `None` when the backend exposes none.
+    pub fn native_window(&self) -> Option<NativeWindowHandle> {
+        self.core.backend().native_window(self.core.window())
+    }
+
+    /// Renders this window's current content into an image.
+    pub fn capture(&self) -> Result<Image> {
+        self.core.backend().capture(self.core.window())
     }
 
     /// Enqueues `msg` for [`App::update`](super::App::update).
@@ -310,7 +355,15 @@ impl<M: 'static> Ui<M> {
 
     /// Closes the window.
     pub fn close(&self) {
+        secondary::mark_closed(self.core.window());
         self.core.backend().close_window(self.core.window());
+    }
+
+    /// Closes the window with a value, which a modal opener receives from
+    /// [`Ui::open_modal`]. On a non-modal window the value is discarded.
+    pub fn close_with_result<R: 'static>(&self, result: R) {
+        self.core.set_result(Box::new(result));
+        self.close();
     }
 
     /// Ends the event loop.

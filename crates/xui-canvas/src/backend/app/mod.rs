@@ -92,10 +92,16 @@ impl ApplicationHandler<UserEvent> for App {
         match event {
             WindowEvent::RedrawRequested => self.redraw(raw),
             WindowEvent::CloseRequested => {
+                let primary = self
+                    .shared
+                    .windows
+                    .borrow()
+                    .get(&raw)
+                    .is_some_and(|state| state.primary);
                 let handled =
                     self.shared
                         .deliver(Self::window_id(raw), WidgetId::NONE, &Event::Close);
-                if !handled {
+                if !handled && primary {
                     event_loop.exit();
                 }
             }
@@ -174,6 +180,9 @@ impl ApplicationHandler<UserEvent> for App {
     }
 
     fn user_event(&mut self, event_loop: &ActiveEventLoop, event: UserEvent) {
+        // A window opened while the loop runs (a secondary window) has no OS
+        // window yet; create it before its wake event is delivered.
+        self.create_windows(event_loop);
         if self.shared.quit.get() {
             event_loop.exit();
             return;
@@ -190,6 +199,8 @@ impl ApplicationHandler<UserEvent> for App {
             event_loop.exit();
             return;
         }
+        // Catch a window opened without a wake (for example a static one).
+        self.create_windows(event_loop);
         self.timers(event_loop);
     }
 }

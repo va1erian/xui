@@ -12,6 +12,7 @@ use crate::backend::{
     WindowId,
 };
 use crate::geometry::Rect;
+use crate::image::Image;
 use crate::router::WidgetHost;
 use crate::theme::Theme;
 
@@ -55,6 +56,7 @@ impl Backend for HeadlessBackend {
                 sink: None,
                 theme: Theme::light(),
                 wakes: 0,
+                enabled: true,
             },
         );
         Ok(WindowId::from_raw(id))
@@ -64,6 +66,37 @@ impl Backend for HeadlessBackend {
         let mut state = self.state.borrow_mut();
         state.windows.remove(&window.raw());
         remove_orphans(&mut state);
+    }
+
+    fn set_window_title(&self, window: WindowId, title: &str) {
+        if let Some(w) = self.state.borrow_mut().windows.get_mut(&window.raw()) {
+            w.title = title.to_string();
+        }
+    }
+
+    fn set_window_enabled(&self, window: WindowId, enabled: bool) {
+        if let Some(w) = self.state.borrow_mut().windows.get_mut(&window.raw()) {
+            w.enabled = enabled;
+        }
+    }
+
+    fn capture(&self, window: WindowId) -> Result<Image> {
+        let state = self.state.borrow();
+        let Some(w) = state.windows.get(&window.raw()) else {
+            return Err(BackendError::Other("no such window".into()));
+        };
+        let (width, height) = (
+            w.client.width().max(0) as u32,
+            w.client.height().max(0) as u32,
+        );
+        let color = w.theme.background;
+        let pixel = [color.r, color.g, color.b, 255];
+        let pixels = pixel.repeat(width as usize * height as usize);
+        Image::from_rgba(width, height, pixels).map_err(|e| BackendError::Other(e.to_string()))
+    }
+
+    fn run_modal(&self, _window: WindowId) -> Result<()> {
+        Ok(())
     }
 
     fn create(&self, parent: ParentRef, spec: &NodeSpec) -> Result<WidgetId> {

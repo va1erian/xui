@@ -5,10 +5,11 @@
 use std::rc::Rc;
 
 use xui_core::backend::{
-    Backend, Event, FontSpec, ImplKind, NodeKind, NodeSpec, Painter, ParentRef, PlatformSpec,
-    Result as BackendResult, TextLayout, TextMetrics, TextShaper, TextStyle, TimerId, Waker,
-    WidgetId, WindowId,
+    Backend, BackendError, Event, FontSpec, ImplKind, NodeKind, NodeSpec, Painter, ParentRef,
+    PlatformSpec, Result as BackendResult, TextLayout, TextMetrics, TextShaper, TextStyle, TimerId,
+    Waker, WidgetId, WindowId,
 };
+use xui_core::image::Image;
 use xui_core::router::WidgetHost;
 use xui_core::{Rect, Theme};
 
@@ -44,6 +45,14 @@ impl Backend for OffscreenBackend {
         self.nodes
             .borrow_mut()
             .retain(|(_, node)| node.window != window);
+    }
+
+    fn capture(&self, window: WindowId) -> BackendResult<Image> {
+        let image = self
+            .render(window)
+            .ok_or_else(|| BackendError::Other("no such window".into()))?;
+        Image::from_rgba(image.width, image.height, image.pixels)
+            .map_err(|error| BackendError::Other(error.to_string()))
     }
 
     fn create(&self, parent: ParentRef, spec: &NodeSpec) -> BackendResult<WidgetId> {
