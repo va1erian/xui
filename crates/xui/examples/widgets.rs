@@ -284,10 +284,10 @@ fn run(renderer: Renderer, switch: Rc<Cell<Option<Renderer>>>) {
             // Both smoke hooks fire through one timer mapper, told apart by id.
             let switch_at = Rc::new(Cell::new(None));
             let autoclose_at = Rc::new(Cell::new(None));
-            if CAN_SWITCH
-                && let Ok(millis) = std::env::var("XUI_AUTOSWITCH_MS")
-            {
-                let _ = millis.parse::<u32>().map(|ms| switch_at.set(Some(ui.set_timer(ms))));
+            if CAN_SWITCH && let Ok(millis) = std::env::var("XUI_AUTOSWITCH_MS") {
+                let _ = millis
+                    .parse::<u32>()
+                    .map(|ms| switch_at.set(Some(ui.set_timer(ms))));
             }
             if let Ok(millis) = std::env::var("XUI_DEMO_AUTOCLOSE_MS") {
                 let _ = millis
