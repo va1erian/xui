@@ -9,6 +9,7 @@
 
 use crate::color::Color;
 use crate::geometry::{Point, Rect};
+use crate::image::Image;
 use crate::units::Dip;
 
 /// How text is aligned inside the rectangle it is drawn into.
@@ -161,6 +162,10 @@ pub trait Canvas {
 
     /// Draws `text` inside `rect` using `style`.
     fn draw_text(&mut self, text: &str, rect: Rect, style: &TextStyle);
+
+    /// Draws `image` scaled into `rect`, honouring the current clip. The image
+    /// fills the rectangle exactly; its aspect ratio is not preserved.
+    fn draw_image(&mut self, image: &Image, rect: Rect);
 
     /// Clips subsequent drawing to `rect` until the matching `pop_clip`.
     ///

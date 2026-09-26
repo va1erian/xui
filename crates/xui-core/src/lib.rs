@@ -17,6 +17,7 @@ pub mod app;
 pub mod backend;
 pub mod color;
 pub mod geometry;
+pub mod image;
 pub mod layout;
 pub mod message;
 pub mod property;
@@ -33,6 +34,7 @@ pub use backend::{
 };
 pub use color::Color;
 pub use geometry::{Point, Rect, Size};
+pub use image::{Image, ImageError};
 pub use layout::{Anchor, Dock, DockLayout, Insets, Stack, StackDirection, StackSlot, anchored};
 pub use message::{HitTest, Key, Modifiers, MouseButton};
 pub use property::{Properties, Property, Value};

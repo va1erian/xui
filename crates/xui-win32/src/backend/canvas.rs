@@ -11,6 +11,7 @@
 use crate::d2d::{PointF, RectF, Stroke};
 use crate::gdi::{self, TextFormat};
 use xui_core::backend::{Canvas, TextAlign, TextStyle, TextVAlign};
+use xui_core::image::Image;
 use xui_core::{Color, Point, Rect};
 
 /// A portable canvas over a Win32 GDI [`gdi::Canvas`].
@@ -238,6 +239,37 @@ impl Canvas for Win32Canvas<'_> {
         let rect = self.rect(rect);
         self.canvas
             .draw_text(rect, text, style.color, Self::text_format(style));
+    }
+
+    fn draw_image(&mut self, image: &Image, rect: Rect) {
+        let rect = self.rect(rect);
+        if rect.is_empty() {
+            return;
+        }
+        // Reuse the platform layer's RGBA buffer and WIC resampler so the
+        // DIB's per-pixel alpha matches what the rest of the crate uploads.
+        // Uploading allocates a DIB (and a WIC resample when scaling); an
+        // image cache would remove that, but an image is not a per-item draw.
+        let rgba = crate::RgbaImage {
+            width: image.width(),
+            height: image.height(),
+            pixels: image.pixels().to_vec(),
+        };
+        let target = (rect.width().max(1) as u32, rect.height().max(1) as u32);
+        let rgba = if (rgba.width, rgba.height) == target {
+            rgba
+        } else {
+            match crate::imaging::resize(&rgba, target.0, target.1) {
+                Ok(scaled) => scaled,
+                Err(_) => return,
+            }
+        };
+        let Ok(bitmap) =
+            gdi::Bitmap::from_rgba(rgba.width as i32, rgba.height as i32, &rgba.pixels)
+        else {
+            return;
+        };
+        self.canvas.draw_bitmap(&bitmap, rect);
     }
 
     fn push_clip(&mut self, rect: Rect) {

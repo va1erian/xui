@@ -1,4 +1,5 @@
 use crate::Color;
+use crate::image::Image;
 
 use super::*;
 use crate::message::MouseButton;
@@ -53,6 +54,32 @@ fn a_transform_moves_the_recorded_geometry() {
 
     match backend.ops(node_id).as_slice() {
         [DrawOp::Fill(rect, _)] => assert_eq!(*rect, Rect::new(0, 0, 20, 10)),
+        other => panic!("unexpected ops: {other:?}"),
+    }
+}
+
+#[test]
+fn a_drawn_image_is_recorded() {
+    let backend = HeadlessBackend::new();
+    let window = backend.open_window(&PlatformSpec::new("t")).unwrap();
+    let node_id = backend
+        .create(ParentRef::Window(window), &node(NodeKind::Custom))
+        .unwrap();
+
+    let image = Image::from_rgba(1, 1, vec![9, 8, 7, 255]).unwrap();
+    backend.set_painter(
+        node_id,
+        Rc::new(move |canvas| {
+            canvas.draw_image(&image, Rect::new(0, 5, 10, 15));
+        }),
+    );
+    backend.render(node_id);
+
+    match backend.ops(node_id).as_slice() {
+        [DrawOp::Image(rect, recorded)] => {
+            assert_eq!(*rect, Rect::new(0, 5, 10, 15));
+            assert_eq!(recorded.pixel(0, 0), Some([9, 8, 7, 255]));
+        }
         other => panic!("unexpected ops: {other:?}"),
     }
 }

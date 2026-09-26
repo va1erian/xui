@@ -7,11 +7,15 @@
 //! backend. Text rasterisation is not implemented yet, so [`Canvas::draw_text`]
 //! draws nothing until the text system lands.
 
-use tiny_skia::{FillRule, Paint, Path, PathBuilder, Pixmap, Shader, Stroke, Transform};
+use tiny_skia::{
+    FillRule, FilterQuality, Paint, Path, PathBuilder, Pattern, Pixmap, Shader, SpreadMode, Stroke,
+    Transform,
+};
 
 use xui_core::backend::{Canvas, TextStyle};
 use xui_core::color::Color;
 use xui_core::geometry::{Point, Rect};
+use xui_core::image::Image;
 
 use crate::to_skia;
 
@@ -134,6 +138,30 @@ fn intersect(a: Rect, b: Rect) -> Rect {
         a.right.min(b.right),
         a.bottom.min(b.bottom),
     )
+}
+
+/// Uploads `image` to a tiny-skia pixmap, premultiplying its straight alpha.
+///
+/// This allocates a pixmap per call; an image cache would remove that, but an
+/// image is not drawn once per list row.
+fn premultiplied(image: &Image) -> Option<Pixmap> {
+    let mut pixmap = Pixmap::new(image.width(), image.height())?;
+    let source = image.pixels().as_chunks::<4>().0;
+    for (destination, pixel) in pixmap
+        .data_mut()
+        .as_chunks_mut::<4>()
+        .0
+        .iter_mut()
+        .zip(source)
+    {
+        let alpha = pixel[3] as u32;
+        let scale = |channel: u8| ((channel as u32 * alpha + 127) / 255) as u8;
+        destination[0] = scale(pixel[0]);
+        destination[1] = scale(pixel[1]);
+        destination[2] = scale(pixel[2]);
+        destination[3] = pixel[3];
+    }
+    Some(pixmap)
 }
 
 impl Canvas for SkiaCanvas<'_> {
@@ -272,6 +300,40 @@ impl Canvas for SkiaCanvas<'_> {
         let rect = self.rect(rect);
         let dpi = self.dpi;
         crate::text::draw(self.pixmap, text, rect, style, dpi);
+    }
+
+    fn draw_image(&mut self, image: &Image, rect: Rect) {
+        let rect = self.rect(rect);
+        if rect.is_empty() {
+            return;
+        }
+        let Some(pixmap) = premultiplied(image) else {
+            return;
+        };
+        // Map the image's own pixel rectangle onto the destination rectangle.
+        let scale_x = rect.width() as f32 / image.width() as f32;
+        let scale_y = rect.height() as f32 / image.height() as f32;
+        let transform = Transform::from_row(
+            scale_x,
+            0.0,
+            0.0,
+            scale_y,
+            rect.left as f32,
+            rect.top as f32,
+        );
+        let source = sk_rect(Rect::new(0, 0, image.width() as i32, image.height() as i32));
+        let paint = Paint {
+            shader: Pattern::new(
+                pixmap.as_ref(),
+                SpreadMode::Pad,
+                FilterQuality::Bilinear,
+                1.0,
+                Transform::identity(),
+            ),
+            anti_alias: true,
+            ..Paint::default()
+        };
+        self.pixmap.fill_rect(source, &paint, transform, None);
     }
 
     fn push_clip(&mut self, rect: Rect) {
