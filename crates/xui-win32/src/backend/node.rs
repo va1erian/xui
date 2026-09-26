@@ -6,6 +6,8 @@
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
+use windows::Win32::UI::WindowsAndMessaging::WS_EX_NOACTIVATE;
+
 use xui_core::Rect;
 use xui_core::backend::{
     BackendError, ImplKind, NodeKind, NodeSpec, Painter, ParentRef, Result as BackendResult,
@@ -25,6 +27,8 @@ pub(super) struct BackendNode {
     pub(super) window_id: WindowId,
     pub(super) parent: ParentRef,
     pub(super) hwnd: Hwnd,
+    /// Whether the node is a top-level popup window rather than a child.
+    pub(super) is_popup: bool,
     kind: NodeKind,
     /// Text of a custom node (a native control answers from its own state).
     text: RefCell<String>,
@@ -57,11 +61,15 @@ impl BackendNode {
         let drag_region = Rc::new(Cell::new(false));
         let (hwnd, window) = if spec.kind == NodeKind::Edit {
             create_native_edit(parent_hwnd, spec, shared.theme())?
+        } else if spec.popup {
+            create_popup(widget, parent_hwnd, shared, &painter, &drag_region, spec)?
         } else {
             create_painted(widget, parent_hwnd, shared, &painter, &drag_region, spec)?
         };
 
-        if !spec.visible {
+        // A popup applied its own visibility when it was created; a child is
+        // created visible by style and only hidden here when asked.
+        if !spec.popup && !spec.visible {
             sys::window::show(hwnd, sys::window::ShowKind::Hidden);
         }
         if !spec.enabled {
@@ -73,6 +81,7 @@ impl BackendNode {
             window_id,
             parent,
             hwnd,
+            is_popup: spec.popup,
             kind: spec.kind,
             text: RefCell::new(spec.text.clone()),
             bounds: Cell::new(spec.bounds),
@@ -176,5 +185,64 @@ fn create_painted(
         handler,
     )
     .map_err(|_| BackendError::CreateFailed("node"))?;
+    Ok((window.hwnd(), Some(window)))
+}
+
+/// A painted top-level popup window the front layer draws into.
+///
+/// Unlike a painted child, a popup is an owned `WS_POPUP` window: it can
+/// overhang its host, and Windows keeps it above every child of the host, so a
+/// sibling repaint can never paint over it. It is created with a thick frame
+/// that `WM_NCCALCSIZE` removes, which is what makes DWM draw the native drop
+/// shadow a borderless window otherwise lacks; `WS_EX_NOACTIVATE` keeps a click
+/// on the popup from deactivating the host, and `WS_EX_TOOLWINDOW` keeps it off
+/// the taskbar and the Alt+Tab list.
+///
+/// The node's bounds stay host-client relative in the core; [`super::contract`]
+/// converts them to screen coordinates when it moves the popup.
+fn create_popup(
+    widget: WidgetId,
+    owner_hwnd: Hwnd,
+    shared: &Rc<WindowShared>,
+    painter: &Rc<RefCell<Option<Painter>>>,
+    drag_region: &Rc<Cell<bool>>,
+    spec: &NodeSpec,
+) -> BackendResult<(Hwnd, Option<Window>)> {
+    let bounds = Rc::new(Cell::new(Rect::from_size(spec.bounds.size())));
+    let handler = NodeHandler::new(
+        widget,
+        Rc::clone(shared),
+        Rc::clone(&bounds),
+        Rc::clone(painter),
+        Rc::clone(drag_region),
+    );
+    let class = WindowClass::register("xui.popup", shared.theme().background)
+        .map_err(|_| BackendError::CreateFailed("popup class"))?;
+    let style = WindowStyle::new().popup().resizable().caption();
+    let ex_style = WindowExStyle::new().tool_window().with(WS_EX_NOACTIVATE.0);
+    let window = Window::create(
+        class,
+        Some(owner_hwnd),
+        style,
+        ex_style,
+        spec.bounds,
+        "",
+        handler,
+    )
+    .map_err(|_| BackendError::CreateFailed("popup"))?;
+    // The frame is created first; now hide it and let the whole rectangle be
+    // the popup's client, so only the drop shadow the frame earns remains.
+    crate::window::nc::set_frameless_shadow(window.hwnd(), true);
+    sys::dwm::enable_nc_rendering(window.hwnd());
+    // Recompute the non-client area now the flag is set: the initial creation
+    // ran `WM_NCCALCSIZE` before it, so the frame would still be visible.
+    sys::nc::reframe(window.hwnd());
+    // Show only after the painter has run, so the first frame is the finished
+    // face rather than the class background.
+    if spec.visible {
+        window.show_painted();
+    } else {
+        sys::window::show(window.hwnd(), sys::window::ShowKind::Hidden);
+    }
     Ok((window.hwnd(), Some(window)))
 }

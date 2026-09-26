@@ -19,8 +19,8 @@ use windows::Win32::Graphics::Gdi::{ExcludeClipRect, HDC, RestoreDC, SaveDC};
 use windows::Win32::UI::HiDpi::{AdjustWindowRectExForDpi, GetSystemMetricsForDpi};
 use windows::Win32::UI::WindowsAndMessaging::{
     CWP_SKIPDISABLED, CWP_SKIPINVISIBLE, ChildWindowFromPointEx, DefWindowProcW, GWL_EXSTYLE,
-    GWL_STYLE, GetMenuBarInfo, GetWindowLongPtrW, GetWindowPlacement, IsZoomed, MENUBARINFO,
-    NCCALCSIZE_PARAMS, OBJID_MENU, SM_CXPADDEDBORDER, SM_CYCAPTION, SM_CYSIZEFRAME,
+    GWL_STYLE, GetMenuBarInfo, GetWindowLongPtrW, GetWindowPlacement, HTCLIENT, IsZoomed,
+    MENUBARINFO, NCCALCSIZE_PARAMS, OBJID_MENU, SM_CXPADDEDBORDER, SM_CYCAPTION, SM_CYSIZEFRAME,
     SW_SHOWMAXIMIZED, WINDOW_EX_STYLE, WINDOW_STYLE, WINDOWPLACEMENT, WM_ERASEBKGND, WM_NCCALCSIZE,
     WM_NCHITTEST, WS_CAPTION,
 };
@@ -194,6 +194,26 @@ fn over_interactive(hwnd: HWND, client_point: Point) -> bool {
 /// Handles `WM_NCCALCSIZE` for an extended-frame window, or `None` to let the
 /// default apply.
 pub(crate) fn calc_size(hwnd: HWND, wparam: WPARAM, lparam: LPARAM) -> Option<LRESULT> {
+    if crate::window::nc::is_frameless_shadow(hwnd_from(hwnd)) {
+        if wparam.0 == 0 {
+            return None;
+        }
+        // A frameless popup is created with a thick frame only so DWM gives it
+        // a drop shadow. Let the default establish that frame first (DWM reads
+        // it to decide on the shadow), then make the whole proposed window
+        // rectangle the client, so the invisible frame and caption are gone and
+        // the popup's face fills the window.
+        // SAFETY: with `wparam` TRUE, `lparam` is a system-owned
+        // `NCCALCSIZE_PARAMS*`; `rgrc[0]` is the proposed window rectangle.
+        let params = lparam.0 as *mut NCCALCSIZE_PARAMS;
+        let proposed = unsafe { (*params).rgrc[0] };
+        // SAFETY: `hwnd` is live and the message fields follow the documented
+        // `WM_NCCALCSIZE` contract.
+        let _ = unsafe { DefWindowProcW(hwnd, WM_NCCALCSIZE, wparam, lparam) };
+        // SAFETY: `params` is still the system-owned struct.
+        unsafe { (*params).rgrc[0] = proposed };
+        return Some(LRESULT(0));
+    }
     if wparam.0 == 0 || !crate::window::nc::is_extended(hwnd_from(hwnd)) {
         return None;
     }
@@ -232,6 +252,11 @@ pub(crate) fn calc_size(hwnd: HWND, wparam: WPARAM, lparam: LPARAM) -> Option<LR
 /// Handles `WM_NCHITTEST` for an extended-frame window, or `None` to let the
 /// default apply.
 pub(crate) fn hit_test(hwnd: HWND, wparam: WPARAM, lparam: LPARAM) -> Option<LRESULT> {
+    if crate::window::nc::is_frameless_shadow(hwnd_from(hwnd)) {
+        // The frame is invisible, so no point is a resize border or a caption:
+        // the whole popup is client area that the widget handles.
+        return Some(LRESULT(HTCLIENT as isize));
+    }
     if !crate::window::nc::is_extended(hwnd_from(hwnd)) {
         return None;
     }
