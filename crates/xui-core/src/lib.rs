@@ -43,9 +43,10 @@ pub use theme::{Theme, Themed};
 pub use units::{Dip, Px, dip};
 pub use widget::{
     Button, CellData, CheckBox, Column, ColumnWidth, ComboBox, Control, Edit, Fill, Glyph,
-    GroupBox, HasText, Hyperlink, Label, ListModel, ListView, MaterialStatusBar, MultilineEdit,
-    NumberField, Panel, ProgressBar, RadioGroup, SelectionMode, Separator, Slider, SortDirection,
-    StatusBar, ToggleButton, Toolbar, TopBar, TopBarId, TreeRow, TreeView,
+    GroupBox, HasText, Hyperlink, Label, ListModel, ListView, MaterialStatusBar, Menu, MenuId,
+    MenuScope, MultilineEdit, NumberField, Panel, ProgressBar, RadioGroup, SelectionMode,
+    Separator, Slider, SortDirection, StatusBar, ToggleButton, Toolbar, TopBar, TopBarId, TreeRow,
+    TreeView,
 };
 
 /// The core types a frontend or a backend usually needs, in one `use`.
