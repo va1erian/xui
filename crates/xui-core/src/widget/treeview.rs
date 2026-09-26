@@ -265,9 +265,13 @@ impl<M: 'static> TreeView<M> {
     }
 
     /// The number of rows.
-    #[allow(clippy::len_without_is_empty)]
     pub fn len(&self) -> usize {
         self.rows.borrow().len()
+    }
+
+    /// Whether the tree has no rows.
+    pub fn is_empty(&self) -> bool {
+        self.rows.borrow().is_empty()
     }
 
     /// The tree's node identity.

@@ -41,8 +41,8 @@ pub use theme::{Theme, Themed};
 pub use units::{Dip, Px, dip};
 pub use widget::{
     Button, CheckBox, ComboBox, Control, Edit, GroupBox, HasText, Hyperlink, Label, ListView,
-    Panel, ProgressBar, RadioGroup, Separator, Slider, StatusBar, ToggleButton, Toolbar, TreeRow,
-    TreeView,
+    MultilineEdit, NumberField, Panel, ProgressBar, RadioGroup, Separator, Slider, StatusBar,
+    ToggleButton, Toolbar, TreeRow, TreeView,
 };
 
 /// The core types a frontend or a backend usually needs, in one `use`.
