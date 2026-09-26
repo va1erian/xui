@@ -8,8 +8,12 @@
 //! an offscreen renderer; the windowing shell and event loop build on it.
 
 mod canvas;
+mod offscreen;
+mod text;
 
 pub use canvas::SkiaCanvas;
+pub use offscreen::OffscreenBackend;
+pub use text::measure as measure_text;
 
 use tiny_skia::Pixmap;
 use xui_core::color::Color;
@@ -59,10 +63,20 @@ impl Surface {
     }
 
     /// Runs `draw` with a canvas over `bounds` (in surface coordinates),
-    /// clipped to that rectangle.
-    pub fn with_canvas<R>(&mut self, bounds: Rect, draw: impl FnOnce(&mut SkiaCanvas) -> R) -> R {
-        let mut canvas = SkiaCanvas::new(&mut self.pixmap, bounds, 96);
+    /// clipped to that rectangle, at a dots-per-inch of `dpi`.
+    pub fn with_canvas_at<R>(
+        &mut self,
+        bounds: Rect,
+        dpi: u32,
+        draw: impl FnOnce(&mut SkiaCanvas) -> R,
+    ) -> R {
+        let mut canvas = SkiaCanvas::new(&mut self.pixmap, bounds, dpi);
         draw(&mut canvas)
+    }
+
+    /// Runs `draw` with a canvas at a dots-per-inch of 96.
+    pub fn with_canvas<R>(&mut self, bounds: Rect, draw: impl FnOnce(&mut SkiaCanvas) -> R) -> R {
+        self.with_canvas_at(bounds, 96, draw)
     }
 
     /// Reads the surface back as an [`RgbaImage`].
