@@ -25,7 +25,7 @@ use xui_core::{Rect, Theme};
 
 use crate::gdi::Font;
 use crate::sys;
-use crate::window::{Window, WindowClass, WindowExStyle, WindowStyle};
+use crate::window::{CursorShape, Window, WindowClass, WindowExStyle, WindowStyle};
 
 use handler::{TopHandler, WindowShared};
 use node::BackendNode;
@@ -204,7 +204,7 @@ impl Backend for Win32Backend {
         let window = Window::create(
             class,
             None,
-            WindowStyle::overlapped(),
+            WindowStyle::overlapped().clip_children(),
             WindowExStyle::new(),
             bounds,
             &spec.title,
@@ -310,8 +310,13 @@ impl Backend for Win32Backend {
     }
 
     fn set_cursor(&self, id: WidgetId, cursor: Cursor) {
-        if let Some(node) = self.nodes.borrow().get(&id.raw()) {
-            node.cursor.set(cursor);
+        if let Some((hwnd, _)) = self.node(id) {
+            let shape = match cursor {
+                Cursor::Default => CursorShape::Arrow,
+                Cursor::Hand => CursorShape::Hand,
+                Cursor::Text => CursorShape::IBeam,
+            };
+            sys::window_input::set_cursor(hwnd, shape);
         }
     }
 

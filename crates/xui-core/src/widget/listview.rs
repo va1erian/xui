@@ -83,7 +83,7 @@ impl<M: 'static> ListView<M> {
                     let top = bounds.top + row * index as i32;
                     let rect = Rect::new(bounds.left, top, bounds.right, top + row);
                     if selected.get() == Some(index) {
-                        canvas.fill_rect(rect, theme.selection);
+                        canvas.fill_rect(rect, theme.accent);
                     } else if hover.get() == Some(index) {
                         canvas.fill_rect(rect, theme.hover);
                     }

@@ -67,6 +67,47 @@ fn chevron_hit(dpi: u32, row: &TreeRow, x: i32) -> bool {
     row.expandable && x >= left && x < left + Dip(16.0).to_px(dpi).value()
 }
 
+/// Whether the row at `index` is shown: every ancestor row (the nearest
+/// preceding row at each smaller depth) must be expanded.
+fn is_visible(rows: &[TreeRow], index: usize) -> bool {
+    let mut depth = rows[index].depth;
+    let mut i = index;
+    while depth > 0 {
+        let parent_depth = depth - 1;
+        let mut parent = None;
+        while i > 0 {
+            i -= 1;
+            if rows[i].depth == parent_depth {
+                parent = Some(i);
+                break;
+            }
+            if rows[i].depth < parent_depth {
+                break;
+            }
+        }
+        match parent {
+            Some(p) if rows[p].expandable && rows[p].expanded => depth = parent_depth,
+            _ => return false,
+        }
+    }
+    true
+}
+
+/// The raw row index drawn at visible slot `slot`, or `None` past the end.
+fn slot_to_index(rows: &[TreeRow], slot: usize) -> Option<usize> {
+    let mut visible = 0;
+    for index in 0..rows.len() {
+        if !is_visible(rows, index) {
+            continue;
+        }
+        if visible == slot {
+            return Some(index);
+        }
+        visible += 1;
+    }
+    None
+}
+
 /// A flattened, fixed-row-height collapsible tree, rows supplied in order.
 pub struct TreeView<M: 'static> {
     control: Control<M>,
@@ -105,12 +146,18 @@ impl<M: 'static> TreeView<M> {
                 let indent = Dip(16.0).to_px(dpi).value();
                 let chevron = Dip(16.0).to_px(dpi).value();
                 let enabled = enabled.get();
-                for (index, entry) in rows.borrow().iter().enumerate() {
-                    let top = bounds.top + row * index as i32;
+                let rows = rows.borrow();
+                let mut slot: i32 = 0;
+                for (index, entry) in rows.iter().enumerate() {
+                    if !is_visible(&rows, index) {
+                        continue;
+                    }
+                    let top = bounds.top + row * slot;
+                    slot += 1;
                     let rect = Rect::new(bounds.left, top, bounds.right, top + row);
                     let current = selected.get() == Some(index);
                     if current {
-                        canvas.fill_rect(rect, theme.selection);
+                        canvas.fill_rect(rect, theme.accent);
                     } else if hover.get() == Some(index) {
                         canvas.fill_rect(rect, theme.hover);
                     }
@@ -171,7 +218,8 @@ impl<M: 'static> TreeView<M> {
                 match event {
                     Event::MouseDown { button, .. } if *button == MouseButton::Left => {
                         let (x, y) = event.position()?;
-                        let index = row_at(ui.dpi(), y, rows.borrow().len())?;
+                        let slot = row_at(ui.dpi(), y, rows.borrow().len())?;
+                        let index = slot_to_index(&rows.borrow(), slot)?;
                         if chevron_hit(ui.dpi(), &rows.borrow()[index], x) {
                             let expanded = !rows.borrow()[index].expanded;
                             set_expanded(index, expanded)
@@ -182,7 +230,8 @@ impl<M: 'static> TreeView<M> {
                         }
                     }
                     Event::MouseMove { y, .. } => {
-                        let index = row_at(ui.dpi(), *y, rows.borrow().len());
+                        let index = row_at(ui.dpi(), *y, rows.borrow().len())
+                            .and_then(|slot| slot_to_index(&rows.borrow(), slot));
                         if hover.get() != index {
                             hover.set(index);
                             ui.invalidate(id);
@@ -206,10 +255,19 @@ impl<M: 'static> TreeView<M> {
                         let current = selected.get();
                         match key {
                             Key::UP | Key::DOWN => {
+                                let entries = rows.borrow();
                                 let step = if key == Key::UP { -1 } else { 1 };
-                                let at = current.unwrap_or(0) as isize + step;
-                                selected.set(Some(at.clamp(0, len as isize - 1) as usize));
-                                ui.invalidate(id);
+                                let mut at = current.unwrap_or(0) as isize + step;
+                                while at >= 0
+                                    && (at as usize) < len
+                                    && !is_visible(&entries, at as usize)
+                                {
+                                    at += step;
+                                }
+                                if at >= 0 && (at as usize) < len {
+                                    selected.set(Some(at as usize));
+                                    ui.invalidate(id);
+                                }
                                 None
                             }
                             Key::LEFT | Key::RIGHT => set_expanded(current?, key == Key::RIGHT),
@@ -389,6 +447,27 @@ mod tests {
         runtime.deliver(WidgetId::NONE, &Event::Wake);
         assert_eq!(tree.selected(), None, "a chevron click does not select");
         assert_eq!(LOG.with(|log| log.borrow().clone()), vec![101, 100]);
+    }
+
+    #[test]
+    fn a_collapsed_branch_hides_its_descendants() {
+        let mut rows = [
+            TreeRow::new("Inbox", 0).expandable(true).expanded(true),
+            TreeRow::new("Work", 1).expandable(true).expanded(true),
+            TreeRow::new("Deep", 2),
+            TreeRow::new("Archive", 0).expandable(true),
+            TreeRow::new("Old", 1),
+        ];
+        assert!(is_visible(&rows, 2), "an expanded chain shows the leaf");
+        assert!(!is_visible(&rows, 4), "a collapsed parent hides its child");
+        assert_eq!(slot_to_index(&rows, 2), Some(2));
+        assert_eq!(slot_to_index(&rows, 3), Some(3));
+
+        rows[0].expanded = false;
+        assert!(!is_visible(&rows, 1), "collapsing hides the child");
+        assert!(!is_visible(&rows, 2), "collapsing hides the grandchild");
+        assert_eq!(slot_to_index(&rows, 1), Some(3), "Archive moves up a slot");
+        assert_eq!(slot_to_index(&rows, 2), None, "no third visible row");
     }
 
     #[test]

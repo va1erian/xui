@@ -12,7 +12,7 @@ use std::rc::Rc;
 use windows::Win32::Graphics::Gdi::{HBRUSH, HDC, HGDIOBJ};
 use windows::Win32::UI::WindowsAndMessaging::{EN_CHANGE, WM_CTLCOLOREDIT, WM_CTLCOLORSTATIC};
 
-use xui_core::backend::{Cursor, Event, Painter, WidgetId, WindowId};
+use xui_core::backend::{Event, Painter, WidgetId, WindowId};
 use xui_core::router::WidgetHost;
 use xui_core::{Color, Rect, Theme};
 
@@ -288,7 +288,6 @@ pub(crate) struct NodeHandler {
     shared: Rc<WindowShared>,
     bounds: Rc<Cell<Rect>>,
     painter: Rc<RefCell<Option<Painter>>>,
-    cursor: Rc<Cell<Cursor>>,
     tracking_mouse: Cell<bool>,
 }
 
@@ -299,14 +298,12 @@ impl NodeHandler {
         shared: Rc<WindowShared>,
         bounds: Rc<Cell<Rect>>,
         painter: Rc<RefCell<Option<Painter>>>,
-        cursor: Rc<Cell<Cursor>>,
     ) -> NodeHandler {
         NodeHandler {
             widget,
             shared,
             bounds,
             painter,
-            cursor,
             tracking_mouse: Cell::new(false),
         }
     }
@@ -348,13 +345,6 @@ impl WindowHandler for NodeHandler {
         // slider or progress bar drags. The whole dirty rectangle is repainted
         // on `WM_PAINT`, so claim the erase and skip the default fill.
         if matches!(&message, Message::Other { code, .. } if *code == sys::d2d::WM_ERASEBKGND) {
-            return Some(1);
-        }
-        // Windows asks for the pointer shape as the mouse enters; answer with
-        // the node's requested cursor (the class default is the arrow).
-        if matches!(&message, Message::Other { code, .. } if *code == sys::cursor::WM_SETCURSOR_ID)
-        {
-            sys::cursor::apply(self.cursor.get());
             return Some(1);
         }
         match &message {
