@@ -18,7 +18,7 @@ use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use crate::app::Ui;
-use crate::geometry::Rect;
+use crate::geometry::{Rect, Size};
 use crate::hwnd::Hwnd;
 use crate::layout::StackDirection;
 use crate::sys;
@@ -290,6 +290,39 @@ impl SplitNode {
     /// The two panes, so the window can bind a split nested inside either one.
     pub(crate) fn panes(&self) -> [&LayoutItem; 2] {
         [&self.a, &self.b]
+    }
+
+    /// The split's preferred size in device pixels at `dpi`: both panes' natural
+    /// extents (each floored by its configured minimum) plus the divider along
+    /// the split's axis, and the larger pane across it.
+    pub(crate) fn preferred_size(&self, dpi: u32) -> Size {
+        let direction = self.shared.direction;
+        let a_visible = self.a.is_visible();
+        let b_visible = self.b.is_visible();
+        let a = self.a.natural_size(direction, dpi);
+        let b = self.b.natural_size(direction, dpi);
+        let min_a = Dip(self.shared.min_a.get()).to_px(dpi).value().max(0);
+        let min_b = Dip(self.shared.min_b.get()).to_px(dpi).value().max(0);
+        let divider = Dip(DIVIDER_DIP).to_px(dpi).value();
+
+        let (a_main, a_cross, b_main, b_cross) = match direction {
+            StackDirection::Horizontal => (a.width, a.height, b.width, b.height),
+            StackDirection::Vertical => (a.height, a.width, b.height, b.width),
+        };
+        let a_main = if a_visible { a_main.max(min_a) } else { 0 };
+        let b_main = if b_visible { b_main.max(min_b) } else { 0 };
+        let gap = if a_visible && b_visible { divider } else { 0 };
+        let main = a_main + gap + b_main;
+        let cross = match (a_visible, b_visible) {
+            (true, true) => a_cross.max(b_cross),
+            (true, false) => a_cross,
+            (false, true) => b_cross,
+            (false, false) => 0,
+        };
+        match direction {
+            StackDirection::Horizontal => Size::new(main, cross),
+            StackDirection::Vertical => Size::new(cross, main),
+        }
     }
 
     /// Shows or hides both panes and the divider. Used when a split is a page

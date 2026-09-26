@@ -3,7 +3,8 @@
 //! Stacks: weighted slots along one axis.
 
 use super::Insets;
-use crate::geometry::Rect;
+use super::pack;
+use crate::geometry::{Rect, Size};
 use crate::units::{Dip, Px};
 
 /// The axis a [`Stack`] lays its slots along.
@@ -102,6 +103,17 @@ impl Stack {
     pub fn push(mut self, slot: StackSlot) -> Stack {
         self.slots.push(slot);
         self
+    }
+
+    /// The stack's preferred size in device pixels at `dpi`, given each slot's
+    /// natural size (`naturals[i]` for slot `i`) already in device pixels.
+    ///
+    /// Along the main axis the result is the margins plus the sum of the
+    /// naturals plus a `spacing` gap between adjacent pairs; across it the
+    /// margins plus the largest natural. A `Fill` slot has no natural size, so
+    /// its caller passes zero for it.
+    pub fn preferred_size(&self, naturals: &[Size], dpi: u32) -> Size {
+        pack::stack_size(self.direction, self.insets, self.spacing, naturals, dpi)
     }
 
     /// Splits `rect` into one rect per slot, in order, scaling to `dpi`.
@@ -341,5 +353,44 @@ mod tests {
         assert_eq!(distribute(10, &[1, 1, 1]), vec![3, 3, 4]);
         assert_eq!(distribute(0, &[1, 2]), vec![0, 0]);
         assert_eq!(distribute(7, &[0, 0]), vec![3, 4]);
+    }
+
+    #[test]
+    fn preferred_size_of_a_column_packs_its_naturals() {
+        let stack = Stack::vertical()
+            .margins(Insets::all(dip(4.0)))
+            .spacing(dip(2.0))
+            .fixed(dip(10.0))
+            .fill(1)
+            .min(dip(10.0));
+        // Naturals: 30x20, a fill that contributes nothing, 10x50.
+        let naturals = [Size::new(30, 20), Size::new(0, 0), Size::new(10, 50)];
+        // Height: 4 + 20 + 2 + 0 + 2 + 50 + 4 = 82; width: 4 + max(30) + 4.
+        assert_eq!(stack.preferred_size(&naturals, 96), Size::new(38, 82));
+    }
+
+    #[test]
+    fn preferred_size_of_a_row_packs_its_naturals() {
+        let stack = Stack::horizontal()
+            .margins(Insets::all(dip(3.0)))
+            .spacing(dip(5.0))
+            .fixed(dip(10.0))
+            .fill(1);
+        let naturals = [Size::new(40, 30), Size::new(0, 0)];
+        // Width: 3 + 40 + 5 + 0 + 3 = 51; height: 3 + max(30) + 3.
+        assert_eq!(stack.preferred_size(&naturals, 96), Size::new(51, 36));
+    }
+
+    #[test]
+    fn preferred_size_is_scale_equivariant() {
+        // Doubling the naturals and the DPI doubles the margins too, so the
+        // whole result doubles.
+        let stack = Stack::vertical()
+            .margins(Insets::all(dip(4.0)))
+            .spacing(dip(2.0));
+        let naturals = [Size::new(30, 20), Size::new(10, 40)];
+        let one = stack.preferred_size(&naturals, 96);
+        let two = stack.preferred_size(&[Size::new(60, 40), Size::new(20, 80)], 192);
+        assert_eq!(two, Size::new(one.width * 2, one.height * 2));
     }
 }

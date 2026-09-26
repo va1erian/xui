@@ -21,10 +21,12 @@
 
 mod anchor;
 mod dock;
+mod pack;
 mod stack;
 
 pub use anchor::{Anchor, MIN_ANCHOR_PX, anchored};
 pub use dock::{Dock, DockLayout};
+pub use pack::free_preferred;
 pub use stack::{Stack, StackDirection, StackSlot};
 
 use crate::geometry::Rect;
@@ -78,7 +80,10 @@ impl Insets {
 
 /// The layout-arithmetic types a frontend usually needs.
 pub mod prelude {
-    pub use super::{Anchor, Dock, DockLayout, Insets, Stack, StackDirection, StackSlot, anchored};
+    pub use super::{
+        Anchor, Dock, DockLayout, Insets, Stack, StackDirection, StackSlot, anchored,
+        free_preferred,
+    };
 }
 
 #[cfg(test)]

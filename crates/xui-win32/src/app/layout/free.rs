@@ -42,6 +42,26 @@ pub(super) fn compute(layout: &Layout, origin: Size, rect: Rect, dpi: u32) -> Ve
     placed
 }
 
+/// The preferred size of a free `layout`, in device pixels at `dpi`: the
+/// furthest right and bottom edge among its widgets' design bounds (in device
+/// pixels at 96 DPI) and the design `origin` itself.
+///
+/// The origin is included so a free layout never packs smaller than the window
+/// it was designed against, only grows to fit content pinned outside it.
+pub(super) fn preferred(layout: &Layout, origin: Size, dpi: u32) -> Size {
+    let mut bounds = vec![Rect::from_size(origin)];
+    for item in &layout.slots {
+        if !item.is_visible() {
+            continue;
+        }
+        if let Content::Widget(handle) = item.content() {
+            bounds.push(handle.design_bounds(dpi));
+        }
+    }
+    let extent = crate::layout::free_preferred(&bounds);
+    Size::new(scale(extent.width, dpi), scale(extent.height, dpi))
+}
+
 /// Scales a design value (device pixels at 96 DPI) to device pixels at `dpi`.
 fn scale(value: i32, dpi: u32) -> i32 {
     Dip::new(value as f32).to_px(dpi).value()
