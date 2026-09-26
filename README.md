@@ -1,5 +1,8 @@
 # xui
 
+[![CI](https://github.com/va1erian/xui/actions/workflows/ci.yml/badge.svg)](https://github.com/va1erian/xui/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/va1erian/xui/branch/main/graph/badge.svg)](https://codecov.io/gh/va1erian/xui)
+
 Cross-platform UI for Rust: **small, fast, idiomatic and properly themed**.
 
 xui is a portable widget layer (`xui-core`) plus interchangeable **backends**.

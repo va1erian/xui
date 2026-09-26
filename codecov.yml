@@ -1,0 +1,23 @@
+# Codecov configuration. The statuses are informational at first so coverage
+# reporting never blocks a PR while the suite is being filled out; tighten them
+# (remove `informational`) once the numbers are stable.
+coverage:
+  status:
+    project:
+      default:
+        informational: true
+    patch:
+      default:
+        informational: true
+
+comment:
+  layout: "reach, diff, flags, files"
+  require_changes: false
+
+# Raw Win32 bindings and the test/example scaffolding are not meaningful to
+# measure; the coverage job still builds and runs them.
+ignore:
+  - "crates/xui-win32/src/sys/**"
+  - "crates/xui-litehtml/**"
+  - "**/tests/**"
+  - "**/examples/**"
