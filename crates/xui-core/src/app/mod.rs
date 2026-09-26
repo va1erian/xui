@@ -48,6 +48,8 @@ pub trait App: 'static {
 type CloseMapper<M> = Box<dyn Fn() -> Option<M>>;
 /// A timer tick mapped to an optional app message.
 type TimerMapper<M> = Box<dyn Fn(TimerId) -> Option<M>>;
+/// A widget's own timer listener, shared so one may be cloned out to run.
+type TimerListener<M> = Rc<dyn Fn(TimerId) -> Option<M>>;
 /// A display-layout change mapped to an optional app message.
 type DisplayMapper<M> = Box<dyn Fn() -> Option<M>>;
 
@@ -64,6 +66,10 @@ pub(crate) struct Core<M> {
     router: Router,
     on_close: RefCell<Option<CloseMapper<M>>>,
     on_timer: RefCell<Option<TimerMapper<M>>>,
+    /// Per-widget timer listeners, told apart from the app's mapping so a
+    /// widget can watch its own timer without displacing [`Ui::on_timer`].
+    timer_listeners: RefCell<Vec<(usize, TimerListener<M>)>>,
+    next_timer_listener: Cell<usize>,
     on_display_change: RefCell<Option<DisplayMapper<M>>>,
 }
 
@@ -80,6 +86,8 @@ impl<M> Core<M> {
             router: Router::new(),
             on_close: RefCell::new(None),
             on_timer: RefCell::new(None),
+            timer_listeners: RefCell::new(Vec::new()),
+            next_timer_listener: Cell::new(0),
             on_display_change: RefCell::new(None),
         })
     }
@@ -152,6 +160,21 @@ impl<M> Core<M> {
         self.on_timer.replace(Some(Box::new(f)));
     }
 
+    /// Adds a widget's timer listener, returning a token to remove it again.
+    pub(crate) fn add_timer_listener(&self, f: impl Fn(TimerId) -> Option<M> + 'static) -> usize {
+        let token = self.next_timer_listener.get();
+        self.next_timer_listener.set(token.wrapping_add(1));
+        self.timer_listeners.borrow_mut().push((token, Rc::new(f)));
+        token
+    }
+
+    /// Removes the listener `token` returned by [`Core::add_timer_listener`].
+    pub(crate) fn remove_timer_listener(&self, token: usize) {
+        self.timer_listeners
+            .borrow_mut()
+            .retain(|(existing, _)| *existing != token);
+    }
+
     /// Records the display-change mapper.
     pub(crate) fn set_on_display_change(&self, f: impl Fn() -> Option<M> + 'static) {
         self.on_display_change.replace(Some(Box::new(f)));
@@ -214,6 +237,23 @@ impl<A: App> Runtime<A> {
                 Event::Timer { id } => {
                     let mapped = self.core.on_timer.borrow().as_ref().and_then(|f| f(*id));
                     if let Some(msg) = mapped {
+                        self.core.enqueue(msg);
+                    }
+                    // Clone the listeners out first: one may register or remove
+                    // another timer listener, and running it under the borrow
+                    // would fight the borrow flag.
+                    let listeners: Vec<TimerListener<A::Msg>> = self
+                        .core
+                        .timer_listeners
+                        .borrow()
+                        .iter()
+                        .map(|(_, listener)| Rc::clone(listener))
+                        .collect();
+                    let listened: Vec<A::Msg> = listeners
+                        .iter()
+                        .filter_map(|listener| listener(*id))
+                        .collect();
+                    for msg in listened {
                         self.core.enqueue(msg);
                     }
                     return true;

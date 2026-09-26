@@ -29,6 +29,7 @@ mod slider;
 mod statusbar;
 mod togglebutton;
 mod toolbar;
+mod tooltip;
 mod topbar;
 mod treeview;
 
@@ -58,5 +59,6 @@ pub use slider::Slider;
 pub use statusbar::StatusBar;
 pub use togglebutton::ToggleButton;
 pub use toolbar::Toolbar;
+pub use tooltip::Tooltip;
 pub use topbar::{Glyph, TopBar, TopBarId};
 pub use treeview::{CheckState, NodeId, TreeModel, TreeNode, TreeRow, TreeView};
