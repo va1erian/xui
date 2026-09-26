@@ -16,7 +16,9 @@ use std::rc::Rc;
 
 use xui_core::app::{App, Ui, run_app};
 use xui_core::backend::{Backend, PlatformSpec};
-use xui_core::widget::{Button, CheckBox, Edit, HasText, Label, ProgressBar, RadioGroup, Slider};
+use xui_core::widget::{
+    Button, CheckBox, ComboBox, Edit, GroupBox, HasText, Label, ProgressBar, RadioGroup, Slider,
+};
 use xui_core::{Rect, Theme, TimerId, WidgetId};
 use xui_win32::Win32Backend;
 
@@ -42,6 +44,8 @@ struct WidgetsApp {
     _bar: ProgressBar<Msg>,
     _slider: Slider<Msg>,
     _radios: RadioGroup<Msg>,
+    _group: GroupBox<Msg>,
+    _combo: ComboBox<Msg>,
 }
 
 impl App for WidgetsApp {
@@ -160,6 +164,14 @@ fn run(theme: Theme, file: &str) {
                     RadioGroup::new(ui, Rect::new(20, 252, 320, 336), &["Low", "Medium", "High"])
                         .unwrap();
                 radios.select(1);
+                let group = GroupBox::new(ui, Rect::new(340, 16, 620, 180), "Group").unwrap();
+                let combo = ComboBox::new(
+                    ui,
+                    Rect::new(340, 200, 520, 228),
+                    &["Alpha", "Beta", "Gamma"],
+                )
+                .unwrap();
+                combo.select(1);
                 let window = backend.window_hwnd(ui.window()).expect("window handle");
 
                 // A worker types into the field and then clicks the button with
@@ -213,6 +225,8 @@ fn run(theme: Theme, file: &str) {
                     _bar: bar,
                     _slider: slider,
                     _radios: radios,
+                    _group: group,
+                    _combo: combo,
                 }
             },
         )
