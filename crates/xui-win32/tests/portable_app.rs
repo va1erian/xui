@@ -169,3 +169,74 @@ fn a_worker_thread_proxy_delivers_on_win32() {
         "the worker's message arrived before the watchdog"
     );
 }
+
+struct PainterlessApp;
+
+impl App for PainterlessApp {
+    type Msg = Msg;
+
+    fn update(&mut self, msg: Msg, ui: &mut Ui<Msg>) {
+        match msg {
+            Msg::Quit => ui.quit(),
+        }
+    }
+}
+
+/// A node the app never gave a painter must still validate its `WM_PAINT`;
+/// otherwise every invalidation re-delivers `WM_PAINT` forever and starves the
+/// timer that should end the test. A background thread is the fallback quit, so
+/// a regression fails the assertion instead of hanging the suite.
+#[test]
+fn a_painterless_node_does_not_spin_on_paint() {
+    let backend = Rc::new(Win32Backend::new());
+    let backend_for_run: Rc<dyn Backend> = backend.clone();
+    let fired = Rc::new(Cell::new(false));
+
+    let result = {
+        let fired = Rc::clone(&fired);
+        run_app(
+            backend_for_run,
+            PlatformSpec::new("xui.painterless"),
+            move |ui| {
+                // A plain container with no painter, as a composite widget's
+                // spacer row would be. Invalidate it so `WM_PAINT` is delivered.
+                let node = ui
+                    .create_node(&NodeSpec::new(
+                        NodeKind::Container,
+                        Rect::new(0, 0, 160, 60),
+                    ))
+                    .expect("create painterless node");
+                ui.invalidate(node);
+
+                let short = ui.set_timer(200);
+                assert!(short.0 != 0, "timer started");
+                let fired_for_timer = Rc::clone(&fired);
+                ui.on_timer(move |timer| {
+                    if timer == short {
+                        fired_for_timer.set(true);
+                        Some(Msg::Quit)
+                    } else {
+                        None
+                    }
+                });
+
+                // Fallback: never let a regression hang the test suite.
+                let proxy = ui.proxy();
+                std::thread::spawn(move || {
+                    std::thread::sleep(std::time::Duration::from_millis(3000));
+                    let _ = proxy.send(Msg::Quit);
+                });
+
+                PainterlessApp
+            },
+        )
+    };
+
+    if result.is_err() {
+        return;
+    }
+    assert!(
+        fired.get(),
+        "a painterless node starved the timer: WM_PAINT was not validated"
+    );
+}
