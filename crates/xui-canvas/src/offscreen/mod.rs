@@ -23,6 +23,8 @@ use crate::text_layout::CosmicShaper;
 use crate::{RgbaImage, Surface};
 
 mod backend;
+#[cfg(test)]
+mod capture_tests;
 mod geometry;
 #[cfg(test)]
 mod tests;
