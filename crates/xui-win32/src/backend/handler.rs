@@ -415,6 +415,10 @@ impl NodeHandler {
         };
         let hwnd = window.hwnd();
         let Some(paint) = Paint::begin(hwnd) else {
+            // A window that cannot begin a paint (a null DC, a lost back
+            // buffer) would otherwise keep its update region dirty and loop on
+            // `WM_PAINT`; validating leaves it for the next frame.
+            sys::window::validate(hwnd);
             return Rect::default();
         };
         let dirty = paint.paint_rect();
@@ -463,6 +467,16 @@ impl WindowHandler for NodeHandler {
         }
         match &message {
             Message::Paint => {
+                // A node without a painter draws nothing, but it still has to
+                // validate its update region: `paint` returns before
+                // `BeginPaint` when the painter is absent, so an unvalidated
+                // region makes Windows re-deliver `WM_PAINT` forever (a busy
+                // loop that starves timers and freezes the window). Validate
+                // and leave the node transparent.
+                if self.painter.borrow().is_none() {
+                    sys::window::validate(window.hwnd());
+                    return Some(0);
+                }
                 let dirty = self.paint(window);
                 self.shared.deliver(self.widget, Event::Paint { dirty });
                 return Some(0);
