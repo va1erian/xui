@@ -30,6 +30,7 @@ mod panel;
 mod popup;
 mod progressbar;
 mod radiogroup;
+mod scrollbar;
 mod scrollview;
 mod separator;
 mod slider;

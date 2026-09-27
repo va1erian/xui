@@ -2,7 +2,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use super::ScrollView;
-use super::view::thumb_rect;
+use super::scrollbar::thumb_rect;
 use crate::app::{App, Core, Runtime, Ui};
 use crate::backend::headless::HeadlessBackend;
 use crate::backend::{Backend, Event, PlatformSpec, WidgetId};
@@ -130,22 +130,22 @@ fn dragging_the_thumb_scrolls() {
     view.add(a.id(), dip(800.0));
     let runtime = app(core);
 
-    let track = view.shared.bar.get();
-    let thumb = thumb_rect(&view.shared, track, ui.dpi()).expect("a thumb");
+    let track = view.shared.bar.track();
+    let thumb = thumb_rect(track, view.shared.metrics(), ui.dpi()).expect("a thumb");
     let middle = thumb.top + thumb.height() / 2;
-    runtime.deliver(view.shared.bar_id, &down(middle));
+    runtime.deliver(view.shared.bar.id(), &down(middle));
     assert_eq!(
         backend.captured(),
-        Some(view.shared.bar_id),
+        Some(view.shared.bar.id()),
         "the thumb drag captures the pointer"
     );
-    runtime.deliver(view.shared.bar_id, &at(middle + 40));
+    runtime.deliver(view.shared.bar.id(), &at(middle + 40));
     assert!(
         view.offset().value() > 0,
         "dragging the thumb down scrolls down"
     );
     runtime.deliver(
-        view.shared.bar_id,
+        view.shared.bar.id(),
         &Event::MouseUp {
             x: 4,
             y: middle + 40,
@@ -155,7 +155,7 @@ fn dragging_the_thumb_scrolls() {
     );
     assert_eq!(backend.captured(), None, "the release drops the capture");
     let settled = view.offset();
-    runtime.deliver(view.shared.bar_id, &at(middle + 80));
+    runtime.deliver(view.shared.bar.id(), &at(middle + 80));
     assert_eq!(view.offset(), settled, "a released thumb stops following");
 }
 
@@ -180,7 +180,7 @@ fn content_that_fits_has_no_scrollbar() {
     let a = Label::new(view.ui(), Rect::new(0, 0, 10, 10), "a").unwrap();
     view.add(a.id(), dip(50.0));
     assert!(
-        !backend.node(view.shared.bar_id).unwrap().3,
+        !backend.node(view.shared.bar.id()).unwrap().3,
         "the bar is hidden"
     );
     assert_eq!(view.offset(), Px(0));

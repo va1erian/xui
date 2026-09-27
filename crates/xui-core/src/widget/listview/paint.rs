@@ -2,10 +2,11 @@
 
 //! The list view's painter: the header row, then only the visible body rows.
 
-use super::state::{HEADER, PADDING, ROW, State, TEXT_SIZE, column_spans, column_widths};
+use super::state::{PADDING, ROW, State, TEXT_SIZE, column_spans, column_widths, header_px};
 use crate::backend::{Canvas, TextAlign, TextStyle};
 use crate::geometry::{Point, Rect};
 use crate::theme::Theme;
+use crate::widget::scrollbar;
 
 /// Draws `state` into `canvas`. Only the visible rows are touched, so a large
 /// model costs the same as a small one.
@@ -15,13 +16,31 @@ pub(crate) fn paint(canvas: &mut dyn Canvas, state: &State, theme: &Theme, outli
     canvas.clear(theme.background);
 
     let row_px = ROW.to_px(dpi).value().max(1);
-    let body = if state.has_header() {
-        let height = HEADER.to_px(dpi).value();
-        let header = Rect::new(bounds.left, bounds.top, bounds.right, bounds.top + height);
-        paint_header(canvas, state, theme, header, dpi);
-        Rect::new(header.left, header.bottom, bounds.right, bounds.bottom)
+    let header_h = header_px(state.has_header(), dpi);
+    // Reserve the bar's width so the last column does not run under it.
+    let overflows = state.len() as i32 * row_px > (bounds.height() - header_h).max(0);
+    let reserve = if overflows {
+        scrollbar::BAR.to_px(dpi).value()
     } else {
-        bounds
+        0
+    };
+    let content = Rect::new(
+        bounds.left,
+        bounds.top,
+        bounds.right - reserve,
+        bounds.bottom,
+    );
+    let body = if state.has_header() {
+        let header = Rect::new(
+            content.left,
+            content.top,
+            content.right,
+            content.top + header_h,
+        );
+        paint_header(canvas, state, theme, header, dpi);
+        Rect::new(header.left, header.bottom, content.right, content.bottom)
+    } else {
+        content
     };
 
     if body.is_empty() {
@@ -31,7 +50,7 @@ pub(crate) fn paint(canvas: &mut dyn Canvas, state: &State, theme: &Theme, outli
         return;
     }
 
-    let widths = column_widths(dpi, bounds.width(), &state.columns);
+    let widths = column_widths(dpi, body.width(), &state.columns);
     let spans = column_spans(&widths);
     let visible = (body.height() / row_px) as usize;
     canvas.push_clip(body);
@@ -41,7 +60,7 @@ pub(crate) fn paint(canvas: &mut dyn Canvas, state: &State, theme: &Theme, outli
         if row >= state.len() {
             break;
         }
-        let rect = Rect::new(bounds.left, top, bounds.right, top + row_px);
+        let rect = Rect::new(body.left, top, body.right, top + row_px);
         paint_row(canvas, state, theme, rect, row, &spans, dpi);
         top += row_px;
     }

@@ -20,12 +20,14 @@ use std::collections::BTreeSet;
 use std::rc::Rc;
 
 use super::control::Control;
+use super::scrollbar::{self, Bar};
 use crate::app::Ui;
 use crate::backend::{NodeKind, NodeSpec, Result};
 use crate::geometry::{Point, Rect};
 use crate::units::Dip;
 
 mod api;
+mod bar;
 mod events;
 mod model;
 mod paint;
@@ -84,6 +86,8 @@ impl<M> Mappers<M> {
 /// position.
 pub struct ListView<M: 'static> {
     control: Control<M>,
+    _bar: Control<M>,
+    bar: Rc<Bar>,
     state: Rc<RefCell<State>>,
     mappers: Rc<Mappers<M>>,
 }
@@ -109,6 +113,10 @@ impl<M: 'static> ListView<M> {
 
     fn build(ui: &Ui<M>, bounds: Rect, rows: Rows) -> Result<ListView<M>> {
         let control = Control::new(ui, &NodeSpec::new(NodeKind::ListView, bounds).tab_stop())?;
+        let bar_control = Control::new(
+            &ui.with_parent(control.id()),
+            &NodeSpec::new(NodeKind::Container, Rect::default()),
+        )?;
         let mut selected = BTreeSet::new();
         let focused = if rows.len() == 0 {
             None
@@ -130,6 +138,7 @@ impl<M: 'static> ListView<M> {
             enabled: true,
         }));
         let mappers = Rc::new(Mappers::new());
+        let bar = Rc::new(Bar::new(bar_control.id()));
 
         {
             let state = Rc::clone(&state);
@@ -142,17 +151,36 @@ impl<M: 'static> ListView<M> {
             }));
         }
         {
+            let state = Rc::clone(&state);
+            let id = control.id();
+            let scoped = ui.clone();
+            let theme = ui.theme_handle();
+            bar_control.set_painter(Rc::new(move |canvas| {
+                let metrics = bar::metrics(&scoped, id, &state.borrow());
+                scrollbar::paint(canvas, metrics, theme.get());
+            }));
+        }
+        {
             let mapper = events::mapper(
                 ui.clone(),
                 control.id(),
                 Rc::clone(&state),
                 Rc::clone(&mappers),
+                Rc::clone(&bar),
             );
             control.on_events(mapper);
         }
+        {
+            let mapper = bar::mapper(ui.clone(), control.id(), Rc::clone(&bar), Rc::clone(&state));
+            bar_control.on_events(mapper);
+        }
+        bar::layout(ui, control.id(), &bar, &state.borrow());
+        ui.raise(bar.id());
 
         Ok(ListView {
             control,
+            _bar: bar_control,
+            bar,
             state,
             mappers,
         })
@@ -175,6 +203,12 @@ impl<M: 'static> ListView<M> {
     /// Adds a pre-built [`Column`], e.g. one that is centred.
     pub fn add_column(self, column: Column) -> ListView<M> {
         self.state.borrow_mut().columns.push(column);
+        bar::layout(
+            self.control.ui(),
+            self.control.id(),
+            &self.bar,
+            &self.state.borrow(),
+        );
         self.control.invalidate();
         self
     }

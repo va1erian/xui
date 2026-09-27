@@ -6,7 +6,7 @@
 use std::collections::BTreeSet;
 
 use super::state::{ROW, Rows, header_px};
-use super::{CellData, ListModel, ListView, SortDirection};
+use super::{CellData, ListModel, ListView, SortDirection, bar};
 use crate::backend::WidgetId;
 use crate::property::{Properties, Property, Value};
 
@@ -42,6 +42,12 @@ impl<M: 'static> ListView<M> {
         state.hover = None;
         state.offset = 0;
         drop(state);
+        bar::layout(
+            self.control.ui(),
+            self.control.id(),
+            &self.bar,
+            &self.state.borrow(),
+        );
         self.control.invalidate();
     }
 
@@ -107,6 +113,7 @@ impl<M: 'static> ListView<M> {
         let visible = ((body / ROW.to_px(dpi).value().max(1)) as usize).max(1);
         self.state.borrow_mut().ensure_visible(row, visible);
         self.control.invalidate();
+        self.control.ui().invalidate(self.bar.id());
     }
 
     /// Shows a sort arrow on `column` without raising an event.

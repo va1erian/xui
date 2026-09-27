@@ -206,6 +206,9 @@ impl ApplicationHandler<UserEvent> for App<'_> {
         }
         // Catch a window opened without a wake (for example a static one).
         self.create_windows(event_loop);
+        // A window the backend closed this turn has no state left; drop its OS
+        // window so it leaves the screen instead of staying frozen.
+        self.reconcile_windows();
         self.timers(event_loop);
     }
 }

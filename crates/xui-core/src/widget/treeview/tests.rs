@@ -15,7 +15,7 @@ use crate::Image;
 use crate::app::{App, Core, Runtime};
 use crate::backend::headless::{DrawOp, HeadlessBackend};
 use crate::backend::{Backend, Event, PlatformSpec, WidgetId};
-use crate::geometry::Point;
+use crate::geometry::{Point, Rect};
 use crate::message::{Key, Modifiers, MouseButton};
 use crate::theme::Theme;
 use crate::widget::Glyph;

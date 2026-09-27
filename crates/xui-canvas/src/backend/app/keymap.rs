@@ -5,10 +5,14 @@
 
 use winit::event::MouseButton as WinitButton;
 use winit::keyboard::{Key as WinitKey, NamedKey};
-use winit::window::CursorIcon;
+use winit::window::{CursorIcon, ResizeDirection};
 
 use xui_core::backend::Cursor;
 use xui_core::message::{Key, MouseButton};
+
+/// The frame thickness, in device pixels, within which a borderless resizable
+/// window treats a pointer as being on a resize edge.
+pub(super) const RESIZE_BORDER_PX: i32 = 5;
 
 /// The `winit` icon for a portable pointer shape.
 pub(super) fn cursor_icon(cursor: Cursor) -> CursorIcon {
@@ -18,6 +22,53 @@ pub(super) fn cursor_icon(cursor: Cursor) -> CursorIcon {
         Cursor::Text => CursorIcon::Text,
         Cursor::SizeHorizontal => CursorIcon::EwResize,
         Cursor::SizeVertical => CursorIcon::NsResize,
+    }
+}
+
+/// The resize direction for a pointer at `(x, y)` in a `width`×`height` client
+/// area, when it is within `border` device pixels of an edge.
+///
+/// Returns `None` in the interior, when `resizable` is false, when `border` is
+/// not positive, or when an axis is too short for its two edges to be distinct.
+pub(super) fn resize_direction(
+    x: i32,
+    y: i32,
+    width: u32,
+    height: u32,
+    border: i32,
+    resizable: bool,
+) -> Option<ResizeDirection> {
+    if !resizable || border <= 0 {
+        return None;
+    }
+    let (width, height) = (width as i32, height as i32);
+    let horizontal = width >= 2 * border;
+    let vertical = height >= 2 * border;
+    let west = horizontal && x < border;
+    let east = horizontal && x >= width - border;
+    let north = vertical && y < border;
+    let south = vertical && y >= height - border;
+    Some(match (north, south, west, east) {
+        (true, _, true, _) => ResizeDirection::NorthWest,
+        (true, _, _, true) => ResizeDirection::NorthEast,
+        (_, true, true, _) => ResizeDirection::SouthWest,
+        (_, true, _, true) => ResizeDirection::SouthEast,
+        (true, _, _, _) => ResizeDirection::North,
+        (_, true, _, _) => ResizeDirection::South,
+        (_, _, true, _) => ResizeDirection::West,
+        (_, _, _, true) => ResizeDirection::East,
+        _ => return None,
+    })
+}
+
+/// The pointer icon shown over the frame for a resize direction. The edges use
+/// the bidirectional arrows a border draws; the corners use diagonals.
+pub(super) fn resize_cursor(direction: ResizeDirection) -> CursorIcon {
+    match direction {
+        ResizeDirection::East | ResizeDirection::West => CursorIcon::EwResize,
+        ResizeDirection::North | ResizeDirection::South => CursorIcon::NsResize,
+        ResizeDirection::NorthEast | ResizeDirection::SouthWest => CursorIcon::NeswResize,
+        ResizeDirection::NorthWest | ResizeDirection::SouthEast => CursorIcon::NwseResize,
     }
 }
 
@@ -114,5 +165,85 @@ mod tests {
         assert_eq!(mouse_button(WinitButton::Left), Some(MouseButton::Left));
         assert_eq!(mouse_button(WinitButton::Back), Some(MouseButton::X1));
         assert_eq!(mouse_button(WinitButton::Forward), Some(MouseButton::X2));
+    }
+
+    #[test]
+    fn each_edge_of_the_frame_maps_to_a_resize_direction() {
+        // A 100x80 window with a 4px frame, probed at the middle of each edge.
+        assert_eq!(
+            resize_direction(0, 40, 100, 80, 4, true),
+            Some(ResizeDirection::West)
+        );
+        assert_eq!(
+            resize_direction(99, 40, 100, 80, 4, true),
+            Some(ResizeDirection::East)
+        );
+        assert_eq!(
+            resize_direction(50, 0, 100, 80, 4, true),
+            Some(ResizeDirection::North)
+        );
+        assert_eq!(
+            resize_direction(50, 79, 100, 80, 4, true),
+            Some(ResizeDirection::South)
+        );
+    }
+
+    #[test]
+    fn each_corner_of_the_frame_maps_to_a_diagonal_direction() {
+        assert_eq!(
+            resize_direction(0, 0, 100, 80, 4, true),
+            Some(ResizeDirection::NorthWest)
+        );
+        assert_eq!(
+            resize_direction(99, 0, 100, 80, 4, true),
+            Some(ResizeDirection::NorthEast)
+        );
+        assert_eq!(
+            resize_direction(0, 79, 100, 80, 4, true),
+            Some(ResizeDirection::SouthWest)
+        );
+        assert_eq!(
+            resize_direction(99, 79, 100, 80, 4, true),
+            Some(ResizeDirection::SouthEast)
+        );
+    }
+
+    #[test]
+    fn the_interior_is_not_a_resize_edge() {
+        assert_eq!(resize_direction(50, 40, 100, 80, 4, true), None);
+        assert_eq!(resize_direction(4, 40, 100, 80, 4, true), None);
+        assert_eq!(resize_direction(50, 4, 100, 80, 4, true), None);
+    }
+
+    #[test]
+    fn a_non_resizable_window_has_no_resize_edges() {
+        assert_eq!(resize_direction(0, 0, 100, 80, 4, false), None);
+        assert_eq!(resize_direction(50, 40, 100, 80, 4, false), None);
+    }
+
+    #[test]
+    fn a_window_too_small_for_two_edges_has_no_resize_edges() {
+        // Narrower than twice the frame, so no horizontal edge is distinct.
+        assert_eq!(resize_direction(0, 40, 6, 80, 4, true), None);
+        assert_eq!(
+            resize_direction(50, 0, 6, 80, 4, true),
+            Some(ResizeDirection::North)
+        );
+    }
+
+    #[test]
+    fn the_resize_cursors_follow_the_direction() {
+        assert_eq!(resize_cursor(ResizeDirection::East), CursorIcon::EwResize);
+        assert_eq!(resize_cursor(ResizeDirection::West), CursorIcon::EwResize);
+        assert_eq!(resize_cursor(ResizeDirection::North), CursorIcon::NsResize);
+        assert_eq!(resize_cursor(ResizeDirection::South), CursorIcon::NsResize);
+        assert_eq!(
+            resize_cursor(ResizeDirection::NorthEast),
+            CursorIcon::NeswResize
+        );
+        assert_eq!(
+            resize_cursor(ResizeDirection::NorthWest),
+            CursorIcon::NwseResize
+        );
     }
 }

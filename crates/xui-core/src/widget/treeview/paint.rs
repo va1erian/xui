@@ -9,6 +9,7 @@ use crate::Color;
 use crate::backend::{Canvas, TextStyle};
 use crate::geometry::{Point, Rect};
 use crate::theme::Theme;
+use crate::widget::scrollbar;
 
 /// The per-paint flags the app controls.
 #[derive(Clone, Copy, Debug)]
@@ -28,14 +29,29 @@ pub(crate) fn paint(canvas: &mut dyn Canvas, state: &State, theme: &Theme, optio
     canvas.clear(theme.background);
 
     let row_height = flatten::ROW.to_px(dpi).value().max(1);
+    // Reserve the bar's width so a row's label does not run under it.
+    let overflows = state.visible_len() as i32 * row_height > bounds.height().max(0);
+    let right = bounds.right
+        - if overflows {
+            scrollbar::BAR.to_px(dpi).value()
+        } else {
+            0
+        };
     let mut slot = 0;
     for (index, node) in state.rows.iter().enumerate() {
         if !flatten::is_visible(&state.rows, index) {
             continue;
         }
-        let top = bounds.top + row_height * slot;
+        if slot < state.offset {
+            slot += 1;
+            continue;
+        }
+        let top = bounds.top + row_height * (slot - state.offset) as i32;
         slot += 1;
-        let rect = Rect::new(bounds.left, top, bounds.right, top + row_height);
+        if top >= bounds.bottom {
+            break;
+        }
+        let rect = Rect::new(bounds.left, top, right, top + row_height);
         let is_current = options.current == Some(node.id);
         let fill = if is_current {
             Some(theme.accent)
@@ -92,7 +108,7 @@ pub(crate) fn paint(canvas: &mut dyn Canvas, state: &State, theme: &Theme, optio
                 node.icon.is_some(),
             ),
             top,
-            bounds.right - flatten::pad(dpi),
+            right - flatten::pad(dpi),
             top + row_height,
         );
         let style = TextStyle::new(color, flatten::TEXT).middle();
