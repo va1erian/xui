@@ -3,10 +3,10 @@
 //! The portable [`Canvas`] over a `tiny-skia` pixmap.
 //!
 //! Shapes are drawn with a tracked translation/scale and a clip. A rectangular
-//! clip is exact (each shape's rectangle is intersected with it); a rounded
-//! clip additionally builds a full-surface mask so the corner arcs clip. Text
-//! rasterisation is not implemented yet, so [`Canvas::draw_text`] draws nothing
-//! until the text system lands.
+//! clip is exact for axis-aligned rectangles (each is intersected with it) and
+//! trims text and images by bounds; a rounded clip, or any clip an ellipse or
+//! polygon must be cut by, builds a full-surface coverage mask so the corners
+//! and edges clip exactly.
 
 use tiny_skia::{
     FilterQuality, Mask, Paint, Path, PathBuilder, Pattern, Pixmap, Shader, SpreadMode, Transform,
@@ -69,13 +69,20 @@ impl<'a> SkiaCanvas<'a> {
         )
     }
 
-    fn rect(&self, rect: Rect) -> Rect {
-        let mapped = Rect::new(
+    /// Maps `rect` into device space, ignoring the clip. Text alignment is
+    /// relative to the whole target rect, so it must not be trimmed first.
+    fn map_rect(&self, rect: Rect) -> Rect {
+        Rect::new(
             (self.tx + rect.left as f32 * self.scale).round() as i32,
             (self.ty + rect.top as f32 * self.scale).round() as i32,
             (self.tx + rect.right as f32 * self.scale).round() as i32,
             (self.ty + rect.bottom as f32 * self.scale).round() as i32,
-        );
+        )
+    }
+
+    /// Maps `rect` into device space and trims it to the innermost clip.
+    fn rect(&self, rect: Rect) -> Rect {
+        let mapped = self.map_rect(rect);
         self.clips
             .last()
             .map_or(mapped, |clip| intersect(mapped, clip.bounds()))
@@ -85,23 +92,10 @@ impl<'a> SkiaCanvas<'a> {
         corners.map(|corner| Corner::new(corner.x * self.scale, corner.y * self.scale))
     }
 
-    /// Rebuilds the clip mask after a push/pop. Only a rounded clip needs one:
-    /// a purely rectangular clip is already applied by intersecting each
-    /// shape's rectangle, which is exact for rectangles and cheap.
-    fn rebuild_mask(&mut self) {
-        let rounded = self
-            .clips
-            .iter()
-            .any(|clip| matches!(clip, Clip::Rounded(..)));
-        if !rounded {
-            self.mask = None;
-            return;
-        }
-        let Some(mut mask) = Mask::new(self.pixmap.width(), self.pixmap.height()) else {
-            self.mask = None;
-            return;
-        };
-        // Start fully opaque, then intersect every clip outline into it.
+    /// Builds a coverage mask for the current clip stack, or `None` when there
+    /// are no clips. Start fully opaque, then intersect every clip outline.
+    fn build_mask(&self) -> Option<Mask> {
+        let mut mask = Mask::new(self.pixmap.width(), self.pixmap.height())?;
         mask.clear();
         mask.invert();
         for clip in &self.clips {
@@ -109,7 +103,27 @@ impl<'a> SkiaCanvas<'a> {
                 mask.intersect_path(&path, FILL_RULE, true, Transform::identity());
             }
         }
-        self.mask = Some(mask);
+        Some(mask)
+    }
+
+    /// Rebuilds the clip mask after a push/pop. A rounded clip always needs
+    /// one; a purely rectangular clip is trimmed by intersecting each shape's
+    /// rectangle, which is exact for rectangles and cheaper, so it waits for
+    /// [`SkiaCanvas::ensure_mask`] rather than allocating a mask per push.
+    fn rebuild_mask(&mut self) {
+        let rounded = self
+            .clips
+            .iter()
+            .any(|clip| matches!(clip, Clip::Rounded(..)));
+        self.mask = if rounded { self.build_mask() } else { None };
+    }
+
+    /// Ensures a mask exists for a shape the cheap rectangle intersection
+    /// cannot trim (an ellipse or polygon). A rounded clip already has one.
+    fn ensure_mask(&mut self) {
+        if self.mask.is_none() && !self.clips.is_empty() {
+            self.mask = self.build_mask();
+        }
     }
 
     /// Fills `path`, whose coordinates are already in device space (the
@@ -157,57 +171,29 @@ impl Canvas for SkiaCanvas<'_> {
     }
 
     fn fill_ellipse(&mut self, center: Point, radius_x: f32, radius_y: f32, color: Color) {
-        let center = self.point(center);
-        let rx = radius_x * self.scale;
-        let ry = radius_y * self.scale;
-        let bounds = Rect::new(
-            (center.x as f32 - rx).round() as i32,
-            (center.y as f32 - ry).round() as i32,
-            (center.x as f32 + rx).round() as i32,
-            (center.y as f32 + ry).round() as i32,
-        );
-        let bounds = self
-            .clips
-            .last()
-            .map_or(bounds, |clip| intersect(bounds, clip.bounds()));
-        if bounds.is_empty() {
+        // The full ellipse, not one trimmed to the clip's bounding box: the
+        // mask trims it exactly, so a clipped edge stays straight.
+        let Some(path) = self.ellipse_path(center, radius_x, radius_y) else {
             return;
-        }
-        let mut builder = PathBuilder::new();
-        builder.push_oval(sk_rect(bounds));
-        if let Some(path) = builder.finish() {
-            self.fill(&path, solid_shader(to_skia(color)));
-        }
+        };
+        self.ensure_mask();
+        self.fill(&path, solid_shader(to_skia(color)));
     }
 
     fn fill_polygon(&mut self, points: &[Point], color: Color) {
         if points.len() < 3 {
             return;
         }
-        let points: Vec<Point> = points.iter().map(|point| self.point(*point)).collect();
-        if let Some(clip) = self.clips.last() {
-            let bbox = points.iter().fold(
-                Rect::new(i32::MAX, i32::MAX, i32::MIN, i32::MIN),
-                |bounds, point| {
-                    Rect::new(
-                        bounds.left.min(point.x),
-                        bounds.top.min(point.y),
-                        bounds.right.max(point.x),
-                        bounds.bottom.max(point.y),
-                    )
-                },
-            );
-            if intersect(bbox, clip.bounds()).is_empty() {
-                return;
-            }
-        }
+        let first = self.point(points[0]);
         let mut builder = PathBuilder::new();
-        builder.move_to(points[0].x as f32, points[0].y as f32);
+        builder.move_to(first.x as f32, first.y as f32);
         for point in &points[1..] {
+            let point = self.point(*point);
             builder.line_to(point.x as f32, point.y as f32);
         }
         builder.close();
         if let Some(path) = builder.finish() {
+            self.ensure_mask();
             self.fill(&path, solid_shader(to_skia(color)));
         }
     }
@@ -317,9 +303,20 @@ impl Canvas for SkiaCanvas<'_> {
     }
 
     fn draw_text(&mut self, text: &str, rect: Rect, style: &TextStyle) {
-        let rect = self.rect(rect);
+        let rect = self.map_rect(rect);
+        let clip = self.clips.last().map(Clip::bounds);
         let dpi = self.dpi;
-        crate::text::draw(self.pixmap, text, rect, style, dpi);
+        crate::text::draw(
+            self.pixmap,
+            text,
+            rect,
+            style,
+            dpi,
+            crate::text::GlyphClip {
+                bounds: clip,
+                mask: self.mask.as_ref(),
+            },
+        );
     }
 
     fn draw_layout(&mut self, layout: &dyn TextLayout, origin: Point, color: Rgba) {
@@ -329,12 +326,33 @@ impl Canvas for SkiaCanvas<'_> {
         else {
             return;
         };
-        crate::text_layout::draw_layout(self.pixmap, cosmic, self.point(origin), color);
+        let origin = self.point(origin);
+        let clip = self.clips.last().map(Clip::bounds);
+        crate::text_layout::draw_layout(
+            self.pixmap,
+            cosmic,
+            origin,
+            color,
+            crate::text::GlyphClip {
+                bounds: clip,
+                mask: self.mask.as_ref(),
+            },
+        );
     }
 
     fn draw_image(&mut self, image: &Image, rect: Rect) {
-        let rect = self.rect(rect);
-        if rect.is_empty() {
+        let dest = self.map_rect(rect);
+        if dest.is_empty() {
+            return;
+        }
+        // Cropped, not squashed: only the source sub-rectangle under the clip
+        // is drawn, at the full-size scale, so the image's left region stays at
+        // the left edge when the right half is clipped away.
+        let visible = self
+            .clips
+            .last()
+            .map_or(dest, |clip| intersect(dest, clip.bounds()));
+        if visible.is_empty() {
             return;
         }
         // The premultiplied upload is cached on the surface (LRU over bytes,
@@ -344,18 +362,24 @@ impl Canvas for SkiaCanvas<'_> {
             return;
         };
         let pixmap: &Pixmap = &pixmap;
-        // Map the image's own pixel rectangle onto the destination rectangle.
-        let scale_x = rect.width() as f32 / image.width() as f32;
-        let scale_y = rect.height() as f32 / image.height() as f32;
+        // Map the image's own pixel rectangle onto the full destination
+        // rectangle; the filled source is only the visible slice of that map.
+        let scale_x = dest.width() as f32 / image.width() as f32;
+        let scale_y = dest.height() as f32 / image.height() as f32;
         let transform = Transform::from_row(
             scale_x,
             0.0,
             0.0,
             scale_y,
-            rect.left as f32,
-            rect.top as f32,
+            dest.left as f32,
+            dest.top as f32,
         );
-        let source = sk_rect(Rect::new(0, 0, image.width() as i32, image.height() as i32));
+        let source = sk_rect(Rect::new(
+            ((visible.left - dest.left) as f32 / scale_x).round() as i32,
+            ((visible.top - dest.top) as f32 / scale_y).round() as i32,
+            ((visible.right - dest.left) as f32 / scale_x).round() as i32,
+            ((visible.bottom - dest.top) as f32 / scale_y).round() as i32,
+        ));
         let paint = Paint {
             shader: Pattern::new(
                 pixmap.as_ref(),
@@ -367,7 +391,8 @@ impl Canvas for SkiaCanvas<'_> {
             anti_alias: true,
             ..Paint::default()
         };
-        self.pixmap.fill_rect(source, &paint, transform, None);
+        self.pixmap
+            .fill_rect(source, &paint, transform, self.mask.as_ref());
     }
 
     fn push_clip(&mut self, rect: Rect) {

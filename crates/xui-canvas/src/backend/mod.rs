@@ -166,11 +166,10 @@ impl Shared {
     ) -> Option<(WidgetId, i32, i32)> {
         let nodes = self.nodes.borrow();
         for (id, node) in nodes.iter().rev() {
-            if node.window != window || !node.visible || !node.enabled {
+            if node.window != window {
                 continue;
             }
-            let abs = geometry::absolute_bounds(&nodes, *id)?;
-            if abs.contains(xui_core::Point::new(x, y)) {
+            if let Some(abs) = geometry::hit_bounds(&nodes, *id, x, y) {
                 return Some((*id, x - abs.left, y - abs.top));
             }
         }

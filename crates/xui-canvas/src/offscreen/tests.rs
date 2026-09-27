@@ -33,6 +33,125 @@ fn red_pixels(image: &crate::RgbaImage) -> usize {
 }
 
 #[test]
+fn a_nested_child_paints_at_its_parents_offset() {
+    let backend = OffscreenBackend::new();
+    let window = backend
+        .open_window(&PlatformSpec::new("nested").size(Dip(100.0), Dip(100.0)))
+        .unwrap();
+    let parent = backend
+        .create(
+            ParentRef::Window(window),
+            &NodeSpec::new(NodeKind::Container, Rect::new(20, 30, 90, 80)),
+        )
+        .unwrap();
+    let child = backend
+        .create(
+            ParentRef::Widget(parent),
+            &NodeSpec::new(NodeKind::Custom, Rect::new(0, 0, 10, 10)),
+        )
+        .unwrap();
+    backend.set_painter(
+        child,
+        Rc::new(|canvas| {
+            let bounds = canvas.bounds();
+            canvas.fill_rect(bounds, Color::rgb(255, 0, 0));
+        }),
+    );
+
+    let image = backend.render(window).expect("a rendered window");
+    assert_eq!(
+        image.pixel(25, 35),
+        Some([255, 0, 0, 255]),
+        "the child paints at the parent's offset"
+    );
+    assert_ne!(
+        image.pixel(5, 5),
+        Some([255, 0, 0, 255]),
+        "not at its parent-relative position"
+    );
+}
+
+#[test]
+fn a_nested_child_is_hit_at_its_absolute_position() {
+    let backend = OffscreenBackend::new();
+    let window = backend
+        .open_window(&PlatformSpec::new("nested hit"))
+        .unwrap();
+    let parent = backend
+        .create(
+            ParentRef::Window(window),
+            &NodeSpec::new(NodeKind::Container, Rect::new(20, 30, 60, 40)),
+        )
+        .unwrap();
+    let child = backend
+        .create(
+            ParentRef::Widget(parent),
+            &NodeSpec::new(NodeKind::Container, Rect::new(5, 5, 10, 10)),
+        )
+        .unwrap();
+    let log = Rc::new(RefCell::new(Vec::new()));
+    backend.set_event_sink(window, Rc::new(Recorder(Rc::clone(&log))));
+
+    let consumed = backend.inject(
+        window,
+        Event::MouseDown {
+            x: 27,
+            y: 37,
+            button: MouseButton::Left,
+            modifiers: Modifiers::NONE,
+        },
+    );
+
+    assert!(consumed, "the child consumes the click");
+    assert!(
+        matches!(
+            log.borrow().last(),
+            Some((target, Event::MouseDown { x: 2, y: 2, .. })) if *target == child
+        ),
+        "the click targets the child at (25, 35) and is translated locally"
+    );
+}
+
+#[test]
+fn a_child_under_a_hidden_ancestor_is_not_hit() {
+    let backend = OffscreenBackend::new();
+    let window = backend
+        .open_window(&PlatformSpec::new("hidden hit"))
+        .unwrap();
+    let parent = backend
+        .create(
+            ParentRef::Window(window),
+            &NodeSpec::new(NodeKind::Container, Rect::new(20, 30, 60, 40)),
+        )
+        .unwrap();
+    let _child = backend
+        .create(
+            ParentRef::Widget(parent),
+            &NodeSpec::new(NodeKind::Container, Rect::new(5, 5, 10, 10)),
+        )
+        .unwrap();
+    let log = Rc::new(RefCell::new(Vec::new()));
+    backend.set_event_sink(window, Rc::new(Recorder(Rc::clone(&log))));
+    backend.set_visible(parent, false);
+
+    let consumed = backend.inject(
+        window,
+        Event::MouseDown {
+            x: 27,
+            y: 37,
+            button: MouseButton::Left,
+            modifiers: Modifiers::NONE,
+        },
+    );
+
+    assert!(!consumed, "no node is hit");
+    assert!(
+        log.borrow().is_empty(),
+        "the hidden subtree receives nothing"
+    );
+}
+
+#[test]
 fn a_clip_hides_an_overflowing_childs_painting() {
     let backend = OffscreenBackend::new();
     let window = backend.open_window(&PlatformSpec::new("clip")).unwrap();

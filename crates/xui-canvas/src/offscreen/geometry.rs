@@ -22,6 +22,14 @@ impl GeometryNode for Node {
     fn clip(&self) -> Option<Rect> {
         self.clip
     }
+
+    fn visible(&self) -> bool {
+        self.visible
+    }
+
+    fn enabled(&self) -> bool {
+        self.enabled
+    }
 }
 
 /// Rebuilds `event` with its cursor position at `(x, y)`.
