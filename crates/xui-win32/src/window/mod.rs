@@ -14,14 +14,12 @@ mod ops;
 mod placement;
 mod size;
 mod theme;
-mod title_bar;
 
 pub use backdrop::Backdrop;
 pub use icon::Icon;
 pub use monitor::{MonitorInfo, monitor_of, monitors};
 pub use ops::CursorShape;
 pub use placement::{Placement, ShowState, centered_in_work_area, monitor_work_areas};
-pub use title_bar::TitleBar;
 
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -404,8 +402,8 @@ impl Drop for Window {
 /// The window types a frontend usually needs.
 pub mod prelude {
     pub use super::{
-        Backdrop, CursorShape, Icon, MonitorInfo, Placement, ShowState, TitleBar, Window,
-        WindowClass, WindowExStyle, WindowHandler, WindowStyle, centered_in_work_area, monitor_of,
+        Backdrop, CursorShape, Icon, MonitorInfo, Placement, ShowState, Window, WindowClass,
+        WindowExStyle, WindowHandler, WindowStyle, centered_in_work_area, monitor_of,
         monitor_work_areas, monitors,
     };
 }

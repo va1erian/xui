@@ -33,10 +33,7 @@ use super::{hwnd_from, raw_hwnd};
 mod frame;
 mod geometry;
 
-pub(crate) use frame::{
-    apply_extended_frame, caption_buttons_in_window, client_mismatch, enable_extended, reframe,
-    refresh_caption_inset,
-};
+pub(crate) use frame::{apply_extended_frame, enable_extended, reframe};
 use geometry::{FrameInsets, decide, extended_client_rect, hit_code};
 
 /// The frame thickness of `hwnd`, with the caption height excluded from `top`.

@@ -15,7 +15,6 @@ pub use notify::{Notify, TimerId};
 pub use xui_core::message::{HitTest, Key, Modifiers, MouseButton};
 
 use crate::geometry::{Point, Rect, Size};
-use crate::hwnd::Hwnd;
 
 /// A window-procedure return value.
 pub type LResult = isize;
@@ -85,33 +84,6 @@ pub enum Message {
     Command(Command),
     /// `WM_NOTIFY`.
     Notify(Notify),
-    /// `WM_DRAWITEM`: an owner-drawn control needs painting. The device
-    /// context is only valid while handling this message; return `Some(1)`
-    /// (TRUE) once drawn.
-    DrawItem {
-        /// The control that needs painting.
-        control: Hwnd,
-        /// The control's id.
-        id: usize,
-        /// `itemID`: the menu command id, or the control's item index.
-        item: usize,
-        /// `itemData`: the application value set when the item was added. For
-        /// owner-drawn menus this is win32ui's own render id.
-        data: usize,
-        /// Whether this is an owner-drawn *menu* item (`CtlType == ODT_MENU`).
-        menu: bool,
-        /// `itemAction` (`ODA_*` from `Winuser.h`): why painting was requested.
-        /// Owner-drawn widgets usually repaint unconditionally.
-        action: u32,
-        /// `itemState` (`ODS_*` from `Winuser.h`): selected, focused,
-        /// disabled and similar flags. Interpret it with `sys` helpers so
-        /// callers never name the raw codes.
-        state: u32,
-        /// The device context to paint into, as a raw value.
-        dc: isize,
-        /// The rectangle to paint, in the control's client coordinates.
-        area: Rect,
-    },
     /// `WM_MEASUREITEM`: an owner-drawn control (or menu) is asked how large one
     /// item should be. Only meaningful while handling it; write the size back
     /// with [`Window::set_measured_size`](crate::Window::set_measured_size).

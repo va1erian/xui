@@ -11,12 +11,10 @@ use core::ffi::c_void;
 use windows::Win32::Foundation::COLORREF;
 use windows::Win32::Graphics::Dwm::{DWMWA_USE_IMMERSIVE_DARK_MODE, DwmSetWindowAttribute};
 use windows::Win32::Graphics::Gdi::{HBRUSH, HDC, SetBkColor, SetTextColor};
-use windows::Win32::UI::Controls::SetWindowTheme;
 use windows::Win32::UI::WindowsAndMessaging::{
     GCLP_HBRBACKGROUND, SetClassLongPtrW, WM_CTLCOLORBTN, WM_CTLCOLORDLG, WM_CTLCOLOREDIT,
     WM_CTLCOLORLISTBOX, WM_CTLCOLORSTATIC,
 };
-use windows::core::PCWSTR;
 
 use crate::color::Color;
 use crate::hwnd::Hwnd;
@@ -46,42 +44,6 @@ pub(crate) const fn ctlcolor_msg_listbox() -> u32 {
 /// `WM_CTLCOLORDLG` id.
 pub(crate) const fn ctlcolor_msg_dlg() -> u32 {
     WM_CTLCOLORDLG
-}
-
-/// Which family a control belongs to, selecting its `SetWindowTheme` sub-app
-/// name. Scrollable and button-chrome controls darken through
-/// `DarkMode_Explorer`: `DarkMode_CFD` was tried for button chrome but left
-/// buttons rendering classic-light, so it was dropped there. Combo boxes are
-/// the exception: only `DarkMode_CFD` (the common-file-dialog/combo theme)
-/// darkens their closed field and dropped list, while `DarkMode_Explorer`
-/// leaves the field bright white (#67). Parts `DarkMode_Explorer` still misses
-/// (radio text, the group box frame) are owner-drawn by the widget instead.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum NativeControlKind {
-    /// Scrollable controls (list, tree, header).
-    Scrollable,
-    /// Button-chrome controls (push buttons, check boxes, radios, group
-    /// boxes, statics).
-    Button,
-    /// Combo boxes: the closed field and the dropped list.
-    ComboBox,
-}
-
-/// Opts a control into its dark visual style, or back to `Explorer` when
-/// light. Only documented `SetWindowTheme` names are used
-/// (`DarkMode_Explorer`, `DarkMode_CFD`, `Explorer`); where a native part
-/// cannot be darkened this way, the control owner-draws it.
-pub(crate) fn apply_native_theme(hwnd: Hwnd, kind: NativeControlKind, is_dark: bool) {
-    let name = match (is_dark, kind) {
-        (true, NativeControlKind::ComboBox) => windows::core::w!("DarkMode_CFD"),
-        (true, _) => windows::core::w!("DarkMode_Explorer"),
-        (false, _) => windows::core::w!("Explorer"),
-    };
-    // SAFETY: `hwnd` is a live control; the theme names are static literals
-    // documented for `SetWindowTheme`.
-    super::control::keep_font(hwnd, || unsafe {
-        let _ = SetWindowTheme(raw_hwnd(hwnd), name, PCWSTR::null());
-    });
 }
 
 /// Applies (or clears) the DWM dark title bar for a top-level window.

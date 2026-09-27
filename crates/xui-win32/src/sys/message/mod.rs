@@ -1,6 +1,5 @@
 //! Raw-message decoding: the typed [`Message`] behind each Win32 message.
 
-mod draw;
 mod input;
 mod measure;
 mod notify;
@@ -28,7 +27,6 @@ use super::hwnd_from;
 
 use notify::decode_notify;
 
-pub(crate) use draw::{decode_draw, message_id as draw_message_id};
 pub(crate) use measure::{message_id as measure_message_id, set_size as set_measured_size};
 
 /// Name of the message a worker thread posts to wake the UI.

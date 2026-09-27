@@ -15,8 +15,6 @@ use std::rc::Rc;
 
 use xui_win32::prelude::*;
 
-pub mod uia;
-
 /// Set to any value to let a genuinely headless run skip its window tests
 /// instead of failing: `XUI_TESTS_ALLOW_HEADLESS=1`.
 pub const ALLOW_HEADLESS_ENV: &str = "XUI_TESTS_ALLOW_HEADLESS";
@@ -124,78 +122,6 @@ impl WindowHandler for NullHandler {
     fn message(&self, _window: &Window, _message: Message) -> Option<LResult> {
         None
     }
-}
-
-/// How a watched widget-layer run ended.
-pub struct RunApp {
-    /// Whether the watchdog fired before the app quit.
-    pub timed_out: bool,
-    /// The id of the watchdog timer.
-    pub watchdog: Option<TimerId>,
-}
-
-/// Runs a widget-layer app under a watchdog: the helper starts a watchdog timer
-/// on the window before `make` runs and quits the loop (recording `timed_out`)
-/// if it fires, so an app that never quits fails the test instead of hanging.
-///
-/// `make` receives the `Ui` and must enqueue its first message (typically
-/// `ui.emit(..)`) and arrange for the app to quit once done. Returns `None`
-/// when the session cannot create windows.
-pub fn run_app_with_watchdog<A, F>(name: &str, make: F) -> Option<RunApp>
-where
-    A: App + 'static,
-    F: FnOnce(&mut Ui<A::Msg>) -> A,
-{
-    run_app_spec_with_watchdog(WindowSpec::new(name).theme(Theme::light()), make)
-}
-
-/// Like [`run_app_with_watchdog`], but with a caller-built [`WindowSpec`], so a
-/// test can exercise spec options such as [`Backdrop`] or [`TitleBar`].
-pub fn run_app_spec_with_watchdog<A, F>(spec: WindowSpec, make: F) -> Option<RunApp>
-where
-    A: App + 'static,
-    F: FnOnce(&mut Ui<A::Msg>) -> A,
-{
-    run_app_spec_with_watchdog_ms(spec, WATCHDOG_MS, make)
-}
-
-/// Like [`run_app_spec_with_watchdog`], with a longer watchdog for a
-/// measurement that legitimately runs for many seconds.
-pub fn run_app_spec_with_watchdog_ms<A, F>(
-    spec: WindowSpec,
-    watchdog_ms: u32,
-    make: F,
-) -> Option<RunApp>
-where
-    A: App + 'static,
-    F: FnOnce(&mut Ui<A::Msg>) -> A,
-{
-    xui_win32::init();
-
-    let timed_out = Rc::new(Cell::new(false));
-    let watchdog = Rc::new(Cell::new(None));
-    let timed_out_for_timer = Rc::clone(&timed_out);
-    let watchdog_for_timer = Rc::clone(&watchdog);
-    let result = xui_win32::run_app(spec, move |ui| {
-        let id = ui.set_timer(watchdog_ms).ok();
-        watchdog_for_timer.set(id);
-        ui.on_timer(move |fired| {
-            if Some(fired) == id {
-                timed_out_for_timer.set(true);
-                xui_win32::quit(1);
-            }
-            None
-        });
-        make(ui)
-    });
-
-    if result.is_err() {
-        return skip_window();
-    }
-    Some(RunApp {
-        timed_out: timed_out.get(),
-        watchdog: watchdog.get(),
-    })
 }
 
 /// One row of the shared five-row test model.
