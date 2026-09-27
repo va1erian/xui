@@ -28,6 +28,7 @@ use crate::units::Dip;
 
 mod api;
 mod bar;
+mod ellipsis;
 mod events;
 mod model;
 mod paint;

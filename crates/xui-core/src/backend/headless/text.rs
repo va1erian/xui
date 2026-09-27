@@ -4,8 +4,26 @@
 //! monospace font, so a test can assert hit-test and selection geometry
 //! without a platform font stack.
 
+use crate::backend::canvas::{TextMetrics, TextStyle};
 use crate::backend::text::{FontSpec, TextHit, TextLayout, TextShaper};
 use crate::geometry::Rect;
+
+/// A deterministic stand-in for real font metrics: a half-em advance per
+/// character and a 1.25x line height, matching [`HeadlessShaper`]'s
+/// approximation. Used by both [`Backend::measure_text`](crate::backend::Backend::measure_text)
+/// and the recording canvas's own measurement, so headless tests see the same
+/// numbers whichever path they measure through.
+pub(crate) fn estimate_metrics(text: &str, style: &TextStyle, dpi: u32) -> TextMetrics {
+    let height = (style.size.to_px(dpi).value() as f32 * 1.25).round() as i32;
+    let width =
+        (text.chars().count() as f32 * style.size.to_px(dpi).value() as f32 * 0.5).round() as i32;
+    TextMetrics {
+        width,
+        height,
+        ascent: height * 3 / 4,
+        descent: height / 4,
+    }
+}
 
 /// Shapes text with a fixed advance and line height.
 pub(crate) struct HeadlessShaper;
