@@ -4,7 +4,9 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use xui_core::app::{App, Ui, run_app};
-use xui_core::backend::{Backend, Event, NodeKind, NodeSpec, ParentRef, PlatformSpec, WidgetId};
+use xui_core::backend::{
+    Backend, Event, NodeKind, NodeSpec, Painter, ParentRef, PlatformSpec, WidgetId,
+};
 use xui_core::message::{Modifiers, MouseButton};
 use xui_core::widget::{Label, ScrollView};
 use xui_core::{Color, Dip, Rect, Theme};
@@ -30,6 +32,24 @@ fn red_pixels(image: &crate::RgbaImage) -> usize {
         .iter()
         .filter(|pixel| pixel[0] > 200 && pixel[1] < 80 && pixel[2] < 80)
         .count()
+}
+
+fn blue_pixels(image: &crate::RgbaImage) -> usize {
+    image
+        .pixels
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .filter(|pixel| pixel[0] < 80 && pixel[1] < 80 && pixel[2] > 200)
+        .count()
+}
+
+/// A painter that fills the node's bounds with a solid colour.
+fn fill(color: Color) -> Painter {
+    Rc::new(move |canvas| {
+        let bounds = canvas.bounds();
+        canvas.fill_rect(bounds, color);
+    })
 }
 
 #[test]
@@ -214,6 +234,91 @@ fn a_clip_keeps_the_visible_part_of_a_child() {
         red,
         100 * 5,
         "only the 5px inside the clip is painted, not the 55 below"
+    );
+}
+
+#[test]
+fn a_hidden_panel_hides_its_painted_child() {
+    let backend = OffscreenBackend::new();
+    let window = backend
+        .open_window(&PlatformSpec::new("visibility"))
+        .unwrap();
+    let panel = backend
+        .create(
+            ParentRef::Window(window),
+            &NodeSpec::new(NodeKind::Container, Rect::new(0, 0, 100, 80)),
+        )
+        .unwrap();
+    let child = backend
+        .create(
+            ParentRef::Widget(panel),
+            &NodeSpec::new(NodeKind::Container, Rect::new(10, 10, 30, 30)),
+        )
+        .unwrap();
+    backend.set_painter(child, fill(Color::rgb(255, 0, 0)));
+    // Hiding the panel must skip its whole subtree.
+    backend.set_visible(panel, false);
+
+    let image = backend.render(window).expect("a rendered window");
+    assert_eq!(
+        red_pixels(&image),
+        0,
+        "the child of a hidden panel is not painted"
+    );
+}
+
+#[test]
+fn a_visible_panel_with_a_hidden_child_paints_only_the_panel() {
+    let backend = OffscreenBackend::new();
+    let window = backend
+        .open_window(&PlatformSpec::new("visibility"))
+        .unwrap();
+    let panel = backend
+        .create(
+            ParentRef::Window(window),
+            &NodeSpec::new(NodeKind::Container, Rect::new(0, 0, 100, 80)),
+        )
+        .unwrap();
+    let child = backend
+        .create(
+            ParentRef::Widget(panel),
+            &NodeSpec::new(NodeKind::Container, Rect::new(10, 10, 30, 30)),
+        )
+        .unwrap();
+    backend.set_painter(panel, fill(Color::rgb(255, 0, 0)));
+    backend.set_painter(child, fill(Color::rgb(0, 0, 255)));
+    backend.set_visible(child, false);
+
+    let image = backend.render(window).expect("a rendered window");
+    assert_eq!(red_pixels(&image), 100 * 80, "the panel itself is painted");
+    assert_eq!(blue_pixels(&image), 0, "its hidden child is skipped");
+}
+
+#[test]
+fn an_unhidden_child_under_a_visible_parent_still_paints() {
+    let backend = OffscreenBackend::new();
+    let window = backend
+        .open_window(&PlatformSpec::new("visibility"))
+        .unwrap();
+    let panel = backend
+        .create(
+            ParentRef::Window(window),
+            &NodeSpec::new(NodeKind::Container, Rect::new(0, 0, 100, 80)),
+        )
+        .unwrap();
+    let child = backend
+        .create(
+            ParentRef::Widget(panel),
+            &NodeSpec::new(NodeKind::Container, Rect::new(10, 10, 30, 30)),
+        )
+        .unwrap();
+    backend.set_painter(child, fill(Color::rgb(255, 0, 0)));
+
+    let image = backend.render(window).expect("a rendered window");
+    assert_eq!(
+        red_pixels(&image),
+        20 * 20,
+        "the child of a visible panel is painted, not over-culled"
     );
 }
 

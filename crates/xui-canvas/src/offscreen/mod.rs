@@ -27,7 +27,9 @@ mod geometry;
 #[cfg(test)]
 mod tests;
 
-use crate::backend::geometry::{absolute_bounds, ancestor_clip, hit_bounds, intersect};
+use crate::backend::geometry::{
+    absolute_bounds, ancestor_clip, effectively_visible, hit_bounds, intersect,
+};
 use geometry::translate;
 
 /// The default dots-per-inch a surface is rendered at.
@@ -154,7 +156,7 @@ impl OffscreenBackend {
         let nodes = self.nodes.borrow();
         let paints: Vec<Draw> = nodes
             .iter()
-            .filter(|(_, node)| node.window == window && node.visible)
+            .filter(|(id, node)| node.window == window && effectively_visible(&nodes, *id))
             .filter_map(|(id, node)| {
                 let painter = node.painter.clone();
                 let gl = gl_nodes.iter().any(|(raw, _)| *raw == id.raw());
