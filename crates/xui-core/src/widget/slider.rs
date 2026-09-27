@@ -66,7 +66,7 @@ impl<M: 'static> Slider<M> {
                 let x = left + (span as f64 * fraction).round() as i32;
 
                 let full = Rect::new(left, mid - track / 2, right, mid - track / 2 + track);
-                canvas.fill_rounded_rect(full, track as f32 / 2.0, theme.scrollbar_track);
+                canvas.fill_rounded_rect(full, track as f32 / 2.0, theme.track);
                 let filled = Rect::new(left, mid - track / 2, x, mid - track / 2 + track);
                 canvas.fill_rounded_rect(filled, track as f32 / 2.0, theme.accent);
                 canvas.fill_ellipse(Point::new(x, mid), thumb as f32, thumb as f32, theme.accent);

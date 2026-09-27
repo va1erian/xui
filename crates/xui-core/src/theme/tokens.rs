@@ -71,8 +71,15 @@ pub struct Theme {
     pub input_border: Color,
     /// Scrollbar thumb (WinUI thumb: light `#C8C6C4`, dark `#605E5C`).
     pub scrollbar: Color,
-    /// Scrollbar track (matches [`Theme::background`]).
+    /// Scrollbar track (matches [`Theme::background`]): the scrollbar's own
+    /// unfilled track is meant to blend into the page, since the thumb alone
+    /// carries the affordance.
     pub scrollbar_track: Color,
+    /// Slider/progress-bar groove (WinUI `ControlStrokeColorDefault`: light
+    /// `#E1E1E1`, dark `#3F3F3F`). Unlike [`Theme::scrollbar_track`], a
+    /// slider's or progress bar's unfilled groove is drawn over the plain
+    /// background and must stay visible against it (#160).
+    pub track: Color,
 }
 
 impl Theme {
@@ -101,6 +108,7 @@ impl Theme {
             input_border: Color::hex(0xE1_E1_E1),
             scrollbar: Color::hex(0xC8_C6_C4),
             scrollbar_track: Color::hex(0xF3_F3_F3),
+            track: Color::hex(0xE1_E1_E1),
         }
     }
 
@@ -129,6 +137,7 @@ impl Theme {
             input_border: Color::hex(0x3F_3F_3F),
             scrollbar: Color::hex(0x60_5E_5C),
             scrollbar_track: Color::hex(0x20_20_20),
+            track: Color::hex(0x3F_3F_3F),
         }
     }
 }
@@ -155,6 +164,19 @@ mod tests {
     fn tracks_follow_background() {
         assert_eq!(Theme::light().scrollbar_track, Theme::light().background);
         assert_eq!(Theme::dark().scrollbar_track, Theme::dark().background);
+    }
+
+    /// A slider/progress groove sits on the plain background and must read
+    /// against it, unlike the scrollbar's own (intentionally blended) track
+    /// (#160).
+    #[test]
+    fn the_slider_track_stays_visible_on_the_background() {
+        for theme in [Theme::light(), Theme::dark()] {
+            assert_ne!(
+                theme.track, theme.background,
+                "the groove must differ from the background it's painted on"
+            );
+        }
     }
 
     #[test]
