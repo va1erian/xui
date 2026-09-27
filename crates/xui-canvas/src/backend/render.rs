@@ -10,7 +10,7 @@ use xui_core::geometry::Rect;
 use xui_core::image::Image;
 
 use super::Shared;
-use super::geometry::{absolute_bounds, ancestor_clip, intersect};
+use super::geometry::{absolute_bounds, ancestor_clip, effectively_visible, intersect};
 use crate::Surface;
 use crate::gl::GlWidget;
 
@@ -69,7 +69,7 @@ pub(super) fn composite(shared: &Shared, window: WindowId, surface: &mut Surface
         let gl_nodes = windows.get(&window.raw()).map(|state| &state.gl_nodes);
         nodes
             .iter()
-            .filter(|(_, node)| node.window == window && node.visible)
+            .filter(|(id, node)| node.window == window && effectively_visible(&nodes, *id))
             .filter_map(|(id, node)| {
                 let painter = node.painter.clone();
                 let gl = gl_nodes.is_some_and(|nodes| nodes.contains_key(id));
