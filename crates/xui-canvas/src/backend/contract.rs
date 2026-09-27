@@ -7,9 +7,9 @@ use std::time::Instant;
 
 use winit::window::Window;
 use xui_core::backend::{
-    Backend, BackendError, Cursor, FontSpec, ImplKind, NodeKind, NodeSpec, Painter, ParentRef,
-    PlatformSpec, Result as BackendResult, TextLayout, TextMetrics, TextShaper, TextStyle, TimerId,
-    Waker, WidgetId, WindowId,
+    Backend, BackendError, Cursor, Event, FontSpec, ImplKind, NodeKind, NodeSpec, Painter,
+    ParentRef, PlatformSpec, Result as BackendResult, TextLayout, TextMetrics, TextShaper,
+    TextStyle, TimerId, Waker, WidgetId, WindowId,
 };
 use xui_core::image::Image;
 use xui_core::router::WidgetHost;
@@ -182,12 +182,31 @@ impl Backend for WinitBackend {
         }
     }
 
-    fn apply_moves(&self, _window: WindowId, moves: &[(WidgetId, Rect)]) {
-        let mut nodes = self.shared.nodes.borrow_mut();
-        for (id, rect) in moves {
-            if let Some((_, node)) = nodes.iter_mut().find(|(node_id, _)| node_id == id) {
-                node.bounds = *rect;
+    fn apply_moves(&self, window: WindowId, moves: &[(WidgetId, Rect)]) {
+        let mut resized = Vec::new();
+        {
+            let mut nodes = self.shared.nodes.borrow_mut();
+            for (id, rect) in moves {
+                if let Some((_, node)) = nodes.iter_mut().find(|(node_id, _)| node_id == id) {
+                    if node.bounds.size() != rect.size() {
+                        resized.push((*id, *rect));
+                    }
+                    node.bounds = *rect;
+                }
             }
+        }
+        // A moved node gets no other size notification here (there is no HWND
+        // to fire WM_SIZE on), so a resized widget must be told directly or its
+        // own cached layout (e.g. a scrollbar's track) goes stale.
+        for (id, rect) in resized {
+            self.shared.deliver(
+                window,
+                id,
+                &Event::Resize {
+                    width: rect.width(),
+                    height: rect.height(),
+                },
+            );
         }
     }
 

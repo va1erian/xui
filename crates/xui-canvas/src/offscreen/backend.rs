@@ -106,11 +106,36 @@ impl Backend for OffscreenBackend {
         }
     }
 
-    fn apply_moves(&self, _window: WindowId, moves: &[(WidgetId, Rect)]) {
-        let mut nodes = self.nodes.borrow_mut();
-        for (id, rect) in moves {
-            if let Some((_, node)) = nodes.iter_mut().find(|(node_id, _)| node_id == id) {
-                node.bounds = *rect;
+    fn apply_moves(&self, window: WindowId, moves: &[(WidgetId, Rect)]) {
+        let mut resized = Vec::new();
+        {
+            let mut nodes = self.nodes.borrow_mut();
+            for (id, rect) in moves {
+                if let Some((_, node)) = nodes.iter_mut().find(|(node_id, _)| node_id == id) {
+                    if node.bounds.size() != rect.size() {
+                        resized.push((*id, *rect));
+                    }
+                    node.bounds = *rect;
+                }
+            }
+        }
+        // A moved node gets no other size notification here (there is no HWND
+        // to fire WM_SIZE on), so a resized widget must be told directly or its
+        // own cached layout (e.g. a scrollbar's track) goes stale.
+        let sink = self
+            .windows
+            .borrow()
+            .get(&window.raw())
+            .and_then(|entry| entry.sink.clone());
+        if let Some(sink) = sink {
+            for (id, rect) in resized {
+                sink.deliver(
+                    id,
+                    &Event::Resize {
+                        width: rect.width(),
+                        height: rect.height(),
+                    },
+                );
             }
         }
     }

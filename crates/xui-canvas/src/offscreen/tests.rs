@@ -1,4 +1,5 @@
-//! Unit tests for the offscreen backend: per-node clipping and pointer capture.
+//! Unit tests for the offscreen backend: per-node clipping, hit-testing and
+//! layout. Pointer capture has its own file, [`super::capture_tests`].
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -15,7 +16,7 @@ use super::OffscreenBackend;
 use crate::tests::save;
 
 /// A sink that records every event it is handed.
-struct Recorder(Rc<RefCell<Vec<(WidgetId, Event)>>>);
+pub(super) struct Recorder(pub(super) Rc<RefCell<Vec<(WidgetId, Event)>>>);
 
 impl xui_core::router::WidgetHost for Recorder {
     fn deliver(&self, target: WidgetId, event: &Event) -> bool {
@@ -323,104 +324,6 @@ fn an_unhidden_child_under_a_visible_parent_still_paints() {
 }
 
 #[test]
-fn a_captured_node_receives_an_out_of_bounds_move() {
-    let backend = OffscreenBackend::new();
-    let window = backend.open_window(&PlatformSpec::new("capture")).unwrap();
-    let node = backend
-        .create(
-            ParentRef::Window(window),
-            &NodeSpec::new(NodeKind::Container, Rect::new(10, 10, 60, 50)),
-        )
-        .unwrap();
-    let log = Rc::new(RefCell::new(Vec::new()));
-    backend.set_event_sink(window, Rc::new(Recorder(Rc::clone(&log))));
-
-    backend.set_capture(node);
-    let consumed = backend.inject(
-        window,
-        Event::MouseMove {
-            x: 500,
-            y: 500,
-            modifiers: Modifiers::NONE,
-        },
-    );
-
-    assert!(consumed, "the captured node consumes the move");
-    let events = log.borrow();
-    let (target, event) = events.last().expect("an event was delivered");
-    assert_eq!(*target, node, "the captured node is the target");
-    // Far outside the node: the local point stays negative.
-    assert!(matches!(
-        event,
-        Event::MouseMove { x, y, .. } if *x == 490 && *y == 490
-    ));
-}
-
-#[test]
-fn releasing_capture_tells_the_captured_node() {
-    let backend = OffscreenBackend::new();
-    let window = backend.open_window(&PlatformSpec::new("capture")).unwrap();
-    let node = backend
-        .create(
-            ParentRef::Window(window),
-            &NodeSpec::new(NodeKind::Container, Rect::new(10, 10, 60, 50)),
-        )
-        .unwrap();
-    let log = Rc::new(RefCell::new(Vec::new()));
-    backend.set_event_sink(window, Rc::new(Recorder(Rc::clone(&log))));
-
-    backend.set_capture(node);
-    backend.release_capture();
-
-    let events = log.borrow();
-    assert!(matches!(
-        events.as_slice(),
-        [(target, Event::CaptureChanged)] if *target == node
-    ));
-    // A move after release no longer reaches the node.
-    let before = events.len();
-    backend.inject(
-        window,
-        Event::MouseMove {
-            x: 500,
-            y: 500,
-            modifiers: Modifiers::NONE,
-        },
-    );
-    assert_eq!(log.borrow().len(), before, "capture is gone");
-}
-
-#[test]
-fn a_mouse_up_reaches_the_captured_node_outside_it() {
-    let backend = OffscreenBackend::new();
-    let window = backend.open_window(&PlatformSpec::new("capture")).unwrap();
-    let node = backend
-        .create(
-            ParentRef::Window(window),
-            &NodeSpec::new(NodeKind::Container, Rect::new(0, 0, 40, 40)),
-        )
-        .unwrap();
-    let log = Rc::new(RefCell::new(Vec::new()));
-    backend.set_event_sink(window, Rc::new(Recorder(Rc::clone(&log))));
-
-    backend.set_capture(node);
-    backend.inject(
-        window,
-        Event::MouseUp {
-            x: 200,
-            y: 200,
-            button: MouseButton::Left,
-            modifiers: Modifiers::NONE,
-        },
-    );
-
-    assert!(matches!(
-        log.borrow().last(),
-        Some((target, Event::MouseUp { .. })) if *target == node
-    ));
-}
-
-#[test]
 fn a_scroll_view_clips_overflowing_content_light_and_dark() {
     struct Scroll {
         _view: ScrollView<u32>,
@@ -498,4 +401,38 @@ fn capturing_a_closed_window_is_an_error() {
     let window = backend.open_window(&PlatformSpec::new("gone")).unwrap();
     backend.close_window(window);
     assert!(backend.capture(window).is_err());
+}
+
+#[test]
+fn a_resized_move_notifies_the_node_but_a_reposition_does_not() {
+    // A node has no HWND of its own to fire a native size message on, so a
+    // parent that resizes it through `apply_moves` (as `Control::set_bounds`
+    // does) must be told directly: otherwise a widget with layout cached from
+    // its last `Event::Resize` (a scrollbar's track, say) never sees the new
+    // size.
+    let backend = OffscreenBackend::new();
+    let window = backend.open_window(&PlatformSpec::new("resize")).unwrap();
+    let node = backend
+        .create(
+            ParentRef::Window(window),
+            &NodeSpec::new(NodeKind::Container, Rect::new(0, 0, 40, 20)),
+        )
+        .unwrap();
+    let log = Rc::new(RefCell::new(Vec::new()));
+    backend.set_event_sink(window, Rc::new(Recorder(Rc::clone(&log))));
+
+    backend.apply_moves(window, &[(node, Rect::new(10, 10, 50, 30))]);
+    assert!(
+        log.borrow().is_empty(),
+        "a same-size move is just a reposition, not a resize"
+    );
+
+    backend.apply_moves(window, &[(node, Rect::new(10, 10, 90, 30))]);
+    assert!(
+        matches!(
+            log.borrow().last(),
+            Some((target, Event::Resize { width: 80, height: 20 })) if *target == node
+        ),
+        "a size change delivers Event::Resize to the moved node itself"
+    );
 }
