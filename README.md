@@ -13,8 +13,8 @@ snapshots and tests. Dark mode is first-class on every backend.
 
 ```text
                 ┌──────────────────────────────────────────┐
-  your app ───▶ │ xui-core: App / Ui, widgets, layout,     │
-                │ theme, input, accessibility, Backend     │
+  your app ───▶    xui-core: App / Ui, widgets, layout,      
+                    theme, input, accessibility, Backend    
                 └───────────────┬──────────────────────────┘
                                 │ Backend trait
           ┌─────────────────────┼───────────────────────┬─────────────┐
