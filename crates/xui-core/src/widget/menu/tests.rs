@@ -173,6 +173,53 @@ fn a_submenu_opens_sideways_and_selects_a_nested_item() {
 }
 
 #[test]
+fn leaving_a_submenu_returns_focus_to_its_parent() {
+    let (backend, core, ui) = setup();
+    let menu = Menu::context(&ui)
+        .on_select(|id| Some(id.0 as u32))
+        .build(|m| {
+            m.submenu(MenuId::new(1), "&More", |s| {
+                s.item(MenuId::new(2), "&Deep");
+            });
+            m.item(MenuId::new(3), "Plain");
+        });
+    let popup = menu.popup_id(0).unwrap();
+    let submenu = menu.popup_id(1).unwrap();
+    let runtime = Runtime::primary(core, TestApp(Rc::new(RefCell::new(Vec::new()))));
+    let (row, _, pad) = geometry(ui.dpi());
+
+    menu.show_context(0, 0);
+    assert_eq!(backend.focused(), Some(popup), "the root popup holds focus");
+
+    // Hovering the submenu row opens it and moves the focus to it.
+    runtime.deliver(
+        popup,
+        &Event::MouseMove {
+            x: 5,
+            y: pad + row / 2,
+            modifiers: Modifiers::NONE,
+        },
+    );
+    assert_eq!(backend.focused(), Some(submenu), "the submenu took focus");
+
+    // Hovering a plain row closes the submenu; the focus must come back to the
+    // parent, or the open menu stops receiving keys on a native backend.
+    runtime.deliver(
+        popup,
+        &Event::MouseMove {
+            x: 5,
+            y: pad + row + row / 2,
+            modifiers: Modifiers::NONE,
+        },
+    );
+    assert_eq!(
+        backend.focused(),
+        Some(popup),
+        "closing the submenu returned focus to its parent"
+    );
+}
+
+#[test]
 fn check_and_radio_items_toggle_and_clear_siblings() {
     let (_backend, core, ui) = setup();
     let toggles = Rc::new(RefCell::new(Vec::new()));
@@ -327,6 +374,39 @@ fn popups_are_created_as_transient_popup_surfaces() {
         "a dropdown is a transient surface the backend can float above the window"
     );
     assert!(!backend.is_popup(bar), "the bar itself is an ordinary node");
+}
+
+#[test]
+fn moving_over_the_open_title_does_not_reopen_the_popup() {
+    let (backend, core, ui) = setup();
+    let menu = sample_bar(&ui);
+    let bar = menu.id().unwrap();
+    let popup = menu.popup_id(0).unwrap();
+    let runtime = Runtime::primary(core, TestApp(Rc::new(RefCell::new(Vec::new()))));
+
+    runtime.deliver(bar, &down(5, 14));
+    assert!(menu.is_open());
+
+    // The pointer moves over the bar arrive continuously. Moving inside the
+    // title whose menu is already open must not hide and re-show the popup,
+    // or the drop-down flickers on every move.
+    let before = backend.move_calls();
+    for x in 6..=10 {
+        runtime.deliver(
+            bar,
+            &Event::MouseMove {
+                x,
+                y: 14,
+                modifiers: Modifiers::NONE,
+            },
+        );
+    }
+    assert_eq!(
+        backend.move_calls(),
+        before,
+        "moving within the open title must not reposition the popup"
+    );
+    assert!(visible(&backend, popup), "the popup stayed shown");
 }
 
 #[test]

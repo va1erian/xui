@@ -126,6 +126,8 @@ impl Win32Backend {
             && let Some(window) = self.windows.borrow().get(&window_id.raw())
         {
             window.shared.unregister_node(hwnd);
+            window.shared.forget_popup(hwnd);
+            window.shared.clear_key_focus(*id);
         }
     }
 

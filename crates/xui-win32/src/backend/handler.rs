@@ -10,11 +10,13 @@ use std::ffi::c_void;
 use std::rc::Rc;
 
 use windows::Win32::Graphics::Gdi::{HBRUSH, HDC, HGDIOBJ};
-use windows::Win32::UI::WindowsAndMessaging::{EN_CHANGE, WM_CTLCOLOREDIT, WM_CTLCOLORSTATIC};
+use windows::Win32::UI::WindowsAndMessaging::{
+    EN_CHANGE, WM_CTLCOLOREDIT, WM_CTLCOLORSTATIC, WM_MOVE,
+};
 
 use xui_core::backend::{Event, Painter, WidgetId, WindowId};
 use xui_core::router::WidgetHost;
-use xui_core::{Color, Rect, Theme};
+use xui_core::{Color, Point, Rect, Theme};
 
 use crate::backend::canvas::Win32Canvas;
 use crate::gdi::Paint;
@@ -36,6 +38,15 @@ pub(crate) struct WindowShared {
     /// The brush last returned for `WM_CTLCOLOR*`, kept alive for the control
     /// to paint with.
     brush: RefCell<Option<(Color, HBRUSH)>>,
+    /// The node that owns the host's keyboard input while the OS focus is on
+    /// the host window itself: a transient popup, whose top-level window must
+    /// not take activation. `None` leaves input to the host.
+    key_focus: RefCell<Option<WidgetId>>,
+    /// The host window's handle, so an open popup can be re-pinned to it.
+    host: Cell<Hwnd>,
+    /// Open popups by handle, with their host-client rectangles, so they
+    /// follow the host window when it moves.
+    popups: RefCell<HashMap<usize, Rect>>,
 }
 
 impl WindowShared {
@@ -46,7 +57,66 @@ impl WindowShared {
             nodes: RefCell::new(HashMap::new()),
             theme: Cell::new(Theme::light()),
             brush: RefCell::new(None),
+            key_focus: RefCell::new(None),
+            host: Cell::new(Hwnd::NULL),
+            popups: RefCell::new(HashMap::new()),
         })
+    }
+
+    /// Records the host window this shared state belongs to.
+    pub(crate) fn set_host(&self, hwnd: Hwnd) {
+        self.host.set(hwnd);
+    }
+
+    /// Records an open popup's host-client rectangle.
+    pub(crate) fn track_popup(&self, hwnd: Hwnd, rect: Rect) {
+        self.popups.borrow_mut().insert(hwnd.raw(), rect);
+    }
+
+    /// Forgets a popup, so a moved host no longer repositions it.
+    pub(crate) fn forget_popup(&self, hwnd: Hwnd) {
+        self.popups.borrow_mut().remove(&hwnd.raw());
+    }
+
+    /// Re-pins every open popup to the host after the host moved.
+    pub(crate) fn reposition_popups(&self) {
+        let host = self.host.get();
+        if host.is_null() {
+            return;
+        }
+        let moves: Vec<(Hwnd, Rect)> = self
+            .popups
+            .borrow()
+            .iter()
+            .map(|(raw, rect)| {
+                let at =
+                    crate::sys::window::client_to_screen(host, Point::new(rect.left, rect.top));
+                (
+                    Hwnd::from_raw(*raw),
+                    Rect::new(at.x, at.y, at.x + rect.width(), at.y + rect.height()),
+                )
+            })
+            .collect();
+        crate::sys::layout::apply(&moves);
+    }
+
+    /// Sets the node that owns the host's keyboard input, if any.
+    pub(crate) fn set_key_focus(&self, id: Option<WidgetId>) {
+        *self.key_focus.borrow_mut() = id;
+    }
+
+    /// The node that owns the host's keyboard input while the OS focus is on
+    /// the host window, if any.
+    pub(crate) fn key_focus(&self) -> Option<WidgetId> {
+        *self.key_focus.borrow()
+    }
+
+    /// Clears the host's keyboard focus when it is `id`.
+    pub(crate) fn clear_key_focus(&self, id: WidgetId) {
+        let mut focus = self.key_focus.borrow_mut();
+        if *focus == Some(id) {
+            *focus = None;
+        }
     }
 
     /// Records the window's theme.
@@ -270,15 +340,40 @@ impl WindowHandler for TopHandler {
         if matches!(&message, Message::Paint) {
             return None;
         }
+        // A popup is pinned to the host's client area, so move the open popups
+        // with the host when it is dragged. `WM_MOVE` reports the new origin.
+        if let Message::Other { code, .. } = &message
+            && *code == WM_MOVE
+        {
+            self.shared.reposition_popups();
+        }
         let is_close = matches!(&message, Message::Close);
         let event = to_event(&message)?;
-        let handled = self.shared.deliver(WidgetId::NONE, event);
+        // A transient popup never takes activation, so the OS focus stays on
+        // the host; forward the host's keyboard input to the popup the app
+        // focused, the way a native menu keeps its window active. Everything
+        // else is window-level.
+        let target = if is_keyboard(&event) {
+            self.shared.key_focus().unwrap_or(WidgetId::NONE)
+        } else {
+            WidgetId::NONE
+        };
+        let handled = self.shared.deliver(target, event);
         // With no sink to handle it, let the default close the window.
         if is_close && !handled {
             return None;
         }
         Some(0)
     }
+}
+
+/// Whether `event` is keyboard input that must reach the app's logical focus
+/// even while the OS focus is on the host window.
+fn is_keyboard(event: &Event) -> bool {
+    matches!(
+        event,
+        Event::KeyDown { .. } | Event::KeyUp { .. } | Event::Char(_)
+    )
 }
 
 /// The handler of one node window: it paints the registered painter and

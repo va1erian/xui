@@ -213,7 +213,7 @@ fn the_popup_paints_its_text_and_face() {
     backend.render(tooltip.id());
     let ops = backend.ops(tooltip.id());
     assert!(
-        ops.iter().any(|op| matches!(op, DrawOp::Rounded(..))),
+        ops.iter().any(|op| matches!(op, DrawOp::Clear(_))),
         "a popup face was painted: {ops:?}"
     );
     assert!(

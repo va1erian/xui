@@ -14,7 +14,7 @@ use std::rc::Rc;
 use windows::Win32::Foundation::{HWND, RECT};
 use windows::Win32::UI::Input::KeyboardAndMouse::GetFocus;
 use windows::Win32::UI::WindowsAndMessaging::{
-    GW_OWNER, GWL_STYLE, GetClientRect, GetWindow, GetWindowLongPtrW, WS_CHILD,
+    GW_OWNER, GWL_STYLE, GetClientRect, GetForegroundWindow, GetWindow, GetWindowLongPtrW, WS_CHILD,
 };
 
 use xui_core::app::{App, Ui};
@@ -33,8 +33,11 @@ struct Checks {
     top_level: bool,
     /// The popup is owned by the host window.
     owned: bool,
-    /// The keyboard focus moved to the popup when it opened.
-    focus_on_popup: bool,
+    /// The popup did not become the foreground window, so the host was not
+    /// deactivated by it.
+    popup_not_foreground: bool,
+    /// The OS focus stayed off the top-level popup, so the host kept focus.
+    focus_off_popup: bool,
     /// The popup's client area is exactly the node's face, so no frame clips it.
     face_is_client: bool,
     /// The later-created node is an ordinary child, not a popup.
@@ -73,7 +76,8 @@ impl App for PopupApp {
                 if let Some(hwnd) = self.backend.node_hwnd(self.popup) {
                     checks.top_level = !is_child(hwnd);
                     checks.owned = owner(hwnd) == Some(self.owner);
-                    checks.focus_on_popup = focus() == Some(hwnd);
+                    checks.popup_not_foreground = foreground() != Some(hwnd);
+                    checks.focus_off_popup = focus() != Some(hwnd);
                     let face = self.backend.bounds(self.popup);
                     checks.face_is_client = client_size(hwnd) == (face.width(), face.height());
                 }
@@ -164,12 +168,16 @@ fn a_bar_menu_popup_floats_above_a_later_node() {
     );
     assert!(checks.owned, "the popup is owned by its host window");
     assert!(
-        checks.overlay_is_child,
-        "the later node is an ordinary child, so the test exercises the overlap"
+        checks.popup_not_foreground,
+        "opening the popup must not make it the foreground window"
     );
     assert!(
-        checks.focus_on_popup,
-        "opening the menu moves the keyboard focus to the popup"
+        checks.focus_off_popup,
+        "the OS focus stays on the host; the popup is focused logically"
+    );
+    assert!(
+        checks.overlay_is_child,
+        "the later node is an ordinary child, so the test exercises the overlap"
     );
     assert!(
         checks.face_is_client,
@@ -195,6 +203,13 @@ fn owner(hwnd: Hwnd) -> Option<Hwnd> {
 fn focus() -> Option<Hwnd> {
     // SAFETY: `GetFocus` returns the thread's focus window, no arguments.
     let raw = unsafe { GetFocus() };
+    (!raw.0.is_null()).then(|| Hwnd::from_raw(raw.0 as usize))
+}
+
+/// The system's foreground window, or `None`.
+fn foreground() -> Option<Hwnd> {
+    // SAFETY: `GetForegroundWindow` takes no arguments and only reads state.
+    let raw = unsafe { GetForegroundWindow() };
     (!raw.0.is_null()).then(|| Hwnd::from_raw(raw.0 as usize))
 }
 

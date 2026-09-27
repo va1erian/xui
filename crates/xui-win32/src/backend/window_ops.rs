@@ -45,6 +45,7 @@ impl Win32Backend {
             TopHandler::new(id, Rc::clone(&shared)),
         )
         .map_err(|_| BackendError::CreateFailed("window"))?;
+        shared.set_host(window.hwnd());
         chrome::apply(spec, &window);
         resize_client(&window, width, height);
         window.show();
