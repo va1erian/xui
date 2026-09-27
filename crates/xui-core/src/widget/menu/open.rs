@@ -13,6 +13,12 @@ use crate::geometry::{Point, Rect};
 
 /// Opens the menu of bar title `index`.
 pub(super) fn open_bar<M: 'static>(rt: &Rc<Runtime<M>>, index: usize) {
+    // Re-opening the title whose menu is already open would hide and re-show
+    // its popup. The pointer moves over the bar fire continuously, so that
+    // churn flickers the open drop-down; leave the stack untouched instead.
+    if rt.view.borrow().bar_open == Some(index) {
+        return;
+    }
     close_levels_from(rt, 0);
     let title = {
         let model = rt.model.borrow();

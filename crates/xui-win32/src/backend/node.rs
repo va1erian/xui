@@ -245,9 +245,11 @@ fn create_popup(
     // ran `WM_NCCALCSIZE` before it, so the frame would still be visible.
     sys::nc::reframe(window.hwnd());
     // Show only after the painter has run, so the first frame is the finished
-    // face rather than the class background.
+    // face rather than the class background. A popup never activates its host.
     if spec.visible {
-        window.show_painted();
+        sys::first_show::show_painted(window.hwnd(), || {
+            sys::window::show(window.hwnd(), sys::window::ShowKind::NoActivate);
+        });
     } else {
         sys::window::show(window.hwnd(), sys::window::ShowKind::Hidden);
     }

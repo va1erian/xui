@@ -237,7 +237,16 @@ fn hover<M: 'static>(rt: &Rc<Runtime<M>>, depth: usize, index: usize) {
     invalidate_level(rt, depth);
     match node_info(rt, depth, index) {
         Some(info) if info.kind == Kind::Submenu && info.enabled => open_submenu(rt, depth, index),
-        _ => close_levels_from(rt, depth + 1),
+        _ => {
+            let had_submenu = rt.view.borrow().levels.len() > depth + 1;
+            close_levels_from(rt, depth + 1);
+            // The closed submenu held the host's keyboard focus (a native popup
+            // is focused logically, not by taking activation); hand it back to
+            // this level, or the open menu would stop receiving keys.
+            if had_submenu {
+                focus_level(rt, depth);
+            }
+        }
     }
 }
 

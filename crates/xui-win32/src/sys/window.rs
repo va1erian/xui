@@ -15,9 +15,9 @@ use windows::Win32::UI::WindowsAndMessaging::{
     CS_DBLCLKS, CreateWindowExW, DestroyWindow, GA_ROOT, GWL_STYLE, GetAncestor, GetClientRect,
     GetWindowLongPtrW, GetWindowRect, GetWindowTextLengthW, GetWindowTextW, HCURSOR, HMENU,
     HWND_BOTTOM, HWND_TOP, IDC_ARROW, KillTimer, LoadCursorW, MoveWindow, RegisterClassExW,
-    SW_HIDE, SW_SHOW, SW_SHOWMAXIMIZED, SW_SHOWMINNOACTIVE, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE,
-    SetTimer, SetWindowLongPtrW, SetWindowPos, SetWindowTextW, ShowWindow, UnregisterClassW,
-    WINDOW_EX_STYLE, WINDOW_STYLE, WNDCLASSEXW, WS_TABSTOP,
+    SW_HIDE, SW_SHOW, SW_SHOWMAXIMIZED, SW_SHOWMINNOACTIVE, SW_SHOWNOACTIVATE, SWP_NOACTIVATE,
+    SWP_NOMOVE, SWP_NOSIZE, SetTimer, SetWindowLongPtrW, SetWindowPos, SetWindowTextW, ShowWindow,
+    UnregisterClassW, WINDOW_EX_STYLE, WINDOW_STYLE, WNDCLASSEXW, WS_TABSTOP,
 };
 use windows::core::{HSTRING, PCWSTR};
 
@@ -32,6 +32,9 @@ use super::{raw_hwnd, win32, win32_error};
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum ShowKind {
     Normal,
+    /// Shown without activating, so a transient popup never takes the host's
+    /// activation (a `SW_SHOW` would, despite `WS_EX_NOACTIVATE`).
+    NoActivate,
     Minimized,
     Maximized,
     Hidden,
@@ -560,6 +563,7 @@ pub(crate) fn is_maximized(hwnd: Hwnd) -> bool {
 pub(crate) fn show(hwnd: Hwnd, kind: ShowKind) {
     let cmd = match kind {
         ShowKind::Normal => SW_SHOW,
+        ShowKind::NoActivate => SW_SHOWNOACTIVATE,
         ShowKind::Minimized => SW_SHOWMINNOACTIVE,
         ShowKind::Maximized => SW_SHOWMAXIMIZED,
         ShowKind::Hidden => SW_HIDE,

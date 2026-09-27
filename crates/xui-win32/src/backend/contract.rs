@@ -13,6 +13,7 @@ use xui_core::image::Image;
 use xui_core::router::WidgetHost;
 use xui_core::{Dip, Point, Px, Rect, Theme};
 
+use super::handler::WindowShared;
 use super::node::BackendNode;
 use super::{Win32Backend, cursor::cursor_shape, text};
 use crate::sys;
@@ -189,9 +190,14 @@ impl Backend for Win32Backend {
                     // A popup is a top-level window: the core works in host
                     // client coordinates, so convert its rect to the screen.
                     let rect = if node.is_popup {
-                        let host = windows.get(&node.window_id.raw())?.window.hwnd();
-                        let at =
-                            sys::window::client_to_screen(host, Point::new(rect.left, rect.top));
+                        let entry = windows.get(&node.window_id.raw())?;
+                        // Track the host-client rect so the popup follows the
+                        // host window on a move.
+                        entry.shared.track_popup(node.hwnd, *rect);
+                        let at = sys::window::client_to_screen(
+                            entry.window.hwnd(),
+                            Point::new(rect.left, rect.top),
+                        );
                         Rect::new(at.x, at.y, at.x + rect.width(), at.y + rect.height())
                     } else {
                         *rect
@@ -212,9 +218,11 @@ impl Backend for Win32Backend {
         if let Some((hwnd, is_popup)) = entry {
             if visible && is_popup {
                 // Paint the finished face before the popup is composed, so its
-                // first frame is never the class background.
+                // first frame is never the class background. Show it without
+                // activating: a plain `SW_SHOW` would steal the host's
+                // activation and flicker its chrome on every open/switch.
                 sys::first_show::show_painted(hwnd, || {
-                    sys::window::show(hwnd, sys::window::ShowKind::Normal);
+                    sys::window::show(hwnd, sys::window::ShowKind::NoActivate);
                 });
             } else {
                 let kind = if visible {
@@ -223,6 +231,14 @@ impl Backend for Win32Backend {
                     sys::window::ShowKind::Hidden
                 };
                 sys::window::show(hwnd, kind);
+            }
+        }
+        if !visible {
+            self.clear_key_focus(id);
+            if let Some((hwnd, true)) = entry
+                && let Some(shared) = self.node_shared(id)
+            {
+                shared.forget_popup(hwnd);
             }
         }
     }
@@ -271,7 +287,32 @@ impl Backend for Win32Backend {
     }
 
     fn focus(&self, id: WidgetId) {
-        if let Some((hwnd, _)) = self.node(id) {
+        let Some((hwnd, is_popup, window)) = self
+            .nodes
+            .borrow()
+            .get(&id.raw())
+            .map(|node| (node.hwnd, node.is_popup, node.window_id))
+        else {
+            return;
+        };
+        let shared = self
+            .windows
+            .borrow()
+            .get(&window.raw())
+            .map(|entry| Rc::clone(&entry.shared));
+        let Some(shared) = shared else {
+            return;
+        };
+        if is_popup {
+            // A top-level popup must not take activation, or the host window
+            // would lose focus. Keep the OS focus on the host and route its
+            // keyboard input to the popup instead, as a native menu does.
+            shared.set_key_focus(Some(id));
+            if let Some(host) = self.window_hwnd(window) {
+                sys::window::set_focus(host);
+            }
+        } else {
+            shared.set_key_focus(None);
             sys::window::set_focus(hwnd);
         }
     }
@@ -372,5 +413,28 @@ impl Backend for Win32Backend {
 
     fn supports(&self, kind: NodeKind) -> ImplKind {
         BackendNode::impl_kind(kind)
+    }
+}
+
+impl Win32Backend {
+    /// The shared state of the window that owns `id`, if it still exists.
+    fn node_shared(&self, id: WidgetId) -> Option<Rc<WindowShared>> {
+        let window = self
+            .nodes
+            .borrow()
+            .get(&id.raw())
+            .map(|node| node.window_id)?;
+        self.windows
+            .borrow()
+            .get(&window.raw())
+            .map(|entry| Rc::clone(&entry.shared))
+    }
+
+    /// Drops the host window's logical keyboard focus when it is `id`, so a
+    /// hidden or destroyed popup stops receiving the host's key input.
+    fn clear_key_focus(&self, id: WidgetId) {
+        if let Some(shared) = self.node_shared(id) {
+            shared.clear_key_focus(id);
+        }
     }
 }

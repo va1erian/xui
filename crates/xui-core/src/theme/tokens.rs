@@ -57,10 +57,10 @@ pub struct Theme {
     pub border: Color,
     /// Focused border (accent outline: matches [`Theme::accent`]).
     pub border_focused: Color,
-    /// Drop shadow cast by an elevated, transient surface (menus, combo popups,
-    /// tooltips). It is the shadow's base colour; the popup painter supplies
-    /// the soft alpha falloff, so the token stays opaque. WinUI draws these
-    /// shadows in black at a low opacity (light/dark `#000000`).
+    /// Base colour of the drop shadow an elevated, transient surface (menus,
+    /// combo popups, tooltips) may cast. WinUI draws these shadows in black at
+    /// a low opacity (light/dark `#000000`); the platform's own window shadow
+    /// is used where it exists, so the portable painter draws none.
     pub shadow: Color,
     /// Input background: edits, address bar (light `#FFFFFF`, dark `#1F1F1F`).
     pub input_background: Color,
