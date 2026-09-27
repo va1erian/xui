@@ -15,6 +15,7 @@ use xui_canvas::{OffscreenBackend, RgbaImage};
 use xui_core::app::{App, Ui, run_app};
 use xui_core::backend::{Backend, PlatformSpec};
 use xui_core::geometry::Rect;
+use xui_core::image::Image;
 use xui_core::widget::{
     Button, CheckBox, ColorPicker, ComboBox, Dialog, Edit, FlowText, Glyph, GridView, GroupBox,
     Hyperlink, Label, ListView, MaterialStatusBar, Menu, MenuId, MultilineEdit, NumberField, Panel,
@@ -25,6 +26,23 @@ use xui_core::{Color, Dip, Theme};
 
 fn rect(left: i32, top: i32, right: i32, bottom: i32) -> Rect {
     Rect::new(left, top, right, bottom)
+}
+
+/// A 16x16 two-tone artwork icon built in memory, so the gallery exercises an
+/// `Image` row icon (and the backend's decoded-image cache) beside the glyphs.
+fn art_image() -> Image {
+    let mut pixels = Vec::new();
+    for y in 0..16 {
+        for x in 0..16 {
+            let (r, g, b) = if (x / 4 + y / 4) % 2 == 0 {
+                (0x7A, 0xC8, 0xE8)
+            } else {
+                (0x2A, 0x62, 0xA8)
+            };
+            pixels.extend_from_slice(&[r, g, b, 255]);
+        }
+    }
+    Image::from_rgba(16, 16, pixels).expect("16x16 RGBA")
 }
 
 /// The widgets, kept alive for the whole `run_app` call: dropping one destroys
@@ -114,7 +132,7 @@ fn build(ui: &Ui<()>) -> Vec<Box<dyn Any>> {
                 .expanded(true)
                 .icon(Glyph::Folder),
             TreeRow::new("Work", 1).icon(Glyph::Tag),
-            TreeRow::new("Home", 1).icon(Glyph::People),
+            TreeRow::new("Home", 1).icon(art_image()),
             TreeRow::new("Archive", 0)
                 .expandable(true)
                 .icon(Glyph::History),

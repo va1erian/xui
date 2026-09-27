@@ -330,4 +330,47 @@ mod tests {
             "a whole painter must run in one BeginDraw/EndDraw"
         );
     }
+
+    /// A painter that draws images stays in its one open frame, and the same
+    /// image drawn again — the same row icon on the next paint — uploads its
+    /// device bitmap once, the regression the portable image cache targets.
+    #[test]
+    fn image_draws_share_the_frame_and_upload_once() {
+        use xui_core::backend::Canvas as _;
+        use xui_core::image::Image;
+
+        const SIZE: i32 = 16;
+        let image = Image::from_rgba(4, 4, [0xE0, 0x10, 0xF0, 0xFF].repeat(16)).unwrap();
+        let Some(memory) = MemoryDc::new(SIZE, SIZE) else {
+            return;
+        };
+        let canvas = crate::gdi::Canvas::new(memory.dc);
+        // Skip when Direct2D is unavailable: the GDI fallback has no frames.
+        if canvas.d2d().is_none() {
+            return;
+        }
+        let frames = frames_started();
+        let uploads = crate::sys::d2d::bitmap::bitmaps_created();
+        for _ in 0..2 {
+            let mut win =
+                crate::backend::canvas::Win32Canvas::new(&canvas, Rect::new(0, 0, SIZE, SIZE), 96);
+            win.clear(Color::rgb(0x10, 0x10, 0x10));
+            win.draw_image(&image, Rect::new(0, 0, SIZE, SIZE));
+        }
+        assert_eq!(
+            frames_started() - frames,
+            2,
+            "an image draw must not close and reopen the painter's frame"
+        );
+        assert_eq!(
+            crate::sys::d2d::bitmap::bitmaps_created() - uploads,
+            1,
+            "the same image must upload one device bitmap, not one per paint"
+        );
+        assert_eq!(
+            memory.pixel(4, 4),
+            (0xE0, 0x10, 0xF0),
+            "the cached draw must still land its pixels"
+        );
+    }
 }

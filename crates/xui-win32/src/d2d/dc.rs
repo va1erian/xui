@@ -26,8 +26,10 @@ use crate::error::Result;
 use crate::geometry::Rect;
 use crate::sys;
 use crate::sys::d2d::{EndDraw, Target};
+use xui_core::image::Image;
 
-use super::{PointF, RectF, Stroke};
+use super::bitmap::{ImageId, Raster};
+use super::{Interpolation, PointF, RectF, Stroke};
 
 /// One anti-aliased paint onto a device context.
 ///
@@ -126,6 +128,29 @@ impl DcCanvas {
     /// Draws a line.
     pub fn draw_line(&mut self, from: PointF, to: PointF, color: Color, stroke: Stroke) {
         self.with(|target| target.line(from, to, color, stroke));
+    }
+
+    /// Draws `image` scaled into `dest`, inside the open frame.
+    ///
+    /// The image is premultiplied and uploaded to the thread's DC target once
+    /// and then cached, keyed by the image's identity — the id a portable
+    /// [`Canvas`](xui_core::backend::Canvas) hands down with the pixels — so
+    /// the same image drawn on every repaint costs one cached `DrawBitmap`
+    /// instead of a fresh upload. The surface-level cache behind
+    /// [`D2dCanvas::image`](super::D2dCanvas::image) only draws through its
+    /// own window target, so the two id spaces never share this cache.
+    pub fn draw_image(&mut self, image: &Image, dest: RectF) {
+        let raster = Raster::new(image.width(), image.height(), image.pixels());
+        self.with(|target| {
+            target.draw_image(
+                ImageId(image.id()),
+                raster,
+                dest,
+                None,
+                1.0,
+                Interpolation::Linear,
+            )
+        });
     }
 
     /// Restricts drawing to `rect` until the matching

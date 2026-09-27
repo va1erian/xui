@@ -17,13 +17,6 @@ use xui_core::{Color, Point, Rect};
 
 use super::canvas::Win32Canvas;
 
-/// One entry on the canvas's clip stack: the device-space bounds used to cull
-/// a shape and, for a rounded clip, the corners that mask it.
-pub(crate) struct Clip {
-    pub(crate) bounds: Rect,
-    pub(crate) corners: Option<[Corner; 4]>,
-}
-
 impl Win32Canvas<'_> {
     pub(crate) fn point(&self, point: Point) -> Point {
         Point::new(
@@ -41,7 +34,7 @@ impl Win32Canvas<'_> {
         );
         self.clips
             .last()
-            .map_or(mapped, |clip| intersect(mapped, clip.bounds))
+            .map_or(mapped, |clip| intersect(mapped, *clip))
     }
 
     /// The painter's shared Direct2D frame, or `None` when Direct2D is
@@ -94,7 +87,7 @@ impl Win32Canvas<'_> {
     pub(crate) fn ellipse_clipped_out(&self, bounds: Rect) -> bool {
         self.clips
             .last()
-            .is_some_and(|clip| intersect(bounds, clip.bounds).is_empty())
+            .is_some_and(|clip| intersect(bounds, *clip).is_empty())
     }
 }
 

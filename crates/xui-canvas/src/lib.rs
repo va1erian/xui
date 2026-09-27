@@ -18,6 +18,7 @@
 mod backend;
 mod canvas;
 mod gl;
+mod image_cache;
 mod offscreen;
 mod paint;
 mod sys;
@@ -62,9 +63,12 @@ impl RgbaImage {
 }
 
 /// A software surface: a rectangle being painted, filled from a background and
-/// then drawn into with a [`SkiaCanvas`].
+/// then drawn into with a [`SkiaCanvas`]. The surface also carries the decoded
+/// images its painters draw, so an image uploads once and every repaint
+/// reuses it.
 pub struct Surface {
     pixmap: Pixmap,
+    images: image_cache::ImageCache,
 }
 
 impl Surface {
@@ -72,7 +76,10 @@ impl Surface {
     pub fn new(width: u32, height: u32) -> Surface {
         let mut pixmap = Pixmap::new(width.max(1), height.max(1)).expect("pixmap");
         pixmap.fill(tiny_skia::Color::TRANSPARENT);
-        Surface { pixmap }
+        Surface {
+            pixmap,
+            images: image_cache::ImageCache::new(),
+        }
     }
 
     /// Fills the whole surface with `color`.
@@ -88,7 +95,7 @@ impl Surface {
         dpi: u32,
         draw: impl FnOnce(&mut SkiaCanvas) -> R,
     ) -> R {
-        let mut canvas = SkiaCanvas::new(&mut self.pixmap, bounds, dpi);
+        let mut canvas = SkiaCanvas::new(&mut self.pixmap, &mut self.images, bounds, dpi);
         draw(&mut canvas)
     }
 

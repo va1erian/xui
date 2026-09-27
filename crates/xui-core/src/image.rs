@@ -16,10 +16,19 @@
 //! [`Canvas::draw_image`]: crate::backend::Canvas::draw_image
 
 use std::fmt;
+use std::sync::atomic::{AtomicU64, Ordering};
+
+/// Issues image identities: process-wide and unique per build of an image, so
+/// a backend can key its decoded-image cache by one.
+static NEXT_ID: AtomicU64 = AtomicU64::new(1);
 
 /// An RGBA8 bitmap, row-major with the origin at the top-left.
-#[derive(Clone, Debug, PartialEq, Eq)]
+///
+/// An image never changes after construction and a clone copies the identity
+/// with the pixels, so equal identities mean equal pixels; see [`Image::id`].
+#[derive(Clone)]
 pub struct Image {
+    id: u64,
     width: u32,
     height: u32,
     pixels: Vec<u8>,
@@ -56,10 +65,22 @@ impl Image {
             return Err(ImageError::Size);
         }
         Ok(Image {
+            id: NEXT_ID.fetch_add(1, Ordering::Relaxed),
             width,
             height,
             pixels,
         })
+    }
+
+    /// An identity for this image's pixels: unique per build, kept by clones.
+    ///
+    /// Backends cache the decoded (and uploaded) form of an image keyed by
+    /// this, so drawing the same image on every repaint — a row icon, a tile's
+    /// art — costs one cache lookup instead of a fresh decode. Equal ids mean
+    /// equal pixels; distinct ids say nothing (two separately built images with
+    /// the same pixels get different ids).
+    pub fn id(&self) -> u64 {
+        self.id
     }
 
     /// The width in pixels.
@@ -193,6 +214,26 @@ impl Image {
     }
 }
 
+/// Two images are equal by their pixels; the identity is not part of it, so
+/// two separately built images with the same pixels stay equal.
+impl PartialEq for Image {
+    fn eq(&self, other: &Image) -> bool {
+        self.width == other.width && self.height == other.height && self.pixels == other.pixels
+    }
+}
+
+impl Eq for Image {}
+
+impl fmt::Debug for Image {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Image")
+            .field("width", &self.width)
+            .field("height", &self.height)
+            .field("pixels", &self.pixels)
+            .finish()
+    }
+}
+
 fn mix(a: u8, b: u8, t: f32) -> u8 {
     (a as f32 + (b as f32 - a as f32) * t)
         .round()
@@ -285,5 +326,17 @@ mod tests {
         assert_eq!(Image::from_rgba(1, 1, vec![0; 3]), Err(ImageError::Size));
         assert!(Image::decode_png(b"not a png").is_err());
         assert!(Image::decode(b"not an image").is_err());
+    }
+
+    #[test]
+    fn clones_keep_their_identity_and_rebuilds_get_their_own() {
+        let image = Image::from_rgba(1, 1, vec![1, 2, 3, 255]).unwrap();
+        assert_eq!(image.clone().id(), image.id());
+
+        // The same pixels built again are an equal image with an identity of
+        // its own: equality stays by pixels, only the cache key differs.
+        let rebuilt = Image::from_rgba(1, 1, vec![1, 2, 3, 255]).unwrap();
+        assert_eq!(rebuilt, image);
+        assert_ne!(rebuilt.id(), image.id());
     }
 }

@@ -24,6 +24,7 @@ mod path;
 mod surface;
 mod text;
 
+pub(crate) use bitmap::Raster;
 pub use bitmap::{ImageId, Interpolation};
 pub use brush::{ExtendMode, GradientStop, LinearGradient, RadialGradient, Rgba};
 pub use canvas::D2dCanvas;

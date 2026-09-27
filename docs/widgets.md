@@ -114,7 +114,8 @@ let tree = TreeView::new(ui, rect, &[
 - `icon(impl Into<RowIcon>)` puts a leading icon before a row's label:
   `RowIcon::Glyph(Glyph::Folder)` draws a themed vector shape (pass a `Glyph`
   directly), and `RowIcon::Image(Image)` draws a decoded bitmap in its own
-  colours.
+  colours — uploaded once per image and cached by the backend (keyed by the
+  image's identity), so per-row art stays cheap on every repaint.
 - Indent guides are selection-aware: they blend into the selected or hovered
   row's fill instead of crossing it with a high-contrast `border` line.
 - Runtime: `selected`, `select`, `checked`, `set_checked`, `set_rows`,
