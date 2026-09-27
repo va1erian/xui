@@ -15,7 +15,7 @@ use tiny_skia::Pixmap;
 use xui_core::backend::{FontSpec, Rgba, TextHit, TextLayout, TextShaper};
 use xui_core::geometry::{Point, Rect};
 
-use crate::text::{TextSystem, attrs_for, blend, line_height};
+use crate::text::{GlyphClip, TextSystem, attrs_for, blend, line_height};
 
 /// A `Send + Sync` cosmic-text shaper. Cloning shares the font system.
 #[derive(Clone)]
@@ -147,8 +147,15 @@ impl TextLayout for CosmicLayout {
     }
 }
 
-/// Draws `layout` on `pixmap` with its top-left corner at `origin`, in `color`.
-pub(crate) fn draw_layout(pixmap: &mut Pixmap, layout: &CosmicLayout, origin: Point, color: Rgba) {
+/// Draws `layout` on `pixmap` with its top-left corner at `origin`, in `color`,
+/// clamping each glyph block to `clip`.
+pub(crate) fn draw_layout(
+    pixmap: &mut Pixmap,
+    layout: &CosmicLayout,
+    origin: Point,
+    color: Rgba,
+    clip: GlyphClip<'_>,
+) {
     let mut buffer = layout.buffer.lock().unwrap_or_else(PoisonError::into_inner);
     if buffer.layout_runs().next().is_none() {
         return;
@@ -166,12 +173,12 @@ pub(crate) fn draw_layout(pixmap: &mut Pixmap, layout: &CosmicLayout, origin: Po
             }
             blend(
                 pixmap,
-                origin.x + x,
-                origin.y + y,
+                Point::new(origin.x + x, origin.y + y),
                 w,
                 h,
                 [color.r, color.g, color.b],
                 alpha,
+                clip,
             );
         },
     );

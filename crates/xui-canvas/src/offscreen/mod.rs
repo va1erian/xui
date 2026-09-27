@@ -27,7 +27,7 @@ mod geometry;
 #[cfg(test)]
 mod tests;
 
-use crate::backend::geometry::{absolute_bounds, ancestor_clip, intersect};
+use crate::backend::geometry::{absolute_bounds, ancestor_clip, hit_bounds, intersect};
 use geometry::translate;
 
 /// The default dots-per-inch a surface is rendered at.
@@ -161,15 +161,16 @@ impl OffscreenBackend {
                 if painter.is_none() && !gl {
                     return None;
                 }
+                let bounds = absolute_bounds(&nodes, *id)?;
                 let clip = ancestor_clip(&nodes, *id);
                 if let Some(clip) = clip
-                    && intersect(node.bounds, clip).is_empty()
+                    && intersect(bounds, clip).is_empty()
                 {
                     return None;
                 }
                 Some(Draw {
                     id: *id,
-                    bounds: node.bounds,
+                    bounds,
                     clip,
                     painter,
                     gl,
@@ -265,16 +266,13 @@ impl OffscreenBackend {
             }
             None => {
                 let nodes = self.nodes.borrow();
-                nodes
-                    .iter()
-                    .rev()
-                    .find(|(_, node)| {
-                        node.window == window
-                            && node.visible
-                            && node.enabled
-                            && node.bounds.contains(xui_core::Point::new(x, y))
-                    })
-                    .map(|(id, node)| (*id, x - node.bounds.left, y - node.bounds.top))
+                nodes.iter().rev().find_map(|(id, node)| {
+                    if node.window != window {
+                        return None;
+                    }
+                    let abs = hit_bounds(&nodes, *id, x, y)?;
+                    Some((*id, x - abs.left, y - abs.top))
+                })
             }
         };
         let Some((target, lx, ly)) = target else {

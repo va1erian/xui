@@ -10,11 +10,20 @@ use std::cell::RefCell;
 
 use cosmic_text::{
     Align, Attrs, Buffer, Color, Family, FontSystem, Metrics, Shaping, Style, SwashCache, Weight,
+    Wrap,
 };
-use tiny_skia::{Pixmap, PremultipliedColorU8};
+use tiny_skia::{Mask, Pixmap, PremultipliedColorU8};
 
 use xui_core::backend::{TextAlign, TextMetrics, TextStyle, TextVAlign, TextWeight};
-use xui_core::geometry::Rect;
+use xui_core::geometry::{Point, Rect};
+
+/// The active clip for a glyph blit: the device-space bounds every glyph is
+/// clamped to, and the rounded-clip coverage mask when one is active.
+#[derive(Clone, Copy)]
+pub(crate) struct GlyphClip<'a> {
+    pub(crate) bounds: Option<Rect>,
+    pub(crate) mask: Option<&'a Mask>,
+}
 
 thread_local! {
     static TEXT: RefCell<TextSystem> = RefCell::new(TextSystem::new());
@@ -94,8 +103,15 @@ pub fn measure(text: &str, style: &TextStyle, dpi: u32, max_width: i32) -> TextM
             &mut text_system.font_system,
             Metrics::new(size, line_height(size)),
         );
-        let wrap = style.wrap.then_some(max_width.max(1) as f32);
-        buffer.set_size(wrap, None);
+        // Size to `max_width` even without wrapping: alignment corrects against
+        // the buffer width, while `Wrap::None` keeps a non-wrapping run on one
+        // line. `run.line_w` stays the run's own advance either way.
+        buffer.set_size(Some(max_width.max(1) as f32), None);
+        buffer.set_wrap(if style.wrap {
+            Wrap::WordOrGlyph
+        } else {
+            Wrap::None
+        });
         buffer.set_text(text, &attrs(style), Shaping::Advanced, align_of(style));
         buffer.shape_until_scroll(&mut text_system.font_system, false);
         for run in buffer.layout_runs() {
@@ -113,8 +129,15 @@ pub fn measure(text: &str, style: &TextStyle, dpi: u32, max_width: i32) -> TextM
 }
 
 /// Draws `text` inside `rect` on `pixmap`, blending the glyph coverage of
-/// `style` over what is already there.
-pub fn draw(pixmap: &mut Pixmap, text: &str, rect: Rect, style: &TextStyle, dpi: u32) {
+/// `style` over what is already there and clamping each glyph block to `clip`.
+pub fn draw(
+    pixmap: &mut Pixmap,
+    text: &str,
+    rect: Rect,
+    style: &TextStyle,
+    dpi: u32,
+    clip: GlyphClip<'_>,
+) {
     if text.is_empty() || rect.is_empty() {
         return;
     }
@@ -126,8 +149,14 @@ pub fn draw(pixmap: &mut Pixmap, text: &str, rect: Rect, style: &TextStyle, dpi:
         let text_system = &mut *text_system.borrow_mut();
         let metrics = Metrics::new(size, line_height(size));
         let mut buffer = Buffer::new(&mut text_system.font_system, metrics);
-        let wrap = style.wrap.then_some(rect_w.max(1) as f32);
-        buffer.set_size(wrap, None);
+        // Size to the target rect even without wrapping so alignment corrects
+        // against it; only `style.wrap` lets the run break across lines.
+        buffer.set_size(Some(rect_w.max(1) as f32), None);
+        buffer.set_wrap(if style.wrap {
+            Wrap::WordOrGlyph
+        } else {
+            Wrap::None
+        });
         buffer.set_text(text, &attrs(style), Shaping::Advanced, align_of(style));
         buffer.shape_until_scroll(&mut text_system.font_system, false);
 
@@ -148,12 +177,12 @@ pub fn draw(pixmap: &mut Pixmap, text: &str, rect: Rect, style: &TextStyle, dpi:
                 }
                 blend(
                     pixmap,
-                    rect_left + x,
-                    rect_top + top_offset + y,
+                    Point::new(rect_left + x, rect_top + top_offset + y),
                     w,
                     h,
                     [color_r, color_g, color_b],
                     alpha,
+                    clip,
                 );
             },
         );
@@ -161,18 +190,27 @@ pub fn draw(pixmap: &mut Pixmap, text: &str, rect: Rect, style: &TextStyle, dpi:
 }
 
 /// Blends `color` with coverage `alpha` (0..=255) over a `w` x `h` glyph block
-/// at `(left, top)`, clipped to the pixmap.
+/// at `origin`, clipped to the pixmap and to `clip`.
 pub(crate) fn blend(
     pixmap: &mut Pixmap,
-    left: i32,
-    top: i32,
+    origin: Point,
     w: u32,
     h: u32,
     color: [u8; 3],
     alpha: u32,
+    clip: GlyphClip<'_>,
 ) {
+    let (left, top) = (origin.x, origin.y);
     let (pw, ph) = (pixmap.width() as i32, pixmap.height() as i32);
-    let a = alpha as f32 / 255.0;
+    // A whole block beyond the clip rectangle needs no per-pixel work.
+    if let Some(bounds) = clip.bounds
+        && (left + w as i32 <= bounds.left
+            || top + h as i32 <= bounds.top
+            || left >= bounds.right
+            || top >= bounds.bottom)
+    {
+        return;
+    }
     let pixels = pixmap.pixels_mut();
     for gy in 0..h as i32 {
         for gx in 0..w as i32 {
@@ -180,7 +218,19 @@ pub(crate) fn blend(
             if x < 0 || y < 0 || x >= pw || y >= ph {
                 continue;
             }
+            if let Some(bounds) = clip.bounds
+                && (x < bounds.left || y < bounds.top || x >= bounds.right || y >= bounds.bottom)
+            {
+                continue;
+            }
             let at = (y * pw + x) as usize;
+            let coverage = clip
+                .mask
+                .map_or(255, |mask| mask.data().get(at).copied().unwrap_or(0));
+            if coverage == 0 {
+                continue;
+            }
+            let a = (alpha * coverage as u32) as f32 / 65025.0;
             let dst = pixels[at];
             let mix = |index: usize, channel: u8| {
                 let source = channel as f32 * a;
