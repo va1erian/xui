@@ -2,7 +2,7 @@
 
 //! The headless backend's recording canvas and its draw-op log.
 
-use crate::backend::canvas::{Canvas, TextStyle};
+use crate::backend::canvas::{Canvas, TextMetrics, TextStyle};
 use crate::backend::paint::{Corner, LinearGradient, RadialGradient, Rgba, Stroke};
 use crate::backend::text::TextLayout;
 use crate::color::Color;
@@ -256,6 +256,10 @@ impl Canvas for RecordingCanvas {
         let rect = self.rect(rect);
         self.ops
             .push(DrawOp::Text(rect, text.to_string(), style.color));
+    }
+
+    fn measure_text(&self, text: &str, style: &TextStyle) -> TextMetrics {
+        super::text::estimate_metrics(text, style, self.dpi)
     }
 
     fn draw_layout(&mut self, _layout: &dyn TextLayout, origin: Point, color: Rgba) {

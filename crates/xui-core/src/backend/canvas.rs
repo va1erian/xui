@@ -259,6 +259,16 @@ pub trait Canvas {
     /// Draws `text` inside `rect` using `style`.
     fn draw_text(&mut self, text: &str, rect: Rect, style: &TextStyle);
 
+    /// Measures `text` set in `style`, at this surface's own DPI, without
+    /// drawing it.
+    ///
+    /// A widget that must decide whether a run fits before painting it (an
+    /// end-ellipsis truncation, for instance) uses this instead of
+    /// [`Backend::measure_text`](super::Backend::measure_text) because a
+    /// painted widget's painter closure only ever receives a `Canvas`, never
+    /// the backend or `Ui` it was built with.
+    fn measure_text(&self, text: &str, style: &TextStyle) -> TextMetrics;
+
     /// Draws a shaped [`TextLayout`] with its top-left corner at `origin`, in
     /// `color`. A backend whose text path cannot blend treats the colour as
     /// opaque.

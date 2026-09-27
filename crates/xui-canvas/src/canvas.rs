@@ -13,7 +13,8 @@ use tiny_skia::{
 };
 
 use xui_core::backend::{
-    Canvas, Corner, LinearGradient, RadialGradient, Rgba, Stroke, TextLayout, TextStyle,
+    Canvas, Corner, LinearGradient, RadialGradient, Rgba, Stroke, TextLayout, TextMetrics,
+    TextStyle,
 };
 use xui_core::color::Color;
 use xui_core::geometry::{Point, Rect};
@@ -317,6 +318,10 @@ impl Canvas for SkiaCanvas<'_> {
                 mask: self.mask.as_ref(),
             },
         );
+    }
+
+    fn measure_text(&self, text: &str, style: &TextStyle) -> TextMetrics {
+        crate::text::measure(text, style, self.dpi, i32::MAX)
     }
 
     fn draw_layout(&mut self, layout: &dyn TextLayout, origin: Point, color: Rgba) {

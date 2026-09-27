@@ -232,6 +232,43 @@ fn cell_text_is_clipped_to_its_column() {
     );
 }
 
+#[test]
+fn a_cell_too_narrow_for_its_text_is_ellipsized_not_clipped_bare() {
+    let (backend, _core, ui) = setup();
+    let model: Vec<Vec<String>> = vec![vec!["abcdefghij".into(), "b".into()]];
+    let list = ListView::with_model(&ui, Rect::new(0, 0, 200, 120), model)
+        .unwrap()
+        .column("A", Dip::new(40.0))
+        .column("B", super::Fill);
+
+    backend.render(list.id());
+    // 10 chars at the headless measurer's 6px advance would take 60px, far
+    // wider than the 28px the 40px-wide column leaves after its padding, so
+    // the cell must be cut short and end with the ellipsis, not the raw text.
+    let drawn = texts(&backend, list.id());
+    assert!(
+        drawn.iter().any(|text| text.ends_with('\u{2026}')),
+        "expected an ellipsized cell among {drawn:?}"
+    );
+    assert!(
+        !drawn.contains(&"abcdefghij".to_string()),
+        "the overflowing text must not be drawn in full: {drawn:?}"
+    );
+}
+
+#[test]
+fn a_cell_that_fits_draws_unchanged() {
+    let (backend, _core, ui) = setup();
+    let model: Vec<Vec<String>> = vec![vec!["short".into(), "b".into()]];
+    let list = ListView::with_model(&ui, Rect::new(0, 0, 300, 120), model)
+        .unwrap()
+        .column("A", Dip::new(200.0))
+        .column("B", super::Fill);
+
+    backend.render(list.id());
+    assert!(texts(&backend, list.id()).contains(&"short".to_string()));
+}
+
 /// Whether every text op is inside the innermost clip open when it was drawn.
 fn every_text_is_clipped(ops: &[DrawOp]) -> bool {
     let mut clips: Vec<Rect> = Vec::new();

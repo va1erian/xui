@@ -217,15 +217,7 @@ impl Backend for HeadlessBackend {
     }
 
     fn measure_text(&self, text: &str, style: &TextStyle, dpi: u32) -> TextMetrics {
-        let height = (style.size.to_px(dpi).value() as f32 * 1.25).round() as i32;
-        let width = (text.chars().count() as f32 * style.size.to_px(dpi).value() as f32 * 0.5)
-            .round() as i32;
-        TextMetrics {
-            width,
-            height,
-            ascent: height * 3 / 4,
-            descent: height / 4,
-        }
+        super::text::estimate_metrics(text, style, dpi)
     }
 
     fn text_shaper(&self) -> Box<dyn TextShaper> {

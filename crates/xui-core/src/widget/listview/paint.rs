@@ -2,11 +2,25 @@
 
 //! The list view's painter: the header row, then only the visible body rows.
 
+use super::ellipsis;
 use super::state::{PADDING, ROW, State, TEXT_SIZE, column_spans, column_widths, header_px};
 use crate::backend::{Canvas, TextAlign, TextStyle};
 use crate::geometry::{Point, Rect};
 use crate::theme::Theme;
 use crate::widget::scrollbar;
+
+/// Draws `text` truncated with an end-ellipsis when it is wider than `rect`,
+/// clipping the cell either way so a truncation that still slightly overshoots
+/// (the measurer and the rasterizer can disagree by a pixel or two) never
+/// bleeds into the next column.
+fn draw_cell_text(canvas: &mut dyn Canvas, text: &str, cell: Rect, rect: Rect, style: &TextStyle) {
+    canvas.push_clip(cell);
+    let fitted = ellipsis::truncate(text, rect.width(), &mut |candidate| {
+        canvas.measure_text(candidate, style).width
+    });
+    canvas.draw_text(&fitted, rect, style);
+    canvas.pop_clip();
+}
 
 /// Draws `state` into `canvas`. Only the visible rows are touched, so a large
 /// model costs the same as a small one.
@@ -97,11 +111,9 @@ fn paint_header(canvas: &mut dyn Canvas, state: &State, theme: &Theme, rect: Rec
         let cell = Rect::new(rect.left + left, rect.top, rect.left + right, rect.bottom);
         let text = Rect::new(cell.left + pad, cell.top, cell.right - pad, cell.bottom);
         let style = aligned(TextStyle::new(theme.text, TEXT_SIZE).middle(), column);
-        // A long title must not run into the next column: clip the cell. The
-        // clip is cheap now that the backend draws a whole node in one frame.
-        canvas.push_clip(cell);
-        canvas.draw_text(&column.title, text, &style);
-        canvas.pop_clip();
+        // A long title must not run into the next column: ellipsize it, and
+        // clip the cell too in case the measurer and rasterizer disagree.
+        draw_cell_text(canvas, &column.title, cell, text, &style);
         if state.sort.is_some_and(|(sorted, _)| sorted == index) {
             paint_sort_arrow(canvas, state.sort, cell, theme, dpi);
         }
@@ -170,9 +182,13 @@ fn paint_row(
         }
         let text = Rect::new(rect.left + pad, rect.top, rect.right - pad, rect.bottom);
         let style = TextStyle::new(color, TEXT_SIZE).middle();
-        canvas.push_clip(rect);
-        canvas.draw_text(state.rows.cell(row, 0).unwrap_or(""), text, &style);
-        canvas.pop_clip();
+        draw_cell_text(
+            canvas,
+            state.rows.cell(row, 0).unwrap_or(""),
+            rect,
+            text,
+            &style,
+        );
         return;
     }
 
@@ -191,10 +207,15 @@ fn paint_row(
         let cell = Rect::new(rect.left + left, rect.top, rect.left + right, rect.bottom);
         let text = Rect::new(cell.left + pad, cell.top, cell.right - pad, cell.bottom);
         let style = aligned(TextStyle::new(color, TEXT_SIZE).middle(), column);
-        // Clip the cell so a long value cannot overlap the next column.
-        canvas.push_clip(cell);
-        canvas.draw_text(state.rows.cell(row, index).unwrap_or(""), text, &style);
-        canvas.pop_clip();
+        // A long value must not run into the next column: ellipsize it, and
+        // clip the cell too in case the measurer and rasterizer disagree.
+        draw_cell_text(
+            canvas,
+            state.rows.cell(row, index).unwrap_or(""),
+            cell,
+            text,
+            &style,
+        );
     }
 }
 
