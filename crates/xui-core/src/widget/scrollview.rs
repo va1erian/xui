@@ -18,22 +18,19 @@ use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use super::control::Control;
+use super::scrollbar::{self, Bar, Metrics};
 use crate::app::Ui;
 use crate::backend::{NodeKind, NodeSpec, Result, WidgetId};
 use crate::geometry::Rect;
 use crate::layout::Stack;
 use crate::property::{Properties, Property, Value};
 use crate::units::{Dip, Px};
-use view::{bar_event, paint_bar, paint_viewport, set_offset, viewport_event};
+use view::{bar_event, paint_viewport, set_offset, viewport_event};
 
-/// The scrollbar's width.
-const BAR: Dip = Dip(12.0);
 /// How far one wheel notch scrolls.
 const WHEEL_STEP: Dip = Dip(48.0);
 /// How far an arrow key scrolls.
 const LINE_STEP: Dip = Dip(24.0);
-/// The shortest the thumb may shrink to.
-const MIN_THUMB: Dip = Dip(24.0);
 
 type ScrollMapper<M> = RefCell<Option<Box<dyn Fn(Px) -> Option<M>>>>;
 
@@ -46,21 +43,27 @@ struct Row {
 /// State the view, its scrollbar and their painters and mappers share.
 struct Shared<M: 'static> {
     id: WidgetId,
-    bar_id: WidgetId,
     /// The content viewport in the view's own coordinates (excludes the bar).
     viewport: Cell<Rect>,
-    /// The scrollbar's rectangle in the view's own coordinates.
-    bar: Cell<Rect>,
     /// The content's total height in pixels.
     content: Cell<i32>,
     /// The scroll offset in pixels.
     offset: Cell<i32>,
+    /// The scrollbar's geometry and drag.
+    bar: Bar,
     rows: RefCell<Vec<Row>>,
-    /// The pointer coordinate a thumb drag started at, while dragging.
-    drag: Cell<Option<i32>>,
-    /// The offset when the drag started.
-    drag_offset: Cell<i32>,
     on_scroll: ScrollMapper<M>,
+}
+
+impl<M: 'static> Shared<M> {
+    /// The scroll metrics of the viewport.
+    fn metrics(&self) -> Metrics {
+        Metrics {
+            viewport: self.viewport.get().height(),
+            content: self.content.get(),
+            offset: self.offset.get(),
+        }
+    }
 }
 
 /// A container with a scrollable content area and a vertical scrollbar.
@@ -76,20 +79,17 @@ impl<M: 'static> ScrollView<M> {
     pub fn new(ui: &Ui<M>, bounds: Rect) -> Result<ScrollView<M>> {
         let control = Control::new(ui, &NodeSpec::new(NodeKind::ScrollView, bounds).tab_stop())?;
         let scoped = ui.with_parent(control.id());
-        let bar = Control::new(
+        let bar_node = Control::new(
             &scoped,
             &NodeSpec::new(NodeKind::Container, Rect::default()),
         )?;
         let shared = Rc::new(Shared {
             id: control.id(),
-            bar_id: bar.id(),
             viewport: Cell::new(bounds),
-            bar: Cell::new(Rect::default()),
             content: Cell::new(0),
             offset: Cell::new(0),
+            bar: Bar::new(bar_node.id()),
             rows: RefCell::new(Vec::new()),
-            drag: Cell::new(None),
-            drag_offset: Cell::new(0),
             on_scroll: RefCell::new(None),
         });
         {
@@ -99,8 +99,8 @@ impl<M: 'static> ScrollView<M> {
         {
             let shared = Rc::clone(&shared);
             let theme = ui.theme_handle();
-            bar.set_painter(Rc::new(move |canvas| {
-                paint_bar(&shared, canvas, theme.get())
+            bar_node.set_painter(Rc::new(move |canvas| {
+                scrollbar::paint(canvas, shared.metrics(), theme.get())
             }));
         }
         {
@@ -111,12 +111,12 @@ impl<M: 'static> ScrollView<M> {
         {
             let shared = Rc::clone(&shared);
             let ui = ui.clone();
-            bar.on_events(move |event| bar_event(&shared, &ui, event));
+            bar_node.on_events(move |event| bar_event(&shared, &ui, event));
         }
-        ui.raise(shared.bar_id);
+        ui.raise(shared.bar.id());
         Ok(ScrollView {
             control,
-            _bar: bar,
+            _bar: bar_node,
             scoped,
             shared,
         })
@@ -136,7 +136,7 @@ impl<M: 'static> ScrollView<M> {
     pub fn add(&self, id: WidgetId, height: Dip) {
         self.shared.rows.borrow_mut().push(Row { id, height });
         relayout(&self.scoped, &self.shared);
-        self.scoped.raise(self.shared.bar_id);
+        self.scoped.raise(self.shared.bar.id());
     }
 
     /// The content's total height.
@@ -224,7 +224,11 @@ fn relayout<M>(ui: &Ui<M>, s: &Shared<M>) {
         .map(|row| row.height.to_px(dpi).value().max(0))
         .sum();
     let overflows = content > bounds.height();
-    let bar_width = if overflows { BAR.to_px(dpi).value() } else { 0 };
+    let bar_width = if overflows {
+        scrollbar::BAR.to_px(dpi).value()
+    } else {
+        0
+    };
     let viewport = Rect::new(
         bounds.left,
         bounds.top,
@@ -236,9 +240,9 @@ fn relayout<M>(ui: &Ui<M>, s: &Shared<M>) {
     let offset = s.offset.get().clamp(0, max_offset);
     s.content.set(content);
     s.viewport.set(viewport);
-    s.bar.set(bar);
+    s.bar.set_track(bar.width(), bar.height());
     s.offset.set(offset);
-    ui.set_visible(s.bar_id, overflows);
+    ui.set_visible(s.bar.id(), overflows);
 
     let rows = s.rows.borrow();
     let mut stack = Stack::vertical();
@@ -255,7 +259,7 @@ fn relayout<M>(ui: &Ui<M>, s: &Shared<M>) {
 
     let mut moves: Vec<(WidgetId, Rect)> = Vec::with_capacity(rows.len() + 1);
     if overflows {
-        moves.push((s.bar_id, bar));
+        moves.push((s.bar.id(), bar));
     }
     for (row, rect) in rows.iter().zip(rects) {
         let rect = rect.offset(0, -offset);
@@ -266,5 +270,5 @@ fn relayout<M>(ui: &Ui<M>, s: &Shared<M>) {
         moves.push((row.id, rect));
     }
     ui.apply_moves(&moves);
-    ui.invalidate(s.bar_id);
+    ui.invalidate(s.bar.id());
 }

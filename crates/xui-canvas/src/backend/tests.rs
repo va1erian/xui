@@ -21,3 +21,11 @@ fn a_default_window_keeps_its_decorations() {
     assert_eq!(state.decorations, Decorations::System);
     assert_eq!(state.caption_inset, dip(0.0));
 }
+
+#[test]
+fn window_state_records_whether_the_window_is_resizable() {
+    assert!(WindowState::new(&PlatformSpec::new("t")).resizable);
+    let mut spec = PlatformSpec::new("t");
+    spec.resizable = false;
+    assert!(!WindowState::new(&spec).resizable);
+}

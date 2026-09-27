@@ -32,6 +32,8 @@ const ICON: Dip = Dip(16.0);
 const ICON_GAP: Dip = Dip(6.0);
 /// The design size of a row's label text.
 pub(crate) const TEXT: Dip = Dip(12.0);
+/// Visible rows scrolled per wheel notch.
+pub(crate) const WHEEL_ROWS: usize = 3;
 
 /// One materialized row: a flat [`TreeRow`] or a loaded model node.
 #[derive(Clone, Debug)]
@@ -87,6 +89,8 @@ pub(crate) enum Source {
 pub(crate) struct State {
     pub(crate) rows: Vec<FlatNode>,
     pub(crate) source: Source,
+    /// The first visible slot drawn, i.e. the scroll position.
+    pub(crate) offset: usize,
 }
 
 impl State {
@@ -100,6 +104,7 @@ impl State {
         State {
             rows,
             source: Source::Flat,
+            offset: 0,
         }
     }
 
@@ -116,7 +121,35 @@ impl State {
         State {
             rows,
             source: Source::Model(model),
+            offset: 0,
         }
+    }
+
+    /// The number of visible rows: the roots and every loaded descendant whose
+    /// ancestors are expanded.
+    pub(crate) fn visible_len(&self) -> usize {
+        (0..self.rows.len())
+            .filter(|index| is_visible(&self.rows, *index))
+            .count()
+    }
+
+    /// Clamps the scroll offset so it never leaves a blank body of `visible`
+    /// slots.
+    pub(crate) fn clamp_offset(&mut self, visible: usize) {
+        let max = self.visible_len().saturating_sub(visible.max(1));
+        self.offset = self.offset.min(max);
+    }
+
+    /// Scrolls just enough that the visible slot `slot` is fully inside a body
+    /// `visible` slots tall.
+    pub(crate) fn scroll_to_slot(&mut self, slot: usize, visible: usize) {
+        let visible = visible.max(1);
+        if slot < self.offset {
+            self.offset = slot;
+        } else if slot >= self.offset + visible {
+            self.offset = slot + 1 - visible;
+        }
+        self.clamp_offset(visible);
     }
 
     /// The raw index of the row with `id`, whether or not it is visible.
@@ -231,13 +264,13 @@ pub(crate) fn guide_x(dpi: u32, left: i32, level: u16) -> i32 {
     level_x(dpi, left, level) + px(CHEVRON, dpi) / 2
 }
 
-/// The raw index of the row drawn at `y`, before the visibility filter.
-pub(crate) fn row_at(dpi: u32, y: i32, count: usize) -> Option<usize> {
+/// The visible slot drawn at `y`, after the scroll `offset`.
+pub(crate) fn row_at(dpi: u32, y: i32, count: usize, offset: usize) -> Option<usize> {
     if y < 0 {
         return None;
     }
-    let index = (y / px(ROW, dpi).max(1)) as usize;
-    (index < count).then_some(index)
+    let slot = offset + (y / px(ROW, dpi).max(1)) as usize;
+    (slot < count).then_some(slot)
 }
 
 /// Whether the row at `index` is shown: every ancestor row (the nearest

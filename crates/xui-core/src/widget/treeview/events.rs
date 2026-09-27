@@ -13,6 +13,7 @@ use crate::app::Ui;
 use crate::backend::{Event, WidgetId};
 use crate::geometry::Point;
 use crate::message::{Key, MouseButton};
+use crate::widget::scrollbar::Bar;
 
 /// The shared handles an event mapper reads and writes.
 pub(crate) struct Input<M: 'static> {
@@ -25,11 +26,16 @@ pub(crate) struct Input<M: 'static> {
     pub(crate) checkboxes: Rc<Cell<bool>>,
     pub(crate) tri_state: Rc<Cell<bool>>,
     pub(crate) mappers: Rc<Mappers<M>>,
+    pub(crate) bar: Rc<Bar>,
 }
 
 impl<M: 'static> Input<M> {
     /// Maps one backend event to the app's message.
     pub(crate) fn handle(&self, event: &Event) -> Option<M> {
+        if let Event::Resize { .. } = event {
+            self.sync_bar();
+            return None;
+        }
         // In design mode the editor handles input, not the widget.
         if (self.ui.is_design_mode() && event.is_input()) || !self.enabled.get() {
             return None;
@@ -56,6 +62,11 @@ impl<M: 'static> Input<M> {
                 self.ui.invalidate(self.id);
                 None
             }
+            Event::MouseWheel {
+                delta,
+                horizontal: false,
+                ..
+            } => self.wheel(*delta),
             Event::KeyDown { repeat, system, .. } if *repeat <= 1 && !*system => {
                 self.key_down(event)
             }
@@ -66,10 +77,14 @@ impl<M: 'static> Input<M> {
     fn mouse_down(&self, event: &Event) -> Option<M> {
         let (x, y) = event.position()?;
         let dpi = self.ui.dpi();
-        let (slot, index) = {
+        let (slot, index, offset) = {
             let state = self.state.borrow();
-            let slot = flatten::row_at(dpi, y, state.rows.len())?;
-            (slot, flatten::slot_to_index(&state.rows, slot)?)
+            let slot = flatten::row_at(dpi, y, state.rows.len(), state.offset)?;
+            (
+                slot,
+                flatten::slot_to_index(&state.rows, slot)?,
+                state.offset,
+            )
         };
         let (id, depth, expandable, expanded) = {
             let state = self.state.borrow();
@@ -81,7 +96,7 @@ impl<M: 'static> Input<M> {
         }
         if self.checkboxes.get() {
             let row_height = flatten::ROW.to_px(dpi).value().max(1);
-            let top = slot as i32 * row_height;
+            let top = (slot - offset) as i32 * row_height;
             if flatten::checkbox_rect(dpi, 0, top, depth).contains(Point::new(x, y)) {
                 return self.toggle_check(index);
             }
@@ -102,7 +117,7 @@ impl<M: 'static> Input<M> {
         let dpi = self.ui.dpi();
         let (id, at) = {
             let state = self.state.borrow();
-            let slot = flatten::row_at(dpi, y, state.rows.len())?;
+            let slot = flatten::row_at(dpi, y, state.rows.len(), state.offset)?;
             let index = flatten::slot_to_index(&state.rows, slot)?;
             (state.rows[index].id, Point::new(x, y))
         };
@@ -118,7 +133,8 @@ impl<M: 'static> Input<M> {
             let id = self.selected.get()?;
             let index = state.find(id)?;
             let slot = flatten::index_to_slot(&state.rows, index)?;
-            let y = (slot as i32 + 1) * flatten::ROW.to_px(dpi).value().max(1);
+            let row = slot.saturating_sub(state.offset);
+            let y = (row as i32 + 1) * flatten::ROW.to_px(dpi).value().max(1);
             (id, Point::new(0, y))
         };
         self.emit_context(id, at)
@@ -167,6 +183,7 @@ impl<M: 'static> Input<M> {
                         self.selected.set(Some(id));
                         self.ui.invalidate(self.id);
                     }
+                    self.scroll_selection_into_view();
                 }
                 None
             }
@@ -194,9 +211,12 @@ impl<M: 'static> Input<M> {
             if !state.set_expanded(index, expanded) {
                 return None;
             }
+            let visible = self.visible_slots();
+            state.clamp_offset(visible);
             state.rows[index].id
         };
         self.ui.invalidate(self.id);
+        self.sync_bar();
         self.mappers
             .toggle
             .borrow()
@@ -227,9 +247,64 @@ impl<M: 'static> Input<M> {
     fn id_at(&self, y: i32) -> Option<NodeId> {
         let dpi = self.ui.dpi();
         let state = self.state.borrow();
-        let slot = flatten::row_at(dpi, y, state.rows.len())?;
+        let slot = flatten::row_at(dpi, y, state.rows.len(), state.offset)?;
         let index = flatten::slot_to_index(&state.rows, slot)?;
         Some(state.rows[index].id)
+    }
+
+    /// Re-lays the bar out after the visible row count changed.
+    fn sync_bar(&self) {
+        super::bar::layout(&self.ui, self.id, &self.bar, &self.state.borrow());
+        self.ui.invalidate(self.bar.id());
+    }
+
+    /// How many whole rows fit in the body.
+    fn visible_slots(&self) -> usize {
+        let row_px = flatten::ROW.to_px(self.ui.dpi()).value().max(1);
+        ((self.ui.bounds(self.id).height().max(0) / row_px) as usize).max(1)
+    }
+
+    /// Scrolls the wheel by `delta` notches.
+    fn wheel(&self, delta: i16) -> Option<M> {
+        let visible = self.visible_slots();
+        let mut state = self.state.borrow_mut();
+        let max = state.visible_len().saturating_sub(visible);
+        let step = i64::from(delta) * flatten::WHEEL_ROWS as i64;
+        let next = (state.offset as i64 - step).clamp(0, max as i64) as usize;
+        if next != state.offset {
+            state.offset = next;
+            drop(state);
+            self.ui.invalidate(self.id);
+            self.ui.invalidate(self.bar.id());
+        }
+        None
+    }
+
+    /// Scrolls just enough that the selected row is fully visible.
+    fn scroll_selection_into_view(&self) {
+        let Some(id) = self.selected.get() else {
+            return;
+        };
+        let slot = {
+            let state = self.state.borrow();
+            state
+                .find(id)
+                .and_then(|index| flatten::index_to_slot(&state.rows, index))
+        };
+        let visible = self.visible_slots();
+        let changed = {
+            let mut state = self.state.borrow_mut();
+            let before = state.offset;
+            match slot {
+                Some(slot) => state.scroll_to_slot(slot, visible),
+                None => state.clamp_offset(visible),
+            }
+            state.offset != before
+        };
+        if changed {
+            self.ui.invalidate(self.id);
+            self.ui.invalidate(self.bar.id());
+        }
     }
 }
 

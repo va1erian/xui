@@ -92,6 +92,8 @@ pub(crate) struct WindowState {
     pub(crate) window: Option<Rc<Window>>,
     /// Whether the window shows the system title bar.
     pub(crate) decorations: Decorations,
+    /// Whether the user may resize the window.
+    pub(crate) resizable: bool,
     /// The custom caption band height the app asked for.
     pub(crate) caption_inset: Dip,
     /// The node the pointer is over, so a `MouseLeave` can be sent on exit.
@@ -126,6 +128,7 @@ impl WindowState {
             sink: None,
             window: None,
             decorations: spec.decorations,
+            resizable: spec.resizable,
             caption_inset: spec.caption_inset,
             hover: None,
             focused: None,

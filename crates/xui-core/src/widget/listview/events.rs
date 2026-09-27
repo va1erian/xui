@@ -7,6 +7,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use super::Mappers;
+use super::bar;
 use super::model::SelectionMode;
 use super::resize;
 use super::state::{
@@ -16,6 +17,7 @@ use crate::app::Ui;
 use crate::backend::{Cursor, Event, WidgetId};
 use crate::geometry::Point;
 use crate::message::{Key, Modifiers, MouseButton};
+use crate::widget::scrollbar::Bar;
 
 /// Builds the event closure a [`ListView`](super::ListView) registers.
 pub(crate) fn mapper<M: 'static>(
@@ -23,13 +25,18 @@ pub(crate) fn mapper<M: 'static>(
     id: WidgetId,
     state: Rc<RefCell<State>>,
     mappers: Rc<Mappers<M>>,
+    bar: Rc<Bar>,
 ) -> impl Fn(&Event) -> Option<M> + 'static {
     move |event| {
+        if let Event::Resize { .. } = event {
+            bar::layout(&ui, id, &bar, &state.borrow());
+            return None;
+        }
         // In design mode the editor handles input, not the widget.
         if (ui.is_design_mode() && event.is_input()) || !state.borrow().enabled {
             return None;
         }
-        handle(&ui, id, &state, &mappers, event)
+        handle(&ui, id, &state, &mappers, &bar, event)
     }
 }
 
@@ -38,6 +45,7 @@ fn handle<M: 'static>(
     id: WidgetId,
     state: &Rc<RefCell<State>>,
     mappers: &Mappers<M>,
+    bar: &Bar,
     event: &Event,
 ) -> Option<M> {
     let dpi = ui.dpi();
@@ -112,6 +120,7 @@ fn handle<M: 'static>(
                         state.ensure_visible(row, visible);
                     }
                     ui.invalidate(id);
+                    ui.invalidate(bar.id());
                     selection_message(mappers, &state.borrow())
                 }
                 _ => None,
@@ -235,6 +244,7 @@ fn handle<M: 'static>(
                 state.offset = next;
                 drop(state);
                 ui.invalidate(id);
+                ui.invalidate(bar.id());
             }
             None
         }
@@ -243,7 +253,7 @@ fn handle<M: 'static>(
             modifiers,
             repeat,
             system,
-        } if *repeat <= 1 && !*system => handle_key(ui, id, state, mappers, *key, *modifiers),
+        } if *repeat <= 1 && !*system => handle_key(ui, id, state, mappers, bar, *key, *modifiers),
         _ => None,
     }
 }
@@ -253,6 +263,7 @@ fn handle_key<M: 'static>(
     id: WidgetId,
     state: &Rc<RefCell<State>>,
     mappers: &Mappers<M>,
+    bar: &Bar,
     key: Key,
     modifiers: Modifiers,
 ) -> Option<M> {
@@ -315,6 +326,7 @@ fn handle_key<M: 'static>(
         }
     }
     ui.invalidate(id);
+    ui.invalidate(bar.id());
     if state.borrow().selected == before {
         None
     } else {

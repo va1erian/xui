@@ -21,11 +21,13 @@ use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use super::control::Control;
+use super::scrollbar::{self, Bar};
 use crate::app::Ui;
 use crate::backend::{NodeKind, NodeSpec, Result, WidgetId};
 use crate::geometry::{Point, Rect};
 use crate::property::{Properties, Property, Value};
 
+mod bar;
 mod events;
 mod flatten;
 mod icon;
@@ -68,6 +70,8 @@ impl<M> Mappers<M> {
 /// A flattened, fixed-row-height tree over flat rows or a virtual model.
 pub struct TreeView<M: 'static> {
     control: Control<M>,
+    _bar: Control<M>,
+    bar: Rc<Bar>,
     state: Rc<RefCell<State>>,
     selected: Rc<Cell<Option<NodeId>>>,
     hover: Rc<Cell<Option<NodeId>>>,
@@ -96,6 +100,10 @@ impl<M: 'static> TreeView<M> {
 
     fn build(ui: &Ui<M>, bounds: Rect, state: State) -> Result<TreeView<M>> {
         let control = Control::new(ui, &NodeSpec::new(NodeKind::TreeView, bounds).tab_stop())?;
+        let bar_control = Control::new(
+            &ui.with_parent(control.id()),
+            &NodeSpec::new(NodeKind::Container, Rect::default()),
+        )?;
         let state = Rc::new(RefCell::new(state));
         let selected = Rc::new(Cell::new(None));
         let hover = Rc::new(Cell::new(None));
@@ -104,6 +112,7 @@ impl<M: 'static> TreeView<M> {
         let tri_state = Rc::new(Cell::new(false));
         let guides = Rc::new(Cell::new(true));
         let mappers = Rc::new(Mappers::new());
+        let bar = Rc::new(Bar::new(bar_control.id()));
 
         {
             let state = Rc::clone(&state);
@@ -131,6 +140,16 @@ impl<M: 'static> TreeView<M> {
             }));
         }
         {
+            let state = Rc::clone(&state);
+            let id = control.id();
+            let scoped = ui.clone();
+            let theme = ui.theme_handle();
+            bar_control.set_painter(Rc::new(move |canvas| {
+                let metrics = bar::metrics(&scoped, id, &state.borrow());
+                scrollbar::paint(canvas, metrics, theme.get());
+            }));
+        }
+        {
             let input = events::Input {
                 ui: ui.clone(),
                 id: control.id(),
@@ -141,12 +160,27 @@ impl<M: 'static> TreeView<M> {
                 checkboxes: Rc::clone(&checkboxes),
                 tri_state: Rc::clone(&tri_state),
                 mappers: Rc::clone(&mappers),
+                bar: Rc::clone(&bar),
             };
             control.on_events(move |event| input.handle(event));
         }
+        {
+            let mapper = bar::mapper(
+                ui.clone(),
+                control.id(),
+                Rc::clone(&bar),
+                Rc::clone(&state),
+                Rc::clone(&enabled),
+            );
+            bar_control.on_events(mapper);
+        }
+        bar::layout(ui, control.id(), &bar, &state.borrow());
+        ui.raise(bar.id());
 
         Ok(TreeView {
             control,
+            _bar: bar_control,
+            bar,
             state,
             selected,
             hover,
@@ -249,6 +283,7 @@ impl<M: 'static> TreeView<M> {
             .filter(|id| self.state.borrow().find(*id).is_some());
         self.selected.set(keep);
         self.control.invalidate();
+        self.sync_bar();
     }
 
     /// Replaces the tree with a model, reading its roots now and clearing the
@@ -258,6 +293,7 @@ impl<M: 'static> TreeView<M> {
         self.selected.set(None);
         self.hover.set(None);
         self.control.invalidate();
+        self.sync_bar();
     }
 
     /// The number of materialized rows, hidden descendants included.
@@ -273,6 +309,16 @@ impl<M: 'static> TreeView<M> {
     /// The tree's node identity.
     pub fn id(&self) -> WidgetId {
         self.control.id()
+    }
+
+    /// Re-lays the scrollbar out from the tree's current bounds and rows.
+    fn sync_bar(&self) {
+        bar::layout(
+            self.control.ui(),
+            self.control.id(),
+            &self.bar,
+            &self.state.borrow(),
+        );
     }
 
     /// Enables or disables the tree; a disabled tree is dimmed and ignores input.

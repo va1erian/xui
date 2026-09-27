@@ -4,17 +4,72 @@
 //! focus, pointer capture and modifier state, and turning `winit` events into
 //! the portable [`Event`] vocabulary.
 
+use std::rc::Rc;
+
 use winit::event::{ElementState, MouseButton as WinitButton, MouseScrollDelta};
 use winit::keyboard::Key as WinitKey;
-use winit::window::CursorIcon;
+use winit::window::{CursorIcon, ResizeDirection, Window};
 
-use xui_core::backend::{Event, WidgetId};
+use xui_core::backend::{Decorations, Event, WidgetId, WindowId};
 use xui_core::message::MouseButton;
 
 use super::App;
-use super::keymap::{cursor_icon, mouse_button, virtual_key};
+use super::keymap::{
+    RESIZE_BORDER_PX, cursor_icon, mouse_button, resize_cursor, resize_direction, virtual_key,
+};
 
 impl App<'_> {
+    /// The window's live `winit` window, if it has one yet.
+    fn window_handle(&self, raw: u64) -> Option<Rc<Window>> {
+        self.shared
+            .windows
+            .borrow()
+            .get(&raw)
+            .and_then(|state| state.window.clone())
+    }
+
+    /// The native resize direction for a pointer at `(x, y)`, but only for a
+    /// borderless window: a decorated one has system borders that already do
+    /// this, and its client coordinates do not include them.
+    fn resize_direction_at(&self, raw: u64, x: i32, y: i32) -> Option<ResizeDirection> {
+        let (width, height, resizable, borderless) = {
+            let windows = self.shared.windows.borrow();
+            let state = windows.get(&raw)?;
+            (
+                state.size.0,
+                state.size.1,
+                state.resizable,
+                state.decorations == Decorations::None,
+            )
+        };
+        if !borderless {
+            return None;
+        }
+        resize_direction(x, y, width, height, RESIZE_BORDER_PX, resizable)
+    }
+
+    /// Shows `icon` on the window the pointer is over.
+    fn set_window_cursor(&self, raw: u64, icon: CursorIcon) {
+        if let Some(handle) = self.window_handle(raw) {
+            handle.set_cursor(icon);
+        }
+    }
+
+    /// Replaces the hovered node, sending `MouseLeave` to the one left behind.
+    fn set_hover(&self, raw: u64, window: WindowId, target: Option<WidgetId>) {
+        let previous = self
+            .shared
+            .windows
+            .borrow_mut()
+            .get_mut(&raw)
+            .and_then(|state| std::mem::replace(&mut state.hover, target));
+        if previous != target
+            && let Some(previous) = previous
+        {
+            self.shared.deliver(window, previous, &Event::MouseLeave);
+        }
+    }
+
     /// Moves the keyboard focus to `id`, telling the old and new holders.
     fn set_focus(&self, raw: u64, id: WidgetId) {
         let previous = self
@@ -48,15 +103,7 @@ impl App<'_> {
                 .unwrap_or(CursorIcon::Default),
             None => CursorIcon::Default,
         };
-        let handle = self
-            .shared
-            .windows
-            .borrow()
-            .get(&raw)
-            .and_then(|state| state.window.clone());
-        if let Some(handle) = handle {
-            handle.set_cursor(icon);
-        }
+        self.set_window_cursor(raw, icon);
     }
 
     pub(super) fn cursor_moved(&mut self, raw: u64, x: f64, y: f64) {
@@ -80,19 +127,16 @@ impl App<'_> {
             self.apply_cursor(raw, Some(captured));
             return;
         }
+        // The frame of a borderless resizable window resizes it, so the pointer
+        // shows a resize cursor and does not reach the node under it.
+        if let Some(direction) = self.resize_direction_at(raw, x, y) {
+            self.set_hover(raw, window, None);
+            self.set_window_cursor(raw, resize_cursor(direction));
+            return;
+        }
         let target = self.shared.hit_test(window, x, y);
         let target_id = target.map(|(id, _, _)| id);
-        let previous = self
-            .shared
-            .windows
-            .borrow_mut()
-            .get_mut(&raw)
-            .and_then(|state| std::mem::replace(&mut state.hover, target_id));
-        if previous != target_id
-            && let Some(previous) = previous
-        {
-            self.shared.deliver(window, previous, &Event::MouseLeave);
-        }
+        self.set_hover(raw, window, target_id);
         if let Some((id, lx, ly)) = target {
             self.shared.deliver(
                 window,
@@ -111,6 +155,20 @@ impl App<'_> {
         let window = Self::window_id(raw);
         let (x, y) = (self.cursor.0 as i32, self.cursor.1 as i32);
         let captured = *self.shared.captured.borrow();
+        let Some(button) = mouse_button(button) else {
+            return;
+        };
+        // A left-button press in the frame of a borderless resizable window
+        // starts a native resize, as the system border would on a decorated one.
+        if state == ElementState::Pressed
+            && button == MouseButton::Left
+            && captured.is_none()
+            && let Some(direction) = self.resize_direction_at(raw, x, y)
+            && let Some(handle) = self.window_handle(raw)
+        {
+            let _ = handle.drag_resize_window(direction);
+            return;
+        }
         let target = match captured {
             Some(id) => self
                 .shared
@@ -121,25 +179,15 @@ impl App<'_> {
         let Some((id, lx, ly)) = target else {
             return;
         };
-        let Some(button) = mouse_button(button) else {
-            return;
-        };
         // A left-button press on a drag region moves the whole window, as a
         // title bar's empty area does, instead of reaching the node.
         if state == ElementState::Pressed
             && button == MouseButton::Left
             && captured.is_none()
             && self.shared.is_drag_region(id)
+            && let Some(handle) = self.window_handle(raw)
         {
-            let handle = self
-                .shared
-                .windows
-                .borrow()
-                .get(&raw)
-                .and_then(|state| state.window.clone());
-            if let Some(handle) = handle {
-                let _ = handle.drag_window();
-            }
+            let _ = handle.drag_window();
             return;
         }
         let event = if state == ElementState::Pressed {

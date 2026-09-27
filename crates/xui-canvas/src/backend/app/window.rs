@@ -26,12 +26,17 @@ impl App<'_> {
             if self.windows.contains_key(&raw) {
                 continue;
             }
-            let (title, size, decorations) = {
+            let (title, size, decorations, resizable) = {
                 let windows = self.shared.windows.borrow();
                 let Some(state) = windows.get(&raw) else {
                     continue;
                 };
-                (state.title.clone(), state.size, state.decorations)
+                (
+                    state.title.clone(),
+                    state.size,
+                    state.decorations,
+                    state.resizable,
+                )
             };
             // A requested backdrop (Acrylic/Mica) is approximated by the opaque
             // theme background on platforms without the DWM material; softbuffer
@@ -39,6 +44,7 @@ impl App<'_> {
             let attributes = WindowAttributes::default()
                 .with_title(title)
                 .with_inner_size(LogicalSize::new(f64::from(size.0), f64::from(size.1)))
+                .with_resizable(resizable)
                 .with_decorations(decorations == Decorations::System);
             let Ok(window) = event_loop.create_window(attributes) else {
                 continue;
@@ -55,6 +61,24 @@ impl App<'_> {
             // first frame, so its widgets lay out at the real scale.
             self.fire_ready(raw);
             self.redraw(raw);
+        }
+    }
+
+    /// Drops the OS window of any backend window that has been closed.
+    ///
+    /// The backend's `close_window` removes the window state, but the handler's
+    /// [`RealWindow`] holds its own `Rc<winit::Window>` clones (through the
+    /// `softbuffer` context and surface), so the OS window survives it. Dropping
+    /// the `RealWindow` releases those clones and destroys the window, so a
+    /// closed secondary window leaves the screen instead of staying frozen.
+    pub(super) fn reconcile_windows(&mut self) {
+        let tracked = self.shared.windows.borrow();
+        let stale = stale_windows(self.windows.keys().copied(), |raw| {
+            tracked.contains_key(&raw)
+        });
+        drop(tracked);
+        for raw in stale {
+            self.windows.remove(&raw);
         }
     }
 
@@ -104,6 +128,17 @@ pub(super) fn dpi_from_scale(scale_factor: f64) -> u32 {
     (scale_factor * f64::from(DEFAULT_DPI)).round().max(1.0) as u32
 }
 
+/// The raw ids in `real` whose backend window is absent from `tracked`: the
+/// handler holds an OS window for each, so one the backend no longer tracks has
+/// been closed and must be destroyed. Pure, so it is tested without an event
+/// loop.
+fn stale_windows(
+    real: impl IntoIterator<Item = u64>,
+    mut tracked: impl FnMut(u64) -> bool,
+) -> Vec<u64> {
+    real.into_iter().filter(|raw| !tracked(*raw)).collect()
+}
+
 /// The window's `(size, dpi)` from its scale factor.
 fn window_metrics(window: &Window) -> ((u32, u32), u32) {
     let size = window.inner_size();
@@ -151,5 +186,22 @@ mod tests {
         let rect = Rect::new(16, 12, 380, 40);
         assert_eq!(scale_rect(rect, 2.0), Rect::new(32, 24, 760, 80));
         assert_eq!(scale_rect(rect, 1.25), Rect::new(20, 15, 475, 50));
+    }
+
+    #[test]
+    fn a_backend_window_that_is_gone_is_stale() {
+        let live = [1u64, 3];
+        let stale = stale_windows([1, 2, 3], |raw| live.contains(&raw));
+        assert_eq!(stale, [2], "the closed secondary window is dropped");
+    }
+
+    #[test]
+    fn windows_the_backend_still_tracks_are_kept() {
+        assert!(stale_windows([1, 2], |_| true).is_empty());
+    }
+
+    #[test]
+    fn a_handler_window_with_no_backend_state_is_stale() {
+        assert_eq!(stale_windows([7], |_| false), [7]);
     }
 }
