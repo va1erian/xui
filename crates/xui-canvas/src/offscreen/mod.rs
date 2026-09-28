@@ -135,26 +135,39 @@ impl OffscreenBackend {
 
     /// Renders `window`'s visible nodes, in creation order, into an image.
     pub fn render(&self, window: WindowId) -> Option<RgbaImage> {
-        let mut windows = self.windows.borrow_mut();
-        let entry = windows.get_mut(&window.raw())?;
-        entry.surface.fill(entry.theme.background);
-        let dpi = entry.dpi;
-        let theme = entry.theme;
+        // Take the surface out of the window state so a painter that re-enters
+        // the backend (for example `Ui::dpi`, which reads this same map) does not
+        // find it borrowed. The window stays in the map, with a placeholder
+        // surface, so painters still read its live DPI, theme and GL content; the
+        // real surface goes back once the frame is composited.
+        let (dpi, theme, width, height, gl, gl_nodes, mut surface) = {
+            let mut windows = self.windows.borrow_mut();
+            let entry = windows.get_mut(&window.raw())?;
+            let surface = std::mem::replace(&mut entry.surface, Surface::new(1, 1));
+            let gl_nodes: Vec<(u64, Rc<dyn GlWidget>)> = entry
+                .gl_nodes
+                .iter()
+                .map(|(raw, widget)| (*raw, Rc::clone(widget)))
+                .collect();
+            (
+                entry.dpi,
+                entry.theme,
+                entry.width,
+                entry.height,
+                entry.gl.clone(),
+                gl_nodes,
+                surface,
+            )
+        };
+        surface.fill(theme.background);
         // GL content is one painter among many, exactly as in the windowed
         // backend; the offscreen backend has no GPU, so it paints the widget's
         // software fallback: window-level content as the base layer, node-level
         // content at its node's bounds.
-        if let Some(widget) = entry.gl.clone() {
-            let bounds = Rect::new(0, 0, entry.width, entry.height);
-            entry
-                .surface
-                .with_canvas_at(bounds, dpi, |canvas| widget.paint(canvas, bounds, &theme));
+        if let Some(widget) = gl {
+            let bounds = Rect::new(0, 0, width, height);
+            surface.with_canvas_at(bounds, dpi, |canvas| widget.paint(canvas, bounds, &theme));
         }
-        let gl_nodes: Vec<(u64, Rc<dyn GlWidget>)> = entry
-            .gl_nodes
-            .iter()
-            .map(|(raw, widget)| (*raw, Rc::clone(widget)))
-            .collect();
         let nodes = self.nodes.borrow();
         let paints: Vec<Draw> = nodes
             .iter()
@@ -184,7 +197,7 @@ impl OffscreenBackend {
         drop(nodes);
         for draw in paints {
             if let Some(painter) = draw.painter {
-                entry.surface.with_canvas_at(draw.bounds, dpi, |canvas| {
+                surface.with_canvas_at(draw.bounds, dpi, |canvas| {
                     if let Some(clip) = draw.clip {
                         canvas.push_clip(clip);
                     }
@@ -194,7 +207,7 @@ impl OffscreenBackend {
             if draw.gl
                 && let Some((_, widget)) = gl_nodes.iter().find(|(raw, _)| *raw == draw.id.raw())
             {
-                entry.surface.with_canvas_at(draw.bounds, dpi, |canvas| {
+                surface.with_canvas_at(draw.bounds, dpi, |canvas| {
                     if let Some(clip) = draw.clip {
                         canvas.push_clip(clip);
                     }
@@ -202,7 +215,11 @@ impl OffscreenBackend {
                 });
             }
         }
-        Some(entry.surface.to_image())
+        let image = surface.to_image();
+        if let Some(entry) = self.windows.borrow_mut().get_mut(&window.raw()) {
+            entry.surface = surface;
+        }
+        Some(image)
     }
 
     /// Installs `widget` as `window`'s GL content. The offscreen backend has no

@@ -66,6 +66,21 @@ fn an_icon_click_maps_to_the_apps_message() {
 }
 
 #[test]
+fn an_item_click_maps_when_the_bar_is_not_at_the_origin() {
+    let (ui, runtime, log) = setup();
+    let menu = TopBarId::new(1);
+    // Node-relative pointer coordinates, so a bar away from the window origin
+    // must still map: the stored bounds are absolute (left = 400).
+    let bar = TopBar::new(&ui, Rect::new(400, 0, 508, 28))
+        .unwrap()
+        .icon(menu, Glyph::Menu)
+        .on_click(move |id| (id == menu).then_some(7));
+
+    click(&runtime, bar.id(), 10);
+    assert_eq!(*log.borrow(), vec![7]);
+}
+
+#[test]
 fn a_toggle_click_maps_its_new_state() {
     let (ui, runtime, log) = setup();
     let star = TopBarId::new(2);

@@ -7,6 +7,7 @@ use std::rc::Rc;
 
 use crate::app::Ui;
 use crate::backend::{Event, WidgetId};
+use crate::geometry::Rect;
 use crate::message::MouseButton;
 
 use super::items::{self, Item, Kind};
@@ -40,7 +41,11 @@ impl<M: 'static> Events<M> {
             return None;
         }
         let items = &self.items;
-        let bounds = ui.bounds(self.id);
+        let extent = ui.bounds(self.id);
+        // Backends deliver pointer coordinates relative to the node, so layout
+        // and hit-testing use a zero-origin rect sized to the node's extent; the
+        // node's absolute position only matters when painting.
+        let bounds = Rect::new(0, 0, extent.width(), extent.height());
         let dpi = ui.dpi();
         match event {
             Event::MouseMove { x, .. } => {

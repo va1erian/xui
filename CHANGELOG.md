@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+### Fixes
+
+- `TopBar` lays its items out and hit-tests them in node-local coordinates, so a
+  bar anywhere other than the window origin responds to clicks, hovers and
+  slider drags (#157).
+- The canvas `OffscreenBackend` no longer holds the window state while painters
+  run, so a `ListView`/`TreeView` scrollbar (which reads the DPI during paint)
+  composites instead of panicking; a regression test covers a parent-placed
+  list's scrollbar thumb tracking its offset (#158).
+- A test guards that `Decorations::None` asks `winit` for an undecorated window
+  on Windows, so the app's own caption is the only chrome (#150).
+
 ### Features
 
 - `arrange`: `ListView` and `StatusBar` are now `Placeable`, so they can be mounted in `row()`/`column()` layouts and reflow with the window (`ListView::auto`, `StatusBar::auto`); a mounted list re-lays its scrollbar against its new bounds (#181).
