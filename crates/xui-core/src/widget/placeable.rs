@@ -10,11 +10,11 @@
 use super::separator::Orientation;
 use super::{
     Button, CheckBox, ComboBox, Edit, HasText, Hyperlink, Label, MultilineEdit, NumberField,
-    ProgressBar, Separator, Slider, ToggleButton,
+    ProgressBar, Separator, Slider, StatusBar, ToggleButton,
 };
 use crate::app::Ui;
 use crate::backend::{TextStyle, WidgetId};
-use crate::geometry::Size;
+use crate::geometry::{Rect, Size};
 use crate::units::Dip;
 
 /// The design size of widget text.
@@ -33,6 +33,10 @@ const CHECK_LEAD: Dip = Dip(24.0);
 const PROGRESS_HEIGHT: Dip = Dip(8.0);
 /// The vertical padding around a bare text run.
 const TEXT_PADDING: Dip = Dip(4.0);
+/// The natural size of a status bar with nothing to size it.
+const STATUS_WIDTH: Dip = Dip(200.0);
+/// The natural height of a status bar.
+const STATUS_HEIGHT: Dip = Dip(24.0);
 
 /// A widget a layout can place.
 ///
@@ -47,6 +51,14 @@ pub trait Placeable<M: 'static> {
     fn natural_size(&self, ui: &Ui<M>, dpi: u32) -> Size {
         let _ = dpi;
         ui.bounds(self.id()).size()
+    }
+
+    /// Reacts to the layout having placed the widget's node at `rect` (device
+    /// pixels). A widget that owns satellite nodes positions them here so they
+    /// follow their primary — a [`ListView`](super::ListView) re-lays its
+    /// scrollbar; the default does nothing.
+    fn placed(&self, ui: &Ui<M>, rect: Rect) {
+        let _ = (ui, rect);
     }
 }
 
@@ -165,5 +177,15 @@ impl<M: 'static> Placeable<M> for Separator<M> {
             Orientation::Horizontal => Size::new(0, line),
             Orientation::Vertical => Size::new(line, 0),
         }
+    }
+}
+
+impl<M: 'static> Placeable<M> for StatusBar<M> {
+    fn id(&self) -> WidgetId {
+        StatusBar::id(self)
+    }
+
+    fn natural_size(&self, _ui: &Ui<M>, dpi: u32) -> Size {
+        Size::new(px(STATUS_WIDTH, dpi), px(STATUS_HEIGHT, dpi))
     }
 }

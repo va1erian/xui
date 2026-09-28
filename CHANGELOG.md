@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Features
+
+- `arrange`: `ListView` and `StatusBar` are now `Placeable`, so they can be mounted in `row()`/`column()` layouts and reflow with the window (`ListView::auto`, `StatusBar::auto`); a mounted list re-lays its scrollbar against its new bounds (#181).
+
 ### Breaking
 
 - **The Win32-native widget layer is removed.** `xui-win32` no longer has

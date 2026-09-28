@@ -20,10 +20,11 @@ use std::collections::BTreeSet;
 use std::rc::Rc;
 
 use super::control::Control;
+use super::placeable::Placeable;
 use super::scrollbar::{self, Bar};
 use crate::app::Ui;
-use crate::backend::{NodeKind, NodeSpec, Result};
-use crate::geometry::{Point, Rect};
+use crate::backend::{NodeKind, NodeSpec, Result, WidgetId};
+use crate::geometry::{Point, Rect, Size};
 use crate::units::Dip;
 
 mod api;
@@ -42,6 +43,11 @@ pub use self::model::{
     CellData, Column, ColumnWidth, Fill, ListModel, SelectionMode, SortDirection,
 };
 use self::state::{Rows, State};
+
+/// The natural size of a list with nothing to size it; a `fill` entry overrides
+/// the axis it fills.
+const NATURAL_WIDTH: Dip = Dip(360.0);
+const NATURAL_HEIGHT: Dip = Dip(200.0);
 
 /// Maps a row index to the app's message.
 type RowMapper<M> = Box<dyn Fn(usize) -> Option<M>>;
@@ -99,6 +105,13 @@ impl<M: 'static> ListView<M> {
     pub fn new(ui: &Ui<M>, bounds: Rect, items: &[&str]) -> Result<ListView<M>> {
         let rows = Rows::Simple(items.iter().map(|item| item.to_string()).collect());
         Self::build(ui, bounds, rows)
+    }
+
+    /// Creates a virtual list with no bounds of its own, for a layout to place
+    /// (see [`crate::arrange`]); add columns with [`column`](ListView::column)
+    /// and install the model later with [`set_model`](ListView::set_model).
+    pub fn auto(ui: &Ui<M>, model: impl ListModel + 'static) -> Result<ListView<M>> {
+        Self::with_model(ui, Rect::default(), model)
     }
 
     /// Creates a virtual list backed by `model` at `bounds`. Add columns with
@@ -277,5 +290,24 @@ impl<M: 'static> ListView<M> {
     pub fn on_sort(self, mapper: impl Fn(usize) -> Option<M> + 'static) -> ListView<M> {
         *self.mappers.sort.borrow_mut() = Some(Box::new(mapper));
         self
+    }
+}
+
+impl<M: 'static> Placeable<M> for ListView<M> {
+    fn id(&self) -> WidgetId {
+        self.control.id()
+    }
+
+    fn natural_size(&self, _ui: &Ui<M>, dpi: u32) -> Size {
+        Size::new(
+            NATURAL_WIDTH.to_px(dpi).value(),
+            NATURAL_HEIGHT.to_px(dpi).value(),
+        )
+    }
+
+    fn placed(&self, ui: &Ui<M>, _rect: Rect) {
+        // A layout moves only the list's own node; the scrollbar is a child
+        // node, so re-lay it out against the list's new bounds.
+        bar::layout(ui, self.control.id(), &self.bar, &self.state.borrow());
     }
 }

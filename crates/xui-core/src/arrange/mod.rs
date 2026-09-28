@@ -31,8 +31,8 @@ use crate::geometry::Size;
 use crate::layout::{Group, Insets, Item, Sizing, StackDirection};
 use crate::units::Dip;
 use crate::widget::{
-    Button, CheckBox, ComboBox, Edit, Hyperlink, Label, MultilineEdit, NumberField, Placeable,
-    ProgressBar, Separator, Slider, ToggleButton,
+    Button, CheckBox, ComboBox, Edit, Hyperlink, Label, ListView, MultilineEdit, NumberField,
+    Placeable, ProgressBar, Separator, Slider, StatusBar, ToggleButton,
 };
 
 pub use mount::Mounted;
@@ -121,11 +121,13 @@ entry_for!(
     Edit,
     Hyperlink,
     Label,
+    ListView,
     MultilineEdit,
     NumberField,
     ProgressBar,
     Separator,
     Slider,
+    StatusBar,
     ToggleButton,
 );
 
