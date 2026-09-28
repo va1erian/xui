@@ -57,11 +57,23 @@ impl App<'_> {
             .timers
             .borrow()
             .iter()
-            .filter(|(_, (_, at))| *at <= now)
-            .map(|(id, (window, _))| (*id, *window))
+            .filter(|(_, (_, at, _))| *at <= now)
+            .map(|(id, (window, _, _))| (*id, *window))
             .collect();
         for (id, window) in due {
-            self.shared.timers.borrow_mut().remove(&id);
+            // A callback run earlier in this batch may have killed the timer
+            // or closed its window. Reschedule before delivering so this
+            // timer's own callback may kill it.
+            let rescheduled = match self.shared.timers.borrow_mut().get_mut(&id) {
+                Some(timer) => {
+                    timer.1 = now + timer.2;
+                    true
+                }
+                None => false,
+            };
+            if !rescheduled {
+                continue;
+            }
             self.shared
                 .deliver(window, WidgetId::NONE, &Event::Timer { id: TimerId(id) });
         }
@@ -70,7 +82,7 @@ impl App<'_> {
             .timers
             .borrow()
             .values()
-            .map(|(_, at)| *at)
+            .map(|(_, at, _)| *at)
             .min();
         match next {
             Some(at) => event_loop.set_control_flow(ControlFlow::WaitUntil(at)),

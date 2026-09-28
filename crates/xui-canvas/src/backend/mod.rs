@@ -23,7 +23,7 @@ mod tests;
 use std::cell::{Cell, OnceCell, RefCell};
 use std::collections::HashMap;
 use std::rc::Rc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use winit::event_loop::{EventLoop, EventLoopProxy};
 use winit::raw_window_handle::{
@@ -148,8 +148,9 @@ pub(crate) struct Shared {
     /// The node the pointer is captured by, if any: pointer moves and releases
     /// go to it even outside its bounds.
     pub(crate) captured: RefCell<Option<WidgetId>>,
-    /// Fires at the given instant, then is removed; carries its window.
-    pub(crate) timers: RefCell<HashMap<usize, (WindowId, Instant)>>,
+    /// Repeating timers: window, next due instant and period. A timer fires,
+    /// is rescheduled one period on, and lives until killed.
+    pub(crate) timers: RefCell<HashMap<usize, (WindowId, Instant, Duration)>>,
     pub(crate) next_window: Cell<u64>,
     pub(crate) next_widget: Cell<u64>,
     pub(crate) next_timer: Cell<usize>,

@@ -187,3 +187,58 @@ fn window_design_mode_reaches_scoped_containers() {
     click(&runtime, inside.id());
     assert_eq!(*log.borrow(), vec![1]);
 }
+
+fn container(ui: &Ui<u32>) -> Control<u32> {
+    Control::new(
+        ui,
+        &NodeSpec::new(NodeKind::Container, Rect::new(0, 0, 80, 28)),
+    )
+    .unwrap()
+}
+
+#[test]
+fn a_control_receives_only_its_own_timer_ticks() {
+    let (_backend, core, ui) = setup();
+    let button = container(&ui);
+    let other = container(&ui);
+    let log = Rc::new(RefCell::new(Vec::new()));
+    let runtime = Runtime::primary(
+        core,
+        TestApp {
+            log: Rc::clone(&log),
+        },
+    );
+    let tick = |id| {
+        runtime.deliver(WidgetId::NONE, &Event::Timer { id });
+        runtime.deliver(WidgetId::NONE, &Event::Wake);
+    };
+    ui.on_timer(|_| Some(99));
+
+    let mine = button.set_timer(500, || Some(1)).unwrap();
+    let theirs = other.set_timer(500, || Some(2)).unwrap();
+    assert_ne!(mine, theirs);
+    tick(mine);
+    tick(theirs);
+    assert_eq!(*log.borrow(), vec![99, 1, 99, 2], "the app mapping is kept");
+
+    button.kill_timer(mine);
+    log.borrow_mut().clear();
+    tick(mine);
+    assert_eq!(*log.borrow(), vec![99], "a killed timer no longer ticks");
+}
+
+#[test]
+fn dropping_a_control_stops_its_timers() {
+    let (_backend, core, ui) = setup();
+    let log = Rc::new(RefCell::new(Vec::new()));
+    let runtime = Runtime::primary(
+        core,
+        TestApp {
+            log: Rc::clone(&log),
+        },
+    );
+    let timer = { container(&ui).set_timer(500, || Some(1)).unwrap() };
+    runtime.deliver(WidgetId::NONE, &Event::Timer { id: timer });
+    runtime.deliver(WidgetId::NONE, &Event::Wake);
+    assert!(log.borrow().is_empty());
+}
