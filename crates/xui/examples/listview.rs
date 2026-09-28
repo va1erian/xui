@@ -144,7 +144,7 @@ fn tracks(count: usize) -> Vec<Track> {
 }
 
 fn backend() -> Rc<dyn Backend> {
-    #[cfg(all(feature = "win32", windows))]
+    #[cfg(all(feature = "d2d", windows))]
     {
         if std::env::var("XUI_BACKEND").as_deref() == Ok("canvas") {
             Rc::new(xui_canvas::WinitBackend::new())
@@ -152,7 +152,7 @@ fn backend() -> Rc<dyn Backend> {
             Rc::new(xui_win32::Win32Backend::new())
         }
     }
-    #[cfg(not(all(feature = "win32", windows)))]
+    #[cfg(not(all(feature = "d2d", windows)))]
     {
         Rc::new(xui_canvas::WinitBackend::new())
     }

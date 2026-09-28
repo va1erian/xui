@@ -1,8 +1,7 @@
 # Theming
 
 Dark mode is first-class: widgets paint only from semantic theme tokens, so the
-application picks a `Theme` and everything follows. The portable layer and the
-Win32-native layer share the same token set.
+application picks a `Theme` and everything follows. Every backend shares the same token set.
 
 ## The palette
 
@@ -89,7 +88,7 @@ let theme = Theme::system();      // reads the registry / DWM / high-contrast
 
 It reads the user's light/dark preference, the accent colour and the high-contrast
 flag through documented APIs. `is_theme_change(message)` identifies the window
-message that means the preference changed, and the Win32-native window can
+message that means the preference changed, and a Win32 window can
 `follow_system_theme`. See [The Win32 layer](win32.md).
 
 ## Dark-mode notes

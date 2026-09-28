@@ -15,47 +15,24 @@ xui-core  (portable; #![forbid(unsafe_code)], no platform dependency)
    │  widgets · App/Ui runtime · router · theme · units · layout arithmetic
    │  accessibility model · Backend trait · WindowId/WidgetId · Event/Canvas
    ▼
-a backend (xui-win32 · xui-canvas · xui-canvas::OffscreenBackend)
+a backend (xui-canvas · xui-win32 · xui-canvas::OffscreenBackend)
    │  decodes native input → Event, creates nodes, paints, shapes text
    ▼
-the platform (Win32 · winit + softbuffer/tiny-skia · a headless surface)
+the platform (winit + softbuffer/tiny-skia · Win32 · a headless surface)
 ```
 
 - **`xui-core`** is the only crate an application *needs* to depend on. It has
-  no platform dependency and no `unsafe`, so it compiles everywhere.
+  no platform dependency and no `unsafe`, so it compiles everywhere. It is also
+  the only widget layer: every backend runs the same portable widgets, and the
+  `xui` umbrella crate's bare names are always this layer.
 - **A backend** is one value implementing [`xui_core::backend::Backend`]. It
   owns the event loop, creates windows and nodes, delivers events, paints and
-  measures text.
+  measures text. `xui-canvas` (default, every platform) and `xui-win32`
+  (opt-in `d2d` feature, Windows-only, Direct2D-accelerated) are peers — pick
+  one by feature or construct either at runtime and pass it to
+  `xui_core::run_app`. See [Backends](backends.md).
 - The application never names a platform handle; it refers to a window by
   `WindowId` and a widget by `WidgetId`, both assigned by the backend.
-
-### The two widget layers
-
-`xui-win32` contains **two** stacks, and it matters which one you are using.
-
-| | Portable widget layer | Win32-native widget layer |
-|---|---|---|
-| Lives in | `xui-core` (`widget`, `app`, `backend`) | `xui-win32` (`app`, `controls`, `window`, `gdi`, `d2d`, `gl`) |
-| Runs on | every backend | Win32 only |
-| Entry point | `xui_core::run_app(backend, PlatformSpec, make)` | `xui_win32::run_app(WindowSpec, make)` |
-| Hosts widgets as | painted child windows (native `EDIT` for `Edit`) | native common controls (`ListView`, `TreeView`, …) |
-| Layout | widgets are positioned explicitly; containers arrange their children | `column!`/`row!`/`tabs!` layout tree |
-| Best for | code that should build and run on every platform | Windows-only apps that want the deepest native integration |
-
-The `xui` umbrella crate selects between them:
-
-- With the default `win32` feature **on Windows**, `pub use xui_win32::*`
-  re-exports the **Win32-native** names, so `xui::run_app`, `xui::Ui`,
-  `xui::Label`, `xui::column!` are the native layer. The portable layer stays
-  reachable as `xui::xui_core` (and `xui::Win32Backend`).
-- With `canvas` (or on a target where `xui-win32` is empty),
-  `pub use xui_core::*` makes the umbrella's bare names the **portable**
-  widgets.
-
-When you write cross-platform code, depend on `xui-core` directly (or use the
-umbrella with `--no-default-features --features canvas`) and pass a backend to
-`xui_core::run_app`. See [Backends](backends.md) and
-[Getting started](getting-started.md).
 
 ## The `Backend` contract
 
@@ -170,9 +147,7 @@ them:
 - `ScrollView` stacks registered rows, clips descendants and scrolls.
 - `Dialog`, `Menu`, `ComboBox` and `Tooltip` share the popup elevation helper.
 
-The widget layer uses no `set_layout` call and no layout tree of its own; if you
-want the declarative `column!`/`row!` tree, that is the Win32-native layer (see
-[The Win32 layer](win32.md)).
+The widget layer uses no `set_layout` call and no layout tree of its own.
 
 ## Units, colour, theme
 
@@ -222,10 +197,11 @@ crates/xui-core/src/
   image.rs          portable RGBA images and PNG/JPEG decode
   property.rs       the Properties/Property/Value surface
 
-crates/xui-win32/src/     the Win32 backend + the Win32-native widget layer
 crates/xui-canvas/src/    WinitBackend, SkiaCanvas, OffscreenBackend, GL seam
+crates/xui-win32/src/     Win32Backend: Direct2D/DirectWrite painting (Windows)
 crates/xui-gpu/src/       the shared OpenGL surface seam (no platform code)
-crates/xui-litehtml/src/  the litehtml HTML view (Windows)
+crates/xui-litehtml/src/  the litehtml HTML view (Windows; currently out of the
+                          workspace, see issue #168)
 crates/xui/src/           the umbrella crate
 ```
 
@@ -249,4 +225,5 @@ These are non-negotiable and are part of `AGENTS.md`.
 - [Backends](backends.md) — the available implementations and how to combine
   them.
 - [Development](development.md) — the checks and how to add a widget.
-- [The Win32 layer](win32.md) — the native controls and Windows-only features.
+- [The Win32 layer](win32.md) — the low-level platform layer `Win32Backend` is
+  built on, for interop.

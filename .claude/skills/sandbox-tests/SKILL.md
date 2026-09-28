@@ -1,6 +1,6 @@
 ---
 name: sandbox-tests
-description: Run or screenshot win32ui's UI/integration tests (or a win32ui client app's tests or binary) inside Windows Sandbox so they never steal focus or input from the desktop the user or other agents are using. Use whenever you need to run `cargo test`, a single test binary or the demo on a Windows host, or to take a screenshot of an app to see how it looks.
+description: Run or screenshot xui's UI/integration tests (or a client app's tests or binary) inside Windows Sandbox so they never steal focus or input from the desktop the user or other agents are using. Use whenever you need to run `cargo test`, a single test binary or the demo on a Windows host, or to take a screenshot of an app to see how it looks.
 ---
 
 # Running UI tests in Windows Sandbox

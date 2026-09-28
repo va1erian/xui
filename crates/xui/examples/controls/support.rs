@@ -11,13 +11,13 @@ use xui_core::backend::Backend;
 use xui_core::{Dip, Rect};
 
 use xui_canvas::WinitBackend;
-#[cfg(all(feature = "win32", windows))]
+#[cfg(all(feature = "d2d", windows))]
 use xui_win32::Win32Backend;
 
 /// The backend a demo runs on: the native Win32 backend where it exists unless
 /// `XUI_BACKEND=canvas`, otherwise the portable software backend.
 pub fn backend() -> Rc<dyn Backend> {
-    #[cfg(all(feature = "win32", windows))]
+    #[cfg(all(feature = "d2d", windows))]
     {
         if std::env::var("XUI_BACKEND").as_deref() != Ok("canvas") {
             return Rc::new(Win32Backend::new());

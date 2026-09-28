@@ -7,22 +7,29 @@ hands it to `xui_core::run_app`.
 
 | Backend | Crate | Window | Painting | Native handle | Modal |
 |---|---|---|---|---|---|
-| `Win32Backend` | `xui-win32` | Win32 top-level | GDI + Direct2D + DirectWrite | yes (`HWND`) | yes |
 | `WinitBackend` | `xui-canvas` | `winit` | `tiny-skia` → `softbuffer`, or GL | no | no |
+| `Win32Backend` | `xui-win32` | Win32 top-level | Direct2D + DirectWrite (GDI fallback) | yes (`HWND`) | yes |
 | `OffscreenBackend` | `xui-canvas` | none | `tiny-skia` into an RGBA surface | no | no |
 | `GlWidget` host | `xui-canvas` | `winit` | `glow`/OpenGL (whole client area) | no | no |
 
 Every backend runs the **same portable widgets**. This is the point of the
-split: an app written against `xui-core` works on Win32, on Linux/macOS through
-winit, and headlessly in tests.
+split: an app written against `xui-core` works on Windows, on Linux/macOS through
+winit, and headlessly in tests. `WinitBackend` (the umbrella crate's default
+`canvas` feature) is the baseline and runs everywhere; `Win32Backend` (the opt-in
+`d2d` feature) is a Windows-only peer for apps that want native window chrome
+and Direct2D-accelerated painting.
 
-## `Win32Backend` — native Windows
+## `Win32Backend` — Direct2D on Windows
 
-`crates/xui-win32/src/backend/`. This is the backend that makes the portable
-widgets integrate with Windows: most nodes are painted child windows, but a kind
-with a good native control is hosted natively. Today `NodeKind::Edit` is a real
-`EDIT`, so text entry gets real IME, selection, clipboard and accessibility;
-`supports` reports `ImplKind::Native` for it and `Painted` for everything else.
+`crates/xui-win32/src/backend/`. This backend paints the portable widgets
+through Direct2D and DirectWrite (with a GDI fallback if a Direct2D device cannot
+be created), one `BeginDraw`/`EndDraw` per node, and gives them native Windows
+window chrome. Most nodes are painted child windows, but a kind with a good
+native control is hosted natively. Today `NodeKind::Edit` is a real `EDIT`, so
+text entry gets real IME, selection and clipboard; `supports` reports
+`ImplKind::Native` for it and `Painted` for everything else. There is no
+Windows UI Automation bridge on this backend yet, so screen-reader support is
+not available (tracked as a known gap, see issue #169).
 
 ```rust
 use std::rc::Rc;
@@ -159,10 +166,10 @@ Constraints worth knowing:
 
 `crates/xui-litehtml` lays a page out with `litehtml` on a worker thread and
 paints it with Direct2D/DirectWrite through `xui-win32`. It is a Windows-only
-`CustomWidget` host today (`HtmlView<M>`), with links, scrolling, text selection
-and copy. The middle is backend-neutral — the worker emits a `DisplayList` of
-neutral draw commands — so portability to `xui-core`/`xui-canvas` is a follow-up
-(issues #51, #52, #35). It is not part of the umbrella crate.
+widget host (`HtmlView<M>`), with links, scrolling, text selection and copy. The
+middle is backend-neutral — the worker emits a `DisplayList` of neutral draw
+commands. It is currently **out of the workspace** while it is ported onto the
+portable widget layer (issue #168); it is not part of the umbrella crate.
 
 ## Combining backends
 
@@ -171,7 +178,7 @@ can be made at run time:
 
 ```rust
 fn backend() -> Rc<dyn Backend> {
-    #[cfg(all(feature = "win32", windows))]
+    #[cfg(all(feature = "d2d", windows))]
     if std::env::var("XUI_BACKEND").as_deref() != Ok("canvas") {
         return Rc::new(xui_win32::Win32Backend::new());
     }
@@ -183,18 +190,19 @@ fn backend() -> Rc<dyn Backend> {
 button that relaunches the process on the other backend — a new process because
 `winit` allows a single event loop per process.
 
-**Compile-time selection with the umbrella.** Depend on `xui` with a feature:
+**Compile-time selection with the umbrella.** Depend on `xui` with a feature.
+`canvas` is the default; add `d2d` for the Windows backend:
 
 ```toml
 [dependencies]
-xui = { version = "0.1", default-features = false, features = ["canvas"] }
+xui = { version = "0.1", features = ["d2d"] }   # canvas (default) + Direct2D on Windows
+# or, canvas only:
+xui = "0.1"
 ```
 
-`win32` (default) and `canvas` can also be enabled together; the examples gate
-the switch on `cfg!(all(feature = "win32", windows))`. Remember the umbrella's
-bare-name rule from [Architecture](architecture.md#the-two-widget-layers): with
-`win32` on Windows the bare names are the native layer, so portable code should
-spell the core path (`xui::xui_core::…`) or depend on `xui-core` directly.
+The umbrella's bare names are always the portable widgets (`xui::Label`,
+`xui::run_app`, … are `xui_core`'s), whichever features are on; `xui::xui_win32`
+and `xui::xui_canvas` re-export the backends themselves.
 
 **Things you cannot mix.** A window belongs to exactly one backend: its nodes,
 painters and event sink all live there, and a `WidgetId` is meaningless to
@@ -202,7 +210,7 @@ another backend. The offscreen backend is a separate world used for rendering,
 not a window you show. GL content is the exception inside a canvas window, but it
 is composited like any other node and can cover the whole window or one pane.
 
-**Choosing.** Use `Win32Backend` for Windows apps that want native text fields
-and the Windows window features; use `WinitBackend` when the app must also run
-on Linux/macOS or be snapshot-tested; use `OffscreenBackend` in tests and build
-tooling. [Getting started](getting-started.md) walks through the decision.
+**Choosing.** Use `WinitBackend` (the default) unless you have a reason not to:
+it runs everywhere. Use `Win32Backend` for Windows apps that want native text
+fields, the Windows window features and Direct2D-accelerated painting; use
+`OffscreenBackend` in tests and build tooling. [Getting started](getting-started.md) walks through the decision.
