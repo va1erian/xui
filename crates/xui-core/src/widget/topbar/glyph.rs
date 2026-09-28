@@ -17,7 +17,7 @@
 /// vectors, so a media bar needs no icon font and renders the same on every
 /// backend. A caller that needs a richer set can pass text, e.g.
 /// `Glyph::Text("+")`.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Glyph {
     /// Three stacked bars (a menu).
     Menu,

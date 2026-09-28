@@ -7,10 +7,10 @@ use std::rc::Rc;
 
 use crate::backend::{Canvas, TextStyle};
 use crate::geometry::{Point, Rect};
+use crate::icon::draw_icon;
 use crate::theme::Theme;
 use crate::units::Dip;
 
-use super::icon::draw_glyph;
 use super::items::{self, Item, Kind, PADDING, THUMB, TRACK};
 
 /// The corner radius of an item's highlight, checked fill and focus ring.
@@ -66,7 +66,7 @@ pub(super) fn paint(
                 } else {
                     theme.text_disabled
                 };
-                draw_glyph(canvas, *glyph, rect, color, dpi);
+                draw_icon(canvas, *glyph, rect, color, dpi);
             }
             Kind::Toggle { glyph, checked } => {
                 if active.get() == Some(index) {
@@ -85,7 +85,7 @@ pub(super) fn paint(
                 } else {
                     theme.text
                 };
-                draw_glyph(canvas, *glyph, rect, color, dpi);
+                draw_icon(canvas, *glyph, rect, color, dpi);
             }
             Kind::Slider { min, max, value } => {
                 draw_slider(canvas, rect, theme, dpi, (*min, *max, *value), item.enabled);

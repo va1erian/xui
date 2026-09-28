@@ -6,10 +6,10 @@ use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use super::control::{Control, HasText};
-use super::icon::{Icon, draw_icon};
 use crate::app::Ui;
 use crate::backend::{Event, NodeKind, NodeSpec, Result, TextStyle};
 use crate::geometry::Rect;
+use crate::icon::{IconRef, draw_icon};
 use crate::message::{Key, MouseButton};
 use crate::property::{Properties, Property, Value};
 use crate::units::Dip;
@@ -44,7 +44,7 @@ pub struct Button<M: 'static> {
     control: Control<M>,
     state: Rc<Cell<ButtonState>>,
     text: Rc<RefCell<String>>,
-    icon: Rc<Cell<Option<Icon>>>,
+    icon: Rc<Cell<Option<IconRef>>>,
     on_click: ClickMapper<M>,
 }
 
@@ -90,7 +90,8 @@ impl<M: 'static> Button<M> {
                     theme.text
                 };
                 let text = label.borrow();
-                let (icon_rect, text_rect) = layout_content(bounds, icon.get(), text.is_empty());
+                let (icon_rect, text_rect) =
+                    layout_content(bounds, icon.get().is_some(), text.is_empty());
                 if let Some(icon_rect) = icon_rect
                     && let Some(icon) = icon.get()
                 {
@@ -180,14 +181,27 @@ impl<M: 'static> Button<M> {
     }
 
     /// Draws `icon` before the label (or centred when there is no label).
-    pub fn icon(self, icon: Icon) -> Button<M> {
+    ///
+    /// Any [`IconRef`] works: a generated [`Lucide`](crate::icon::Lucide) icon,
+    /// the legacy [`Icon`](super::Icon) set or a [`Glyph`](super::Glyph).
+    pub fn icon(self, icon: impl Into<IconRef>) -> Button<M> {
         self.set_icon(Some(icon));
         self
     }
 
     /// Replaces the leading icon, or removes it with `None`.
-    pub fn set_icon(&self, icon: Option<Icon>) {
-        self.icon.set(icon);
+    ///
+    /// Accepts the same [`IconRef`] inputs as [`Button::icon`]; use
+    /// [`Button::clear_icon`] to remove the icon without a type annotation on
+    /// `None`.
+    pub fn set_icon(&self, icon: Option<impl Into<IconRef>>) {
+        self.icon.set(icon.map(Into::into));
+        self.control.invalidate();
+    }
+
+    /// Removes the button's leading icon.
+    pub fn clear_icon(&self) {
+        self.icon.set(None);
         self.control.invalidate();
     }
 
@@ -237,8 +251,8 @@ impl<M: 'static> Button<M> {
 /// With no icon the label keeps the whole face; with an icon and a label the
 /// icon sits at the leading edge and the label is centred in what remains; with
 /// an icon and no label the icon is centred.
-fn layout_content(bounds: Rect, icon: Option<Icon>, text_empty: bool) -> (Option<Rect>, Rect) {
-    if icon.is_none() {
+fn layout_content(bounds: Rect, has_icon: bool, text_empty: bool) -> (Option<Rect>, Rect) {
+    if !has_icon {
         return (None, bounds);
     }
     let side = (bounds.height() * 2 / 3).clamp(8, ICON_MAX);

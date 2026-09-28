@@ -143,8 +143,10 @@ MIT. See [LICENSE](LICENSE).
 
 ## Credits
 
-The built-in icons (`Icon`, `Glyph`) are outlines from
-[Lucide](https://lucide.dev), vendored under
-[`crates/xui-core/assets/lucide/`](crates/xui-core/assets/lucide/) and used
-under the ISC License (copyright Lucide Icons and Contributors; see the
-[license text](crates/xui-core/assets/lucide/LICENSE)).
+The built-in icons are outlines from [Lucide](https://lucide.dev), vendored
+under [`crates/xui-core/assets/lucide/`](crates/xui-core/assets/lucide/) and
+used under the ISC License (copyright Lucide Icons and Contributors; see the
+[license text](crates/xui-core/assets/lucide/LICENSE)). The generator turns them
+into `xui_core::icon::Lucide`, one variant per SVG; `Icon` and `Glyph` are the
+older, smaller vocabularies kept for compatibility and both draw the same
+shapes through `xui_core::icon::draw_icon`.

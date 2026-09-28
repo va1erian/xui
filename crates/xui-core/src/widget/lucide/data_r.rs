@@ -1,0 +1,55 @@
+// Generated from the vendored Lucide SVGs in `assets/lucide/` (see
+// `assets/lucide/README.md`) by `assets/lucide/generate.py`. Do not edit.
+
+#![allow(clippy::approx_constant)] // generated coordinates, not maths
+
+use crate::backend::PathSeg;
+use PathSeg::{Close, CubicTo, LineTo, MoveTo};
+
+pub(crate) const RECTANGLE_HORIZONTAL: &[PathSeg] = &[
+    MoveTo(4.0, 6.0), LineTo(20.0, 6.0), CubicTo(20.351, 6.0, 20.696, 6.092, 21.0, 6.268),
+    CubicTo(21.304, 6.443, 21.557, 6.696, 21.732, 7.0),
+    CubicTo(21.908, 7.304, 22.0, 7.649, 22.0, 8.0), LineTo(22.0, 16.0),
+    CubicTo(22.0, 16.351, 21.908, 16.696, 21.732, 17.0),
+    CubicTo(21.557, 17.304, 21.304, 17.557, 21.0, 17.732),
+    CubicTo(20.696, 17.908, 20.351, 18.0, 20.0, 18.0), LineTo(4.0, 18.0),
+    CubicTo(3.649, 18.0, 3.304, 17.908, 3.0, 17.732),
+    CubicTo(2.696, 17.557, 2.443, 17.304, 2.268, 17.0),
+    CubicTo(2.092, 16.696, 2.0, 16.351, 2.0, 16.0), LineTo(2.0, 8.0),
+    CubicTo(2.0, 7.649, 2.092, 7.304, 2.268, 7.0),
+    CubicTo(2.443, 6.696, 2.696, 6.443, 3.0, 6.268),
+    CubicTo(3.304, 6.092, 3.649, 6.0, 4.0, 6.0), Close,
+];
+pub(crate) const REDO_2: &[PathSeg] = &[
+    MoveTo(15.0, 14.0), LineTo(20.0, 9.0), LineTo(15.0, 4.0), MoveTo(20.0, 9.0),
+    LineTo(9.5, 9.0), CubicTo(8.535, 9.0, 7.586, 9.254, 6.75, 9.737),
+    CubicTo(5.914, 10.22, 5.22, 10.914, 4.737, 11.75),
+    CubicTo(4.254, 12.586, 4.0, 13.535, 4.0, 14.5),
+    CubicTo(4.0, 15.465, 4.254, 16.414, 4.737, 17.25),
+    CubicTo(5.22, 18.086, 5.914, 18.78, 6.75, 19.263),
+    CubicTo(7.586, 19.746, 8.535, 20.0, 9.5, 20.0), LineTo(13.0, 20.0),
+];
+pub(crate) const REFRESH_CW: &[PathSeg] = &[
+    MoveTo(3.0, 12.0), CubicTo(3.0, 10.42, 3.416, 8.868, 4.206, 7.5),
+    CubicTo(4.996, 6.132, 6.132, 4.996, 7.5, 4.206),
+    CubicTo(8.868, 3.416, 10.42, 3.0, 12.0, 3.0),
+    CubicTo(13.246, 3.005, 14.48, 3.248, 15.635, 3.718),
+    CubicTo(16.79, 4.187, 17.844, 4.874, 18.74, 5.74), LineTo(21.0, 8.0), MoveTo(21.0, 3.0),
+    LineTo(21.0, 8.0), LineTo(16.0, 8.0), MoveTo(21.0, 12.0),
+    CubicTo(21.0, 13.58, 20.584, 15.132, 19.794, 16.5),
+    CubicTo(19.004, 17.868, 17.868, 19.004, 16.5, 19.794),
+    CubicTo(15.132, 20.584, 13.58, 21.0, 12.0, 21.0),
+    CubicTo(10.754, 20.995, 9.52, 20.752, 8.365, 20.282),
+    CubicTo(7.21, 19.813, 6.156, 19.126, 5.26, 18.26), LineTo(3.0, 16.0), MoveTo(8.0, 16.0),
+    LineTo(3.0, 16.0), LineTo(3.0, 21.0),
+];
+pub(crate) const REPEAT: &[PathSeg] = &[
+    MoveTo(17.0, 2.0), LineTo(21.0, 6.0), LineTo(17.0, 10.0), MoveTo(3.0, 11.0),
+    LineTo(3.0, 10.0), CubicTo(3.0, 9.298, 3.185, 8.608, 3.536, 8.0),
+    CubicTo(3.887, 7.392, 4.392, 6.887, 5.0, 6.536),
+    CubicTo(5.608, 6.185, 6.298, 6.0, 7.0, 6.0), LineTo(21.0, 6.0), MoveTo(7.0, 22.0),
+    LineTo(3.0, 18.0), LineTo(7.0, 14.0), MoveTo(21.0, 13.0), LineTo(21.0, 14.0),
+    CubicTo(21.0, 14.702, 20.815, 15.392, 20.464, 16.0),
+    CubicTo(20.113, 16.608, 19.608, 17.113, 19.0, 17.464),
+    CubicTo(18.392, 17.815, 17.702, 18.0, 17.0, 18.0), LineTo(3.0, 18.0),
+];

@@ -1,5 +1,6 @@
 //! Demonstrates the portable [`Button`]: a click raises a `Msg` and a label
-//! reports how many times it was pressed.
+//! reports how many times it was pressed. The buttons carry generated
+//! [`Lucide`] icons, one labelled and one icon-only.
 //!
 //! Run with:
 //!
@@ -10,6 +11,7 @@
 use xui_core::Dip;
 use xui_core::app::{App, Ui, run_app};
 use xui_core::backend::PlatformSpec;
+use xui_core::icon::Lucide;
 use xui_core::widget::{Button, HasText, Label};
 
 #[path = "support.rs"]
@@ -24,7 +26,7 @@ enum Msg {
 struct Demo {
     result: Label<Msg>,
     clicks: u32,
-    _button: Button<Msg>,
+    _buttons: Vec<Button<Msg>>,
 }
 
 impl App for Demo {
@@ -50,14 +52,19 @@ fn main() -> xui_core::backend::Result<()> {
             let l = Layout::new(ui.dpi());
             let result =
                 Label::new(ui, l.rect(16.0, 16.0, 504.0, 48.0), "Not clicked yet").unwrap();
-            let button = Button::new(ui, l.rect(16.0, 64.0, 256.0, 104.0), "Click me")
+            let labelled = Button::new(ui, l.rect(16.0, 64.0, 300.0, 104.0), "Click me")
                 .unwrap()
+                .icon(Lucide::Play)
+                .on_click(|| Some(Msg::Click));
+            let icon_only = Button::new(ui, l.rect(312.0, 64.0, 360.0, 104.0), "")
+                .unwrap()
+                .icon(Lucide::Save)
                 .on_click(|| Some(Msg::Click));
             autoclose(ui, || Msg::Quit);
             Demo {
                 result,
                 clicks: 0,
-                _button: button,
+                _buttons: vec![labelled, icon_only],
             }
         },
     )

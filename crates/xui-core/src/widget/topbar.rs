@@ -9,6 +9,7 @@ use super::control::Control;
 use crate::app::Ui;
 use crate::backend::{NodeKind, NodeSpec, Result, WidgetId};
 use crate::geometry::Rect;
+use crate::icon::IconRef;
 use crate::units::Dip;
 
 mod events;
@@ -104,17 +105,19 @@ impl<M: 'static> TopBar<M> {
         })
     }
 
-    /// Appends an icon button.
-    pub fn icon(self, id: TopBarId, glyph: Glyph) -> TopBar<M> {
-        self.push(id, Kind::Icon(glyph))
+    /// Appends an icon button. Any [`IconRef`] works: a generated
+    /// [`Lucide`](crate::icon::Lucide) icon, the legacy [`Icon`](super::Icon)
+    /// set or a [`Glyph`].
+    pub fn icon(self, id: TopBarId, icon: impl Into<IconRef>) -> TopBar<M> {
+        self.push(id, Kind::Icon(icon.into()))
     }
 
     /// Appends a toggle, starting unchecked.
-    pub fn toggle(self, id: TopBarId, glyph: Glyph) -> TopBar<M> {
+    pub fn toggle(self, id: TopBarId, icon: impl Into<IconRef>) -> TopBar<M> {
         self.push(
             id,
             Kind::Toggle {
-                glyph,
+                glyph: icon.into(),
                 checked: false,
             },
         )

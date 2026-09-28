@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 
 use super::*;
+use crate::widget::Glyph;
 
 fn item(kind: Kind) -> Item {
     Item {
@@ -26,7 +27,7 @@ fn rects(items: &[Item], bounds: Rect, dpi: u32) -> Vec<Rect> {
 #[test]
 fn fixed_items_keep_their_width_and_ignore_surplus() {
     let items = [
-        item(Kind::Icon(Glyph::Menu)),
+        item(Kind::Icon(Glyph::Menu.into())),
         item(Kind::Label("ab".into())),
     ];
     let bounds = Rect::new(0, 0, 200, 24);
@@ -39,9 +40,9 @@ fn fixed_items_keep_their_width_and_ignore_surplus() {
 #[test]
 fn spacers_share_the_leftover_width() {
     let items = [
-        item(Kind::Icon(Glyph::Menu)),
+        item(Kind::Icon(Glyph::Menu.into())),
         item(Kind::Spacer(1)),
-        item(Kind::Icon(Glyph::Close)),
+        item(Kind::Icon(Glyph::Close.into())),
         item(Kind::Spacer(1)),
     ];
     let bounds = Rect::new(0, 0, 200, 24);
@@ -56,7 +57,7 @@ fn spacers_share_the_leftover_width() {
 fn weighted_spacers_split_proportionally() {
     let items = [
         item(Kind::Spacer(1)),
-        item(Kind::Icon(Glyph::Menu)),
+        item(Kind::Icon(Glyph::Menu.into())),
         item(Kind::Spacer(3)),
     ];
     let bounds = Rect::new(0, 0, 136, 24);
@@ -72,7 +73,7 @@ fn hit_testing_skips_labels_and_spacers() {
     let items = [
         item(Kind::Spacer(1)),
         item(Kind::Label("hi".into())),
-        item(Kind::Icon(Glyph::Search)),
+        item(Kind::Icon(Glyph::Search.into())),
     ];
     let bounds = Rect::new(0, 0, 120, 24);
     let label = item_rect(&items, bounds, 96, 1).unwrap();
@@ -85,7 +86,7 @@ fn hit_testing_skips_labels_and_spacers() {
 #[test]
 fn a_fixed_width_overrides_the_natural_width() {
     let items = [
-        item(Kind::Icon(Glyph::Menu)),
+        item(Kind::Icon(Glyph::Menu.into())),
         with_width(
             item(Kind::Slider {
                 min: 0.0,
@@ -102,7 +103,7 @@ fn a_fixed_width_overrides_the_natural_width() {
 #[test]
 fn an_expanding_item_absorbs_the_leftover_width() {
     let items = [
-        item(Kind::Icon(Glyph::Previous)),
+        item(Kind::Icon(Glyph::Previous.into())),
         with_width(
             item(Kind::Slider {
                 min: 0.0,
@@ -111,7 +112,7 @@ fn an_expanding_item_absorbs_the_leftover_width() {
             }),
             Width::Expand(1),
         ),
-        item(Kind::Icon(Glyph::Next)),
+        item(Kind::Icon(Glyph::Next.into())),
     ];
     let cells = rects(&items, Rect::new(0, 0, 200, 24), 96);
     assert_eq!(cells[0], Rect::new(0, 0, 36, 24));

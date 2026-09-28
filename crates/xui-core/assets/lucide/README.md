@@ -5,7 +5,19 @@ The SVGs in this directory are copied unmodified from
 the ISC License; see [LICENSE](LICENSE). Copyright (c) Lucide Icons and
 Contributors.
 
-`generate.py` converts them into `../../src/widget/lucide/data.rs` (absolute move/line/cubic
-segments on the 24x24 design grid) so they can be drawn with the portable
-`Canvas::fill_path`/`stroke_path`. To add an icon, drop its SVG here, re-run the
-script and reference the new constant from `src/widget/lucide/mod.rs`.
+`generate.py` converts them into the generated modules under
+`../../src/widget/lucide/`: `data.rs` holds the public `Lucide` enum, the
+`Lucide::ALL` list and the variant-to-path mapping, and one `data_<letter>.rs`
+per first letter holds the path constants (absolute move/line/cubic segments on
+the 24x24 design grid). The paths are drawn with the portable
+`Canvas::fill_path`/`stroke_path` through `xui_core::icon::draw_icon`.
+
+To add an icon, drop its SVG here and re-run:
+
+```text
+pip install svgelements
+python generate.py
+```
+
+The new file name becomes the `Lucide` variant (`folder-open.svg` →
+`Lucide::FolderOpen`).

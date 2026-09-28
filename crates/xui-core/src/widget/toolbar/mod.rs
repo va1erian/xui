@@ -1,25 +1,47 @@
 #![forbid(unsafe_code)]
 
-//! [`Toolbar`]: a horizontal strip of clickable label items.
+//! [`Toolbar`]: a horizontal strip of clickable items, each an icon, a text
+//! label, or both.
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use super::control::Control;
+use super::tooltip::Tooltip;
 use crate::app::Ui;
-use crate::backend::{Event, NodeKind, NodeSpec, Result, TextStyle, WidgetId};
-use crate::geometry::{Point, Rect};
+use crate::backend::{Event, NodeKind, NodeSpec, Result, WidgetId};
+use crate::geometry::Rect;
+use crate::icon::IconRef;
 use crate::message::{Key, MouseButton};
 use crate::property::{Properties, Property, Value};
-use crate::units::Dip;
+
+mod paint;
 
 /// Maps the index of a clicked item to an optional app message.
 type ClickMapper<M> = Rc<RefCell<Option<Box<dyn Fn(usize) -> Option<M>>>>>;
 
-/// The corner radius of an item's highlight.
-const RADIUS: f32 = 4.0;
-/// The design size of an item's label.
-const TEXT_SIZE: Dip = Dip(12.0);
+/// One toolbar entry: an optional icon, an optional label and an optional
+/// tooltip. At least one of the icon and the label is shown; a text-only item
+/// has no icon.
+pub(crate) struct Item {
+    /// The item's leading icon.
+    pub(crate) icon: Option<IconRef>,
+    /// The item's text label, or `None` for an icon-only item.
+    pub(crate) label: Option<String>,
+    /// The item's hover tooltip, if any.
+    pub(crate) tooltip: Option<String>,
+}
+
+impl Item {
+    /// A text-only item.
+    fn text(label: &str) -> Item {
+        Item {
+            icon: None,
+            label: Some(label.to_string()),
+            tooltip: None,
+        }
+    }
+}
 
 /// The item an event `x` (node-local) falls on; `None` left of the first item
 /// or right of the last one. `bounds` supplies the strip's total width.
@@ -35,31 +57,60 @@ fn item_at(bounds: Rect, x: i32, count: usize) -> Option<usize> {
     (index < count).then_some(index)
 }
 
-/// A horizontal strip of equally-spaced label items.
+/// The hover tooltip text of item `index`, if it names one.
+fn tooltip_at(items: &Rc<RefCell<Vec<Item>>>, index: Option<usize>) -> Option<String> {
+    let items = items.borrow();
+    index
+        .and_then(|index| items.get(index))
+        .and_then(|item| item.tooltip.clone())
+}
+
+/// A horizontal strip of equally-spaced clickable items.
 ///
-/// Clicking an item maps its index to the app's `Msg` through
+/// An item is a text label, an icon, or an icon with a label, and may name a
+/// tooltip. Clicking an item maps its index to the app's `Msg` through
 /// [`Toolbar::on_click`]. The left and right arrow keys move a focused item
 /// (shown with the hover highlight) and Return activates it; a disabled
-/// toolbar ignores input and dims its labels.
+/// toolbar ignores input and dims its items.
 pub struct Toolbar<M: 'static> {
     control: Control<M>,
-    items: Rc<Vec<String>>,
+    items: Rc<RefCell<Vec<Item>>>,
     hover: Rc<Cell<Option<usize>>>,
     enabled: Rc<Cell<bool>>,
     activated: Rc<Cell<i64>>,
+    _tooltip: Option<Rc<Tooltip<M>>>,
     on_click: ClickMapper<M>,
 }
 
 impl<M: 'static> Toolbar<M> {
-    /// Creates a toolbar of `items` along `bounds`.
+    /// Creates a text-only toolbar of `items` along `bounds`.
+    ///
+    /// Add icon items to an empty toolbar with [`Toolbar::empty`] and
+    /// [`Toolbar::item`].
     pub fn new(ui: &Ui<M>, bounds: Rect, items: &[&str]) -> Result<Toolbar<M>> {
+        let toolbar = Toolbar::empty(ui, bounds)?;
+        {
+            let mut slot = toolbar.items.borrow_mut();
+            slot.extend(items.iter().map(|item| Item::text(item)));
+        }
+        toolbar.control.invalidate();
+        Ok(toolbar)
+    }
+
+    /// Creates an empty toolbar along `bounds`; add items with [`Toolbar::item`]
+    /// and [`Toolbar::item_with_text`].
+    pub fn empty(ui: &Ui<M>, bounds: Rect) -> Result<Toolbar<M>> {
         let control = Control::new(ui, &NodeSpec::new(NodeKind::Toolbar, bounds).tab_stop())?;
-        let items: Rc<Vec<String>> = Rc::new(items.iter().map(|item| item.to_string()).collect());
+        let items: Rc<RefCell<Vec<Item>>> = Rc::new(RefCell::new(Vec::new()));
         let hover = Rc::new(Cell::new(None));
         let pressed = Rc::new(Cell::new(None));
         let enabled = Rc::new(Cell::new(true));
         let activated = Rc::new(Cell::new(-1i64));
         let on_click: ClickMapper<M> = Rc::new(RefCell::new(None));
+
+        // One hidden tip for the whole strip; its text follows the hovered item.
+        // A toolbar without tooltips simply never shows it.
+        let tooltip = Tooltip::attach(ui, control.id(), "").ok().map(Rc::new);
 
         {
             let items = Rc::clone(&items);
@@ -67,51 +118,17 @@ impl<M: 'static> Toolbar<M> {
             let pressed = Rc::clone(&pressed);
             let enabled = Rc::clone(&enabled);
             let theme = ui.theme_handle();
-            let flag = control.selected_handle();
+            let selected = control.selected_handle();
             control.set_painter(Rc::new(move |canvas| {
-                let theme = theme.get();
-                let bounds = canvas.bounds();
-                canvas.clear(theme.background);
-
-                let count = items.len();
-                let width = if count == 0 {
-                    0
-                } else {
-                    (bounds.width() / count as i32).max(1)
-                };
-                let enabled = enabled.get();
-                for (index, item) in items.iter().enumerate() {
-                    let left = bounds.left + width * index as i32;
-                    let right = if index + 1 == count {
-                        bounds.right
-                    } else {
-                        left + width
-                    };
-                    let rect = Rect::new(left, bounds.top, right, bounds.bottom);
-                    if pressed.get() == Some(index) {
-                        canvas.fill_rounded_rect(rect, RADIUS, theme.pressed);
-                    } else if hover.get() == Some(index) {
-                        canvas.fill_rounded_rect(rect, RADIUS, theme.hover);
-                    }
-                    if index > 0 {
-                        canvas.draw_line(
-                            Point::new(left, bounds.top),
-                            Point::new(left, bounds.bottom),
-                            theme.border,
-                            1.0,
-                        );
-                    }
-                    let color = if enabled {
-                        theme.text
-                    } else {
-                        theme.text_disabled
-                    };
-                    let style = TextStyle::new(color, TEXT_SIZE).centered().middle();
-                    canvas.draw_text(item, rect, &style);
-                }
-                if flag.get() {
-                    canvas.stroke_rect(bounds, theme.accent, 2.0);
-                }
+                paint::paint(
+                    canvas,
+                    &items,
+                    &hover,
+                    &pressed,
+                    &enabled,
+                    &selected,
+                    theme.get(),
+                );
             }));
         }
 
@@ -121,6 +138,7 @@ impl<M: 'static> Toolbar<M> {
             let pressed = Rc::clone(&pressed);
             let enabled = Rc::clone(&enabled);
             let activated = Rc::clone(&activated);
+            let tooltip = tooltip.clone();
             let on_click = Rc::clone(&on_click);
             let ui = ui.clone();
             let id = control.id();
@@ -135,9 +153,15 @@ impl<M: 'static> Toolbar<M> {
                 let bounds = ui.bounds(id);
                 match event {
                     Event::MouseMove { x, .. } => {
-                        let index = item_at(bounds, *x, items.len());
+                        let index = item_at(bounds, *x, items.borrow().len());
                         if hover.get() != index {
                             hover.set(index);
+                            if let Some(tip) = &tooltip {
+                                match tooltip_at(&items, index) {
+                                    Some(text) => tip.set_text(&text),
+                                    None => tip.hide(),
+                                }
+                            }
                             ui.invalidate(id);
                         }
                         None
@@ -146,6 +170,9 @@ impl<M: 'static> Toolbar<M> {
                         if hover.get().is_some() || pressed.get().is_some() {
                             hover.set(None);
                             pressed.set(None);
+                            if let Some(tip) = &tooltip {
+                                tip.hide();
+                            }
                             ui.invalidate(id);
                         }
                         None
@@ -155,7 +182,7 @@ impl<M: 'static> Toolbar<M> {
                         button: MouseButton::Left,
                         ..
                     } => {
-                        pressed.set(item_at(bounds, *x, items.len()));
+                        pressed.set(item_at(bounds, *x, items.borrow().len()));
                         ui.invalidate(id);
                         None
                     }
@@ -164,7 +191,7 @@ impl<M: 'static> Toolbar<M> {
                         button: MouseButton::Left,
                         ..
                     } => {
-                        let index = item_at(bounds, *x, items.len());
+                        let index = item_at(bounds, *x, items.borrow().len());
                         let was_pressed = pressed.get();
                         pressed.set(None);
                         ui.invalidate(id);
@@ -182,7 +209,7 @@ impl<M: 'static> Toolbar<M> {
                         system,
                         ..
                     } if *repeat <= 1 && !*system => {
-                        let count = items.len();
+                        let count = items.borrow().len();
                         if count == 0 {
                             return None;
                         }
@@ -220,8 +247,35 @@ impl<M: 'static> Toolbar<M> {
             hover,
             enabled,
             activated,
+            _tooltip: tooltip,
             on_click,
         })
+    }
+
+    /// Appends an icon item with a hover tooltip.
+    pub fn item(self, icon: impl Into<IconRef>, tooltip: &str) -> Toolbar<M> {
+        self.push(Item {
+            icon: Some(icon.into()),
+            label: None,
+            tooltip: (!tooltip.is_empty()).then(|| tooltip.to_string()),
+        })
+    }
+
+    /// Appends an icon item with a hover tooltip and a text label after the
+    /// icon.
+    pub fn item_with_text(self, icon: impl Into<IconRef>, tooltip: &str, text: &str) -> Toolbar<M> {
+        self.push(Item {
+            icon: Some(icon.into()),
+            label: Some(text.to_string()),
+            tooltip: (!tooltip.is_empty()).then(|| tooltip.to_string()),
+        })
+    }
+
+    /// Appends a prepared item and repaints.
+    fn push(self, item: Item) -> Toolbar<M> {
+        self.items.borrow_mut().push(item);
+        self.control.invalidate();
+        self
     }
 
     /// Maps a click to the app's message: the closure receives the item index
@@ -233,12 +287,33 @@ impl<M: 'static> Toolbar<M> {
 
     /// The number of items.
     pub fn len(&self) -> usize {
-        self.items.len()
+        self.items.borrow().len()
     }
 
     /// Whether the toolbar has no items.
     pub fn is_empty(&self) -> bool {
-        self.items.is_empty()
+        self.items.borrow().is_empty()
+    }
+
+    /// Item `index`'s icon, if it has one.
+    pub fn icon(&self, index: usize) -> Option<IconRef> {
+        self.items.borrow().get(index).and_then(|item| item.icon)
+    }
+
+    /// Item `index`'s label, if it has one.
+    pub fn label(&self, index: usize) -> Option<String> {
+        self.items
+            .borrow()
+            .get(index)
+            .and_then(|item| item.label.clone())
+    }
+
+    /// Item `index`'s tooltip text, if it names one.
+    pub fn tooltip(&self, index: usize) -> Option<String> {
+        self.items
+            .borrow()
+            .get(index)
+            .and_then(|item| item.tooltip.clone())
     }
 
     /// The toolbar's node identity.
@@ -277,7 +352,7 @@ impl<M: 'static> Properties for Toolbar<M> {
     fn set_property(&self, name: &str, value: Value) -> bool {
         match (name, value) {
             ("selected", Value::Integer(index)) => {
-                let in_range = index >= 0 && (index as usize) < self.items.len();
+                let in_range = index >= 0 && (index as usize) < self.len();
                 let index = if in_range { index } else { -1 };
                 self.activated.set(index);
                 self.hover.set((index >= 0).then_some(index as usize));
@@ -290,82 +365,4 @@ impl<M: 'static> Properties for Toolbar<M> {
 }
 
 #[cfg(test)]
-mod tests {
-    use std::cell::RefCell;
-    use std::rc::Rc;
-
-    use super::*;
-    use crate::app::{App, Core, Runtime};
-    use crate::backend::headless::HeadlessBackend;
-    use crate::backend::{Backend, PlatformSpec};
-    use crate::message::Modifiers;
-
-    struct TestApp(Rc<RefCell<Vec<u32>>>);
-
-    impl App for TestApp {
-        type Msg = u32;
-
-        fn update(&mut self, msg: u32, _ui: &mut Ui<u32>) {
-            self.0.borrow_mut().push(msg);
-        }
-    }
-
-    fn setup() -> (Rc<HeadlessBackend>, Rc<Core<u32>>, Ui<u32>) {
-        let backend = Rc::new(HeadlessBackend::new());
-        let window = backend.open_window(&PlatformSpec::new("test")).unwrap();
-        let core = Core::new(backend.clone(), window);
-        let ui = Ui::new(Rc::clone(&core));
-        (backend, core, ui)
-    }
-
-    fn down(x: i32) -> Event {
-        Event::MouseDown {
-            x,
-            y: 5,
-            button: MouseButton::Left,
-            modifiers: Modifiers::NONE,
-        }
-    }
-
-    fn up(x: i32) -> Event {
-        Event::MouseUp {
-            x,
-            y: 5,
-            button: MouseButton::Left,
-            modifiers: Modifiers::NONE,
-        }
-    }
-
-    #[test]
-    fn clicking_an_item_maps_to_the_apps_message() {
-        let (_backend, core, ui) = setup();
-        let toolbar = Toolbar::new(&ui, Rect::new(0, 0, 90, 28), &["one", "two", "three"])
-            .unwrap()
-            .on_click(|index| Some(index as u32));
-        let log = Rc::new(RefCell::new(Vec::new()));
-        let runtime = Runtime::primary(core, TestApp(Rc::clone(&log)));
-
-        runtime.deliver(toolbar.id(), &down(45));
-        runtime.deliver(toolbar.id(), &up(45));
-        runtime.deliver(WidgetId::NONE, &Event::Wake);
-
-        assert_eq!(*log.borrow(), vec![1]);
-        assert_eq!(toolbar.property("selected"), Some(Value::Integer(1)));
-    }
-
-    #[test]
-    fn a_click_past_the_last_item_raises_nothing() {
-        let (_backend, core, ui) = setup();
-        let toolbar = Toolbar::new(&ui, Rect::new(0, 0, 90, 28), &["one", "two", "three"])
-            .unwrap()
-            .on_click(|index| Some(index as u32));
-        let log = Rc::new(RefCell::new(Vec::new()));
-        let runtime = Runtime::primary(core, TestApp(Rc::clone(&log)));
-
-        runtime.deliver(toolbar.id(), &down(95));
-        runtime.deliver(toolbar.id(), &up(95));
-        runtime.deliver(WidgetId::NONE, &Event::Wake);
-
-        assert!(log.borrow().is_empty(), "no item is under x=95");
-    }
-}
+mod tests;
