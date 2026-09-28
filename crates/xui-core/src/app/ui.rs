@@ -256,6 +256,12 @@ impl<M: 'static> Ui<M> {
         self.core.backend().measure_text(text, style, dpi)
     }
 
+    /// A `Send + Sync` text shaper for this window's backend, usable from a
+    /// worker thread that lays text out off the UI thread.
+    pub fn text_shaper(&self) -> Box<dyn crate::backend::TextShaper> {
+        self.core.backend().text_shaper()
+    }
+
     /// Whether the backend provides a native widget for `kind`.
     pub fn supports(&self, kind: NodeKind) -> ImplKind {
         self.core.backend().supports(kind)

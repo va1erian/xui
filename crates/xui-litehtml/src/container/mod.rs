@@ -4,7 +4,7 @@
 //! layout+record pass lives in `engine.rs`.)
 //!
 //! This is a straight port of `egui-litehtml-webview`'s `painter.rs`, with the
-//! egui types replaced by DirectWrite (`xui_win32::d2d`) and the neutral [`Cmd`]
+//! egui types replaced by the portable text shaper and the neutral [`Cmd`]
 //! from `list.rs`. The invariants are the same: the text engine that measures
 //! must be the one that paints, and litehtml's values map identically.
 //!
@@ -17,9 +17,9 @@ use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 use std::sync::Arc;
 
+use crate::text::{Font, TextSystem};
 use litehtml::email::EMAIL_MASTER_CSS;
 use litehtml::{BorderRadiuses, Color, FontHandle, Position, TextDecorationLine};
-use xui_win32::d2d::{Font, TextSystem};
 
 use crate::geom::{Point, Radius, Rect, Rgba};
 use crate::list::{Cmd, FontDesc, FontKey, Image, ImageKey};

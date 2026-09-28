@@ -1,5 +1,5 @@
 //! Renders an HTML file (or `.eml` fixture, or the built-in `demo` page) in a
-//! xui-win32 window with an [`HtmlView`] filling it.
+//! window (the Win32 backend) with an [`HtmlView`] filling it.
 //!
 //! ```text
 //! cargo run -p xui-litehtml --example html -- demo
@@ -9,12 +9,13 @@
 //!
 //! `--screenshot out.png` renders once, captures via `Ui::capture` and exits
 //! (the capture path is guarded by a timer so a render always has an exit
-//! path). `--width`/`--height` set the window size in design units.
+//! path). `--width`/`--height` set the window size in design units. The view
+//! is sized once, to the window's initial client area.
 //! `--select-demo` renders a page of several blocks (including an RTL and a CJK
 //! phrase), selects everything, and captures a screenshot so the highlight can
 //! be checked. Link clicks print their `href`.
 //!
-//! Set `WIN32UI_DEMO_AUTOCLOSE_MS` to have the window quit itself, so a
+//! Set `XUI_DEMO_AUTOCLOSE_MS` to have the window quit itself, so a
 //! headless smoke run always terminates.
 
 #[cfg(windows)]
@@ -23,9 +24,14 @@ mod demo {
     use std::io::BufWriter;
     use std::path::Path;
 
+    use std::rc::Rc;
+
+    use xui_core::Dip;
+    use xui_core::app::{App as XuiApp, Ui, run_app};
+    use xui_core::backend::{Backend, PlatformSpec};
+    use xui_core::image::Image;
     use xui_litehtml::{HtmlView, HtmlViewEvent};
-    use xui_win32::column;
-    use xui_win32::prelude::*;
+    use xui_win32::Win32Backend;
 
     enum Msg {
         FrameReady,
@@ -146,15 +152,18 @@ mod demo {
             }
         };
 
-        let autoclose = std::env::var("WIN32UI_DEMO_AUTOCLOSE_MS")
+        let autoclose = std::env::var("XUI_DEMO_AUTOCLOSE_MS")
             .ok()
             .and_then(|value| value.parse::<u32>().ok());
 
-        let result = xui_win32::run_app(
-            WindowSpec::new("xui-litehtml").size(dip(width), dip(height)),
+        let backend: Rc<dyn Backend> = Rc::new(Win32Backend::new());
+        let result = run_app(
+            backend,
+            PlatformSpec::new("xui-litehtml").size(Dip(width), Dip(height)),
             move |ui| {
                 let view = HtmlView::new(
                     ui,
+                    ui.client_rect(),
                     html,
                     || Msg::FrameReady,
                     |event| match event {
@@ -162,9 +171,8 @@ mod demo {
                     },
                 )
                 .expect("create the view");
-                ui.set_layout(column![view.fill(1)]);
-                let timer = screenshot.as_ref().and_then(|_| ui.set_timer(100).ok());
-                let close = autoclose.and_then(|millis| ui.set_timer(millis).ok());
+                let timer = screenshot.as_ref().map(|_| ui.set_timer(100));
+                let close = autoclose.map(|millis| ui.set_timer(millis));
                 ui.on_timer(move |id| {
                     if Some(id) == close {
                         Some(Msg::Autoclose)
@@ -210,24 +218,24 @@ mod demo {
     }
 
     fn write_screenshot(
-        image: &RgbaImage,
+        image: &Image,
         path: &Path,
     ) -> std::result::Result<(), Box<dyn std::error::Error>> {
         let file = File::create(path)?;
-        let mut encoder = png::Encoder::new(BufWriter::new(file), image.width, image.height);
+        let mut encoder = png::Encoder::new(BufWriter::new(file), image.width(), image.height());
         encoder.set_color(png::ColorType::Rgba);
         encoder.set_depth(png::BitDepth::Eight);
         let mut writer = encoder.write_header()?;
-        writer.write_image_data(&image.pixels)?;
+        writer.write_image_data(image.pixels())?;
         Ok(())
     }
 
     /// Counts pixels that look like the translucent selection highlight over a
     /// white page (a distinctly blue, non-white colour). A non-zero count is the
     /// programmatic check that the highlight is visible.
-    fn count_highlight(image: &RgbaImage) -> usize {
+    fn count_highlight(image: &Image) -> usize {
         let mut n = 0;
-        for px in image.pixels.as_chunks::<4>().0 {
+        for px in image.pixels().as_chunks::<4>().0 {
             let (r, g, b) = (px[0] as i32, px[1] as i32, px[2] as i32);
             if b >= 200 && b - r >= 40 && b - g >= 20 {
                 n += 1;
@@ -236,7 +244,7 @@ mod demo {
         n
     }
 
-    impl xui_win32::App for App {
+    impl XuiApp for App {
         type Msg = Msg;
 
         fn update(&mut self, msg: Msg, ui: &mut Ui<Msg>) {
