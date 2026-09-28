@@ -17,7 +17,8 @@ $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
 New-Item -ItemType Directory -Force $Out | Out-Null
 $Out = (Resolve-Path $Out).Path
-Remove-Item -Force "$Out/*.png"
+# Only existing PNGs are removed; a real failure (a locked file) still stops.
+Get-ChildItem -Path $Out -Filter *.png -File | Remove-Item -Force
 
 cargo build -q -p xui --features canvas --examples
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

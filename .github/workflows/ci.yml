@@ -87,8 +87,14 @@ jobs:
   # check: it publishes images, it does not gate the merge.
   snapshots:
     runs-on: ubuntu-latest
+    # It runs code from the PR, so it gets a read-only token and no persisted
+    # checkout credentials.
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:

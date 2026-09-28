@@ -54,7 +54,7 @@ take a screenshot.
 
 ## CI
 
-`.github/workflows/ci.yml` runs five jobs:
+`.github/workflows/ci.yml` runs six jobs:
 
 | Job | Runner | What it does |
 |---|---|---|
@@ -63,6 +63,7 @@ take a screenshot.
 | `cross-check` | ubuntu-latest | `cargo check --all-targets`, clippy on `xui-core`, and `xui-core`/`xui-canvas` tests — proving the front layer has no Win32 dependency and the empty backends compile |
 | `cross-check-macos` | macos-latest | check, `xui-core`/`xui-canvas` tests, and the canvas gallery example |
 | `coverage` | windows-latest | `cargo llvm-cov --workspace --all-features`, uploading LCOV to Codecov and as a `coverage-lcov` artifact |
+| `snapshots` | ubuntu-latest | `scripts/snapshots.sh`: every example rendered headlessly in light and dark, uploaded as the `snapshots` artifact (not a required check) |
 
 ## Coverage
 
