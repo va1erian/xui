@@ -170,7 +170,7 @@ Containers own their children; create children through the container's scoped
 
 | Container | Constructor | API |
 |---|---|---|
-| `Panel<M>` | `Panel::new(ui, rect)` | `ui()` scopes children; caller positions them |
+| `Panel<M>` | `Panel::new(ui, rect)` | `ui()` scopes children; caller positions them; `set_design_mode(bool)` makes the subtree ignore input (form designers; also on `ScrollView`, `Split`, `Tabs`) |
 | `ScrollView<M>` | `ScrollView::new(ui, rect)` | `add(WidgetId, Dip)` registers a row height, `scroll_to(Px)`, `on_scroll(Fn(Px))`, `content_height()` |
 | `Split<M>` | `Split::row` / `Split::column` | `pane_a(&[ids])`, `pane_b(&[ids])`, `set_position(Dip)`, `set_min`, `on_moved(Fn(Dip))` |
 | `Tabs<M>` | `Tabs::new(ui, rect)` | `page(title, &[ids])`, `select(index)`/`selected`, `on_change(Fn(usize))` |

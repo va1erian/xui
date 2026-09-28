@@ -128,6 +128,13 @@ impl<M: 'static> Split<M> {
         &self.scoped
     }
 
+    /// Puts the widgets inside this split in or out of design mode: they
+    /// ignore their own input while everything outside stays live. Nested
+    /// containers inherit it.
+    pub fn set_design_mode(&self, on: bool) {
+        self.ui().set_design_mode(on);
+    }
+
     /// The split's node identity.
     pub fn id(&self) -> WidgetId {
         self.control.id()
