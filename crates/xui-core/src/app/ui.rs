@@ -47,6 +47,13 @@ impl<M: 'static> Ui<M> {
         self.core.window()
     }
 
+    /// Replaces the title of this handle's own top-level window.
+    pub fn set_window_title(&self, title: &str) {
+        self.core
+            .backend()
+            .set_window_title(self.core.window(), title);
+    }
+
     /// Opens a non-modal secondary window that runs its own [`App`].
     ///
     /// The child inherits this window's theme. The returned [`WindowHandle`]
