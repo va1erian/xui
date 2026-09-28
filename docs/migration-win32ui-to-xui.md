@@ -47,5 +47,5 @@ low-level platform layer it is built on.
   issue [#169](https://github.com/va1erian/xui/issues/169)).
 - The strip menu and the material status/top bars; the portable `TopBar` and
   `MaterialStatusBar` widgets are the replacements.
-- `xui-litehtml` is out of the workspace until it is ported
+- `xui-litehtml`'s `HtmlView::new` now takes the portable `&Ui` and a `Rect`
   ([#168](https://github.com/va1erian/xui/issues/168)).

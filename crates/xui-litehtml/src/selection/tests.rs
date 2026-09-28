@@ -2,8 +2,8 @@
 //! out of `mod.rs` so the module stays small.
 
 use super::*;
+use crate::text::TextSystem;
 use crate::text_runs::TextRunTable;
-use xui_win32::d2d::TextSystem;
 
 /// The engine lays pages out under the email master stylesheet, which zeroes
 /// paragraph margins and cell padding; these tests are about the gaps
@@ -11,7 +11,7 @@ use xui_win32::d2d::TextSystem;
 const SPACING: &str = "<style>p{margin:1em 0 !important}td,th{padding:1px !important}</style>";
 
 fn table_for(html: &str, width: f32) -> std::sync::Arc<TextRunTable> {
-    let mut engine = crate::engine::Engine::new(TextSystem::new().unwrap());
+    let mut engine = crate::engine::Engine::new(TextSystem::for_tests());
     engine
         .draw_pass(&format!("{SPACING}{html}"), width)
         .expect("parses");

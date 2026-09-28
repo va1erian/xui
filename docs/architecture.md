@@ -200,8 +200,7 @@ crates/xui-core/src/
 crates/xui-canvas/src/    WinitBackend, SkiaCanvas, OffscreenBackend, GL seam
 crates/xui-win32/src/     Win32Backend: Direct2D/DirectWrite painting (Windows)
 crates/xui-gpu/src/       the shared OpenGL surface seam (no platform code)
-crates/xui-litehtml/src/  the litehtml HTML view (Windows; currently out of the
-                          workspace, see issue #168)
+crates/xui-litehtml/src/  the litehtml HTML view (a portable custom-painted node)
 crates/xui/src/           the umbrella crate
 ```
 

@@ -34,7 +34,7 @@ snapshots and tests. Dark mode is first-class on every backend.
 | `xui-canvas` | The cross-platform software backend: a `winit` window compositing with `tiny-skia` and presenting through `softbuffer`, an optional GPU path (`glow` OpenGL through `glutin`), and an `OffscreenBackend` that renders the same widgets headlessly. |
 | `xui-gpu` | The shared OpenGL seam behind both backends' GL widgets: the opaque `GlContext` handle, the `GlSurface` frame/offscreen lifecycle and the offscreen readback. Keeps `glow` out of `xui-core`. |
 | `xui` | The umbrella crate most applications depend on. Selects a backend by feature (`canvas` by default, `d2d` for the Windows Direct2D backend) and re-exports the portable front layer. |
-| `xui-litehtml` | An HTML view built on `litehtml` and Direct2D. Windows-only; currently out of the workspace while it is ported to the portable widget layer (#168). |
+| `xui-litehtml` | An HTML view built on `litehtml` and Direct2D. A portable custom-painted node; Windows-only today because copy uses the Win32 clipboard. |
 
 ## Documentation
 
