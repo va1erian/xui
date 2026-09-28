@@ -5,11 +5,11 @@
 
 use tiny_skia::GradientStop as SkiaStop;
 use tiny_skia::{
-    FillRule, LineCap, Paint, Path, PathBuilder, Shader, SpreadMode, Stroke as SkiaStroke,
-    StrokeDash, Transform,
+    FillRule, LineCap, LineJoin, Paint, Path, PathBuilder, Shader, SpreadMode,
+    Stroke as SkiaStroke, StrokeDash, Transform,
 };
 
-use xui_core::backend::{Cap, Corner, Dash, GradientStop, Stroke};
+use xui_core::backend::{Cap, Corner, Dash, GradientStop, Join, Stroke};
 use xui_core::geometry::{Point, Rect};
 
 /// One entry on the canvas's clip stack.
@@ -119,10 +119,16 @@ pub(crate) fn skia_stroke(stroke: &Stroke, scale: f32) -> SkiaStroke {
         Cap::Square => LineCap::Square,
         Cap::Round => LineCap::Round,
     };
+    let line_join = match stroke.join {
+        Join::Miter => LineJoin::Miter,
+        Join::Bevel => LineJoin::Bevel,
+        Join::Round => LineJoin::Round,
+    };
     SkiaStroke {
         width,
         dash,
         line_cap,
+        line_join,
         ..SkiaStroke::default()
     }
 }

@@ -140,3 +140,11 @@ portable `xui-core` widgets. The original Win32-native widget layer was removed
 ## License
 
 MIT. See [LICENSE](LICENSE).
+
+## Credits
+
+The built-in icons (`Icon`, `Glyph`) are outlines from
+[Lucide](https://lucide.dev), vendored under
+[`crates/xui-core/assets/lucide/`](crates/xui-core/assets/lucide/) and used
+under the ISC License (copyright Lucide Icons and Contributors; see the
+[license text](crates/xui-core/assets/lucide/LICENSE)).

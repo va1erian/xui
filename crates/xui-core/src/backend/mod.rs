@@ -18,6 +18,7 @@ mod ids;
 mod native;
 mod node;
 mod paint;
+mod path;
 mod spec;
 mod text;
 
@@ -30,7 +31,10 @@ pub use event::{Event, TimerId};
 pub use ids::{WidgetId, WindowId};
 pub use native::NativeWindowHandle;
 pub use node::{ImplKind, NodeKind, NodeOptions, NodeSpec, ParentRef};
-pub use paint::{Cap, Corner, Dash, GradientStop, LinearGradient, RadialGradient, Rgba, Stroke};
+pub use paint::{
+    Cap, Corner, Dash, GradientStop, Join, LinearGradient, RadialGradient, Rgba, Stroke,
+};
+pub use path::{PathPlacement, PathSeg, Polyline, flatten};
 pub use spec::{Backdrop, Decorations, PlatformSpec};
 pub use text::{FontSpec, TextHit, TextLayout, TextShaper};
 

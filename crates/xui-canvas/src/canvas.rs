@@ -11,8 +11,8 @@
 use tiny_skia::{FilterQuality, Mask, Paint, PathBuilder, Pattern, Pixmap, SpreadMode, Transform};
 
 use xui_core::backend::{
-    Canvas, Corner, LinearGradient, RadialGradient, Rgba, Stroke, TextLayout, TextMetrics,
-    TextStyle,
+    Canvas, Corner, LinearGradient, PathPlacement, PathSeg, RadialGradient, Rgba, Stroke,
+    TextLayout, TextMetrics, TextStyle,
 };
 use xui_core::color::Color;
 use xui_core::geometry::{Point, Rect};
@@ -192,6 +192,20 @@ impl Canvas for SkiaCanvas<'_> {
         stroke: &Stroke,
     ) {
         if let Some(path) = self.ellipse_path(center, radius_x, radius_y) {
+            self.stroke(&path, to_skia_rgba(color), stroke);
+        }
+    }
+
+    fn fill_path(&mut self, path: &[PathSeg], at: PathPlacement, color: Rgba) {
+        if let Some(path) = self.placed_path(path, at) {
+            self.ensure_mask();
+            self.fill(&path, solid_shader(to_skia_rgba(color)));
+        }
+    }
+
+    fn stroke_path(&mut self, path: &[PathSeg], at: PathPlacement, color: Rgba, stroke: &Stroke) {
+        if let Some(path) = self.placed_path(path, at) {
+            self.ensure_mask();
             self.stroke(&path, to_skia_rgba(color), stroke);
         }
     }

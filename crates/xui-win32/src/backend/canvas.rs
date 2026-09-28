@@ -16,8 +16,8 @@
 use crate::d2d::{DcCanvas, PointF, RectF, Stroke as D2dStroke};
 use crate::gdi;
 use xui_core::backend::{
-    Canvas, Corner, LinearGradient, RadialGradient, Rgba, Stroke, TextLayout, TextMetrics,
-    TextStyle,
+    Canvas, Corner, LinearGradient, PathPlacement, PathSeg, RadialGradient, Rgba, Stroke,
+    TextLayout, TextMetrics, TextStyle, flatten,
 };
 use xui_core::image::Image;
 use xui_core::{Color, Point, Rect};
@@ -262,6 +262,53 @@ impl Canvas for Win32Canvas<'_> {
             Color::rgb(color.r, color.g, color.b),
             stroke.width.max(1.0) as i32,
         );
+    }
+
+    fn fill_path(&mut self, path: &[PathSeg], at: PathPlacement, color: Rgba) {
+        if self.d2d().is_some() {
+            if let Some(geometry) = self.device_path(path, at)
+                && let Some(d2d) = self.d2d()
+            {
+                d2d.fill_path(&geometry, rgba(color));
+            }
+            return;
+        }
+        // GDI: flatten and fill each figure opaque.
+        let at = self.device_placement(at);
+        for figure in flatten(path, at) {
+            self.canvas
+                .polygon(&figure.points, Color::rgb(color.r, color.g, color.b));
+        }
+    }
+
+    fn stroke_path(&mut self, path: &[PathSeg], at: PathPlacement, color: Rgba, stroke: &Stroke) {
+        if self.d2d().is_some() {
+            let scaled = Stroke {
+                width: stroke.width * self.scale,
+                ..*stroke
+            };
+            if let Some(geometry) = self.device_path(path, at)
+                && let Some(d2d) = self.d2d()
+            {
+                d2d.stroke_path(&geometry, rgba(color), d2d_stroke(&scaled));
+            }
+            return;
+        }
+        // GDI: flatten and draw each segment solid.
+        let at = self.device_placement(at);
+        let width = (stroke.width * self.scale).max(1.0) as i32;
+        let color = Color::rgb(color.r, color.g, color.b);
+        for figure in flatten(path, at) {
+            let mut points = figure.points;
+            if figure.closed
+                && let Some(first) = points.first().copied()
+            {
+                points.push(first);
+            }
+            for pair in points.windows(2) {
+                self.canvas.line(pair[0], pair[1], color, width);
+            }
+        }
     }
 
     fn stroke_ellipse_stroked(

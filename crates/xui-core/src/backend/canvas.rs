@@ -8,6 +8,7 @@
 //! layer converts its [`Dip`] design values once, at the boundary.
 
 use super::paint::{Corner, LinearGradient, RadialGradient, Rgba, Stroke};
+use super::path::{PathPlacement, PathSeg, flatten};
 use super::text::TextLayout;
 use crate::color::Color;
 use crate::geometry::{Point, Rect};
@@ -249,6 +250,35 @@ pub trait Canvas {
         color: Rgba,
         stroke: &Stroke,
     );
+
+    /// Fills the closed figures of `path`, placed by `at`, with an RGBA colour.
+    ///
+    /// The default flattens the curves and fills each figure as an opaque
+    /// polygon; a backend with real path support overrides it.
+    fn fill_path(&mut self, path: &[PathSeg], at: PathPlacement, color: Rgba) {
+        for figure in flatten(path, at) {
+            self.fill_polygon(&figure.points, Color::rgb(color.r, color.g, color.b));
+        }
+    }
+
+    /// Strokes `path`, placed by `at`, with the full stroke vocabulary
+    /// (`stroke.width` is in canvas pixels, not scaled by `at`).
+    ///
+    /// The default flattens the curves and draws the segments as lines; a
+    /// backend with real path support overrides it (and honours the join).
+    fn stroke_path(&mut self, path: &[PathSeg], at: PathPlacement, color: Rgba, stroke: &Stroke) {
+        for figure in flatten(path, at) {
+            let mut points = figure.points.clone();
+            if figure.closed
+                && let Some(first) = points.first().copied()
+            {
+                points.push(first);
+            }
+            for pair in points.windows(2) {
+                self.draw_line_stroked(pair[0], pair[1], color, stroke);
+            }
+        }
+    }
 
     /// Fills an axis-aligned rectangle with a linear gradient.
     fn fill_rect_linear(&mut self, rect: Rect, gradient: &LinearGradient);
