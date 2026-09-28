@@ -24,6 +24,8 @@ use xui_core::{Color, Point, Rect};
 
 use super::shape::{d2d_stroke, intersect, linear, point_f, radial, rgba, rounded};
 
+mod draw;
+
 /// A portable canvas over a Win32 GDI [`gdi::Canvas`].
 pub(crate) struct Win32Canvas<'a> {
     pub(crate) canvas: &'a gdi::Canvas,
@@ -312,62 +314,19 @@ impl Canvas for Win32Canvas<'_> {
     }
 
     fn draw_text(&mut self, text: &str, rect: Rect, style: &TextStyle) {
-        let rect = self.rect(rect);
-        super::text::draw(
-            self.canvas,
-            text,
-            rect,
-            style,
-            self.dpi,
-            Self::text_format(style),
-        );
+        self.paint_text(text, rect, style);
     }
 
     fn measure_text(&self, text: &str, style: &TextStyle) -> TextMetrics {
-        super::text::measure_d2d(text, style, self.dpi)
-            .unwrap_or_else(|| super::text::measure_gdi(text, style, self.dpi))
+        self.measure(text, style)
     }
 
     fn draw_layout(&mut self, layout: &dyn TextLayout, origin: Point, color: Rgba) {
-        super::text::draw_layout(self.canvas, layout, self.point(origin), color);
+        self.paint_layout(layout, origin, color);
     }
 
     fn draw_image(&mut self, image: &Image, rect: Rect) {
-        let rect = self.rect(rect);
-        if rect.is_empty() {
-            return;
-        }
-        // Draw through the shared Direct2D frame, from the DC target's cached
-        // device bitmap: the first draw of an image uploads it once and every
-        // later draw — the same row icon on every repaint — is one cached
-        // DrawBitmap inside the open frame, instead of a WIC resample, a GDI
-        // DIB and a frame close/reopen per draw.
-        if let Some(frame) = self.frame.as_mut() {
-            frame.draw_image(image, RectF::from_rect(rect));
-            return;
-        }
-        // Direct2D unavailable: the GDI fallback still pays a copy, a WIC
-        // resample and a DIB per draw, with no frame that could stay open.
-        let rgba = crate::RgbaImage {
-            width: image.width(),
-            height: image.height(),
-            pixels: image.pixels().to_vec(),
-        };
-        let target = (rect.width().max(1) as u32, rect.height().max(1) as u32);
-        let rgba = if (rgba.width, rgba.height) == target {
-            rgba
-        } else {
-            match crate::imaging::resize(&rgba, target.0, target.1) {
-                Ok(scaled) => scaled,
-                Err(_) => return,
-            }
-        };
-        let Ok(bitmap) =
-            gdi::Bitmap::from_rgba(rgba.width as i32, rgba.height as i32, &rgba.pixels)
-        else {
-            return;
-        };
-        self.canvas.draw_bitmap(&bitmap, rect);
+        self.paint_image(image, rect);
     }
 
     fn push_clip(&mut self, rect: Rect) {
