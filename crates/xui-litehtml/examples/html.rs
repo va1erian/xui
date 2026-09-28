@@ -1,5 +1,5 @@
 //! Renders an HTML file (or `.eml` fixture, or the built-in `demo` page) in a
-//! window (the Win32 backend) with an [`HtmlView`] filling it.
+//! window (the portable `winit` backend) with an [`HtmlView`] filling it.
 //!
 //! ```text
 //! cargo run -p xui-litehtml --example html -- demo
@@ -18,7 +18,6 @@
 //! Set `XUI_DEMO_AUTOCLOSE_MS` to have the window quit itself, so a
 //! headless smoke run always terminates.
 
-#[cfg(windows)]
 mod demo {
     use std::fs::File;
     use std::io::BufWriter;
@@ -26,16 +25,17 @@ mod demo {
 
     use std::rc::Rc;
 
+    use xui_canvas::WinitBackend;
     use xui_core::Dip;
     use xui_core::app::{App as XuiApp, Ui, run_app};
     use xui_core::backend::{Backend, PlatformSpec};
     use xui_core::image::Image;
     use xui_litehtml::{HtmlView, HtmlViewEvent};
-    use xui_win32::Win32Backend;
 
     enum Msg {
         FrameReady,
         Link(String),
+        Copy(String),
         Tick,
         Autoclose,
     }
@@ -156,7 +156,7 @@ mod demo {
             .ok()
             .and_then(|value| value.parse::<u32>().ok());
 
-        let backend: Rc<dyn Backend> = Rc::new(Win32Backend::new());
+        let backend: Rc<dyn Backend> = Rc::new(WinitBackend::new());
         let result = run_app(
             backend,
             PlatformSpec::new("xui-litehtml").size(Dip(width), Dip(height)),
@@ -168,6 +168,7 @@ mod demo {
                     || Msg::FrameReady,
                     |event| match event {
                         HtmlViewEvent::LinkClicked(href) => Some(Msg::Link(href)),
+                        HtmlViewEvent::CopyRequested(text) => Some(Msg::Copy(text)),
                     },
                 )
                 .expect("create the view");
@@ -251,6 +252,7 @@ mod demo {
             match msg {
                 Msg::FrameReady => self.view.invalidate(),
                 Msg::Link(href) => eprintln!("html: link clicked: {href}"),
+                Msg::Copy(text) => eprintln!("html: copy requested: {} chars", text.len()),
                 Msg::Autoclose => ui.quit(),
                 Msg::Tick => {
                     self.ticks += 1;
@@ -308,10 +310,6 @@ mod demo {
     }
 }
 
-#[cfg(windows)]
 fn main() {
     demo::main();
 }
-
-#[cfg(not(windows))]
-fn main() {}

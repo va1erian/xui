@@ -12,7 +12,6 @@ use xui_core::app::Ui;
 use xui_core::backend::{NodeKind, NodeSpec, Result};
 use xui_core::geometry::Rect;
 use xui_core::widget::Control;
-use xui_win32::Hwnd;
 
 use crate::text::TextSystem;
 use crate::widget::HtmlWidget;
@@ -24,6 +23,10 @@ pub enum HtmlViewEvent {
     /// The user clicked a link (an `<a href>`). litehtml has no navigation
     /// concept of its own, so the host decides what to do with it.
     LinkClicked(String),
+    /// The user pressed Ctrl+C with text selected; carries the text as a copy
+    /// should read. The crate has no clipboard of its own, so the host puts it
+    /// on the platform clipboard.
+    CopyRequested(String),
 }
 
 /// An HTML view hosted as a custom-painted node, rendered on a worker thread
@@ -57,9 +60,6 @@ impl<M: Send + 'static> HtmlView<M> {
         let scale = ui.dpi() as f32 / 96.0;
         let images: ImageSource = Arc::new(Mutex::new(None));
         let worker_images = Arc::clone(&images);
-        let hwnd = ui
-            .native_window()
-            .map_or(Hwnd::NULL, |handle| Hwnd::from_raw(handle.raw()));
 
         let control = Control::new(ui, &NodeSpec::new(NodeKind::Custom, bounds))?;
         let widget = Rc::new(HtmlWidget::new(
@@ -69,7 +69,6 @@ impl<M: Send + 'static> HtmlView<M> {
             latest_id.clone(),
             html,
             scale,
-            hwnd,
         ));
 
         {

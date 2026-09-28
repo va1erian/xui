@@ -21,7 +21,6 @@ use std::time::{Duration, Instant};
 use xui_core::Color;
 use xui_core::backend::{Canvas, Rgba as PRgba};
 use xui_core::geometry::Rect as PxRect;
-use xui_win32::Hwnd;
 
 use crate::geom::{Point, Rect};
 use crate::list::Frame;
@@ -81,8 +80,6 @@ pub struct HtmlWidget {
     shift_held: Cell<bool>,
     /// The window's scale from device to independent pixels (dpi / 96).
     scale: Cell<f32>,
-    /// The top-level window, for clipboard ownership while copying.
-    hwnd: Hwnd,
 }
 
 impl HtmlWidget {
@@ -93,7 +90,6 @@ impl HtmlWidget {
         latest_id: Arc<AtomicU64>,
         html: String,
         scale: f32,
-        hwnd: Hwnd,
     ) -> Self {
         Self {
             painter: RefCell::new(Painter::new(text)),
@@ -118,7 +114,6 @@ impl HtmlWidget {
             last_click: Cell::new(None),
             shift_held: Cell::new(false),
             scale: Cell::new(scale),
-            hwnd,
         }
     }
 
@@ -292,13 +287,6 @@ impl HtmlWidget {
                 PxRect::new(px(r.left), py(r.top), px(r.right), py(r.bottom)),
                 SELECTION_FILL,
             );
-        }
-    }
-
-    /// Copies the selection to the clipboard.
-    fn copy_selection(&self) {
-        if let Some(text) = self.selected_text() {
-            let _ = xui_win32::clipboard::set_text(self.hwnd, &text);
         }
     }
 }

@@ -7,8 +7,8 @@
 //! **Render, scroll, resize, DPI, links, text selection, copy, keyboard.** It
 //! was extracted from esMail's `litehtml-view-d2d`. [`HtmlView`] is a
 //! custom-painted portable node: the app gives it bounds and maps its
-//! [`HtmlViewEvent`]s to its own `Msg`. Copy to the clipboard still uses
-//! `xui-win32`, so the crate stays Windows-only for now.
+//! [`HtmlViewEvent`]s to its own `Msg`. The crate has no platform code: Ctrl+C
+//! raises [`HtmlViewEvent::CopyRequested`] for the app to put on its clipboard.
 //!
 //! # Design
 //!
@@ -49,13 +49,7 @@
 //! `Arc<Image>`; paint draws them via `Canvas::draw_image`. Remote images are
 //! fetched through the host's [`ImageFetcher`], when it installed one, and
 //! otherwise left unloaded.
-//!
-//! # On other targets
-//!
-//! This crate compiles to an empty crate on non-Windows so the workspace's
-//! Linux CI stays green.
 
-#![cfg(windows)]
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
