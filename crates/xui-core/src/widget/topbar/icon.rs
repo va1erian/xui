@@ -1,14 +1,15 @@
 #![forbid(unsafe_code)]
 
-//! The built-in [`Glyph`](super::Glyph) icon set: vendored Lucide outlines drawn
-//! with portable [`Canvas`] primitives, so a media bar needs no icon font and
-//! renders the same on every backend.
+//! The built-in [`Glyph`](super::Glyph) icon set: each variant resolves to a
+//! generated [`Lucide`] outline (some filled), drawn with portable [`Canvas`]
+//! primitives, so a media bar needs no icon font and renders the same on every
+//! backend.
 
 use crate::backend::{Canvas, TextStyle};
 use crate::color::Color;
 use crate::geometry::Rect;
 use crate::units::Dip;
-use crate::widget::lucide;
+use crate::widget::lucide::{self, Lucide};
 
 use super::Glyph;
 
@@ -28,35 +29,34 @@ pub(crate) fn draw_glyph(
     color: Color,
     dpi: u32,
 ) {
-    if let Glyph::Text(text) = glyph {
-        let style = TextStyle::new(color, TEXT_SIZE).centered().middle();
-        canvas.draw_text(text, rect, &style);
-        return;
-    }
-    let (strokes, filled) = match glyph {
-        Glyph::Menu => (lucide::MENU, false),
-        Glyph::Search => (lucide::SEARCH, false),
-        Glyph::Close => (lucide::X, false),
-        Glyph::More => (lucide::ELLIPSIS, false),
-        Glyph::Star => (lucide::STAR, false),
-        Glyph::StarFilled => (lucide::STAR, true),
-        Glyph::Play => (lucide::PLAY, true),
-        Glyph::Pause => (lucide::PAUSE, true),
-        Glyph::Stop => (lucide::SQUARE, true),
-        Glyph::Previous => (lucide::SKIP_BACK, true),
-        Glyph::Next => (lucide::SKIP_FORWARD, true),
-        Glyph::Repeat => (lucide::REPEAT, false),
-        Glyph::Shuffle => (lucide::SHUFFLE, false),
-        Glyph::Audio => (lucide::VOLUME_2, false),
-        Glyph::Album => (lucide::DISC, false),
-        Glyph::People => (lucide::USERS, false),
-        Glyph::Tag => (lucide::TAG, false),
-        Glyph::Folder => (lucide::FOLDER, false),
-        Glyph::History => (lucide::HISTORY, false),
-        Glyph::Monitor => (lucide::MONITOR, false),
-        Glyph::Settings => (lucide::SETTINGS, false),
-        Glyph::Text(_) => return,
+    let (icon, filled) = match glyph {
+        Glyph::Text(text) => {
+            let style = TextStyle::new(color, TEXT_SIZE).centered().middle();
+            canvas.draw_text(text, rect, &style);
+            return;
+        }
+        Glyph::Menu => (Lucide::Menu, false),
+        Glyph::Search => (Lucide::Search, false),
+        Glyph::Close => (Lucide::X, false),
+        Glyph::More => (Lucide::Ellipsis, false),
+        Glyph::Star => (Lucide::Star, false),
+        Glyph::StarFilled => (Lucide::Star, true),
+        Glyph::Play => (Lucide::Play, true),
+        Glyph::Pause => (Lucide::Pause, true),
+        Glyph::Stop => (Lucide::Square, true),
+        Glyph::Previous => (Lucide::SkipBack, true),
+        Glyph::Next => (Lucide::SkipForward, true),
+        Glyph::Repeat => (Lucide::Repeat, false),
+        Glyph::Shuffle => (Lucide::Shuffle, false),
+        Glyph::Audio => (Lucide::Volume2, false),
+        Glyph::Album => (Lucide::Disc, false),
+        Glyph::People => (Lucide::Users, false),
+        Glyph::Tag => (Lucide::Tag, false),
+        Glyph::Folder => (Lucide::Folder, false),
+        Glyph::History => (Lucide::History, false),
+        Glyph::Monitor => (Lucide::Monitor, false),
+        Glyph::Settings => (Lucide::Settings, false),
     };
     let size = GLYPH.to_px(dpi).value().max(2);
-    lucide::draw(canvas, strokes, filled, rect, size, color, dpi);
+    lucide::draw_lucide(canvas, icon, filled, rect, size, color, dpi);
 }

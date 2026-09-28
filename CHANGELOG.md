@@ -18,10 +18,22 @@
 
 ### Features
 
+- **One public Lucide icon API.** The vendored outlines generate a public
+  `xui_core::icon::Lucide` enum (one variant per SVG), `IconRef` unifies it with
+  the legacy `Icon`/`Glyph` sets, and `xui_core::icon::draw_icon` is the single
+  drawing entry point. `Button::icon`, `Toolbar` items, `TreeRow`/`RowIcon` and
+  `TopBar` now accept any `Into<IconRef>`, while the existing `Icon` and `Glyph`
+  callers keep compiling. The icon set grew from 25 to 75 icons; adding one is
+  dropping its SVG into `crates/xui-core/assets/lucide/` and re-running
+  `generate.py`.
 - `arrange`: `ListView` and `StatusBar` are now `Placeable`, so they can be mounted in `row()`/`column()` layouts and reflow with the window (`ListView::auto`, `StatusBar::auto`); a mounted list re-lays its scrollbar against its new bounds (#181).
 
 ### Breaking
 
+- `RowIcon` gained an `Icon(IconRef)` variant, so an exhaustive match on it must
+  handle it; `Button::set_icon` now takes `Option<impl Into<IconRef>>`
+  (`Button::clear_icon` removes the icon; a bare `None` needs a type
+  annotation).
 - **The Win32-native widget layer is removed.** `xui-win32` no longer has
   `controls`, the `column!`/`row!`/`tabs!` layout tree, `xui_win32::run_app(
   WindowSpec, ...)`, the strip menu, material status/top bars, `TitleBar`,

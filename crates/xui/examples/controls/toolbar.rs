@@ -1,5 +1,6 @@
 //! Demonstrates the portable [`Toolbar`]: clicking a tool reports its index and
-//! a label names it.
+//! a label names it. The tools are generated [`Lucide`] icons with tooltips,
+//! one of them carrying a text label after the icon.
 //!
 //! Run with:
 //!
@@ -10,13 +11,14 @@
 use xui_core::Dip;
 use xui_core::app::{App, Ui, run_app};
 use xui_core::backend::PlatformSpec;
+use xui_core::icon::Lucide;
 use xui_core::widget::{HasText, Label, Toolbar};
 
 #[path = "support.rs"]
 mod support;
 use support::{Layout, autoclose, backend};
 
-const TOOLS: [&str; 3] = ["New", "Open", "Save"];
+const TOOLS: [&str; 3] = ["Save", "Copy", "Run"];
 
 enum Msg {
     Click(usize),
@@ -49,8 +51,11 @@ fn main() -> xui_core::backend::Result<()> {
         |ui| {
             let l = Layout::new(ui.dpi());
             let result = Label::new(ui, l.rect(16.0, 16.0, 504.0, 48.0), "No tool yet").unwrap();
-            let toolbar = Toolbar::new(ui, l.rect(16.0, 64.0, 504.0, 112.0), &TOOLS)
+            let toolbar = Toolbar::empty(ui, l.rect(16.0, 64.0, 504.0, 112.0))
                 .unwrap()
+                .item(Lucide::Save, "Save")
+                .item(Lucide::Copy, "Copy")
+                .item_with_text(Lucide::Play, "Run", "Run")
                 .on_click(|index| Some(Msg::Click(index)));
             autoclose(ui, || Msg::Quit);
             Demo {

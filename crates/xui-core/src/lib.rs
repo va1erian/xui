@@ -19,6 +19,7 @@ pub mod arrange;
 pub mod backend;
 pub mod color;
 pub mod geometry;
+pub mod icon;
 pub mod image;
 pub mod layout;
 pub mod message;
@@ -38,6 +39,7 @@ pub use backend::{
 };
 pub use color::Color;
 pub use geometry::{Point, Rect, Size};
+pub use icon::{IconRef, Lucide, draw_icon};
 pub use image::{Image, ImageError};
 pub use layout::{Anchor, Dock, DockLayout, Insets, Stack, StackDirection, StackSlot, anchored};
 pub use message::{HitTest, Key, Modifiers, MouseButton};
@@ -52,7 +54,7 @@ pub use widget::{
     MultilineEdit, NodeId, NumberField, Panel, ProgressBar, RadioGroup, RowIcon, Run, RunStyle,
     ScrollView, SelectionMode, Separator, Slider, SortDirection, Split, StatusBar, Tabs, Tile,
     TilePaint, TileSize, ToggleButton, Toolbar, Tooltip, TopBar, TopBarId, TreeModel, TreeNode,
-    TreeRow, TreeView, draw_icon,
+    TreeRow, TreeView,
 };
 
 /// The core types a frontend or a backend usually needs, in one `use`.

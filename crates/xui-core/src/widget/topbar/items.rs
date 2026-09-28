@@ -12,9 +12,10 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use crate::geometry::Rect;
+use crate::icon::IconRef;
 use crate::units::Dip;
 
-use super::{Glyph, TopBarId};
+use super::TopBarId;
 
 /// The design size of an icon button or a toggle.
 pub(super) const ITEM: Dip = Dip(36.0);
@@ -37,11 +38,11 @@ pub(super) const TRACK: Dip = Dip(3.0);
 #[derive(Clone, Debug)]
 pub(super) enum Kind {
     /// A clickable icon button.
-    Icon(Glyph),
+    Icon(IconRef),
     /// A latching icon button.
     Toggle {
         /// The button's icon.
-        glyph: Glyph,
+        glyph: IconRef,
         /// Whether it is checked.
         checked: bool,
     },
