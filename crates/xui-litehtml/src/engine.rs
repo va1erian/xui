@@ -5,11 +5,11 @@
 use std::sync::Arc;
 
 use litehtml::{Document, DrawContext};
-use xui_win32::d2d::TextSystem;
 
 use crate::container::{D2dContainer, ua_sheet};
 use crate::links::LinkTable;
 use crate::list::{DisplayList, Frame};
+use crate::text::TextSystem;
 use crate::text_runs::TextRunTable;
 
 /// Everything the worker thread owns: the container plus the finished frame.

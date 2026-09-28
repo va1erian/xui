@@ -213,10 +213,10 @@ fn run_for(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use xui_win32::d2d::TextSystem;
+    use crate::text::TextSystem;
 
     fn table_for(html: &str, width: f32) -> std::sync::Arc<TextRunTable> {
-        let mut engine = crate::engine::Engine::new(TextSystem::new().unwrap());
+        let mut engine = crate::engine::Engine::new(TextSystem::for_tests());
         engine.draw_pass(html, width).expect("parses");
         engine.runs.clone()
     }

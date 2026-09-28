@@ -3,7 +3,7 @@ name = "xui-litehtml"
 version = "0.1.0"
 edition = "2024"
 license = "MIT"
-description = "An HTML view for xui: lays a page out with litehtml and paints it with Direct2D/DirectWrite through xui-win32"
+description = "An HTML view for xui: lays a page out with litehtml and paints it through xui-core's portable canvas"
 repository = "https://github.com/va1erian/xui"
 
 [dependencies]
@@ -20,6 +20,7 @@ log = "0.4"
 # targets the crate compiles to an empty crate (the crate root is `#![cfg(windows)]`).
 [target.'cfg(windows)'.dependencies]
 xui-win32 = { path = "../xui-win32" }
+xui-core = { path = "../xui-core" }
 
 [dev-dependencies]
 env_logger = "0.11"

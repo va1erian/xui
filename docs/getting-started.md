@@ -182,7 +182,7 @@ Use the table below; the full capability comparison is in [Backends](backends.md
 | A Windows-only app with native text input, backdrop materials, the extended title bar and Direct2D-accelerated painting | `xui_win32::Win32Backend` |
 | GPU rendering inside a canvas window | a `GlWidget` installed with `WinitBackend::set_gl_content` |
 | Deterministic headless snapshots in tests and tooling | `xui_canvas::OffscreenBackend` |
-| An HTML page rendered with Direct2D on Windows | `xui-litehtml`'s `HtmlView` (currently out of the workspace, see issue #168) |
+| An HTML page rendered with Direct2D on Windows | `xui-litehtml`'s `HtmlView` |
 
 Two practical notes:
 

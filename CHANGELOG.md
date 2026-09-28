@@ -16,4 +16,4 @@
   feature is renamed `d2d`. The umbrella's bare names are always the portable
   `xui-core` widgets.
 - `Win32Backend` has no Windows UI Automation support yet (#169).
-- `xui-litehtml` is temporarily out of the workspace (#168).
+- `xui-litehtml`'s `HtmlView` is now a portable custom-painted node: `HtmlView::new` takes a `&Ui` and bounds, paints through `Canvas`, and shapes text through the new `Ui::text_shaper` (#168).

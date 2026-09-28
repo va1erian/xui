@@ -165,11 +165,10 @@ Constraints worth knowing:
 ## `xui-litehtml` — an HTML view
 
 `crates/xui-litehtml` lays a page out with `litehtml` on a worker thread and
-paints it with Direct2D/DirectWrite through `xui-win32`. It is a Windows-only
-widget host (`HtmlView<M>`), with links, scrolling, text selection and copy. The
-middle is backend-neutral — the worker emits a `DisplayList` of neutral draw
-commands. It is currently **out of the workspace** while it is ported onto the
-portable widget layer (issue #168); it is not part of the umbrella crate.
+paints it through the portable `Canvas`, so `HtmlView<M>` is a custom-painted
+node on any backend (text is shaped through `Ui::text_shaper`). It has links,
+scrolling, text selection and copy. It is Windows-only today only because copy
+uses the Win32 clipboard; it is not part of the umbrella crate.
 
 ## Combining backends
 

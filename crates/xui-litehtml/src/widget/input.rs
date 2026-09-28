@@ -2,17 +2,62 @@
 //! scrolling, link clicks, selection drags and multi-clicks. Split out of
 //! `mod.rs` so each file stays small; behaviour is unchanged.
 
-use xui_win32::{CursorShape, Input, Key, MouseButton, WidgetCx};
+use xui_core::backend::{Cursor, Event};
+use xui_core::message::{Key, MouseButton};
 
 use super::{DRAG_SLOP_DIP, HtmlWidget, KEY_LINE_DIP, WHEEL_LINE_DIP};
 use crate::geom::Point;
 use crate::selection::Selection;
 use crate::view::HtmlViewEvent;
 
+/// What handling an event asks of the host: the view applies these to its
+/// node after the widget's state has been updated.
+#[derive(Default)]
+pub(crate) struct Effects {
+    pub(crate) invalidate: bool,
+    pub(crate) focus: bool,
+    pub(crate) capture: bool,
+    pub(crate) release_capture: bool,
+    pub(crate) cursor: Option<Cursor>,
+    pub(crate) emit: Option<HtmlViewEvent>,
+}
+
+impl Effects {
+    fn invalidate(&mut self) {
+        self.invalidate = true;
+    }
+
+    fn focus(&mut self) {
+        self.focus = true;
+    }
+
+    fn capture(&mut self) {
+        self.capture = true;
+    }
+
+    fn release_capture(&mut self) {
+        self.release_capture = true;
+    }
+
+    fn cursor(&mut self, cursor: Cursor) {
+        self.cursor = Some(cursor);
+    }
+
+    fn emit(&mut self, event: HtmlViewEvent) {
+        self.emit = Some(event);
+    }
+}
+
 impl HtmlWidget {
-    pub(super) fn handle_input(&self, input: Input, cx: &mut WidgetCx<HtmlViewEvent>) {
-        match input {
-            Input::MouseWheel {
+    pub(crate) fn handle_input(&self, event: &Event) -> Effects {
+        let mut cx = Effects::default();
+        self.dispatch(event, &mut cx);
+        cx
+    }
+
+    fn dispatch(&self, event: &Event, cx: &mut Effects) {
+        match *event {
+            Event::MouseWheel {
                 delta,
                 horizontal: false,
                 ..
@@ -20,7 +65,7 @@ impl HtmlWidget {
                 self.scroll_by(-delta as f32 / 120.0 * WHEEL_LINE_DIP);
                 cx.invalidate();
             }
-            Input::MouseDown {
+            Event::MouseDown {
                 x,
                 y,
                 button: MouseButton::Left,
@@ -50,7 +95,7 @@ impl HtmlWidget {
                 }
                 cx.invalidate();
             }
-            Input::MouseMove { x, y, .. } => {
+            Event::MouseMove { x, y, .. } => {
                 let p = self.scale_point(x, y);
                 if self.dragging.get() {
                     if let Some(press) = self.press.get()
@@ -75,20 +120,20 @@ impl HtmlWidget {
                     } else if p.y > viewport {
                         self.scroll_by(p.y - viewport);
                     }
-                    cx.cursor(CursorShape::IBeam);
+                    cx.cursor(Cursor::Text);
                     cx.invalidate();
                 } else {
                     let doc = self.doc_point(p);
                     let frame = self.frame.borrow();
                     let cursor = match frame.as_ref() {
-                        Some(frame) if frame.links.href_at(doc).is_some() => CursorShape::Hand,
-                        Some(frame) if frame.runs.is_text_at(doc) => CursorShape::IBeam,
-                        _ => CursorShape::Arrow,
+                        Some(frame) if frame.links.href_at(doc).is_some() => Cursor::Hand,
+                        Some(frame) if frame.runs.is_text_at(doc) => Cursor::Text,
+                        _ => Cursor::Default,
                     };
                     cx.cursor(cursor);
                 }
             }
-            Input::MouseDoubleClick {
+            Event::MouseDoubleClick {
                 x,
                 y,
                 button: MouseButton::Left,
@@ -113,7 +158,7 @@ impl HtmlWidget {
                 }
                 cx.invalidate();
             }
-            Input::MouseUp {
+            Event::MouseUp {
                 x,
                 y,
                 button: MouseButton::Left,
@@ -139,15 +184,15 @@ impl HtmlWidget {
                 }
                 self.moved.set(false);
             }
-            Input::MouseLeave => {
+            Event::MouseLeave => {
                 if !self.dragging.get() {
-                    cx.cursor(CursorShape::Arrow);
+                    cx.cursor(Cursor::Default);
                 }
             }
-            Input::CaptureChanged => {
+            Event::CaptureChanged => {
                 self.dragging.set(false);
             }
-            Input::KeyDown {
+            Event::KeyDown {
                 key,
                 modifiers,
                 repeat: _,
@@ -164,7 +209,7 @@ impl HtmlWidget {
                     self.scroll_key(key, cx);
                 }
             }
-            Input::KeyUp { key, .. } if key == Key::SHIFT => {
+            Event::KeyUp { key, .. } if key == Key::SHIFT => {
                 self.shift_held.set(false);
             }
             _ => {}
@@ -177,7 +222,7 @@ impl HtmlWidget {
         Point::new(x as f32 / s, y as f32 / s)
     }
 
-    fn scroll_key(&self, key: Key, cx: &mut WidgetCx<HtmlViewEvent>) {
+    fn scroll_key(&self, key: Key, cx: &mut Effects) {
         let page = self.viewport_height.get();
         let delta = if key == Key::DOWN {
             KEY_LINE_DIP
