@@ -120,10 +120,68 @@ impl<M: 'static> Tabs<M> {
 
     /// Appends `title`'s page, showing `children` when it is selected.
     pub fn page(self, title: &str, children: &[WidgetId]) -> Tabs<M> {
-        self.shared.titles.borrow_mut().push(title.to_string());
-        self.shared.pages.borrow_mut().push(children.to_vec());
-        relayout(&self.scoped, &self.shared);
+        self.add_page(title, children);
         self
+    }
+
+    /// The number of pages.
+    pub fn page_count(&self) -> usize {
+        self.shared.pages.borrow().len()
+    }
+
+    /// Appends a page at runtime, like [`Tabs::page`] on a handle already in
+    /// use. Selecting it is left to [`Tabs::select`].
+    pub fn add_page(&self, title: &str, children: &[WidgetId]) {
+        let s = &self.shared;
+        s.titles.borrow_mut().push(title.to_string());
+        s.pages.borrow_mut().push(children.to_vec());
+        // Relayout hides the unselected pages, but it returns early while the
+        // container has no bounds, so hide the new page's children here too.
+        if s.pages.borrow().len() - 1 != s.selected.get() {
+            for &child in children {
+                self.scoped.set_visible(child, false);
+            }
+        }
+        relayout(&self.scoped, s);
+    }
+
+    /// Removes the page at `index` and returns its children (now hidden), so
+    /// the caller can destroy them; `None` when `index` is out of range.
+    ///
+    /// The selection follows the page it was on: removing an earlier page
+    /// shifts it down, and removing the selected page selects the page that
+    /// took its place (the last one if it was last). No change event is
+    /// raised, as with [`Tabs::select`].
+    pub fn remove_page(&self, index: usize) -> Option<Vec<WidgetId>> {
+        let s = &self.shared;
+        if index >= s.pages.borrow().len() {
+            return None;
+        }
+        s.titles.borrow_mut().remove(index);
+        let children = s.pages.borrow_mut().remove(index);
+        for &child in &children {
+            self.scoped.set_visible(child, false);
+        }
+        let remaining = s.pages.borrow().len();
+        let selected = s.selected.get();
+        if index < selected {
+            s.selected.set(selected - 1);
+        } else if selected >= remaining {
+            s.selected.set(remaining.saturating_sub(1));
+        }
+        s.hover.set(None);
+        relayout(&self.scoped, s);
+        Some(children)
+    }
+
+    /// Renames the page at `index`; `false` when `index` is out of range.
+    pub fn rename_page(&self, index: usize, title: &str) -> bool {
+        match self.shared.titles.borrow_mut().get_mut(index) {
+            Some(slot) => *slot = title.to_string(),
+            None => return false,
+        }
+        relayout(&self.scoped, &self.shared);
+        true
     }
 
     /// Maps a selection to the app's message: the closure receives the index

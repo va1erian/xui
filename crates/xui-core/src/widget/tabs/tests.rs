@@ -145,4 +145,83 @@ fn a_tabs_own_design_mode_freezes_its_strip() {
     tabs.set_design_mode(false);
     runtime.deliver(tabs.shared.strip_id, &click(second.left + 2));
     assert_eq!(tabs.selected(), 1);
+
+fn label(tabs: &Tabs<usize>, text: &str) -> Label<usize> {
+    Label::new(tabs.ui(), Rect::new(0, 0, 10, 10), text).unwrap()
+}
+
+#[test]
+fn removing_the_selected_page_selects_its_successor() {
+    let (backend, _core, ui) = setup();
+    let tabs = Tabs::new(&ui, Rect::new(0, 0, 200, 120)).unwrap();
+    let (a, b, c) = (label(&tabs, "a"), label(&tabs, "b"), label(&tabs, "c"));
+    let tabs = tabs
+        .page("A", &[a.id()])
+        .page("B", &[b.id()])
+        .page("C", &[c.id()]);
+    tabs.select(1);
+    assert_eq!(tabs.remove_page(1), Some(vec![b.id()]));
+    assert_eq!(tabs.page_count(), 2);
+    assert_eq!(tabs.selected(), 1, "page C took the removed page's place");
+    assert!(backend.node(c.id()).unwrap().3);
+    assert!(!backend.node(a.id()).unwrap().3);
+    assert!(
+        !backend.node(b.id()).unwrap().3,
+        "the removed page's child is hidden"
+    );
+
+    tabs.remove_page(1);
+    assert_eq!(tabs.selected(), 0, "removing the last page clamps");
+    assert!(backend.node(a.id()).unwrap().3);
+    assert_eq!(tabs.remove_page(1), None);
+}
+
+#[test]
+fn removing_an_earlier_page_keeps_the_selection_on_its_page() {
+    let (backend, _core, ui) = setup();
+    let tabs = Tabs::new(&ui, Rect::new(0, 0, 200, 120)).unwrap();
+    let (a, b, c) = (label(&tabs, "a"), label(&tabs, "b"), label(&tabs, "c"));
+    let tabs = tabs
+        .page("A", &[a.id()])
+        .page("B", &[b.id()])
+        .page("C", &[c.id()]);
+    tabs.select(2);
+    tabs.remove_page(0);
+    assert_eq!(tabs.selected(), 1);
+    assert!(backend.node(c.id()).unwrap().3);
+}
+
+#[test]
+fn renaming_and_adding_pages_update_the_strip() {
+    let (backend, _core, ui) = setup();
+    let tabs = Tabs::new(&ui, Rect::new(0, 0, 200, 120)).unwrap();
+    let tabs = tabs.page("A", &[]).page("B", &[]);
+    assert!(tabs.rename_page(1, "Renamed"));
+    assert!(!tabs.rename_page(9, "x"));
+    assert_eq!(tabs.shared.titles.borrow()[1], "Renamed");
+    let before = tabs.shared.tabs.borrow()[1];
+    assert!(tabs.rename_page(1, "A much longer title"));
+    assert!(tabs.shared.tabs.borrow()[1].width() > before.width());
+
+    let extra = label(&tabs, "d");
+    tabs.add_page("D", &[extra.id()]);
+    assert_eq!(tabs.page_count(), 3);
+    assert!(
+        !backend.node(extra.id()).unwrap().3,
+        "an added page starts hidden"
+    );
+}
+
+#[test]
+fn a_page_added_while_the_container_has_no_bounds_starts_hidden() {
+    let (backend, _core, ui) = setup();
+    let tabs = Tabs::new(&ui, Rect::default()).unwrap();
+    let (a, b) = (label(&tabs, "a"), label(&tabs, "b"));
+    let tabs = tabs.page("A", &[a.id()]).page("B", &[b.id()]);
+    assert!(
+        !backend.node(b.id()).unwrap().3,
+        "the unselected page's child is hidden even without bounds"
+    );
+    tabs.add_page("C", &[]);
+    assert_eq!(tabs.page_count(), 3);
 }
