@@ -8,11 +8,13 @@ repository = "https://github.com/va1erian/xui"
 readme = "README.md"
 
 [features]
-default = ["win32"]
-# The Win32 backend (and the Win32-native widget layer). On by default.
-win32 = ["dep:xui-win32"]
-# The software-rendered cross-platform backend (winit + tiny-skia).
+default = ["canvas"]
+# The software-rendered, cross-platform backend (winit + tiny-skia). On by
+# default: it builds and runs on every platform.
 canvas = ["dep:xui-canvas"]
+# The Windows-only backend: native window chrome, Direct2D/DirectWrite
+# painting, GDI fallback. Opt in for higher-fidelity/perf Windows apps.
+d2d = ["dep:xui-win32"]
 
 [dependencies]
 xui-core = { path = "../xui-core" }

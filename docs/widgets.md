@@ -22,8 +22,7 @@ Event builders return `Self`, so they chain at construction.
 ## Common shape
 
 - **No control ids.** Widgets are values; notifications are routed internally by
-  `WidgetId`. There is no `AsControl`/`ControlExt` base trait — each widget has
-  the methods it needs.
+  `WidgetId`. There is no base trait — each widget has the methods it needs.
 - **Events map to your `Msg`.** `on_click`, `on_select`, `on_change`,
   `on_toggle`, `on_activate`, … take a closure returning `Option<Msg>`. The
   runtime queues the message and calls `App::update`, never re-entered.

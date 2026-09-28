@@ -76,7 +76,7 @@ impl Renderer {
     }
 }
 
-#[cfg(all(feature = "win32", windows))]
+#[cfg(all(feature = "d2d", windows))]
 fn backend_for(renderer: Renderer) -> Rc<dyn Backend> {
     match renderer {
         Renderer::Native => Rc::new(xui_win32::Win32Backend::new()),
@@ -84,7 +84,7 @@ fn backend_for(renderer: Renderer) -> Rc<dyn Backend> {
     }
 }
 
-#[cfg(not(all(feature = "win32", windows)))]
+#[cfg(not(all(feature = "d2d", windows)))]
 fn backend_for(renderer: Renderer) -> Rc<dyn Backend> {
     match renderer {
         Renderer::Native | Renderer::Canvas => Rc::new(xui_canvas::WinitBackend::new()),
@@ -92,7 +92,7 @@ fn backend_for(renderer: Renderer) -> Rc<dyn Backend> {
 }
 
 /// Whether the gallery can switch backends (it needs both to be compiled in).
-const CAN_SWITCH: bool = cfg!(all(feature = "win32", windows));
+const CAN_SWITCH: bool = cfg!(all(feature = "d2d", windows));
 
 enum Msg {
     Edit(String),

@@ -2,8 +2,8 @@
 
 Read this and [README.md](README.md) before writing any code. The docs'
 [Architecture](docs/architecture.md) invariants and
-[Development](docs/development.md) ("Adding a portable widget",
-"Adding a Win32-native control") sections are part of these rules.
+[Development](docs/development.md) ("Adding a portable widget") sections are
+part of these rules.
 
 ## Invariants (non-negotiable)
 
@@ -37,8 +37,8 @@ Read this and [README.md](README.md) before writing any code. The docs'
   the app's `Msg` through closures given at construction, there are no numeric
   control ids in the public API, shared behaviour comes from capability traits
   (never a base type, `Deref` or downcasting), and design values are `Dip`.
-  Portable widgets live in `xui-core`; Win32-native controls use
-  `AsControl`/`ControlExt` in `xui-win32`.
+  Widgets live in `xui-core`; backends (`xui-canvas`, `xui-win32`) implement
+  the `Backend` contract and expose no widget API of their own.
 - **Dark mode is first-class**: widgets implement `Themed`, use semantic theme
   tokens only, and owner-draw any native part that ignores dark mode (documented
   APIs only). UI PRs attach one light and one dark screenshot.
@@ -67,7 +67,7 @@ cargo test
   the pointer to take a screenshot; other agents are testing on the same
   desktop. Use `cargo run --features wgc --example capture -- --hwnd/--title/
   --pid … --out shot.png` (or, in tests, `Window::capture_composited` /
-  `win32ui::capture::capture_hwnd`): `Windows.Graphics.Capture` captures any
+  `xui_win32::capture::capture_hwnd`): `Windows.Graphics.Capture` captures any
   top-level window, including one under another, with the DWM frame, caption
   buttons and backdrop material. Prefer it over `capture_screen`, which only
   works for an unoccluded window and has been the reason windows were raised.

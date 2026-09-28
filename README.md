@@ -30,24 +30,24 @@ snapshots and tests. Dark mode is first-class on every backend.
 | Crate | What it is |
 |---|---|
 | `xui-core` | The portable front layer: geometry, units, colour, pure layout arithmetic, semantic theme tokens, the input vocabulary, the accessibility model, the **widget layer**, the `App`/`Ui` runtime and the `Backend` contract. No platform dependency, no `unsafe`. |
-| `xui-win32` | The Win32 backend: `Win32Backend` (an implementation of `xui-core`'s contract) plus a mature Win32-native widget layer — native common controls, GDI/Direct2D/OpenGL, backdrop materials, the extended title bar, monitors, capture and UI Automation. |
+| `xui-win32` | The optional Windows backend: `Win32Backend` (an implementation of `xui-core`'s contract) with native window chrome and Direct2D/DirectWrite painting (GDI fallback), backdrop materials, a custom caption, monitors and capture, plus the low-level platform layer it is built on. No widget API of its own. |
 | `xui-canvas` | The cross-platform software backend: a `winit` window compositing with `tiny-skia` and presenting through `softbuffer`, an optional GPU path (`glow` OpenGL through `glutin`), and an `OffscreenBackend` that renders the same widgets headlessly. |
 | `xui-gpu` | The shared OpenGL seam behind both backends' GL widgets: the opaque `GlContext` handle, the `GlSurface` frame/offscreen lifecycle and the offscreen readback. Keeps `glow` out of `xui-core`. |
-| `xui` | The umbrella crate most applications depend on. Selects a backend by feature (`win32` by default, `canvas` for the software backend) and re-exports the front layer. |
-| `xui-litehtml` | An HTML view built on `litehtml` and Direct2D. Windows-only today; not part of the umbrella. |
+| `xui` | The umbrella crate most applications depend on. Selects a backend by feature (`canvas` by default, `d2d` for the Windows Direct2D backend) and re-exports the portable front layer. |
+| `xui-litehtml` | An HTML view built on `litehtml` and Direct2D. Windows-only; currently out of the workspace while it is ported to the portable widget layer (#168). |
 
 ## Documentation
 
 - **[Getting started](docs/getting-started.md)** — set up a basic app and pick a
   backend.
-- **[Architecture](docs/architecture.md)** — the two layers, the `Backend`
+- **[Architecture](docs/architecture.md)** — the layers, the `Backend`
   contract, the message model and the invariants.
 - **[Backends](docs/backends.md)** — what each backend supports, and how to use
   or combine them.
 - **[Widgets](docs/widgets.md)** — the portable widget catalogue and models.
 - **[Theming](docs/theming.md)** — tokens, dark mode and live switching.
-- **[The Win32 layer](docs/win32.md)** — native controls and the Windows-only
-  window features.
+- **[The Win32 layer](docs/win32.md)** — the Windows backend, its platform layer
+  and the Windows-only window features.
 - **[Platform integration](docs/platform-integration.md)** — where OS services
   (media keys, taskbar, notifications) belong.
 - **[Migration from `win32ui`](docs/migration-win32ui-to-xui.md)**.
@@ -112,11 +112,10 @@ including how to choose and switch the backend.
 
 - **Portable first.** Widgets, layout, theming and input live in `xui-core` and
   are shared by every backend. A widget never names a platform handle.
-- **Native when it pays.** The Win32 backend hosts a portable widget as a real
-  native control where that is best (today, `Edit`), so IME, selection and
-  accessibility come for free; everything else is painted from the same widget
-  code, and a separate Win32-native layer offers the full set of common controls
-  for Windows-only apps.
+- **Fast where it counts.** The default backend is portable software rendering;
+  on Windows an opt-in backend paints the same widgets through Direct2D and hosts
+  a real native `EDIT` where that is best (today, `Edit`), so IME and selection
+  come for free.
 - **Themed, dark mode included.** Controls draw only from semantic theme
   tokens; the app picks a `Theme` (or follows the system) and never handles
   `NM_CUSTOMDRAW`, `WM_CTLCOLOR*` or `SetWindowTheme`.
@@ -133,13 +132,10 @@ software backend all exist and are exercised by tests and examples. The
 decoupling from the original Win32-only crate is still in progress; see the
 [epic](https://github.com/va1erian/xui/issues/1) for milestones.
 
-The `xui` umbrella's default `win32` feature currently re-exports the mature
-**Win32-native widget layer** as the bare names (`xui::run_app`, `xui::Label`,
-`xui::column!`, …); the portable front layer is always available as
-`xui::xui_core`. With `--features canvas` (or on a non-Windows target) the
-umbrella's bare names resolve to the portable `xui-core` widgets instead. See
-[Architecture → The two widget layers](docs/architecture.md#the-two-widget-layers)
-for the exact rules.
+The `xui` umbrella's default `canvas` feature is the cross-platform backend; the
+`d2d` feature adds the Windows Direct2D backend. Its bare names are always the
+portable `xui-core` widgets. The original Win32-native widget layer was removed
+(see [Migration](docs/migration-win32ui-to-xui.md)).
 
 ## License
 
