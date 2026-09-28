@@ -145,6 +145,7 @@ fn a_tabs_own_design_mode_freezes_its_strip() {
     tabs.set_design_mode(false);
     runtime.deliver(tabs.shared.strip_id, &click(second.left + 2));
     assert_eq!(tabs.selected(), 1);
+}
 
 fn label(tabs: &Tabs<usize>, text: &str) -> Label<usize> {
     Label::new(tabs.ui(), Rect::new(0, 0, 10, 10), text).unwrap()
