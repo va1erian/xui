@@ -180,6 +180,14 @@ impl Backend for OffscreenBackend {
         }
     }
 
+    fn raise(&self, id: WidgetId) {
+        let mut nodes = self.nodes.borrow_mut();
+        if let Some(at) = nodes.iter().position(|(node_id, _)| *node_id == id) {
+            let entry = nodes.remove(at);
+            nodes.push(entry);
+        }
+    }
+
     fn focus(&self, _id: WidgetId) {}
 
     fn set_text(&self, id: WidgetId, text: &str) {
