@@ -125,3 +125,24 @@ fn the_selected_property_round_trips() {
     assert!(tabs.set_property("selected", Value::Integer(1)));
     assert_eq!(tabs.selected(), 1);
 }
+
+#[test]
+fn a_tabs_own_design_mode_freezes_its_strip() {
+    let (_backend, core, ui) = setup();
+    let tabs = Tabs::new(&ui, Rect::new(0, 0, 200, 120)).unwrap();
+    let tabs = tabs.page("One", &[]).page("Two", &[]);
+    let runtime = Runtime::primary(core, TestApp(Rc::new(RefCell::new(Vec::new()))));
+    let second = tabs.shared.tabs.borrow()[1];
+
+    tabs.set_design_mode(true);
+    runtime.deliver(tabs.shared.strip_id, &click(second.left + 2));
+    assert_eq!(
+        tabs.selected(),
+        0,
+        "the strip ignores clicks in design mode"
+    );
+
+    tabs.set_design_mode(false);
+    runtime.deliver(tabs.shared.strip_id, &click(second.left + 2));
+    assert_eq!(tabs.selected(), 1);
+}

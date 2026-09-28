@@ -112,7 +112,7 @@ impl<M: 'static> Split<M> {
         );
         {
             let shared = Rc::clone(&shared);
-            let ui = ui.clone();
+            let ui = scoped.clone();
             divider.on_events(move |event| divider_event(&shared, &ui, event));
         }
         Ok(Split {

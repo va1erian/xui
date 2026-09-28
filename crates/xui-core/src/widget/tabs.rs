@@ -90,7 +90,7 @@ impl<M: 'static> Tabs<M> {
         }
         {
             let shared = Rc::clone(&shared);
-            let ui = ui.clone();
+            let ui = scoped.clone();
             strip.on_events(move |event| strip_event(&shared, &ui, event));
         }
         Ok(Tabs {

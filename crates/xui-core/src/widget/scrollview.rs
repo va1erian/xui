@@ -105,12 +105,12 @@ impl<M: 'static> ScrollView<M> {
         }
         {
             let shared = Rc::clone(&shared);
-            let ui = ui.clone();
+            let ui = scoped.clone();
             control.on_events(move |event| viewport_event(&shared, &ui, event));
         }
         {
             let shared = Rc::clone(&shared);
-            let ui = ui.clone();
+            let ui = scoped.clone();
             bar_node.on_events(move |event| bar_event(&shared, &ui, event));
         }
         ui.raise(shared.bar.id());
