@@ -93,6 +93,39 @@ fn a_nested_child_paints_at_its_parents_offset() {
 }
 
 #[test]
+fn a_painter_capturing_its_own_window_does_not_recurse() {
+    let backend = Rc::new(OffscreenBackend::new());
+    let window = backend
+        .open_window(&PlatformSpec::new("reentrant capture"))
+        .unwrap();
+    let node = backend
+        .create(
+            ParentRef::Window(window),
+            &NodeSpec::new(NodeKind::Custom, Rect::new(0, 0, 10, 10)),
+        )
+        .unwrap();
+    // The painter asks the backend to capture the very window being painted; the
+    // nested render must be refused, not recurse until the stack overflows.
+    let nested = Rc::new(RefCell::new(None));
+    let backend_for_painter = Rc::clone(&backend);
+    let nested_for_painter = Rc::clone(&nested);
+    backend.set_painter(
+        node,
+        Rc::new(move |_canvas| {
+            *nested_for_painter.borrow_mut() = Some(backend_for_painter.capture(window).is_err());
+        }),
+    );
+
+    let image = backend.render(window);
+    assert!(image.is_some(), "the outer render completes");
+    assert_eq!(
+        *nested.borrow(),
+        Some(true),
+        "the nested capture is refused"
+    );
+}
+
+#[test]
 fn a_nested_child_is_hit_at_its_absolute_position() {
     let backend = OffscreenBackend::new();
     let window = backend

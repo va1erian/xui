@@ -8,7 +8,7 @@
 //! on headless CI runners). The windowing shell builds on the same surface.
 
 use std::cell::{OnceCell, RefCell};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 use xui_core::backend::{
@@ -74,6 +74,19 @@ struct Draw {
     gl: bool,
 }
 
+/// Clears a window's in-progress render flag when a frame finishes, however the
+/// render returns.
+struct RenderGuard<'a> {
+    rendering: &'a RefCell<HashSet<u64>>,
+    raw: u64,
+}
+
+impl Drop for RenderGuard<'_> {
+    fn drop(&mut self) {
+        self.rendering.borrow_mut().remove(&self.raw);
+    }
+}
+
 /// A backend that renders into a software surface.
 pub struct OffscreenBackend {
     windows: RefCell<HashMap<u64, OffscreenWindow>>,
@@ -82,6 +95,9 @@ pub struct OffscreenBackend {
     next_widget: std::cell::Cell<u64>,
     /// The node the pointer is captured by, if any.
     captured: RefCell<Option<WidgetId>>,
+    /// The windows currently being composited, so a painter that captures its
+    /// own window (re-entering `render`) is refused instead of recursing.
+    rendering: RefCell<HashSet<u64>>,
     text: OnceCell<CosmicShaper>,
 }
 
@@ -100,6 +116,7 @@ impl OffscreenBackend {
             next_window: std::cell::Cell::new(1),
             next_widget: std::cell::Cell::new(1),
             captured: RefCell::new(None),
+            rendering: RefCell::new(HashSet::new()),
             text: OnceCell::new(),
         }
     }
@@ -135,6 +152,16 @@ impl OffscreenBackend {
 
     /// Renders `window`'s visible nodes, in creation order, into an image.
     pub fn render(&self, window: WindowId) -> Option<RgbaImage> {
+        // A painter may ask to capture its own window, which would call `render`
+        // again; refuse the nested render rather than recursing forever. The
+        // guard clears this on every exit, including the early `?` below.
+        if !self.rendering.borrow_mut().insert(window.raw()) {
+            return None;
+        }
+        let _guard = RenderGuard {
+            rendering: &self.rendering,
+            raw: window.raw(),
+        };
         // Take the surface out of the window state so a painter that re-enters
         // the backend (for example `Ui::dpi`, which reads this same map) does not
         // find it borrowed. The window stays in the map, with a placeholder
