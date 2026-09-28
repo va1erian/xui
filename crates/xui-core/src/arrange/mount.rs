@@ -56,12 +56,23 @@ impl<M: 'static> State<M> {
         if !area.is_empty() {
             let dpi = self.ui.dpi();
             let placed = self.tree.compute(area, dpi, &|key| self.leaf(key, dpi));
-            let moves: Vec<(WidgetId, Rect)> = placed
-                .into_iter()
-                .map(|(key, rect)| (self.widgets[key].id(), rect))
-                .filter(|(id, _)| !id.is_none())
-                .collect();
+            let mut moves = Vec::with_capacity(placed.len());
+            let mut after = Vec::with_capacity(placed.len());
+            for (key, rect) in placed {
+                let id = self.widgets[key].id();
+                if id.is_none() {
+                    continue;
+                }
+                moves.push((id, rect));
+                after.push((key, rect));
+            }
+            // One batch for the whole tree, so a relayout does not flicker.
             self.ui.apply_moves(&moves);
+            // Satellite nodes (a list's scrollbar) follow once the primary
+            // nodes are placed, so they read the new bounds.
+            for (key, rect) in after {
+                self.widgets[key].placed(&self.ui, rect);
+            }
         }
         self.placing.set(false);
     }

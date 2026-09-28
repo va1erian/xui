@@ -7,7 +7,7 @@ use crate::backend::{Backend, BackendError, Event, PlatformSpec, WindowId};
 use crate::geometry::Rect;
 use crate::layout::Insets;
 use crate::units::{Dip, dip};
-use crate::widget::{Button, Edit, Label, Panel};
+use crate::widget::{Button, Edit, Fill, Label, ListView, Panel, StatusBar};
 
 struct Idle;
 
@@ -97,6 +97,33 @@ fn nested_layouts_share_the_leftover_space() {
     assert_eq!(ui.bounds(a.id()), Rect::new(0, 0, 400, 40));
     assert_eq!(ui.bounds(b.id()), Rect::new(0, 40, 100, 300));
     assert_eq!(ui.bounds(c.id()), Rect::new(100, 40, 400, 300));
+}
+
+#[test]
+fn a_list_and_a_status_bar_fill_a_column_and_follow_a_resize() {
+    let (backend, window, ui, _runtime) = setup();
+    let list = Rc::new(
+        ListView::auto(&ui, Vec::<String>::new())
+            .unwrap()
+            .column("Name", Fill),
+    );
+    let status = Rc::new(StatusBar::auto(&ui, &["Ready", "0 targets"]).unwrap());
+    let _mounted = ui
+        .mount(
+            column()
+                .margins(Insets::all(dip(8.0)))
+                .spacing(dip(4.0))
+                .child(list.fill(1))
+                .child(status.fixed(dip(24.0))),
+        )
+        .unwrap();
+
+    assert_eq!(ui.bounds(list.id()), Rect::new(8, 8, 392, 264));
+    assert_eq!(ui.bounds(status.id()), Rect::new(8, 268, 392, 292));
+
+    backend.resize_window(window, 500, 400);
+    assert_eq!(ui.bounds(list.id()), Rect::new(8, 8, 492, 364));
+    assert_eq!(ui.bounds(status.id()), Rect::new(8, 368, 492, 392));
 }
 
 #[test]
