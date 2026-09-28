@@ -364,13 +364,11 @@ impl Backend for WinitBackend {
     fn set_timer(&self, window: WindowId, millis: u32) -> TimerId {
         let id = self.shared.next_timer.get();
         self.shared.next_timer.set(id + 1);
-        self.shared.timers.borrow_mut().insert(
-            id,
-            (
-                window,
-                Instant::now() + std::time::Duration::from_millis(u64::from(millis.max(1))),
-            ),
-        );
+        let period = std::time::Duration::from_millis(u64::from(millis.max(1)));
+        self.shared
+            .timers
+            .borrow_mut()
+            .insert(id, (window, Instant::now() + period, period));
         TimerId(id)
     }
 

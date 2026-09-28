@@ -226,6 +226,8 @@ fn show<M: 'static>(
         return;
     }
     shared.pending.set(None);
+    // The timer repeats; the delay is a one-shot.
+    ui.kill_timer(fired);
     if let Some(rect) = placed(ui, target, shared) {
         ui.apply_moves(&[(popup, rect)]);
         ui.set_visible(popup, true);

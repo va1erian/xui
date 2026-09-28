@@ -173,6 +173,20 @@ fn window_design_mode_reaches_scoped_containers() {
     let inside = Button::new(panel.ui(), Rect::new(0, 0, 80, 28), "In")
         .unwrap()
         .on_click(|| Some(1));
+    let log = Rc::new(RefCell::new(Vec::new()));
+    let runtime = Runtime::primary(
+        core,
+        TestApp {
+            log: Rc::clone(&log),
+        },
+    );
+    ui.set_design_mode(true);
+    click(&runtime, inside.id());
+    assert!(log.borrow().is_empty());
+    ui.set_design_mode(false);
+    click(&runtime, inside.id());
+    assert_eq!(*log.borrow(), vec![1]);
+}
 
 fn container(ui: &Ui<u32>) -> Control<u32> {
     Control::new(
@@ -194,13 +208,6 @@ fn a_control_receives_only_its_own_timer_ticks() {
             log: Rc::clone(&log),
         },
     );
-    ui.set_design_mode(true);
-    click(&runtime, inside.id());
-    assert!(log.borrow().is_empty());
-    ui.set_design_mode(false);
-    click(&runtime, inside.id());
-    assert_eq!(*log.borrow(), vec![1]);
-
     let tick = |id| {
         runtime.deliver(WidgetId::NONE, &Event::Timer { id });
         runtime.deliver(WidgetId::NONE, &Event::Wake);
