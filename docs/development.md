@@ -97,6 +97,14 @@ widget in an offscreen window, renders it light and dark, and asserts the
 gallery painted on each theme and that the two images differ. It writes
 `target/ui/widgets-{light,dark}.png` for eyeballing a suspected visual change.
 
+## Headless screenshots
+
+`scripts/snapshots.ps1` (or `scripts/snapshots.sh`) runs every `control_*`
+example and the larger demos on the offscreen backend and writes light and dark
+PNGs to `target/snapshots/`, with no window and no sandbox. CI uploads them as
+the `snapshots` artifact. See [headless-screenshots.md](headless-screenshots.md),
+which also covers the `xui_canvas::snapshot` API for tests in your own app.
+
 ## Mutation testing
 
 `cargo-mutants` finds tests that do not really assert. It is scoped to
@@ -152,7 +160,8 @@ etc. — before crossing the limit.
 
 ## Screenshots
 
-Never raise, activate, foreground a window or move the pointer to screenshot on a
+For portable widgets, render them headlessly first
+([headless-screenshots.md](headless-screenshots.md)). For a real window, never raise, activate, foreground a window or move the pointer to screenshot on a
 shared desktop. Use the composited capture (`--features wgc`):
 
 ```text

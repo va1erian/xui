@@ -21,6 +21,7 @@ mod gl;
 mod image_cache;
 mod offscreen;
 mod paint;
+pub mod snapshot;
 mod sys;
 mod text;
 mod text_layout;

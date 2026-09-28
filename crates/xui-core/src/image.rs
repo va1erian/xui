@@ -41,6 +41,10 @@ pub enum ImageError {
     Size,
     /// The bytes are not a valid image of a supported format.
     Decode(String),
+    /// The pixels could not be encoded as a PNG.
+    Encode(String),
+    /// A file could not be written.
+    Io(String),
 }
 
 impl fmt::Display for ImageError {
@@ -48,6 +52,8 @@ impl fmt::Display for ImageError {
         match self {
             ImageError::Size => f.write_str("pixel buffer does not match the image size"),
             ImageError::Decode(message) => write!(f, "could not decode image: {message}"),
+            ImageError::Encode(message) => write!(f, "could not encode image: {message}"),
+            ImageError::Io(message) => write!(f, "could not write image: {message}"),
         }
     }
 }
@@ -112,6 +118,34 @@ impl Image {
         self.pixels
             .get(at..at + 4)
             .map(|p| [p[0], p[1], p[2], p[3]])
+    }
+
+    /// Encodes the image as an 8-bit RGBA PNG.
+    ///
+    /// The bytes depend only on the pixels, so equal images encode to equal
+    /// bytes.
+    pub fn encode_png(&self) -> Result<Vec<u8>> {
+        let mut bytes = Vec::new();
+        let mut encoder = png::Encoder::new(&mut bytes, self.width, self.height);
+        encoder.set_color(png::ColorType::Rgba);
+        encoder.set_depth(png::BitDepth::Eight);
+        let mut writer = encoder
+            .write_header()
+            .map_err(|error| ImageError::Encode(error.to_string()))?;
+        writer
+            .write_image_data(&self.pixels)
+            .map_err(|error| ImageError::Encode(error.to_string()))?;
+        writer
+            .finish()
+            .map_err(|error| ImageError::Encode(error.to_string()))?;
+        Ok(bytes)
+    }
+
+    /// Writes the image to `path` as a PNG, creating or replacing the file.
+    /// The directory must already exist.
+    pub fn save_png(&self, path: impl AsRef<std::path::Path>) -> Result<()> {
+        let bytes = self.encode_png()?;
+        std::fs::write(path, bytes).map_err(|error| ImageError::Io(error.to_string()))
     }
 
     /// Decodes `bytes` as PNG or JPEG, chosen by the format's signature.
@@ -273,14 +307,10 @@ mod tests {
 
     /// Encodes `pixels` as an 8-bit RGBA PNG in memory.
     fn encode_png(width: u32, height: u32, pixels: &[u8]) -> Vec<u8> {
-        let mut bytes = Vec::new();
-        let mut encoder = png::Encoder::new(&mut bytes, width, height);
-        encoder.set_color(png::ColorType::Rgba);
-        encoder.set_depth(png::BitDepth::Eight);
-        let mut writer = encoder.write_header().expect("png header");
-        writer.write_image_data(pixels).expect("png data");
-        drop(writer);
-        bytes
+        Image::from_rgba(width, height, pixels.to_vec())
+            .unwrap()
+            .encode_png()
+            .unwrap()
     }
 
     #[test]
@@ -338,5 +368,30 @@ mod tests {
         let rebuilt = Image::from_rgba(1, 1, vec![1, 2, 3, 255]).unwrap();
         assert_eq!(rebuilt, image);
         assert_ne!(rebuilt.id(), image.id());
+    }
+
+    #[test]
+    fn encode_round_trips_and_is_deterministic() {
+        let image = Image::from_rgba(2, 1, vec![1, 2, 3, 255, 4, 5, 6, 200]).unwrap();
+        let bytes = image.encode_png().unwrap();
+        assert_eq!(bytes, image.encode_png().unwrap());
+        assert_eq!(Image::decode_png(&bytes).unwrap(), image);
+    }
+
+    #[test]
+    fn save_png_writes_a_file_and_reports_an_unwritable_path() {
+        let image = Image::from_rgba(1, 1, vec![9, 8, 7, 255]).unwrap();
+        let dir = std::env::temp_dir().join(format!("xui-save-png-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("out.png");
+        image.save_png(&path).unwrap();
+        assert_eq!(
+            Image::decode_png(&std::fs::read(&path).unwrap()).unwrap(),
+            image
+        );
+        // A path whose parent is a file cannot be created on any platform.
+        let bad = path.join("nested.png");
+        assert!(matches!(image.save_png(&bad), Err(ImageError::Io(_))));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

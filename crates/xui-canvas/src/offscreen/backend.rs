@@ -15,10 +15,14 @@ use xui_core::{Rect, Theme};
 
 use crate::text_layout::CosmicShaper;
 
-use super::{DEFAULT_DPI, Node, OffscreenBackend};
+use super::{Node, OffscreenBackend};
 
 impl Backend for OffscreenBackend {
     fn run(&self) -> i32 {
+        let hook = self.run_hook.borrow_mut().take();
+        if let Some(hook) = hook {
+            hook();
+        }
         0
     }
 
@@ -37,7 +41,7 @@ impl Backend for OffscreenBackend {
     }
 
     fn open_window(&self, spec: &PlatformSpec) -> BackendResult<WindowId> {
-        self.open_window_at(spec, DEFAULT_DPI)
+        self.open_window_at(spec, self.dpi)
     }
 
     fn close_window(&self, window: WindowId) {

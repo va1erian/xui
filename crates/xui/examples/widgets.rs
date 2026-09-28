@@ -78,6 +78,9 @@ impl Renderer {
 
 #[cfg(all(feature = "d2d", windows))]
 fn backend_for(renderer: Renderer) -> Rc<dyn Backend> {
+    if let Some(backend) = support::offscreen_backend() {
+        return backend;
+    }
     match renderer {
         Renderer::Native => Rc::new(xui_win32::Win32Backend::new()),
         Renderer::Canvas => Rc::new(xui_canvas::WinitBackend::new()),
@@ -86,6 +89,9 @@ fn backend_for(renderer: Renderer) -> Rc<dyn Backend> {
 
 #[cfg(not(all(feature = "d2d", windows)))]
 fn backend_for(renderer: Renderer) -> Rc<dyn Backend> {
+    if let Some(backend) = support::offscreen_backend() {
+        return backend;
+    }
     match renderer {
         Renderer::Native | Renderer::Canvas => Rc::new(xui_canvas::WinitBackend::new()),
     }
@@ -93,6 +99,12 @@ fn backend_for(renderer: Renderer) -> Rc<dyn Backend> {
 
 /// Whether the gallery can switch backends (it needs both to be compiled in).
 const CAN_SWITCH: bool = cfg!(all(feature = "d2d", windows));
+
+// Only the headless hooks are used here; the DIP converter is for the demos in
+// `controls/`.
+#[allow(dead_code)]
+#[path = "controls/support.rs"]
+mod support;
 
 enum Msg {
     Edit(String),
@@ -552,6 +564,8 @@ fn run(renderer: Renderer, switch: Rc<Cell<Option<Renderer>>>) {
                     .unwrap();
             let echo = Label::new(ui, rect(16.0, 612.0, 764.0, 634.0), "Edit: ").unwrap();
 
+            support::snapshot_hook(ui);
+
             // Both smoke hooks fire through one timer mapper, told apart by id.
             let switch_at = Rc::new(Cell::new(None));
             let autoclose_at = Rc::new(Cell::new(None));
@@ -640,6 +654,7 @@ fn run(renderer: Renderer, switch: Rc<Cell<Option<Renderer>>>) {
 fn main() {
     let renderer = match std::env::var("XUI_BACKEND").as_deref() {
         Ok("canvas") => Renderer::Canvas,
+        _ if xui_canvas::snapshot::Gallery::from_env().offscreen() => Renderer::Canvas,
         _ => Renderer::Native,
     };
     let switch = Rc::new(Cell::new(None));

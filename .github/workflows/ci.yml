@@ -82,6 +82,24 @@ jobs:
       # The software backend must build and its non-window tests pass here too.
       - run: cargo test -p xui-canvas
 
+  # Every example rendered headlessly, light and dark, so each PR has a
+  # screenshot set to look at without a desktop or the sandbox. Not a required
+  # check: it publishes images, it does not gate the merge.
+  snapshots:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - run: scripts/snapshots.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: snapshots
+          path: target/snapshots/
+          if-no-files-found: error
+
   # The same portable guarantee on macOS (the future home of a native backend).
   cross-check-macos:
     runs-on: macos-latest
