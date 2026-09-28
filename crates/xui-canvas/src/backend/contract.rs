@@ -80,6 +80,10 @@ impl Backend for WinitBackend {
             .nodes
             .borrow_mut()
             .retain(|(_, node)| node.window != window);
+        self.shared
+            .timers
+            .borrow_mut()
+            .retain(|_, (owner, _, _)| *owner != window);
     }
 
     fn set_window_title(&self, window: WindowId, title: &str) {

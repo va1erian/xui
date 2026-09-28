@@ -61,9 +61,18 @@ impl App<'_> {
             .map(|(id, (window, _, _))| (*id, *window))
             .collect();
         for (id, window) in due {
-            // Reschedule before delivering so the handler may kill the timer.
-            if let Some(timer) = self.shared.timers.borrow_mut().get_mut(&id) {
-                timer.1 = now + timer.2;
+            // A callback run earlier in this batch may have killed the timer
+            // or closed its window. Reschedule before delivering so this
+            // timer's own callback may kill it.
+            let rescheduled = match self.shared.timers.borrow_mut().get_mut(&id) {
+                Some(timer) => {
+                    timer.1 = now + timer.2;
+                    true
+                }
+                None => false,
+            };
+            if !rescheduled {
+                continue;
             }
             self.shared
                 .deliver(window, WidgetId::NONE, &Event::Timer { id: TimerId(id) });
