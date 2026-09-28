@@ -87,6 +87,25 @@ impl Drop for RenderGuard<'_> {
     }
 }
 
+/// Puts a window's real surface back after compositing, on every exit path
+/// (including a panic in a painter), so a later frame cannot keep the 1x1
+/// placeholder that stood in for it while painters ran.
+struct SurfaceRestore<'a> {
+    backend: &'a OffscreenBackend,
+    raw: u64,
+    surface: Option<Surface>,
+}
+
+impl Drop for SurfaceRestore<'_> {
+    fn drop(&mut self) {
+        if let Some(surface) = self.surface.take()
+            && let Some(entry) = self.backend.windows.borrow_mut().get_mut(&self.raw)
+        {
+            entry.surface = surface;
+        }
+    }
+}
+
 /// A backend that renders into a software surface.
 pub struct OffscreenBackend {
     windows: RefCell<HashMap<u64, OffscreenWindow>>,
@@ -165,9 +184,8 @@ impl OffscreenBackend {
         // Take the surface out of the window state so a painter that re-enters
         // the backend (for example `Ui::dpi`, which reads this same map) does not
         // find it borrowed. The window stays in the map, with a placeholder
-        // surface, so painters still read its live DPI, theme and GL content; the
-        // real surface goes back once the frame is composited.
-        let (dpi, theme, width, height, gl, gl_nodes, mut surface) = {
+        // surface, so painters still read its live DPI, theme and GL content.
+        let (dpi, theme, width, height, gl, gl_nodes, surface) = {
             let mut windows = self.windows.borrow_mut();
             let entry = windows.get_mut(&window.raw())?;
             let surface = std::mem::replace(&mut entry.surface, Surface::new(1, 1));
@@ -186,6 +204,14 @@ impl OffscreenBackend {
                 surface,
             )
         };
+        // The guard puts the real surface back on every exit, including a panic
+        // in a painter, so a later frame never keeps the 1x1 placeholder.
+        let mut restore = SurfaceRestore {
+            backend: self,
+            raw: window.raw(),
+            surface: Some(surface),
+        };
+        let surface = restore.surface.as_mut().expect("a taken surface");
         surface.fill(theme.background);
         // GL content is one painter among many, exactly as in the windowed
         // backend; the offscreen backend has no GPU, so it paints the widget's
@@ -243,9 +269,7 @@ impl OffscreenBackend {
             }
         }
         let image = surface.to_image();
-        if let Some(entry) = self.windows.borrow_mut().get_mut(&window.raw()) {
-            entry.surface = surface;
-        }
+        drop(restore);
         Some(image)
     }
 
