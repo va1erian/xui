@@ -8,7 +8,7 @@
 //! on headless CI runners). The windowing shell builds on the same surface.
 
 use std::cell::{OnceCell, RefCell};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 use xui_core::backend::{
@@ -74,6 +74,38 @@ struct Draw {
     gl: bool,
 }
 
+/// Clears a window's in-progress render flag when a frame finishes, however the
+/// render returns.
+struct RenderGuard<'a> {
+    rendering: &'a RefCell<HashSet<u64>>,
+    raw: u64,
+}
+
+impl Drop for RenderGuard<'_> {
+    fn drop(&mut self) {
+        self.rendering.borrow_mut().remove(&self.raw);
+    }
+}
+
+/// Puts a window's real surface back after compositing, on every exit path
+/// (including a panic in a painter), so a later frame cannot keep the 1x1
+/// placeholder that stood in for it while painters ran.
+struct SurfaceRestore<'a> {
+    backend: &'a OffscreenBackend,
+    raw: u64,
+    surface: Option<Surface>,
+}
+
+impl Drop for SurfaceRestore<'_> {
+    fn drop(&mut self) {
+        if let Some(surface) = self.surface.take()
+            && let Some(entry) = self.backend.windows.borrow_mut().get_mut(&self.raw)
+        {
+            entry.surface = surface;
+        }
+    }
+}
+
 /// A backend that renders into a software surface.
 pub struct OffscreenBackend {
     windows: RefCell<HashMap<u64, OffscreenWindow>>,
@@ -82,6 +114,9 @@ pub struct OffscreenBackend {
     next_widget: std::cell::Cell<u64>,
     /// The node the pointer is captured by, if any.
     captured: RefCell<Option<WidgetId>>,
+    /// The windows currently being composited, so a painter that captures its
+    /// own window (re-entering `render`) is refused instead of recursing.
+    rendering: RefCell<HashSet<u64>>,
     text: OnceCell<CosmicShaper>,
 }
 
@@ -100,6 +135,7 @@ impl OffscreenBackend {
             next_window: std::cell::Cell::new(1),
             next_widget: std::cell::Cell::new(1),
             captured: RefCell::new(None),
+            rendering: RefCell::new(HashSet::new()),
             text: OnceCell::new(),
         }
     }
@@ -135,26 +171,56 @@ impl OffscreenBackend {
 
     /// Renders `window`'s visible nodes, in creation order, into an image.
     pub fn render(&self, window: WindowId) -> Option<RgbaImage> {
-        let mut windows = self.windows.borrow_mut();
-        let entry = windows.get_mut(&window.raw())?;
-        entry.surface.fill(entry.theme.background);
-        let dpi = entry.dpi;
-        let theme = entry.theme;
+        // A painter may ask to capture its own window, which would call `render`
+        // again; refuse the nested render rather than recursing forever. The
+        // guard clears this on every exit, including the early `?` below.
+        if !self.rendering.borrow_mut().insert(window.raw()) {
+            return None;
+        }
+        let _guard = RenderGuard {
+            rendering: &self.rendering,
+            raw: window.raw(),
+        };
+        // Take the surface out of the window state so a painter that re-enters
+        // the backend (for example `Ui::dpi`, which reads this same map) does not
+        // find it borrowed. The window stays in the map, with a placeholder
+        // surface, so painters still read its live DPI, theme and GL content.
+        let (dpi, theme, width, height, gl, gl_nodes, surface) = {
+            let mut windows = self.windows.borrow_mut();
+            let entry = windows.get_mut(&window.raw())?;
+            let surface = std::mem::replace(&mut entry.surface, Surface::new(1, 1));
+            let gl_nodes: Vec<(u64, Rc<dyn GlWidget>)> = entry
+                .gl_nodes
+                .iter()
+                .map(|(raw, widget)| (*raw, Rc::clone(widget)))
+                .collect();
+            (
+                entry.dpi,
+                entry.theme,
+                entry.width,
+                entry.height,
+                entry.gl.clone(),
+                gl_nodes,
+                surface,
+            )
+        };
+        // The guard puts the real surface back on every exit, including a panic
+        // in a painter, so a later frame never keeps the 1x1 placeholder.
+        let mut restore = SurfaceRestore {
+            backend: self,
+            raw: window.raw(),
+            surface: Some(surface),
+        };
+        let surface = restore.surface.as_mut().expect("a taken surface");
+        surface.fill(theme.background);
         // GL content is one painter among many, exactly as in the windowed
         // backend; the offscreen backend has no GPU, so it paints the widget's
         // software fallback: window-level content as the base layer, node-level
         // content at its node's bounds.
-        if let Some(widget) = entry.gl.clone() {
-            let bounds = Rect::new(0, 0, entry.width, entry.height);
-            entry
-                .surface
-                .with_canvas_at(bounds, dpi, |canvas| widget.paint(canvas, bounds, &theme));
+        if let Some(widget) = gl {
+            let bounds = Rect::new(0, 0, width, height);
+            surface.with_canvas_at(bounds, dpi, |canvas| widget.paint(canvas, bounds, &theme));
         }
-        let gl_nodes: Vec<(u64, Rc<dyn GlWidget>)> = entry
-            .gl_nodes
-            .iter()
-            .map(|(raw, widget)| (*raw, Rc::clone(widget)))
-            .collect();
         let nodes = self.nodes.borrow();
         let paints: Vec<Draw> = nodes
             .iter()
@@ -184,7 +250,7 @@ impl OffscreenBackend {
         drop(nodes);
         for draw in paints {
             if let Some(painter) = draw.painter {
-                entry.surface.with_canvas_at(draw.bounds, dpi, |canvas| {
+                surface.with_canvas_at(draw.bounds, dpi, |canvas| {
                     if let Some(clip) = draw.clip {
                         canvas.push_clip(clip);
                     }
@@ -194,7 +260,7 @@ impl OffscreenBackend {
             if draw.gl
                 && let Some((_, widget)) = gl_nodes.iter().find(|(raw, _)| *raw == draw.id.raw())
             {
-                entry.surface.with_canvas_at(draw.bounds, dpi, |canvas| {
+                surface.with_canvas_at(draw.bounds, dpi, |canvas| {
                     if let Some(clip) = draw.clip {
                         canvas.push_clip(clip);
                     }
@@ -202,7 +268,9 @@ impl OffscreenBackend {
                 });
             }
         }
-        Some(entry.surface.to_image())
+        let image = surface.to_image();
+        drop(restore);
+        Some(image)
     }
 
     /// Installs `widget` as `window`'s GL content. The offscreen backend has no

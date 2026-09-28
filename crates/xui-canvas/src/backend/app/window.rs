@@ -41,11 +41,7 @@ impl App<'_> {
             // A requested backdrop (Acrylic/Mica) is approximated by the opaque
             // theme background on platforms without the DWM material; softbuffer
             // presents an opaque surface, so there is nothing else to do.
-            let attributes = WindowAttributes::default()
-                .with_title(title)
-                .with_inner_size(LogicalSize::new(f64::from(size.0), f64::from(size.1)))
-                .with_resizable(resizable)
-                .with_decorations(decorations == Decorations::System);
+            let attributes = window_attributes(title, size, decorations, resizable);
             let Ok(window) = event_loop.create_window(attributes) else {
                 continue;
             };
@@ -121,6 +117,23 @@ impl App<'_> {
             rescale_nodes(&self.shared, raw, dpi as f32 / old as f32);
         }
     }
+}
+
+/// The `winit` attributes for a backend window: the system title bar is shown
+/// only for [`Decorations::System`]; [`Decorations::None`] asks `winit` for an
+/// undecorated (frameless) window so the application draws its own caption
+/// without the OS chrome doubling it up.
+pub(super) fn window_attributes(
+    title: String,
+    size: (u32, u32),
+    decorations: Decorations,
+    resizable: bool,
+) -> WindowAttributes {
+    WindowAttributes::default()
+        .with_title(title)
+        .with_inner_size(LogicalSize::new(f64::from(size.0), f64::from(size.1)))
+        .with_resizable(resizable)
+        .with_decorations(decorations == Decorations::System)
 }
 
 /// The dots-per-inch a `winit` scale factor corresponds to (96 at 100%).
@@ -203,5 +216,21 @@ mod tests {
     #[test]
     fn a_handler_window_with_no_backend_state_is_stale() {
         assert_eq!(stale_windows([7], |_| false), [7]);
+    }
+
+    #[test]
+    fn only_a_system_decorations_spec_asks_for_the_os_frame() {
+        let decorated = window_attributes("t".into(), (200, 100), Decorations::System, true);
+        assert!(
+            decorated.decorations,
+            "the default keeps the system title bar"
+        );
+
+        let borderless = window_attributes("t".into(), (200, 100), Decorations::None, true);
+        assert!(
+            !borderless.decorations,
+            "Decorations::None must not request the OS title bar"
+        );
+        assert!(borderless.resizable);
     }
 }
