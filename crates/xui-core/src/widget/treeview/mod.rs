@@ -44,6 +44,7 @@ pub use self::model::{CheckState, NodeId, TreeModel, TreeNode, TreeRow};
 type SelectMapper<M> = Rc<RefCell<Option<Box<dyn Fn(NodeId) -> Option<M>>>>>;
 type ToggleMapper<M> = Rc<RefCell<Option<Box<dyn Fn(NodeId, bool) -> Option<M>>>>>;
 type CheckMapper<M> = Rc<RefCell<Option<Box<dyn Fn(NodeId, CheckState) -> Option<M>>>>>;
+type ActivateMapper<M> = Rc<RefCell<Option<Box<dyn Fn(NodeId) -> Option<M>>>>>;
 /// Maps a right-clicked row and its node-local pointer position to the app's
 /// message.
 type ContextMapper<M> = Rc<RefCell<Option<Box<dyn Fn(NodeId, Point) -> Option<M>>>>>;
@@ -54,6 +55,7 @@ pub(crate) struct Mappers<M> {
     pub(crate) toggle: ToggleMapper<M>,
     pub(crate) check: CheckMapper<M>,
     pub(crate) context: ContextMapper<M>,
+    pub(crate) activate: ActivateMapper<M>,
 }
 
 impl<M> Mappers<M> {
@@ -63,6 +65,7 @@ impl<M> Mappers<M> {
             toggle: Rc::new(RefCell::new(None)),
             check: Rc::new(RefCell::new(None)),
             context: Rc::new(RefCell::new(None)),
+            activate: Rc::new(RefCell::new(None)),
         }
     }
 }
@@ -196,6 +199,14 @@ impl<M: 'static> TreeView<M> {
     /// app's message.
     pub fn on_select(self, mapper: impl Fn(NodeId) -> Option<M> + 'static) -> TreeView<M> {
         *self.mappers.select.borrow_mut() = Some(Box::new(mapper));
+        self
+    }
+
+    /// Maps activating a row (a double click on it, or Enter on the selected
+    /// row) to the app's message. Without it, Enter raises the
+    /// [`on_select`](TreeView::on_select) message as before.
+    pub fn on_activate(self, mapper: impl Fn(NodeId) -> Option<M> + 'static) -> TreeView<M> {
+        *self.mappers.activate.borrow_mut() = Some(Box::new(mapper));
         self
     }
 

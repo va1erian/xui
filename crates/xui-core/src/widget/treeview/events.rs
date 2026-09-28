@@ -49,6 +49,10 @@ impl<M: 'static> Input<M> {
                 button: MouseButton::Right,
                 ..
             } => self.context(event),
+            Event::MouseDoubleClick {
+                button: MouseButton::Left,
+                ..
+            } => self.double_click(event),
             Event::MouseMove { y, .. } => {
                 let id = self.id_at(*y);
                 if self.hover.get() != id {
@@ -105,6 +109,39 @@ impl<M: 'static> Input<M> {
         self.ui.invalidate(self.id);
         self.mappers
             .select
+            .borrow()
+            .as_ref()
+            .and_then(|map| map(id))
+    }
+
+    /// Activates the row under a double click (not its chevron or checkbox).
+    fn double_click(&self, event: &Event) -> Option<M> {
+        let (x, y) = event.position()?;
+        let dpi = self.ui.dpi();
+        let (id, on_control) = {
+            let state = self.state.borrow();
+            let slot = flatten::row_at(dpi, y, state.rows.len(), state.offset)?;
+            let index = flatten::slot_to_index(&state.rows, slot)?;
+            let node = &state.rows[index];
+            let row_height = flatten::ROW.to_px(dpi).value().max(1);
+            let top = (slot - state.offset) as i32 * row_height;
+            let on_chevron = flatten::chevron_hit(dpi, 0, node.depth, node.expandable, x);
+            let on_check = self.checkboxes.get()
+                && flatten::checkbox_rect(dpi, 0, top, node.depth).contains(Point::new(x, y));
+            (node.id, on_chevron || on_check)
+        };
+        if on_control {
+            return None;
+        }
+        self.selected.set(Some(id));
+        self.ui.invalidate(self.id);
+        self.activate(id)
+    }
+
+    /// Maps activating `id` to the app's message.
+    fn activate(&self, id: NodeId) -> Option<M> {
+        self.mappers
+            .activate
             .borrow()
             .as_ref()
             .and_then(|map| map(id))
@@ -188,12 +225,17 @@ impl<M: 'static> Input<M> {
                 None
             }
             Key::LEFT | Key::RIGHT => self.expand(self.index_of(selected)?, key == Key::RIGHT),
-            Key::RETURN => self
-                .mappers
-                .select
-                .borrow()
-                .as_ref()
-                .and_then(|map| map(selected?)),
+            Key::RETURN => {
+                let id = selected?;
+                if self.mappers.activate.borrow().is_some() {
+                    return self.activate(id);
+                }
+                self.mappers
+                    .select
+                    .borrow()
+                    .as_ref()
+                    .and_then(|map| map(id))
+            }
             Key::SPACE => {
                 if !self.checkboxes.get() {
                     return None;
