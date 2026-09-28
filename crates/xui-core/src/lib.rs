@@ -15,6 +15,7 @@
 
 pub mod accessibility;
 pub mod app;
+pub mod arrange;
 pub mod backend;
 pub mod color;
 pub mod geometry;

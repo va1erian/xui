@@ -127,6 +127,7 @@ impl<M: 'static> Ui<M> {
     /// `Core`), and leaving it in the router would keep the whole window alive.
     pub fn destroy(&self, id: WidgetId) {
         self.core.router().unregister(id);
+        self.core.set_hidden(id, false);
         self.core.backend().destroy(id);
     }
 
@@ -135,9 +136,35 @@ impl<M: 'static> Ui<M> {
         self.core.backend().apply_moves(self.core.window(), moves);
     }
 
-    /// Shows or hides a node.
+    /// Shows or hides a node. A mounted layout re-flows when this changes
+    /// whether the node takes part in it: a hidden node takes no space.
     pub fn set_visible(&self, id: WidgetId, visible: bool) {
         self.core.backend().set_visible(id, visible);
+        if self.core.set_hidden(id, !visible) {
+            self.core.run_layout_hooks();
+        }
+    }
+
+    /// Whether a node is shown, as last set through [`Ui::set_visible`].
+    pub fn is_visible(&self, id: WidgetId) -> bool {
+        !self.core.is_hidden(id)
+    }
+
+    /// Re-flows every mounted layout. Call it after a change that alters a
+    /// widget's natural size (its text, say); window resizes, DPI changes and
+    /// visibility changes re-flow on their own.
+    pub fn relayout(&self) {
+        self.core.run_layout_hooks();
+    }
+
+    /// Adds a relayout callback, returning the token that removes it.
+    pub(crate) fn add_layout_hook(&self, f: impl Fn() + 'static) -> usize {
+        self.core.add_layout_hook(f)
+    }
+
+    /// Removes a relayout callback added with [`Ui::add_layout_hook`].
+    pub(crate) fn remove_layout_hook(&self, token: usize) {
+        self.core.remove_layout_hook(token);
     }
 
     /// Enables or disables a node.

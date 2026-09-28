@@ -23,11 +23,13 @@ mod anchor;
 mod dock;
 mod pack;
 mod stack;
+mod tree;
 
 pub use anchor::{Anchor, MIN_ANCHOR_PX, anchored};
 pub use dock::{Dock, DockLayout};
 pub use pack::free_preferred;
 pub use stack::{Stack, StackDirection, StackSlot};
+pub use tree::{Group, Item, Leaf, Sizing};
 
 use crate::geometry::Rect;
 use crate::units::Dip;

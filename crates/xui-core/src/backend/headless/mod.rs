@@ -203,6 +203,36 @@ impl HeadlessBackend {
         }
     }
 
+    /// Resizes `window`'s client area and delivers the window-level
+    /// [`Event::Resize`], as a backend does after the platform resizes it.
+    pub fn resize_window(&self, window: WindowId, width: i32, height: i32) {
+        if let Some(w) = self.state.borrow_mut().windows.get_mut(&window.raw()) {
+            w.client = Rect::new(0, 0, width, height);
+        }
+        self.inject(window, WidgetId::NONE, Event::Resize { width, height });
+    }
+
+    /// Changes `window`'s DPI and delivers the window-level
+    /// [`Event::DpiChanged`].
+    pub fn set_window_dpi(&self, window: WindowId, dpi: u32) {
+        let client = {
+            let mut state = self.state.borrow_mut();
+            let Some(w) = state.windows.get_mut(&window.raw()) else {
+                return;
+            };
+            w.dpi = dpi;
+            w.client
+        };
+        self.inject(
+            window,
+            WidgetId::NONE,
+            Event::DpiChanged {
+                dpi,
+                suggested: client,
+            },
+        );
+    }
+
     /// The title `window` was opened with.
     pub fn window_title(&self, window: WindowId) -> Option<String> {
         self.state

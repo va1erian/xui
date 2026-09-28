@@ -38,6 +38,12 @@ pub struct ToggleButton<M: 'static> {
 }
 
 impl<M: 'static> ToggleButton<M> {
+    /// Creates a toggle button with no bounds of its own, for a layout to place (see
+    /// [`crate::arrange`]); its size comes from [`Placeable`](super::Placeable).
+    pub fn auto(ui: &Ui<M>, text: &str) -> Result<ToggleButton<M>> {
+        ToggleButton::new(ui, Rect::default(), text)
+    }
+
     /// Creates a toggle button labelled `text`, unchecked, at `bounds`.
     pub fn new(ui: &Ui<M>, bounds: Rect, text: &str) -> Result<ToggleButton<M>> {
         let spec = NodeSpec::new(NodeKind::Button, bounds)

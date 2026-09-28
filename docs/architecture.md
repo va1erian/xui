@@ -147,7 +147,26 @@ them:
 - `ScrollView` stacks registered rows, clips descendants and scrolls.
 - `Dialog`, `Menu`, `ComboBox` and `Tooltip` share the popup elevation helper.
 
-The widget layer uses no `set_layout` call and no layout tree of its own.
+On top of that arithmetic, `xui_core::arrange` is a small declarative layer: nest
+`row()`/`column()` builders of widgets, then `ui.mount(layout)` places them and
+keeps them placed. The pieces:
+
+- `layout::Group`/`Item`/`Sizing` are a pure tree (leaves are opaque keys, natural
+  size and visibility are asked for at layout time), so it is testable with no
+  backend. `Sizing` is `Auto`, `Fixed`, `Min`, `Fill`, `Width` or `Height`.
+- `widget::Placeable` is the capability a layout needs from a widget: its node
+  and a natural size measured from its text and the design tokens. A widget
+  built with `::auto(ui, ..)` has no bounds of its own.
+- `arrange::Layout` owns the widgets it is given (a constructor's `Result` goes
+  straight in and the first error surfaces from `mount`); the app shares one it
+  wants to keep through an `Rc`. `Mounted` is what `mount` returns; keep it alive
+  and it re-flows on window resize, DPI change and `Ui::set_visible`, and
+  dropping it destroys the widgets.
+- `Ui::mount_in(container, layout)` lays a layout out inside a `Panel` (or any
+  container node) in the container's own coordinates.
+
+A layout does not observe a text change; call `Ui::relayout()` after one that
+alters a widget's natural size.
 
 ## Units, colour, theme
 

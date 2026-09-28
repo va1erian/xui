@@ -38,6 +38,10 @@ name = "top_bar"
 required-features = ["canvas"]
 
 [[example]]
+name = "layout"
+required-features = ["canvas"]
+
+[[example]]
 name = "menu_bar_flicker"
 path = "examples/menu_bar_flicker.rs"
 required-features = ["canvas"]

@@ -29,13 +29,13 @@ pub(crate) use runtime::Runtime;
 
 use std::any::Any;
 use std::cell::{Cell, RefCell};
-use std::collections::VecDeque;
+use std::collections::{HashSet, VecDeque};
 use std::rc::Rc;
 use std::sync::Arc;
 
 use proxy::Inbox;
 
-use crate::backend::{Backend, TimerId, WindowId};
+use crate::backend::{Backend, TimerId, WidgetId, WindowId};
 use crate::geometry::Rect;
 use crate::router::Router;
 use crate::theme::Theme;
@@ -65,6 +65,8 @@ type DisplayMapper<M> = Box<dyn Fn() -> Option<M>>;
 /// A DPI change mapped to an optional app message, with the new dots-per-inch
 /// and the backend's suggested window bounds in device pixels.
 type DpiMapper<M> = Box<dyn Fn(u32, Rect) -> Option<M>>;
+/// A mounted layout's relayout callback.
+type LayoutHook = Rc<dyn Fn()>;
 
 /// The shared, interior-mutable state behind a window's [`Ui`].
 pub(crate) struct Core<M> {
@@ -85,6 +87,12 @@ pub(crate) struct Core<M> {
     next_timer_listener: Cell<usize>,
     on_display_change: RefCell<Option<DisplayMapper<M>>>,
     on_dpi_changed: RefCell<Option<DpiMapper<M>>>,
+    /// Nodes hidden through [`Ui::set_visible`], which layout leaves out.
+    hidden: RefCell<HashSet<u64>>,
+    /// Mounted layouts' relayout callbacks, run when the window resizes, its
+    /// DPI changes or a node's visibility does.
+    layout_hooks: RefCell<Vec<(usize, LayoutHook)>>,
+    next_layout_hook: Cell<usize>,
     /// A value a modal child closes with (see [`Ui::close_with_result`]). The
     /// opener reads it after the child's loop returns; `Any` erases its type
     /// until then.
@@ -108,6 +116,9 @@ impl<M> Core<M> {
             next_timer_listener: Cell::new(0),
             on_display_change: RefCell::new(None),
             on_dpi_changed: RefCell::new(None),
+            hidden: RefCell::new(HashSet::new()),
+            layout_hooks: RefCell::new(Vec::new()),
+            next_layout_hook: Cell::new(0),
             result: RefCell::new(None),
         })
     }
@@ -203,6 +214,50 @@ impl<M> Core<M> {
     /// Records the DPI-change mapper.
     pub(crate) fn set_on_dpi_changed(&self, f: impl Fn(u32, Rect) -> Option<M> + 'static) {
         self.on_dpi_changed.replace(Some(Box::new(f)));
+    }
+
+    /// Records whether `id` is hidden, returning whether that changed it.
+    pub(crate) fn set_hidden(&self, id: WidgetId, hidden: bool) -> bool {
+        let mut set = self.hidden.borrow_mut();
+        if hidden {
+            set.insert(id.raw())
+        } else {
+            set.remove(&id.raw())
+        }
+    }
+
+    /// Whether `id` was hidden through [`Ui::set_visible`].
+    pub(crate) fn is_hidden(&self, id: WidgetId) -> bool {
+        self.hidden.borrow().contains(&id.raw())
+    }
+
+    /// Adds a relayout callback, returning a token to remove it again.
+    pub(crate) fn add_layout_hook(&self, f: impl Fn() + 'static) -> usize {
+        let token = self.next_layout_hook.get();
+        self.next_layout_hook.set(token.wrapping_add(1));
+        self.layout_hooks.borrow_mut().push((token, Rc::new(f)));
+        token
+    }
+
+    /// Removes the callback `token` returned by [`Core::add_layout_hook`].
+    pub(crate) fn remove_layout_hook(&self, token: usize) {
+        self.layout_hooks
+            .borrow_mut()
+            .retain(|(existing, _)| *existing != token);
+    }
+
+    /// Runs every relayout callback. They are cloned out first: one may mount
+    /// or drop another layout, which would fight the borrow flag.
+    pub(crate) fn run_layout_hooks(&self) {
+        let hooks: Vec<LayoutHook> = self
+            .layout_hooks
+            .borrow()
+            .iter()
+            .map(|(_, hook)| Rc::clone(hook))
+            .collect();
+        for hook in hooks {
+            hook();
+        }
     }
 
     /// Stores the value a modal child closes with.
