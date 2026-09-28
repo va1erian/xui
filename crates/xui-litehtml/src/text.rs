@@ -27,11 +27,11 @@ impl TextSystem {
         }
     }
 
-    /// A text system over the Win32 backend's shaper, for tests.
+    /// A text system over the headless backend's shaper, for tests.
     #[cfg(test)]
     pub(crate) fn for_tests() -> TextSystem {
         use xui_core::backend::Backend;
-        TextSystem::new(xui_win32::Win32Backend::new().text_shaper())
+        TextSystem::new(xui_canvas::OffscreenBackend::new().text_shaper())
     }
 
     /// A font for `family` at `size` DIPs.

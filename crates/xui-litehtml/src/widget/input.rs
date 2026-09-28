@@ -201,7 +201,9 @@ impl HtmlWidget {
                 if key == Key::SHIFT {
                     self.shift_held.set(true);
                 } else if modifiers.ctrl && key == Key::C {
-                    self.copy_selection();
+                    if let Some(text) = self.selected_text() {
+                        cx.emit(HtmlViewEvent::CopyRequested(text));
+                    }
                 } else if modifiers.ctrl && key == Key::A {
                     self.select_all();
                     cx.invalidate();

@@ -3,7 +3,7 @@ name = "xui-litehtml"
 version = "0.1.0"
 edition = "2024"
 license = "MIT"
-description = "An HTML view for xui: lays a page out with litehtml and paints it through xui-core's portable canvas"
+description = "An HTML view for xui: lays a page out with litehtml and paints it through xui-core's portable canvas, on any backend"
 repository = "https://github.com/va1erian/xui"
 
 [dependencies]
@@ -16,13 +16,12 @@ litehtml = { git = "https://github.com/va1erian/litehtml-rs.git", branch = "elem
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif"] }
 log = "0.4"
 
-# Windows-only: the Direct2D/DirectWrite backend and the widget host. On other
-# targets the crate compiles to an empty crate (the crate root is `#![cfg(windows)]`).
-[target.'cfg(windows)'.dependencies]
-xui-win32 = { path = "../xui-win32" }
 xui-core = { path = "../xui-core" }
 
 [dev-dependencies]
+# The tests shape text through the headless backend and the example runs on the
+# portable software backend, so both work on every platform.
+xui-canvas = { path = "../xui-canvas" }
 env_logger = "0.11"
 # Only the example writes a PNG (screenshots); the library itself stays free of it.
 png = "0.17"
