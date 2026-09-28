@@ -14,6 +14,8 @@ pub(super) fn cursor_shape(cursor: Cursor) -> CursorShape {
         Cursor::Text => CursorShape::IBeam,
         Cursor::SizeHorizontal => CursorShape::SizeHorizontal,
         Cursor::SizeVertical => CursorShape::SizeVertical,
+        Cursor::SizeNwSe => CursorShape::SizeNwSe,
+        Cursor::SizeNeSw => CursorShape::SizeNeSw,
     }
 }
 
@@ -33,6 +35,8 @@ mod tests {
             cursor_shape(Cursor::SizeVertical),
             CursorShape::SizeVertical
         );
+        assert_eq!(cursor_shape(Cursor::SizeNwSe), CursorShape::SizeNwSe);
+        assert_eq!(cursor_shape(Cursor::SizeNeSw), CursorShape::SizeNeSw);
         assert_eq!(cursor_shape(Cursor::Default), CursorShape::Arrow);
     }
 }
