@@ -156,3 +156,35 @@ fn a_plain_header_click_still_sorts() {
     );
     assert_eq!(*log.borrow(), vec![0]);
 }
+
+#[test]
+fn the_sort_arrow_does_not_overlap_a_long_sorted_column_title() {
+    let (backend, _core, ui) = setup();
+    let model: Vec<Vec<String>> = vec![vec!["a".into(), "b".into()]];
+    let list = ListView::with_model(&ui, Rect::new(0, 0, 300, 120), model)
+        .unwrap()
+        .column("A quite long column title", Dip::new(120.0))
+        .column("B", super::Fill);
+    list.set_sort_indicator(0, super::SortDirection::Ascending);
+
+    backend.render(list.id());
+    let ops = backend.ops(list.id());
+    let arrow_left = ops
+        .iter()
+        .find_map(|op| match op {
+            DrawOp::Polygon(points, _) => points.iter().map(|p| p.x).min(),
+            _ => None,
+        })
+        .expect("the sorted column draws an arrow");
+    let title_right = ops
+        .iter()
+        .find_map(|op| match op {
+            DrawOp::Text(rect, text, _) if text.starts_with('A') => Some(rect.right),
+            _ => None,
+        })
+        .expect("the sorted column's title is drawn");
+    assert!(
+        title_right <= arrow_left,
+        "the title (ending at {title_right}) must leave room for the arrow (starting at {arrow_left})"
+    );
+}

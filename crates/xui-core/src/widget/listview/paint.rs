@@ -2,7 +2,7 @@
 
 //! The list view's painter: the header row, then only the visible body rows.
 
-use super::ellipsis;
+use super::super::ellipsis;
 use super::state::{PADDING, ROW, State, TEXT_SIZE, column_spans, column_widths, header_px};
 use crate::backend::{Canvas, TextAlign, TextStyle};
 use crate::geometry::{Point, Rect};
@@ -109,15 +109,35 @@ fn paint_header(canvas: &mut dyn Canvas, state: &State, theme: &Theme, rect: Rec
             );
         }
         let cell = Rect::new(rect.left + left, rect.top, rect.left + right, rect.bottom);
-        let text = Rect::new(cell.left + pad, cell.top, cell.right - pad, cell.bottom);
+        let sorted = state.sort.is_some_and(|(sorted, _)| sorted == index);
+        // The sorted column reserves room for its arrow so a long title is
+        // ellipsized before it, rather than drawn underneath it.
+        let text_right = if sorted {
+            cell.right - pad - sort_arrow_width(dpi)
+        } else {
+            cell.right - pad
+        };
+        let text = Rect::new(cell.left + pad, cell.top, text_right, cell.bottom);
         let style = aligned(TextStyle::new(theme.text, TEXT_SIZE).middle(), column);
         // A long title must not run into the next column: ellipsize it, and
         // clip the cell too in case the measurer and rasterizer disagree.
         draw_cell_text(canvas, &column.title, cell, text, &style);
-        if state.sort.is_some_and(|(sorted, _)| sorted == index) {
+        if sorted {
             paint_sort_arrow(canvas, state.sort, cell, theme, dpi);
         }
     }
+}
+
+/// Half the arrow's width; the full triangle spans `2 * half`, plus the
+/// padding gap the caller reserves before the title text.
+fn sort_arrow_half(dpi: u32) -> i32 {
+    (PADDING.to_px(dpi).value() / 2).max(2)
+}
+
+/// The width a sorted header cell must reserve, past its own trailing
+/// padding, so the title text does not draw underneath the arrow.
+fn sort_arrow_width(dpi: u32) -> i32 {
+    sort_arrow_half(dpi) * 2
 }
 
 /// Draws the ascending/descending triangle at the right edge of a sorted
@@ -130,7 +150,7 @@ fn paint_sort_arrow(
     dpi: u32,
 ) {
     use super::model::SortDirection;
-    let half = (PADDING.to_px(dpi).value() / 2).max(2);
+    let half = sort_arrow_half(dpi);
     let pad = PADDING.to_px(dpi).value();
     let cx = cell.right - pad - half;
     let cy = (cell.top + cell.bottom) / 2;

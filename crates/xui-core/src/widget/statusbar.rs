@@ -6,6 +6,7 @@ use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use super::control::Control;
+use super::ellipsis;
 use crate::app::Ui;
 use crate::backend::{NodeKind, NodeSpec, Result, TextStyle, WidgetId};
 use crate::geometry::{Point, Rect};
@@ -84,9 +85,19 @@ impl<M: 'static> StatusBar<M> {
                     } else {
                         theme.text_secondary
                     };
-                    let text_rect = Rect::new(left + padding, bounds.top, right, bounds.bottom);
+                    let cell = Rect::new(left, bounds.top, right, bounds.bottom);
+                    let text_rect =
+                        Rect::new(left + padding, bounds.top, right - padding, bounds.bottom);
                     let style = TextStyle::new(color, TEXT_SIZE).middle();
-                    canvas.draw_text(part, text_rect, &style);
+                    // A part wider than its share of the bar must not run
+                    // into the next part: ellipsize it, and clip the cell
+                    // too in case the measurer and rasterizer disagree.
+                    canvas.push_clip(cell);
+                    let fitted = ellipsis::truncate(part, text_rect.width(), &mut |candidate| {
+                        canvas.measure_text(candidate, &style).width
+                    });
+                    canvas.draw_text(&fitted, text_rect, &style);
+                    canvas.pop_clip();
                 }
             }
 
@@ -213,6 +224,45 @@ mod tests {
             ops.iter()
                 .any(|op| matches!(op, DrawOp::Text(_, text, _) if text == "3 items")),
             "the second part was painted: {ops:?}"
+        );
+    }
+
+    #[test]
+    fn a_part_too_narrow_for_its_text_is_ellipsized_not_overflowed() {
+        let (backend, _core, ui) = setup();
+        let long = "C:\\Users\\hadri\\AppData\\Local\\Microsoft\\WinGet\\Packages";
+        let bar = StatusBar::new(&ui, Rect::new(0, 0, 200, 24), &[long, "30 targets"]).unwrap();
+
+        backend.render(bar.id());
+        let ops = backend.ops(bar.id());
+        let drawn: Vec<&String> = ops
+            .iter()
+            .filter_map(|op| match op {
+                DrawOp::Text(_, text, _) => Some(text),
+                _ => None,
+            })
+            .collect();
+        assert!(
+            drawn.iter().any(|text| text.ends_with('\u{2026}')),
+            "expected the long part to be ellipsized among {drawn:?}"
+        );
+        assert!(
+            !drawn.iter().any(|text| text.as_str() == long),
+            "the overflowing text must not be drawn in full: {drawn:?}"
+        );
+
+        // The bar's two parts split its 200px width evenly at x=100; the
+        // first part's (ellipsized) text must not cross into the second.
+        let first_right = ops
+            .iter()
+            .find_map(|op| match op {
+                DrawOp::Text(rect, text, _) if text.ends_with('\u{2026}') => Some(rect.right),
+                _ => None,
+            })
+            .expect("the first part's ellipsized text is drawn");
+        assert!(
+            first_right <= 100,
+            "the first part's text must stay within its half of the bar: {first_right}"
         );
     }
 
