@@ -116,7 +116,12 @@ fn keyboard_navigation_keeps_the_host_active() {
                 let check = ui.set_timer(900);
                 let watchdog = ui.set_timer(5000);
                 let flag = Rc::clone(&timed_out);
+                let window = ui.window();
+                let timers = Rc::clone(&backend_for_make);
                 ui.on_timer(move |fired| {
+                    // Timers repeat; every step here must run once, or a later
+                    // `open` tick re-opens the menu the keys just closed (#177).
+                    timers.kill_timer(window, fired);
                     if fired == open {
                         Some(Msg::Open)
                     } else if fired == keys {
