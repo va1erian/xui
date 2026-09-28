@@ -11,7 +11,7 @@ use crate::icon::draw_icon;
 use crate::theme::Theme;
 use crate::units::Dip;
 
-use super::Item;
+use super::{Item, cell_span};
 
 /// The corner radius of an item's highlight.
 const RADIUS: f32 = 4.0;
@@ -38,20 +38,15 @@ pub(super) fn paint(
 
     let items = items.borrow();
     let count = items.len();
-    let width = if count == 0 {
-        0
-    } else {
-        (bounds.width() / count as i32).max(1)
-    };
     let enabled = enabled.get();
     for (index, item) in items.iter().enumerate() {
-        let left = bounds.left + width * index as i32;
-        let right = if index + 1 == count {
-            bounds.right
-        } else {
-            left + width
-        };
-        let rect = Rect::new(left, bounds.top, right, bounds.bottom);
+        let (start, end) = cell_span(bounds.width(), count, index);
+        if end <= start {
+            // A strip narrower than its item count leaves some cells empty.
+            continue;
+        }
+        let left = bounds.left + start;
+        let rect = Rect::new(left, bounds.top, bounds.left + end, bounds.bottom);
         if pressed.get() == Some(index) {
             canvas.fill_rounded_rect(rect, RADIUS, theme.pressed);
         } else if hover.get() == Some(index) {

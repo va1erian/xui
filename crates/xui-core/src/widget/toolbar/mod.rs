@@ -43,18 +43,32 @@ impl Item {
     }
 }
 
-/// The item an event `x` (node-local) falls on; `None` left of the first item
-/// or right of the last one. `bounds` supplies the strip's total width.
+/// The node-local `[start, end)` span of item `index` in a strip `width`
+/// pixels wide holding `count` items.
+///
+/// Edges are spread proportionally, so every cell stays inside the strip even
+/// when it is narrower than the item count (some cells are then empty) and the
+/// division remainder is shared out rather than piled onto one cell. Painting
+/// and hit-testing both use it, so what is drawn is what is hit.
+fn cell_span(width: i32, count: usize, index: usize) -> (i32, i32) {
+    if count == 0 || width <= 0 {
+        return (0, 0);
+    }
+    let edge = |i: usize| (i64::from(width) * i as i64 / count as i64) as i32;
+    (edge(index), edge(index + 1))
+}
+
+/// The item an event `x` (node-local) falls on; `None` outside the strip.
+/// `bounds` supplies the strip's total width.
 fn item_at(bounds: Rect, x: i32, count: usize) -> Option<usize> {
-    if count == 0 || x < 0 {
+    let width = bounds.width();
+    if count == 0 || width <= 0 || x < 0 || x >= width {
         return None;
     }
-    let width = bounds.width() / count as i32;
-    if width <= 0 {
-        return None;
-    }
-    let index = (x / width) as usize;
-    (index < count).then_some(index)
+    (0..count).find(|&index| {
+        let (start, end) = cell_span(width, count, index);
+        (start..end).contains(&x)
+    })
 }
 
 /// The hover tooltip text of item `index`, if it names one.
