@@ -210,6 +210,28 @@ dialog.open();
 `Dialog::message`, `Dialog::confirm` and `Dialog::prompt` are the entry points;
 `DialogAction` is `Accept(String)` or `Cancel`.
 
+`TaskDialog<M>` is the richer sibling: the same scrim and card, plus an
+`icon`, any number of app-defined command buttons and an optional verification
+checkbox. Add commands with `command`, then read the checkbox with
+`is_checked` after the action:
+
+```rust
+use xui_core::widget::{TaskDialog, TaskDialogAction, TaskDialogIcon};
+
+let dialog = TaskDialog::new(ui, "Delete 3 files?", "Deleted files cannot be recovered.")
+    .unwrap()
+    .icon(TaskDialogIcon::Warning)
+    .command("Delete").unwrap()
+    .command("Keep").unwrap()
+    .verification("Don't ask me again").unwrap()
+    .on_action(|action| Some(Msg::TaskDialog(action)));
+dialog.open();
+```
+
+`TaskDialogAction` is `Command(usize)` (the index a command was added with) or
+`Cancel`; `TaskDialogIcon` is `None` (the default), `Info`, `Warning`, `Error`
+or `Shield`. Enter picks the first command, Escape cancels.
+
 `Tooltip<M>` attaches to any widget by id and is owned by one hidden node per
 window:
 

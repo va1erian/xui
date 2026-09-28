@@ -177,6 +177,11 @@ path = "examples/controls/tabs.rs"
 required-features = ["canvas"]
 
 [[example]]
+name = "control_taskdialog"
+path = "examples/controls/taskdialog.rs"
+required-features = ["canvas"]
+
+[[example]]
 name = "control_toolbar"
 path = "examples/controls/toolbar.rs"
 required-features = ["canvas"]
