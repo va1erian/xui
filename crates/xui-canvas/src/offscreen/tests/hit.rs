@@ -113,3 +113,37 @@ fn a_resized_move_notifies_the_node_but_a_reposition_does_not() {
         "a size change delivers Event::Resize to the moved node itself"
     );
 }
+
+#[test]
+fn raising_a_node_puts_it_above_an_overlapping_sibling() {
+    let backend = OffscreenBackend::new();
+    let window = backend.open_window(&PlatformSpec::new("raise")).unwrap();
+    let make = || {
+        backend
+            .create(
+                ParentRef::Window(window),
+                &NodeSpec::new(NodeKind::Container, Rect::new(0, 0, 50, 50)),
+            )
+            .unwrap()
+    };
+    let (below, above) = (make(), make());
+    let log = Rc::new(RefCell::new(Vec::new()));
+    backend.set_event_sink(window, Rc::new(Recorder(Rc::clone(&log))));
+    let click = || Event::MouseDown {
+        x: 10,
+        y: 10,
+        button: MouseButton::Left,
+        modifiers: Modifiers::NONE,
+    };
+
+    backend.inject(window, click());
+    assert_eq!(log.borrow().last().map(|(id, _)| *id), Some(above));
+
+    backend.raise(below);
+    backend.inject(window, click());
+    assert_eq!(
+        log.borrow().last().map(|(id, _)| *id),
+        Some(below),
+        "the raised node is now on top"
+    );
+}
