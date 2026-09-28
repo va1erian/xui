@@ -225,4 +225,13 @@ fn a_page_added_while_the_container_has_no_bounds_starts_hidden() {
     );
     tabs.add_page("C", &[]);
     assert_eq!(tabs.page_count(), 3);
+
+    tabs.select(1);
+    assert!(backend.node(b.id()).unwrap().3, "selecting shows the page");
+    assert!(!backend.node(a.id()).unwrap().3);
+    assert!(tabs.remove_page(0).is_some());
+    assert!(
+        backend.node(b.id()).unwrap().3,
+        "the successor of a removed page is shown without bounds"
+    );
 }

@@ -135,13 +135,6 @@ impl<M: 'static> Tabs<M> {
         let s = &self.shared;
         s.titles.borrow_mut().push(title.to_string());
         s.pages.borrow_mut().push(children.to_vec());
-        // Relayout hides the unselected pages, but it returns early while the
-        // container has no bounds, so hide the new page's children here too.
-        if s.pages.borrow().len() - 1 != s.selected.get() {
-            for &child in children {
-                self.scoped.set_visible(child, false);
-            }
-        }
         relayout(&self.scoped, s);
     }
 
@@ -248,6 +241,14 @@ impl<M: 'static> Properties for Tabs<M> {
 
 /// Carves the strip off the top, sizes the tabs and places the selected page.
 fn relayout<M>(ui: &Ui<M>, s: &Shared<M>) {
+    // Visibility does not depend on bounds, so apply it even while the
+    // container has none.
+    let selected = s.selected.get();
+    for (index, children) in s.pages.borrow().iter().enumerate() {
+        for &child in children {
+            ui.set_visible(child, index == selected);
+        }
+    }
     let node = ui.bounds(s.id);
     if node.is_empty() {
         return;
@@ -275,18 +276,9 @@ fn relayout<M>(ui: &Ui<M>, s: &Shared<M>) {
     *s.tabs.borrow_mut() = tabs;
 
     let mut moves: Vec<(WidgetId, Rect)> = vec![(s.strip_id, strip)];
-    let selected = s.selected.get();
-    let pages = s.pages.borrow();
-    for (index, children) in pages.iter().enumerate() {
-        let visible = index == selected;
-        for &child in children {
-            ui.set_visible(child, visible);
-            if visible {
-                moves.push((child, page));
-            }
-        }
+    if let Some(children) = s.pages.borrow().get(selected) {
+        moves.extend(children.iter().map(|&child| (child, page)));
     }
-    drop(pages);
     ui.apply_moves(&moves);
     ui.invalidate(s.strip_id);
 }
