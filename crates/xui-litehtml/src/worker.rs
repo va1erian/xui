@@ -9,8 +9,8 @@ use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
+use crate::text::TextSystem;
 use litehtml::html::decode_data_uri;
-use xui_win32::d2d::TextSystem;
 
 use crate::engine::Engine;
 use crate::list::Frame;

@@ -1,11 +1,3 @@
 [workspace]
-members = ["crates/xui-core", "crates/xui-gpu", "crates/xui-win32", "crates/xui-canvas", "crates/xui"]
-# xui-litehtml is temporarily out of the workspace: it hosts its HtmlView
-# through the native-control layer (AsControl/Custom/app::Ui) that this
-# workspace no longer has, and paints raw Direct2D primitives directly rather
-# than through the portable Canvas trait. Porting it needs either a Canvas
-# escape hatch for backend-specific rendering or moving it onto its own
-# DisplayList-through-Canvas renderer (see docs/backends.md and issues #51,
-# #52, #35, #168) — real design work, not a mechanical rename. Left out of the
-# workspace rather than rushed. Re-add "crates/xui-litehtml" once ported.
+members = ["crates/xui-core", "crates/xui-gpu", "crates/xui-win32", "crates/xui-canvas", "crates/xui", "crates/xui-litehtml"]
 resolver = "3"

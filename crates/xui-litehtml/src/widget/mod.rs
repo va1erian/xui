@@ -1,6 +1,6 @@
-//! The owner-drawn [`HtmlWidget`] behind the public [`HtmlView`](crate::HtmlView)
-//! (which lives in `view.rs`): an xui-win32 [`CustomWidget`] that owns a render
-//! worker and paints its latest frame with Direct2D.
+//! The custom-painted [`HtmlWidget`] behind the public [`HtmlView`](crate::HtmlView)
+//! (which lives in `view.rs`): state that owns a render worker and paints its
+//! latest frame through the portable [`Canvas`].
 //!
 //! Interaction (links, selection, copy, keyboard) is resolved here on the UI
 //! thread from the frame's [`LinkTable`](crate::LinkTable) and
@@ -18,14 +18,16 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 use std::time::{Duration, Instant};
 
-use xui_win32::d2d::{D2dCanvas, RectF, TextSystem};
-use xui_win32::gdi::Canvas;
-use xui_win32::{Color, CustomWidget, Hwnd, Input, Rect as PxRect, Renderer, Theme, WidgetCx};
+use xui_core::Color;
+use xui_core::backend::{Canvas, Rgba as PRgba};
+use xui_core::geometry::Rect as PxRect;
+use xui_win32::Hwnd;
 
 use crate::geom::{Point, Rect};
 use crate::list::Frame;
 use crate::paint::Painter;
 use crate::selection::{Selection, TextPos};
+use crate::text::TextSystem;
 use crate::worker::{Job, Output, RenderJob};
 
 mod input;
@@ -39,16 +41,11 @@ pub(super) const DRAG_SLOP_DIP: f32 = 3.0;
 /// Longest gap between clicks that still extends a multi-click.
 const MULTI_CLICK: Duration = Duration::from_millis(500);
 /// The translucent highlight fill over the page.
-const SELECTION_FILL: xui_win32::d2d::Rgba =
-    xui_win32::d2d::Rgba::with_alpha(0x33, 0x99, 0xFF, 0x80);
+const SELECTION_FILL: PRgba = PRgba::with_alpha(0x33, 0x99, 0xFF, 0x80);
 
-fn to_rectf(r: Rect) -> RectF {
-    RectF::new(r.left, r.top, r.right, r.bottom)
-}
-
-/// The owner-drawn widget behind an [`HtmlView`](crate::HtmlView). All mutable
-/// state lives in `Cell`/`RefCell` fields because the xui-win32 `CustomWidget`
-/// trait hands the widget `&self`.
+/// The custom-painted widget behind an [`HtmlView`](crate::HtmlView). All
+/// mutable state lives in `Cell`/`RefCell` fields because the painter and the
+/// event mapper share it through an `Rc`.
 pub struct HtmlWidget {
     painter: RefCell<Painter>,
     tx: Sender<Job>,
@@ -274,9 +271,9 @@ impl HtmlWidget {
         count
     }
 
-    /// Paints the selection highlight over the page, in document coordinates
-    /// (the canvas is already translated by the scroll offset).
-    fn paint_selection(&self, canvas: &mut D2dCanvas) {
+    /// Paints the selection highlight over the page: document DIPs scaled to
+    /// the canvas and shifted up by the scroll offset.
+    fn paint_selection(&self, canvas: &mut dyn Canvas, scale: f32, scroll: f32) {
         let Some(sel) = self.selection.get().filter(|s| !s.is_empty()) else {
             return;
         };
@@ -289,7 +286,12 @@ impl HtmlWidget {
             .borrow_mut()
             .selection_rects(&frame.list, &frame.runs, &sel);
         for r in &rects {
-            canvas.fill_rect_rgba(to_rectf(*r), SELECTION_FILL);
+            let px = |v: f32| (v * scale).round() as i32;
+            let py = |v: f32| ((v - scroll) * scale).round() as i32;
+            canvas.fill_rect_rgba(
+                PxRect::new(px(r.left), py(r.top), px(r.right), py(r.bottom)),
+                SELECTION_FILL,
+            );
         }
     }
 
@@ -301,20 +303,15 @@ impl HtmlWidget {
     }
 }
 
-impl CustomWidget for HtmlWidget {
-    type Event = crate::view::HtmlViewEvent;
-
-    // This widget is Direct2D-only; the GDI fallback (used only when Direct2D
-    // cannot create a surface) leaves the page blank.
-    fn renderer(&self) -> Renderer {
-        Renderer::Direct2D
-    }
-
-    fn paint(&self, _canvas: &Canvas, _bounds: PxRect, _theme: &Theme) {}
-
-    fn paint_d2d(&self, canvas: &mut D2dCanvas, bounds: RectF, _theme: &Theme) {
-        let width = bounds.width().max(1.0);
-        let height = bounds.height().max(1.0);
+impl HtmlWidget {
+    /// Paints the latest frame into `canvas`, submitting a render job first if
+    /// the page or the width changed.
+    pub(crate) fn paint(&self, canvas: &mut dyn Canvas) {
+        let bounds = canvas.bounds();
+        let scale = canvas.dpi() as f32 / 96.0;
+        self.scale.set(scale);
+        let width = (bounds.width() as f32 / scale).max(1.0);
+        let height = (bounds.height() as f32 / scale).max(1.0);
         self.viewport_height.set(height);
 
         if self.dirty.get() || (width - self.requested_width.get()).abs() > 0.5 {
@@ -335,17 +332,9 @@ impl CustomWidget for HtmlWidget {
                     scroll,
                     self.background.get(),
                 );
-                self.paint_selection(canvas);
+                self.paint_selection(canvas, scale, scroll);
             }
             None => canvas.clear(self.background.get()),
         }
-    }
-
-    fn input(&self, input: Input, cx: &mut WidgetCx<crate::view::HtmlViewEvent>) {
-        self.handle_input(input, cx);
-    }
-
-    fn preferred_size(&self, _dpi: u32) -> Option<xui_win32::Size> {
-        None
     }
 }

@@ -8,7 +8,6 @@ use litehtml::{
     LinearGradient, ListMarker, ListStyleType, MediaFeatures, MediaType, Position, RadialGradient,
     Size, TextTransform,
 };
-use xui_win32::d2d::FontSpec;
 
 use super::{D2dContainer, Slot, c32, corner_radii, rect_of};
 use crate::geom::{Point, Radius, Rgba};
@@ -42,14 +41,9 @@ fn border_edge(border: &Border) -> BorderEdge {
 impl DocumentContainer for D2dContainer {
     fn create_font(&mut self, d: &FontDescription) -> (FontHandle, FontMetrics) {
         let size = d.size().max(1.0);
-        let spec = FontSpec::new(d.family(), size)
-            .weight(d.weight().clamp(1, 1000) as u16)
-            .italic(matches!(d.style(), FontStyle::Italic));
-        let font = self.text.font(&spec).unwrap_or_else(|_| {
-            self.text
-                .font(&FontSpec::new("Segoe UI", size))
-                .expect("Segoe UI resolves")
-        });
+        let weight = d.weight().clamp(1, 1000) as u16;
+        let italic = matches!(d.style(), FontStyle::Italic);
+        let font = self.text.font(d.family(), size, weight, italic);
         let m = font.metrics();
         let height = m.line_height();
         let ascent = m.ascent;
@@ -57,10 +51,10 @@ impl DocumentContainer for D2dContainer {
 
         let key = self.fonts.len() as FontKey;
         self.fonts.push(FontDesc {
-            family: spec.family.clone(),
+            family: d.family().to_string(),
             size,
-            weight: spec.weight,
-            italic: spec.italic,
+            weight,
+            italic,
         });
         let handle = self.next_font;
         self.next_font += 1;
