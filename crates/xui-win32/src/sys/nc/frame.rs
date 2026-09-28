@@ -14,64 +14,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
 use crate::geometry::{Point, Rect};
 use crate::hwnd::Hwnd;
 
-use super::geometry::extended_client_rect;
-use super::{frame_thickness, is_maximized, raw_hwnd, strip_height, to_client};
-
-/// Whether `hwnd`'s client rectangle no longer matches what its current window
-/// rectangle calls for (Windows moved the window during a maximize/de-maximize
-/// without a fresh `WM_NCCALCSIZE`). The app forces a frame change so the
-/// client is recomputed against the final rectangle. A pixel of slack absorbs
-/// the clamping Windows does for a maximized window.
-pub(crate) fn client_mismatch(hwnd: Hwnd) -> bool {
-    if !crate::window::nc::is_extended(hwnd) {
-        return false;
-    }
-    let raw = raw_hwnd(hwnd);
-    let window = crate::sys::window::window_rect(hwnd);
-    let maximized = is_maximized(raw);
-    let frame = frame_thickness(raw);
-    let rect = Rect::new(window.left, window.top, window.right, window.bottom);
-    // A maximized borderless window's client is the monitor work area; Windows
-    // clamps our computed rectangle to it, so expect that.
-    let expected = if maximized {
-        maximized_client(raw).unwrap_or_else(|| extended_client_rect(rect, frame, true))
-    } else {
-        extended_client_rect(rect, frame, false)
-    };
-    let actual = crate::sys::window::client_rect(hwnd);
-    let near = |a: i32, b: i32| (a - b).abs() <= 2;
-    !(near(actual.left, expected.left)
-        && near(actual.top, expected.top)
-        && near(actual.right, expected.right)
-        && near(actual.bottom, expected.bottom))
-}
-
-/// The work area of `hwnd`'s monitor, which is the client rectangle Windows
-/// gives a maximized borderless window, or `None` when it cannot be queried.
-fn maximized_client(hwnd: HWND) -> Option<Rect> {
-    use windows::Win32::Graphics::Gdi::{
-        GetMonitorInfoW, MONITOR_DEFAULTTONEAREST, MONITORINFO, MonitorFromWindow,
-    };
-    // SAFETY: `hwnd` is live; the call only reads its monitor.
-    let monitor = unsafe { MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST) };
-    if monitor.0.is_null() {
-        return None;
-    }
-    let mut info = MONITORINFO {
-        cbSize: size_of::<MONITORINFO>() as u32,
-        ..Default::default()
-    };
-    // SAFETY: `info` is a correctly-sized, initialised out-struct.
-    if !unsafe { GetMonitorInfoW(monitor, &mut info) }.as_bool() {
-        return None;
-    }
-    Some(Rect::new(
-        info.rcWork.left,
-        info.rcWork.top,
-        info.rcWork.right,
-        info.rcWork.bottom,
-    ))
-}
+use super::{raw_hwnd, strip_height, to_client};
 
 /// Recomputes an extended window's non-client area against its current window
 /// rectangle (used after a maximize/de-maximize moved it without one).

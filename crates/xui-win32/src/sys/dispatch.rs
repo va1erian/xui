@@ -14,11 +14,10 @@ use std::panic::{AssertUnwindSafe, catch_unwind};
 use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM};
 use windows::Win32::UI::WindowsAndMessaging::{
     CREATESTRUCTW, DefWindowProcW, GWLP_USERDATA, GetWindowLongPtrW, MSG, SetWindowLongPtrW,
-    WM_ERASEBKGND, WM_GETMINMAXINFO, WM_GETOBJECT, WM_NCCALCSIZE, WM_NCCREATE, WM_NCDESTROY,
-    WM_NCHITTEST, WM_NOTIFY,
+    WM_ERASEBKGND, WM_GETMINMAXINFO, WM_NCCALCSIZE, WM_NCCREATE, WM_NCDESTROY, WM_NCHITTEST,
+    WM_NOTIFY,
 };
 
-use crate::message::{Command, Message};
 use crate::window::WindowHandler;
 
 use super::{hwnd_from, message};
@@ -109,14 +108,6 @@ pub(crate) unsafe extern "system" fn window_proc(
     // SAFETY: reads back the pointer stored above (null for foreign windows).
     let raw = unsafe { GetWindowLongPtrW(hwnd, GWLP_USERDATA) } as *mut Box<dyn WindowHandler>;
 
-    // A window that describes itself to assistive technology answers the UI
-    // Automation root request; everything else falls through unchanged.
-    if msg == WM_GETOBJECT
-        && let Some(result) = super::uia::get_object(hwnd_from(hwnd), wparam.0, lparam.0)
-    {
-        return LRESULT(result);
-    }
-
     if msg == WM_GETMINMAXINFO {
         // Apply the window's configured tracking limits before the handler, so
         // it can read them with `Window::min_max_info`.
@@ -205,11 +196,8 @@ pub(crate) unsafe extern "system" fn window_proc(
         super::cursor_idle::forget(hwnd_from(hwnd));
         super::fullscreen::forget(hwnd_from(hwnd));
         super::menu_seam::forget(hwnd_from(hwnd));
-        super::looper::forget_keyboard(hwnd_from(hwnd));
         crate::theme::forget_window_theme(hwnd_from(hwnd));
-        crate::controls::tooltip::forget_window(hwnd_from(hwnd));
         crate::window::nc::forget_window(hwnd_from(hwnd));
-        crate::accessibility::registry::forget(hwnd_from(hwnd));
     }
 
     if msg == WM_NCDESTROY && !raw.is_null() {
@@ -259,39 +247,12 @@ fn deliver(
         return Some(result);
     }
 
-    // `WM_NOTIFY` is special: it may be consumed by a registered control
-    // (self-contained owner-data/custom-draw plumbing), mapped to the app's
-    // `Msg` by a widget-layer event mapper, or left for the window handler.
-    if msg == WM_NOTIFY
-        && let Some((from, _id, code)) = message::notify_header(lparam)
-    {
-        if let Some(result) =
-            crate::controls::registry::dispatch(hwnd_from(from), code, wparam.0, lparam.0)
-        {
-            return Some(result);
-        }
+    // `WM_NOTIFY` decodes like any other message; nothing intercepts it
+    // ahead of the window handler now that native common controls are gone.
+    if msg == WM_NOTIFY {
         let decoded = message::decode(hwnd, msg, wparam, lparam)?;
-        if crate::controls::registry::dispatch_app_event(hwnd_from(from), &decoded) {
-            return Some(0);
-        }
         let window = crate::window::Window::from_raw(hwnd_from(hwnd));
         return handler.message(&window, decoded);
-    }
-
-    // `WM_DRAWITEM` is special like `WM_NOTIFY`: an owner-drawn control
-    // (`BS_OWNERDRAW`) asks its parent to paint, so the request is offered to
-    // the widget-layer mapper registered for that control first. A mapper
-    // that paints returns `Some(1)` (TRUE).
-    if msg == message::draw_message_id()
-        && let Some(drawn) = message::decode_draw(wparam, lparam)
-    {
-        if let Message::DrawItem { control, .. } = &drawn
-            && crate::controls::registry::dispatch_app_event(*control, &drawn)
-        {
-            return Some(1);
-        }
-        let window = crate::window::Window::from_raw(hwnd_from(hwnd));
-        return handler.message(&window, drawn);
     }
 
     // A message may be suppressed (the first half of a `WM_CHAR` surrogate
@@ -303,18 +264,6 @@ fn deliver(
     if crate::theme::is_theme_change(&message) {
         crate::theme::notify_theme_change(hwnd_from(hwnd));
     }
-    // A `WM_COMMAND` from a child control is first offered to that control's
-    // widget-layer mapper (as `WM_NOTIFY` is above), so a combo's
-    // `CBN_SELCHANGE` reaches the app as a typed message without the app
-    // knowing the control's numeric id.
-    if let Message::Command(Command {
-        control: Some(control),
-        ..
-    }) = &message
-        && crate::controls::registry::dispatch_app_event(*control, &message)
-    {
-        return Some(0);
-    }
     let window = crate::window::Window::from_raw(hwnd_from(hwnd));
     handler.message(&window, message)
 }
@@ -324,6 +273,7 @@ mod tests {
     use std::cell::Cell;
 
     use super::*;
+    use crate::message::Message;
 
     /// Claims every raw message so `deliver` must return before decoding it.
     struct RawProbe {

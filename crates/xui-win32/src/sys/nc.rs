@@ -33,10 +33,7 @@ use super::{hwnd_from, raw_hwnd};
 mod frame;
 mod geometry;
 
-pub(crate) use frame::{
-    apply_extended_frame, caption_buttons_in_window, client_mismatch, enable_extended, reframe,
-    refresh_caption_inset,
-};
+pub(crate) use frame::{apply_extended_frame, enable_extended, reframe};
 use geometry::{FrameInsets, decide, extended_client_rect, hit_code};
 
 /// The frame thickness of `hwnd`, with the caption height excluded from `top`.
@@ -141,13 +138,6 @@ fn caption_strip(hwnd: HWND) -> i32 {
 
 fn strip_height(hwnd: HWND) -> i32 {
     caption_strip(hwnd) + crate::window::nc::menu_row(hwnd_from(hwnd))
-}
-
-/// The caption row's height (device pixels) of an extended-frame window: the
-/// part DWM draws the caption buttons in, without any strip menu row. Used to
-/// lay the strip menu out.
-pub(crate) fn caption_strip_height(hwnd: Hwnd) -> i32 {
-    caption_strip(raw_hwnd(hwnd))
 }
 
 /// The top area an extended-frame window must reserve for its caption buttons

@@ -5,19 +5,18 @@ use core::ffi::c_void;
 
 use windows::Win32::Foundation::{HINSTANCE, HWND, LPARAM, RECT, WPARAM};
 use windows::Win32::Graphics::Gdi::{
-    GetClipBox, GetDC, GetUpdateRect, HBRUSH, InvalidateRect, RDW_ALLCHILDREN, RDW_ERASE,
-    RDW_INVALIDATE, RDW_UPDATENOW, RedrawWindow, ReleaseDC, UpdateWindow, ValidateRect,
+    GetClipBox, GetDC, HBRUSH, InvalidateRect, RDW_ALLCHILDREN, RDW_ERASE, RDW_INVALIDATE,
+    RedrawWindow, ReleaseDC, UpdateWindow, ValidateRect,
 };
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::UI::Input::KeyboardAndMouse::{TME_LEAVE, TRACKMOUSEEVENT, TrackMouseEvent};
-use windows::Win32::UI::Shell::SUBCLASSPROC;
 use windows::Win32::UI::WindowsAndMessaging::{
-    CS_DBLCLKS, CreateWindowExW, DestroyWindow, GA_ROOT, GWL_STYLE, GetAncestor, GetClientRect,
-    GetWindowLongPtrW, GetWindowRect, GetWindowTextLengthW, GetWindowTextW, HCURSOR, HMENU,
-    HWND_BOTTOM, HWND_TOP, IDC_ARROW, KillTimer, LoadCursorW, MoveWindow, RegisterClassExW,
-    SW_HIDE, SW_SHOW, SW_SHOWMAXIMIZED, SW_SHOWMINNOACTIVE, SW_SHOWNOACTIVATE, SWP_NOACTIVATE,
-    SWP_NOMOVE, SWP_NOSIZE, SetTimer, SetWindowLongPtrW, SetWindowPos, SetWindowTextW, ShowWindow,
-    UnregisterClassW, WINDOW_EX_STYLE, WINDOW_STYLE, WNDCLASSEXW, WS_TABSTOP,
+    CS_DBLCLKS, CreateWindowExW, DestroyWindow, GA_ROOT, GetAncestor, GetClientRect, GetWindowRect,
+    GetWindowTextLengthW, GetWindowTextW, HCURSOR, HMENU, HWND_TOP, IDC_ARROW, KillTimer,
+    LoadCursorW, MoveWindow, RegisterClassExW, SW_HIDE, SW_SHOW, SW_SHOWMAXIMIZED,
+    SW_SHOWMINNOACTIVE, SW_SHOWNOACTIVATE, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SetTimer,
+    SetWindowPos, SetWindowTextW, ShowWindow, UnregisterClassW, WINDOW_EX_STYLE, WINDOW_STYLE,
+    WNDCLASSEXW,
 };
 use windows::core::{HSTRING, PCWSTR};
 
@@ -194,20 +193,6 @@ pub(crate) fn destroy(hwnd: Hwnd) {
     }
 }
 
-/// Installs a subclass procedure on `hwnd`, returning whether it succeeded.
-pub(crate) fn set_subclass(hwnd: Hwnd, proc: SUBCLASSPROC, id: usize, refdata: usize) -> bool {
-    // SAFETY: `hwnd` is live and `proc`/`refdata` follow the subclass contract;
-    // the caller keeps `refdata` valid until `remove_subclass`.
-    unsafe { windows::Win32::UI::Shell::SetWindowSubclass(raw_hwnd(hwnd), proc, id, refdata) }
-        .as_bool()
-}
-
-/// Removes a subclass procedure previously installed by [`set_subclass`].
-pub(crate) fn remove_subclass(hwnd: Hwnd, proc: SUBCLASSPROC, id: usize) -> bool {
-    // SAFETY: `proc`/`id` identify a previously installed subclass.
-    unsafe { windows::Win32::UI::Shell::RemoveWindowSubclass(raw_hwnd(hwnd), proc, id) }.as_bool()
-}
-
 /// The top-level (root) ancestor of `hwnd`, or `hwnd` itself when it has no
 /// parent or the handle is stale. Used to key per-window theme state on the
 /// top-level window even for controls nested in a container child window.
@@ -226,12 +211,6 @@ pub(crate) fn root(hwnd: Hwnd) -> Hwnd {
 pub(crate) fn is_window(hwnd: Hwnd) -> bool {
     // SAFETY: `IsWindow` only inspects the handle.
     unsafe { windows::Win32::UI::WindowsAndMessaging::IsWindow(Some(raw_hwnd(hwnd))).as_bool() }
-}
-
-/// Whether `hwnd` is visible (`WS_VISIBLE` and not a hidden ancestor).
-pub(crate) fn is_visible(hwnd: Hwnd) -> bool {
-    // SAFETY: `IsWindowVisible` only inspects the handle.
-    unsafe { windows::Win32::UI::WindowsAndMessaging::IsWindowVisible(raw_hwnd(hwnd)).as_bool() }
 }
 
 /// The client area of `hwnd`, in pixels.
@@ -303,27 +282,6 @@ pub(crate) fn redraw_children(hwnd: Hwnd) {
     }
 }
 
-/// Synchronously repaints `hwnd` and every child, whole.
-///
-/// Used at the end of a resize, once the layout has moved every child, so the
-/// frame the window manager presents next is complete. The whole tree is
-/// repainted rather than only the invalid parts because native containers
-/// (the tab control) repaint the area a sibling vacated before the sibling has
-/// moved. Must not be called while any state the window's paint handler reads
-/// is borrowed.
-pub(crate) fn paint_now(hwnd: Hwnd) {
-    // SAFETY: `hwnd` is live; a null update rectangle means the whole window,
-    // and only documented redraw flags are passed.
-    unsafe {
-        let _ = RedrawWindow(
-            Some(raw_hwnd(hwnd)),
-            None,
-            None,
-            RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN | RDW_UPDATENOW,
-        );
-    }
-}
-
 /// Converts a client-relative `point` of `hwnd` to screen coordinates.
 pub(crate) fn client_to_screen(hwnd: Hwnd, point: Point) -> Point {
     let mut raw = windows::Win32::Foundation::POINT {
@@ -360,24 +318,6 @@ pub(crate) fn move_window(hwnd: Hwnd, bounds: Rect) {
             bounds.width(),
             bounds.height(),
             true,
-        );
-    }
-}
-
-/// Sends `hwnd` to the bottom of its sibling z-order, so a container created
-/// after its content (a tab strip) draws behind the content windows.
-pub(crate) fn send_to_back(hwnd: Hwnd) {
-    // SAFETY: only state flags and a positioning constant are passed; a stale
-    // handle is a documented no-op failure.
-    unsafe {
-        let _ = SetWindowPos(
-            raw_hwnd(hwnd),
-            Some(HWND_BOTTOM),
-            0,
-            0,
-            0,
-            0,
-            SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
         );
     }
 }
@@ -424,50 +364,11 @@ pub(crate) fn set_title(hwnd: Hwnd, title: &str) -> Result<()> {
     unsafe { SetWindowTextW(raw_hwnd(hwnd), &title) }.map_err(win32_error)
 }
 
-/// Reads the window's title text.
-pub(crate) fn get_title(hwnd: Hwnd) -> String {
-    const WM_GETTEXT: u32 = 0x000D;
-    let mut buffer = vec![0u16; 256];
-    let length =
-        send_message(hwnd, WM_GETTEXT, buffer.len(), buffer.as_mut_ptr() as isize) as usize;
-    if length == 0 {
-        return String::new();
-    }
-    String::from_utf16_lossy(&buffer[..length.min(buffer.len())])
-}
-
 /// Enables or disables a window (greyed out and unclickable when disabled).
 pub(crate) fn enable_window(hwnd: Hwnd, enabled: bool) {
     // SAFETY: only a state flag is passed; a stale handle is a documented no-op.
     unsafe {
         let _ = windows::Win32::UI::Input::KeyboardAndMouse::EnableWindow(raw_hwnd(hwnd), enabled);
-    }
-}
-
-/// Includes or excludes `hwnd` from the Tab order (`WS_TABSTOP`).
-pub(crate) fn set_tab_stop(hwnd: Hwnd, tab_stop: bool) {
-    // SAFETY: only the window's style bits are read and written; a stale handle
-    // is a documented no-op.
-    unsafe {
-        let style = GetWindowLongPtrW(raw_hwnd(hwnd), GWL_STYLE);
-        let updated = if tab_stop {
-            style | WS_TABSTOP.0 as isize
-        } else {
-            style & !(WS_TABSTOP.0 as isize)
-        };
-        let _ = SetWindowLongPtrW(raw_hwnd(hwnd), GWL_STYLE, updated);
-    }
-}
-
-/// Re-parents a child window, keeping its coordinates in the new parent.
-pub(crate) fn set_parent(child: Hwnd, parent: Hwnd) {
-    // SAFETY: both handles are live child windows; `SetParent` only changes the
-    // parent linkage and returns the previous parent, which needs no cleanup.
-    unsafe {
-        let _ = windows::Win32::UI::WindowsAndMessaging::SetParent(
-            raw_hwnd(child),
-            Some(raw_hwnd(parent)),
-        );
     }
 }
 
@@ -510,20 +411,6 @@ pub(crate) fn invalidate_rect(hwnd: Hwnd, rect: Rect) {
     unsafe {
         let _ = InvalidateRect(Some(raw_hwnd(hwnd)), Some(&raw), false);
     }
-}
-
-/// The window's pending update rectangle (device pixels), or the whole client
-/// area when Windows reports none. The Direct2D paint path clips its frame to
-/// this so pixels outside it are left untouched.
-pub(crate) fn update_rect(hwnd: Hwnd) -> Rect {
-    let mut raw = RECT::default();
-    // SAFETY: `raw` is a valid out-pointer; `berase = false` leaves the erase
-    // state alone and a stale handle makes the call fail harmlessly.
-    let ok = unsafe { GetUpdateRect(raw_hwnd(hwnd), Some(&mut raw), false) };
-    if !ok.as_bool() {
-        return client_rect(hwnd);
-    }
-    Rect::new(raw.left, raw.top, raw.right, raw.bottom)
 }
 
 /// Marks the whole client area as painted, so Windows stops asking for it.

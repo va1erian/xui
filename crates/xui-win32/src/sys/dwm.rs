@@ -15,8 +15,8 @@ use windows::Win32::Foundation::{COLORREF, ERROR_SUCCESS};
 use windows::Win32::Graphics::Dwm::{
     DWM_WINDOW_CORNER_PREFERENCE, DWMSBT_MAINWINDOW, DWMSBT_TABBEDWINDOW, DWMSBT_TRANSIENTWINDOW,
     DWMWA_BORDER_COLOR, DWMWA_CAPTION_COLOR, DWMWA_COLOR_NONE, DWMWA_SYSTEMBACKDROP_TYPE,
-    DWMWA_TEXT_COLOR, DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_DONOTROUND, DWMWCP_ROUND,
-    DWMWINDOWATTRIBUTE, DwmExtendFrameIntoClientArea, DwmSetWindowAttribute,
+    DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_DONOTROUND, DWMWINDOWATTRIBUTE,
+    DwmExtendFrameIntoClientArea, DwmSetWindowAttribute,
 };
 use windows::Win32::System::Registry::{HKEY_CURRENT_USER, RRF_RT_REG_DWORD, RegGetValueW};
 use windows::Win32::UI::Accessibility::{HCF_HIGHCONTRASTON, HIGHCONTRASTW};
@@ -218,47 +218,6 @@ pub(crate) fn disable_rounding(hwnd: Hwnd) {
             &corner as *const DWM_WINDOW_CORNER_PREFERENCE as *const c_void,
             size_of::<DWM_WINDOW_CORNER_PREFERENCE>() as u32,
         );
-    }
-}
-
-/// Paints the standard caption from `theme` (Windows 11 only), returning
-/// whether every attribute was accepted. A failure leaves the system colours.
-pub(crate) fn apply_caption_colors(hwnd: Hwnd, theme: &Theme) -> bool {
-    if high_contrast() {
-        return false;
-    }
-    let caption = COLORREF(theme.accent.to_colorref());
-    let text = COLORREF(theme.text_on_accent.to_colorref());
-    let border = COLORREF(theme.border.to_colorref());
-    let corner = DWMWCP_ROUND;
-    // SAFETY: `hwnd` is live; each attribute value is a correctly-sized struct
-    // that outlives its call and is only read by DWM.
-    unsafe {
-        let caption = DwmSetWindowAttribute(
-            raw_hwnd(hwnd),
-            DWMWA_CAPTION_COLOR,
-            &caption as *const COLORREF as *const c_void,
-            size_of::<COLORREF>() as u32,
-        );
-        let text = DwmSetWindowAttribute(
-            raw_hwnd(hwnd),
-            DWMWA_TEXT_COLOR,
-            &text as *const COLORREF as *const c_void,
-            size_of::<COLORREF>() as u32,
-        );
-        let border = DwmSetWindowAttribute(
-            raw_hwnd(hwnd),
-            DWMWA_BORDER_COLOR,
-            &border as *const COLORREF as *const c_void,
-            size_of::<COLORREF>() as u32,
-        );
-        let corner = DwmSetWindowAttribute(
-            raw_hwnd(hwnd),
-            DWMWA_WINDOW_CORNER_PREFERENCE,
-            &corner as *const DWM_WINDOW_CORNER_PREFERENCE as *const c_void,
-            size_of::<DWM_WINDOW_CORNER_PREFERENCE>() as u32,
-        );
-        caption.is_ok() && text.is_ok() && border.is_ok() && corner.is_ok()
     }
 }
 

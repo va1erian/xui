@@ -87,15 +87,6 @@ pub(crate) fn set_caption_inset(window: Hwnd, inset: Rect) {
     });
 }
 
-/// The caption buttons' bounds (client coordinates) for `window`.
-pub(crate) fn caption_inset(window: Hwnd) -> Rect {
-    WINDOWS.with(|map| {
-        map.borrow()
-            .get(&window.raw())
-            .map_or(Rect::default(), |entry| entry.caption_inset)
-    })
-}
-
 /// Records the extended strip's height (device pixels) for `window`.
 pub(crate) fn set_strip_height(window: Hwnd, height: i32) {
     WINDOWS.with(|map| {
@@ -103,35 +94,6 @@ pub(crate) fn set_strip_height(window: Hwnd, height: i32) {
             .entry(window.raw())
             .or_default()
             .strip_height = height;
-    });
-}
-
-/// The extended strip's height (device pixels) for `window`, or 0 when unknown.
-pub(crate) fn strip_height(window: Hwnd) -> i32 {
-    WINDOWS.with(|map| {
-        map.borrow()
-            .get(&window.raw())
-            .map_or(0, |entry| entry.strip_height)
-    })
-}
-
-/// Records the strip menu's row height and item rectangles (client
-/// coordinates) for `window`. `height` is the extra row the menu adds below the
-/// caption (zero when the menu is inline); the items are its clickable
-/// rectangles.
-pub(crate) fn set_menu_strip(window: Hwnd, height: i32, items: Vec<Rect>) {
-    WINDOWS.with(|map| {
-        let mut map = map.borrow_mut();
-        let entry = map.entry(window.raw()).or_default();
-        entry.menu_row = height;
-        entry.menu_items = items;
-    });
-}
-
-/// Records the bottom material band's height (device pixels) for `window`.
-pub(crate) fn set_status_bar(window: Hwnd, height: i32) {
-    WINDOWS.with(|map| {
-        map.borrow_mut().entry(window.raw()).or_default().status_bar = height;
     });
 }
 
@@ -143,13 +105,6 @@ pub(crate) fn status_bar(window: Hwnd) -> i32 {
             .get(&window.raw())
             .map_or(0, |entry| entry.status_bar)
     })
-}
-
-/// Records the top material band's height (device pixels) for `window`.
-pub(crate) fn set_top_bar(window: Hwnd, height: i32) {
-    WINDOWS.with(|map| {
-        map.borrow_mut().entry(window.raw()).or_default().top_bar = height;
-    });
 }
 
 /// The top material band's height (device pixels) for `window`, or 0 when there
@@ -180,18 +135,6 @@ pub(crate) fn over_menu_item(window: Hwnd, point: Point) -> bool {
             .get(&window.raw())
             .is_some_and(|entry| entry.menu_items.iter().any(|rect| rect.contains(point)))
     })
-}
-
-/// Records whether `child` accepts clicks in the caption strip.
-pub(crate) fn set_caption_interactive(child: Hwnd, interactive: bool) {
-    INTERACTIVE.with(|set| {
-        let mut set = set.borrow_mut();
-        if interactive {
-            set.insert(child.raw());
-        } else {
-            set.remove(&child.raw());
-        }
-    });
 }
 
 /// Whether `child` accepts clicks in the caption strip.

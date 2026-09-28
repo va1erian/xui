@@ -88,17 +88,13 @@ pub struct Canvas {
 
 impl Canvas {
     /// A canvas over `dc` with no known repaint rectangle.
+    #[cfg(test)]
     pub(crate) fn new(dc: HDC) -> Canvas {
         Canvas {
             dc,
             paint: Rect::default(),
             scroll: std::cell::Cell::new(0),
         }
-    }
-
-    /// A canvas over the raw device context `dc` (a `WM_PAINT` `wparam`).
-    pub(crate) fn from_raw_dc(dc: usize) -> Canvas {
-        Canvas::new(HDC(dc as *mut core::ffi::c_void))
     }
 
     /// A canvas over `dc`, reporting `paint` from [`Canvas::paint_rect`].
@@ -124,13 +120,6 @@ impl Canvas {
     /// offset, so this is returned in the widget's own (content) coordinates.
     pub fn paint_rect(&self) -> Rect {
         self.paint.offset(0, self.scroll.get())
-    }
-
-    /// Removes `rect` from the device context's clip region, so later drawing
-    /// cannot paint over it. An owner-drawn submenu item uses this to suppress
-    /// the system's default arrow, which it draws after `WM_DRAWITEM`.
-    pub(crate) fn exclude_clip_rect(&self, rect: Rect) {
-        sys::gdi::exclude_clip_rect(self.dc, rect);
     }
 
     /// Fills `rect` with `color`.

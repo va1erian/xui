@@ -4,18 +4,12 @@
 //! here are safe to call; they encode the pointer/lifetime contracts of the
 //! Win32 APIs they wrap and document each block with a `// SAFETY:` comment.
 
-pub(crate) mod animation;
-pub(crate) mod button;
-pub(crate) mod button_draw;
 pub(crate) mod capture;
 #[cfg(feature = "wgc")]
 pub(crate) mod capture_wgc;
 #[cfg(feature = "wgc")]
 pub(crate) mod capture_wgc_device;
-pub(crate) mod client_edge;
 pub(crate) mod clipboard;
-pub(crate) mod colorpicker;
-pub(crate) mod combobox;
 pub(crate) mod control;
 pub(crate) mod cursor_idle;
 pub(crate) mod d2d;
@@ -29,40 +23,24 @@ pub(crate) mod first_show;
 pub(crate) mod fullscreen;
 pub(crate) mod gdi;
 pub(crate) mod gl;
-pub(crate) mod glass_child;
-pub(crate) mod glass_paint;
-pub(crate) mod image_list;
 pub(crate) mod imaging;
 pub(crate) mod layout;
-pub(crate) mod listview;
-pub(crate) mod listview_click;
-pub(crate) mod listview_header;
-pub(crate) mod listview_rowheight;
 pub(crate) mod looper;
-pub(crate) mod menu;
 pub(crate) mod menu_seam;
 pub(crate) mod message;
 pub(crate) mod monitor;
 pub(crate) mod nc;
-pub(crate) mod proxy;
-pub(crate) mod scroll;
-pub(crate) mod tabs;
-pub(crate) mod taskdialog;
 pub(crate) mod theme;
 pub(crate) mod theme_system;
-pub(crate) mod tooltip;
-pub(crate) mod treeview;
-pub(crate) mod uia;
 pub(crate) mod window;
 pub(crate) mod window_ext;
 pub(crate) mod window_icon;
 pub(crate) mod window_input;
 
-pub(crate) use dwm::{apply_backdrop, apply_caption_colors, apply_extended_colors};
+pub(crate) use dwm::{apply_backdrop, apply_extended_colors};
 pub(crate) use theme::{
-    NativeControlKind, apply_native_theme, ctlcolor_brush, ctlcolor_msg_btn, ctlcolor_msg_dlg,
-    ctlcolor_msg_edit, ctlcolor_msg_listbox, ctlcolor_msg_static, set_class_background,
-    set_ctlcolor, set_titlebar_dark,
+    ctlcolor_brush, ctlcolor_msg_btn, ctlcolor_msg_dlg, ctlcolor_msg_edit, ctlcolor_msg_listbox,
+    ctlcolor_msg_static, set_class_background, set_ctlcolor, set_titlebar_dark,
 };
 
 use core::ffi::c_void;
