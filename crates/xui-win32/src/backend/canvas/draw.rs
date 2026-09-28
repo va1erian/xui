@@ -3,9 +3,9 @@
 //! [`Win32Canvas`](super::Win32Canvas)'s text, layout and image drawing, split
 //! from `canvas.rs` so both files stay under the size limit.
 
-use crate::d2d::RectF;
+use crate::d2d::{Path, PathBuilder, PointF, RectF};
 use crate::gdi;
-use xui_core::backend::{Rgba, TextLayout, TextMetrics, TextStyle};
+use xui_core::backend::{PathPlacement, PathSeg, Rgba, TextLayout, TextMetrics, TextStyle};
 use xui_core::image::Image;
 use xui_core::{Point, Rect};
 
@@ -69,5 +69,37 @@ impl Win32Canvas<'_> {
             return;
         };
         self.canvas.draw_bitmap(&bitmap, rect);
+    }
+
+    /// `at` composed with the canvas's own transform: the placement that maps
+    /// path space straight to device pixels.
+    pub(crate) fn device_placement(&self, at: PathPlacement) -> PathPlacement {
+        PathPlacement::new(
+            at.scale * self.scale,
+            self.tx + at.x * self.scale,
+            self.ty + at.y * self.scale,
+        )
+    }
+
+    /// Builds `path` as a Direct2D geometry in device space, or `None` when
+    /// it cannot be built (a device error) or is empty.
+    pub(crate) fn device_path(&self, path: &[PathSeg], at: PathPlacement) -> Option<Path> {
+        let at = self.device_placement(at);
+        let point = |x: f32, y: f32| {
+            let (x, y) = at.apply(x, y);
+            PointF::new(x, y)
+        };
+        let mut builder = PathBuilder::new().ok()?;
+        for seg in path {
+            match *seg {
+                PathSeg::MoveTo(x, y) => builder.move_to(point(x, y)),
+                PathSeg::LineTo(x, y) => builder.line_to(point(x, y)),
+                PathSeg::CubicTo(x1, y1, x2, y2, x, y) => {
+                    builder.cubic_to(point(x1, y1), point(x2, y2), point(x, y))
+                }
+                PathSeg::Close => builder.close(),
+            };
+        }
+        builder.build().ok()
     }
 }

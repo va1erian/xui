@@ -27,9 +27,9 @@ pub struct Theme {
     pub raised: Color,
     /// Primary text (WinUI TextPrimary: light `#1B1B1B`, dark `#FFFFFF`).
     pub text: Color,
-    /// De-emphasised text (WinUI TextSecondary: light `#605E5C`, dark `#C7C7C7`).
+    /// De-emphasised text (WinUI TextSecondary: light `#4A4846`, dark `#C7C7C7`).
     pub text_secondary: Color,
-    /// Disabled text (WinUI disabled: light `#A19F9D`, dark `#767676`).
+    /// Disabled text (WinUI disabled: light `#8A8886`, dark `#767676`).
     pub text_disabled: Color,
     /// Text drawn on top of [`Theme::accent`].
     pub text_on_accent: Color,
@@ -42,17 +42,17 @@ pub struct Theme {
     /// Critical/danger fill, e.g. an error progress bar (WinUI
     /// SystemFillColorCritical: light `#C42B1C`, dark `#FF99A4`).
     pub danger: Color,
-    /// Focused selection background (Explorer selected row: light `#C7E0F4`,
+    /// Focused selection background (Explorer selected row: light `#B3D4F0`,
     /// dark `#2B4A67`).
     pub selection: Color,
-    /// Unfocused selection background (Explorer grey: light `#E5E5E5`, dark
+    /// Unfocused selection background (Explorer grey: light `#D6D6D6`, dark
     /// `#3A3A3A`).
     pub selection_unfocused: Color,
-    /// Hover fill (Explorer hover: light `#EAEAEA`, dark `#333333`).
+    /// Hover fill (Explorer hover: light `#E3E3E3`, dark `#333333`).
     pub hover: Color,
-    /// Pressed fill (Explorer pressed: light `#D6D6D6`, dark `#292929`).
+    /// Pressed fill (Explorer pressed: light `#CFCFCF`, dark `#292929`).
     pub pressed: Color,
-    /// Widget border / separators (WinUI CardStroke: light `#E1E1E1`, dark
+    /// Widget border / separators (WinUI CardStroke: light `#CFCFCF`, dark
     /// `#303030`).
     pub border: Color,
     /// Focused border (accent outline: matches [`Theme::accent`]).
@@ -65,18 +65,18 @@ pub struct Theme {
     /// Input background: edits, address bar (light `#FFFFFF`, dark `#1F1F1F`).
     pub input_background: Color,
     /// Border around inputs: edits, combo fields, spin fields, check boxes
-    /// (WinUI `ControlStrokeColorDefault`: light `#E1E1E1`, dark `#3F3F3F`).
+    /// (WinUI `ControlStrokeColorDefault`: light `#8A8A8A`, dark `#3F3F3F`).
     /// Distinct from [`Theme::border`] (card stroke), which is too faint to
     /// outline a field on the dark surface.
     pub input_border: Color,
-    /// Scrollbar thumb (WinUI thumb: light `#C8C6C4`, dark `#605E5C`).
+    /// Scrollbar thumb (WinUI thumb: light `#8B8986`, dark `#605E5C`).
     pub scrollbar: Color,
     /// Scrollbar track (matches [`Theme::background`]): the scrollbar's own
     /// unfilled track is meant to blend into the page, since the thumb alone
     /// carries the affordance.
     pub scrollbar_track: Color,
     /// Slider/progress-bar groove (WinUI `ControlStrokeColorDefault`: light
-    /// `#E1E1E1`, dark `#3F3F3F`). Unlike [`Theme::scrollbar_track`], a
+    /// `#B4B4B4`, dark `#3F3F3F`). Unlike [`Theme::scrollbar_track`], a
     /// slider's or progress bar's unfilled groove is drawn over the plain
     /// background and must stay visible against it (#160).
     pub track: Color,
@@ -91,24 +91,24 @@ impl Theme {
             surface: Color::hex(0xF9_F9_F9),
             raised: Color::hex(0xFF_FF_FF),
             text: Color::hex(0x1B_1B_1B),
-            text_secondary: Color::hex(0x60_5E_5C),
-            text_disabled: Color::hex(0xA1_9F_9D),
+            text_secondary: Color::hex(0x4A_48_46),
+            text_disabled: Color::hex(0x8A_88_86),
             text_on_accent: Color::hex(0xFF_FF_FF),
             accent: Color::hex(0x00_5F_B8),
             warning: Color::hex(0x9D_5D_00),
             danger: Color::hex(0xC4_2B_1C),
-            selection: Color::hex(0xC7_E0_F4),
-            selection_unfocused: Color::hex(0xE5_E5_E5),
-            hover: Color::hex(0xEA_EA_EA),
-            pressed: Color::hex(0xD6_D6_D6),
-            border: Color::hex(0xE1_E1_E1),
+            selection: Color::hex(0xB3_D4_F0),
+            selection_unfocused: Color::hex(0xD6_D6_D6),
+            hover: Color::hex(0xE3_E3_E3),
+            pressed: Color::hex(0xCF_CF_CF),
+            border: Color::hex(0xCF_CF_CF),
             border_focused: Color::hex(0x00_5F_B8),
             shadow: Color::hex(0x00_00_00),
             input_background: Color::hex(0xFF_FF_FF),
-            input_border: Color::hex(0xE1_E1_E1),
-            scrollbar: Color::hex(0xC8_C6_C4),
+            input_border: Color::hex(0x8A_8A_8A),
+            scrollbar: Color::hex(0x8B_89_86),
             scrollbar_track: Color::hex(0xF3_F3_F3),
-            track: Color::hex(0xE1_E1_E1),
+            track: Color::hex(0xB4_B4_B4),
         }
     }
 

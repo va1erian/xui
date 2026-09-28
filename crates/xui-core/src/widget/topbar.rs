@@ -15,7 +15,6 @@ mod events;
 mod glyph;
 mod icon;
 mod items;
-mod nav_glyph;
 mod paint;
 
 #[cfg(test)]

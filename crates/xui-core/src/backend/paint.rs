@@ -101,7 +101,19 @@ pub enum Cap {
     Round,
 }
 
-/// A stroked outline: a width, a dash pattern and a cap shape.
+/// How two stroked segments meet at a corner.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum Join {
+    /// A sharp corner.
+    #[default]
+    Miter,
+    /// A flat, chamfered corner.
+    Bevel,
+    /// A rounded corner.
+    Round,
+}
+
+/// A stroked outline: a width, a dash pattern, a cap shape and a join shape.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Stroke {
     /// The line width.
@@ -110,6 +122,8 @@ pub struct Stroke {
     pub dash: Dash,
     /// The endpoint and dash-end shape.
     pub cap: Cap,
+    /// The corner shape of a stroked path.
+    pub join: Join,
 }
 
 impl Stroke {
@@ -119,6 +133,7 @@ impl Stroke {
             width,
             dash: Dash::Solid,
             cap: Cap::Flat,
+            join: Join::Miter,
         }
     }
 
@@ -130,6 +145,11 @@ impl Stroke {
     /// The same stroke with `cap`.
     pub const fn cap(self, cap: Cap) -> Stroke {
         Stroke { cap, ..self }
+    }
+
+    /// The same stroke with `join`.
+    pub const fn join(self, join: Join) -> Stroke {
+        Stroke { join, ..self }
     }
 }
 

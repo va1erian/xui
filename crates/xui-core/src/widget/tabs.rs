@@ -255,6 +255,8 @@ fn paint_strip<M>(s: &Shared<M>, canvas: &mut dyn Canvas, theme: Theme) {
     // Tab rectangles are in the strip's own coordinates; a painter draws in the
     // canvas's surface coordinates, whose origin is the strip's top-left.
     let (ox, oy) = (bounds.left, bounds.top);
+    // The tab was sized with this padding on both sides of the title.
+    let padding = PADDING.to_px(canvas.dpi()).value().max(0);
     let titles = s.titles.borrow();
     let tabs = s.tabs.borrow();
     for (index, local) in tabs.iter().enumerate() {
@@ -272,7 +274,7 @@ fn paint_strip<M>(s: &Shared<M>, canvas: &mut dyn Canvas, theme: Theme) {
         };
         let style = TextStyle::new(color, TEXT).middle();
         let text = Rect::new(
-            rect.left,
+            rect.left + padding,
             rect.top,
             rect.right,
             (rect.bottom - ACCENT).max(rect.top),

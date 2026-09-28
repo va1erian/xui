@@ -5,7 +5,7 @@
 
 use tiny_skia::{Mask, Path, PathBuilder, Shader, Transform};
 
-use xui_core::backend::{Corner, Stroke};
+use xui_core::backend::{Corner, PathPlacement, PathSeg, Stroke};
 use xui_core::geometry::{Point, Rect};
 
 use super::SkiaCanvas;
@@ -17,6 +17,34 @@ impl SkiaCanvas<'_> {
             (self.tx + point.x as f32 * self.scale).round() as i32,
             (self.ty + point.y as f32 * self.scale).round() as i32,
         )
+    }
+
+    /// Builds `path` placed by `at` in device space, keeping sub-pixel
+    /// coordinates so curves stay smooth.
+    pub(super) fn placed_path(&self, path: &[PathSeg], at: PathPlacement) -> Option<Path> {
+        let map = |x: f32, y: f32| {
+            let (x, y) = at.apply(x, y);
+            (self.tx + x * self.scale, self.ty + y * self.scale)
+        };
+        let mut builder = PathBuilder::new();
+        for seg in path {
+            match *seg {
+                PathSeg::MoveTo(x, y) => {
+                    let (x, y) = map(x, y);
+                    builder.move_to(x, y);
+                }
+                PathSeg::LineTo(x, y) => {
+                    let (x, y) = map(x, y);
+                    builder.line_to(x, y);
+                }
+                PathSeg::CubicTo(x1, y1, x2, y2, x, y) => {
+                    let (c1, c2, end) = (map(x1, y1), map(x2, y2), map(x, y));
+                    builder.cubic_to(c1.0, c1.1, c2.0, c2.1, end.0, end.1);
+                }
+                PathSeg::Close => builder.close(),
+            }
+        }
+        builder.finish()
     }
 
     /// Maps `rect` into device space, ignoring the clip. Text alignment is

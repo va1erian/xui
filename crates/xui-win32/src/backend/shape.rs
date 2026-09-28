@@ -5,12 +5,12 @@
 //! leaves the canvas module holding the trait implementation alone.
 
 use crate::d2d::{
-    Cap as D2dCap, DashStyle, DcCanvas, PointF, Radius, RectF, Rgba as D2dRgba, RoundedRect,
-    Stroke as D2dStroke,
+    Cap as D2dCap, DashStyle, DcCanvas, LineJoin, PointF, Radius, RectF, Rgba as D2dRgba,
+    RoundedRect, Stroke as D2dStroke,
 };
 use crate::gdi::TextFormat;
 use xui_core::backend::{
-    Cap, Corner, Dash, GradientStop, LinearGradient, RadialGradient, Rgba, Stroke, TextAlign,
+    Cap, Corner, Dash, GradientStop, Join, LinearGradient, RadialGradient, Rgba, Stroke, TextAlign,
     TextStyle, TextVAlign,
 };
 use xui_core::{Color, Point, Rect};
@@ -118,7 +118,15 @@ pub(crate) fn d2d_stroke(stroke: &Stroke) -> D2dStroke {
         Cap::Square => D2dCap::Square,
         Cap::Round => D2dCap::Round,
     };
-    D2dStroke::solid(stroke.width.max(1.0)).dash(dash).cap(cap)
+    let join = match stroke.join {
+        Join::Miter => LineJoin::Miter,
+        Join::Bevel => LineJoin::Bevel,
+        Join::Round => LineJoin::Round,
+    };
+    D2dStroke::solid(stroke.width.max(1.0))
+        .dash(dash)
+        .cap(cap)
+        .join(join)
 }
 
 /// Maps device-space bounds and per-corner radii onto a Direct2D rounded

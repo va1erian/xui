@@ -22,6 +22,7 @@ mod hyperlink;
 mod icon;
 mod label;
 mod listview;
+mod lucide;
 mod materialstatusbar;
 mod menu;
 mod multilineedit;
