@@ -108,8 +108,8 @@ impl<M: 'static> ListView<M> {
     }
 
     /// Creates a virtual list with no bounds of its own, for a layout to place
-    /// (see [`crate::arrange`]); add columns with [`column`](ListView::column)
-    /// and install the model later with [`set_model`](ListView::set_model).
+    /// (see [`crate::arrange`]); add columns with [`column`](ListView::column).
+    /// The model can be replaced later with [`set_model`](ListView::set_model).
     pub fn auto(ui: &Ui<M>, model: impl ListModel + 'static) -> Result<ListView<M>> {
         Self::with_model(ui, Rect::default(), model)
     }
