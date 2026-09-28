@@ -6,11 +6,11 @@
 //! A `Control` owns one node created through [`Ui`]: it registers the widget's
 //! painter and event mapper, moves and shows it, and destroys it on drop.
 
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use crate::app::Ui;
-use crate::backend::{Event, NodeSpec, Painter, Result, WidgetId};
+use crate::backend::{Event, NodeSpec, Painter, Result, TimerId, WidgetId};
 use crate::geometry::Rect;
 
 /// The node handle every widget holds.
@@ -20,6 +20,9 @@ pub struct Control<M: 'static> {
     /// Whether a form editor has selected the widget; its painter draws an
     /// outline while set.
     selected: Rc<Cell<bool>>,
+    /// The timers this control started, each with its listener's token, so
+    /// dropping the control stops them.
+    timers: RefCell<Vec<(TimerId, usize)>>,
 }
 
 impl<M: 'static> Control<M> {
@@ -30,6 +33,7 @@ impl<M: 'static> Control<M> {
             ui: ui.clone(),
             id,
             selected: Rc::new(Cell::new(false)),
+            timers: RefCell::new(Vec::new()),
         })
     }
 
@@ -51,6 +55,42 @@ impl<M: 'static> Control<M> {
     /// Registers the widget's event mapper.
     pub fn on_events(&self, mapper: impl Fn(&Event) -> Option<M> + 'static) {
         self.ui.register_events(self.id, mapper);
+    }
+
+    /// Starts a repeating timer owned by this control: every `millis`
+    /// milliseconds `on_tick` runs and may return a message to raise. The
+    /// timer stops with [`Control::kill_timer`] or when the control is
+    /// dropped, and never displaces [`Ui::on_timer`]. A self-animating widget
+    /// (a caret blink) uses it instead of asking the host to forward ticks.
+    /// `None` when the backend could not start a timer.
+    pub fn set_timer(
+        &self,
+        millis: u32,
+        on_tick: impl Fn() -> Option<M> + 'static,
+    ) -> Option<TimerId> {
+        let timer = self.ui.set_timer(millis);
+        if timer.0 == 0 {
+            return None;
+        }
+        let token = self
+            .ui
+            .add_timer_listener(move |fired| if fired == timer { on_tick() } else { None });
+        self.timers.borrow_mut().push((timer, token));
+        Some(timer)
+    }
+
+    /// Stops a timer started with [`Control::set_timer`]; an unknown id is
+    /// ignored.
+    pub fn kill_timer(&self, timer: TimerId) {
+        let token = {
+            let mut timers = self.timers.borrow_mut();
+            let Some(at) = timers.iter().position(|(id, _)| *id == timer) else {
+                return;
+            };
+            timers.remove(at).1
+        };
+        self.ui.remove_timer_listener(token);
+        self.ui.kill_timer(timer);
     }
 
     /// Moves/resizes the node.
@@ -122,6 +162,10 @@ impl<M: 'static> Drop for Control<M> {
         // The widget owns its node: destroying it drops the painter the
         // backend held and unregisters the event mapper (which captured the
         // window), so nothing outlives the widget.
+        for (timer, token) in self.timers.take() {
+            self.ui.remove_timer_listener(token);
+            self.ui.kill_timer(timer);
+        }
         self.ui.destroy(self.id);
     }
 }

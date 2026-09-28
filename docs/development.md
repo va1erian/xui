@@ -127,7 +127,8 @@ runs on every backend. A widget:
    `widget/mod.rs` and `lib.rs`.
 2. Holds a `Control<M>` (which owns its node), creates one or more nodes through
    `Ui`, registers a painter and an event mapper, and destructs its nodes in
-   `Drop`.
+   `Drop`. A widget that animates itself starts its own timer with
+   `Control::set_timer(millis, on_tick)`; the control stops it on drop.
 3. Maps events to the app's `Msg` through closures fixed at construction
    (`on_click`, `on_select`, …) — never a numeric control id.
 4. Paints only from `Theme` tokens, reading the live theme; owner-draw any part
