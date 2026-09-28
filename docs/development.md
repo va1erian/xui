@@ -143,30 +143,10 @@ runs on every backend. A widget:
 Keep `xui-core` free of platform dependencies and `unsafe`; a new `NodeKind` may
 need adding to `backend/node.rs` if the backend must be aware of it.
 
-## Adding a Win32-native control
-
-For the native-compatible layer, follow the widget-layer rules in
-[AGENTS.md](../AGENTS.md) and [The Win32 layer](win32.md):
-
-1. Add a `sys::control` helper for the raw messages you need; keep it safe and
-   document every `unsafe` block.
-2. Add `controls/<name>.rs`: a struct holding a `Control`, an inner state
-   implementing `registry::ControlEvents` if it needs owner-data/custom-draw, and
-   a `Drop` that unregisters.
-3. Decode application-level notifications into a `…Event` enum and add a
-   `Notify::…` variant in `message.rs` + `sys::message::decode_notify`.
-4. Map those events to the app's `Msg` with a `registry::register_app_events`
-   mapper and expose builder methods.
-5. Implement `Themed`, re-deriving colours with `<Control>Theme::from_theme`,
-   updating native parts via `sys::apply_native_theme`, invalidating, and
-   registering with `theme::register_themed`.
-6. Re-export from `lib.rs` (and `prelude`), exercise it in
-   `examples/demo/`, and add a test in `tests/`.
-
 ## File size
 
 Aim under 300 lines per file, hard limit 400. Split along a real seam — a new
-`sys/<name>.rs` for a control's raw helpers, separate paint/state/model modules,
+`sys/<name>.rs` for a backend's raw helpers, separate paint/state/model modules,
 etc. — before crossing the limit.
 
 ## Screenshots

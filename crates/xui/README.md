@@ -2,12 +2,9 @@
 
 Cross-platform UI for Rust: small, fast, idiomatic and properly themed.
 
-`xui` is the umbrella crate. It selects a backend by feature (`win32` by
-default, `canvas` for the cross-platform software backend) and re-exports the
-shared front layer from [xui-core](../xui-core), so an application can write
-`use xui::prelude::*;` and never name a backend.
-
-On Windows with the default `win32` feature the bare names are the
-[Win32-native widget layer](../xui-win32); the portable front layer is always
-available as `xui::xui_core`. See the
+`xui` is the umbrella crate. It re-exports the portable widget layer from
+[xui-core](../xui-core) as its bare names, so an application can write
+`use xui::prelude::*;` and never name a backend, and it selects a backend by
+feature: `canvas` (default, the cross-platform software backend) or `d2d` (the
+Windows Direct2D backend, [xui-win32](../xui-win32)). See the
 [workspace README](../../README.md) and [Getting started](../../docs/getting-started.md).

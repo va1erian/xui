@@ -21,7 +21,7 @@ xui is split so a feature sits in exactly one of three places.
 | | Where | What it is | Example |
 |---|---|---|---|
 | **(a)** | `xui-core` | already portable, no platform dependency, no `unsafe` | `Theme`, `Dip`, `Key`, the `Node`/`Role`/`Action` accessibility model, `PlatformSpec`/`Backend`, the portable widget layer and its `App`/`Ui` runtime |
-| **(b)** | `xui-win32` (`#![cfg(windows)]`) | the Win32 backend, including `cfg(windows)` extension traits over `xui-core` types | `Backdrop`/`TitleBar`, `SystemTheme::system()`, UIA, WGC capture, native controls |
+| **(b)** | `xui-win32` (`#![cfg(windows)]`) | the Win32 backend, including `cfg(windows)` extension traits over `xui-core` types | `Backdrop`, `SystemTheme::system()`, WGC capture, the native `EDIT` |
 | **(c)** | the application | an OS integration the library will not host, compiled away on other targets | SMTC, taskbar thumbar/jump list/progress, `winshell` associations, notifications |
 
 The rule of thumb:
@@ -31,7 +31,7 @@ The rule of thumb:
 - If it is **how one platform draws or hosts a widget**, it belongs in that
   backend, behind `cfg(windows)` at the crate root. The umbrella crate only
   re-exports that backend on Windows
-  (`crates/xui/src/lib.rs`: `#[cfg(all(feature = "win32", windows))]`).
+  (`crates/xui/src/lib.rs`: `#[cfg(all(feature = "d2d", windows))]`).
 - If it is an **OS service** (media keys, the shell, notifications), it belongs
   to the application. xui's job is to give the app a handle and a message
   hook, not to abstract every desktop.

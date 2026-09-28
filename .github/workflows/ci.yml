@@ -20,8 +20,8 @@ jobs:
       - run: cargo check --all-targets
       - run: cargo clippy --all-targets -- -D warnings
       - run: cargo test
-      # The software backend and its cross-platform gallery are behind the
-      # off-by-default `canvas` feature.
+      # The software backend (the umbrella's default `canvas` feature) and its
+      # cross-platform gallery, checked explicitly with the feature spelled out.
       - run: cargo check -p xui --features canvas --all-targets
       - run: cargo clippy -p xui --features canvas --all-targets -- -D warnings
       - run: cargo test -p xui-canvas
@@ -31,7 +31,7 @@ jobs:
       - run: cargo test -p xui-canvas --test gl
         env:
           XUI_CANVAS_GL_TEST: "1"
-      # Every feature at once (win32 + canvas + wgc), so feature interactions
+      # Every feature at once (d2d + canvas + wgc), so feature interactions
       # and the all-features build are checked together.
       - run: cargo test --all-features
       # Compilation of every example is covered by `--all-targets`; run the
