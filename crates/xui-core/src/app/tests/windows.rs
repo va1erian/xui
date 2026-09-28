@@ -91,3 +91,10 @@ fn a_modal_child_returns_its_result_and_reenables_the_owner() {
         "the owner was re-enabled after the modal child closed"
     );
 }
+
+#[test]
+fn ui_retitles_its_own_window() {
+    let (backend, window, _core, ui) = setup();
+    ui.set_window_title("renamed");
+    assert_eq!(backend.window_title(window).as_deref(), Some("renamed"));
+}
