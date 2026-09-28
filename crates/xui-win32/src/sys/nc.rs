@@ -140,13 +140,6 @@ fn strip_height(hwnd: HWND) -> i32 {
     caption_strip(hwnd) + crate::window::nc::menu_row(hwnd_from(hwnd))
 }
 
-/// The caption row's height (device pixels) of an extended-frame window: the
-/// part DWM draws the caption buttons in, without any strip menu row. Used to
-/// lay the strip menu out.
-pub(crate) fn caption_strip_height(hwnd: Hwnd) -> i32 {
-    caption_strip(raw_hwnd(hwnd))
-}
-
 /// The top area an extended-frame window must reserve for its caption buttons
 /// and menu bar, in pixels: the strip, extended to the bottom of the menu bar
 /// when there is one. Content laid out by the app starts below it, so nothing

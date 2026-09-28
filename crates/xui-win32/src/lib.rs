@@ -39,8 +39,8 @@ mod theme;
 mod units;
 mod window;
 
-mod controls;
 pub mod clipboard;
+mod controls;
 pub mod d2d;
 pub mod gdi;
 pub mod gl;

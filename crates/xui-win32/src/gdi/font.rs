@@ -101,12 +101,6 @@ impl Font {
         })
     }
 
-    /// Whether `handle` is one of the shared UI fonts (as opposed to a font a
-    /// caller set on a control on purpose, which must not be replaced).
-    pub(crate) fn is_shared_ui(handle: HFONT) -> bool {
-        SHARED.with(|cache| cache.borrow().values().any(|font| font.handle == handle))
-    }
-
     /// The nominal pixel height of the font.
     pub fn pixel_height(&self) -> i32 {
         self.ascent

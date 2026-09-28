@@ -21,24 +21,11 @@ use crate::color::Color;
 use crate::geometry::Rect;
 use crate::hwnd::Hwnd;
 
-use super::{hwnd_from, raw_hwnd};
+use super::hwnd_from;
 
 thread_local! {
     /// The bar colour to paint the seam with, per window with a dark bar.
     static SEAMS: RefCell<HashMap<isize, Color>> = RefCell::new(HashMap::new());
-}
-
-/// Sets the colour the seam under `hwnd`'s menu bar is painted with, or `None`
-/// to leave the system's line (a light bar).
-pub(crate) fn set(hwnd: Hwnd, color: Option<Color>) {
-    SEAMS.with(|map| {
-        let mut map = map.borrow_mut();
-        match color {
-            Some(color) => map.insert(hwnd.raw() as isize, color),
-            None => map.remove(&(hwnd.raw() as isize)),
-        };
-    });
-    paint(raw_hwnd(hwnd));
 }
 
 /// Drops `hwnd`'s seam colour when the window is destroyed.

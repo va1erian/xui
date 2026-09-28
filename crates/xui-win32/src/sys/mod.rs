@@ -30,7 +30,6 @@ pub(crate) mod menu_seam;
 pub(crate) mod message;
 pub(crate) mod monitor;
 pub(crate) mod nc;
-pub(crate) mod proxy;
 pub(crate) mod theme;
 pub(crate) mod theme_system;
 pub(crate) mod window;

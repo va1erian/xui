@@ -43,12 +43,6 @@ jobs:
       - run: cargo run -p xui --features canvas --example widgets
         env:
           XUI_DEMO_AUTOCLOSE_MS: "4000"
-      - run: cargo run -p xui-win32 --example demo
-        env:
-          WIN32UI_DEMO_AUTOCLOSE_MS: "4000"
-      - run: cargo run -p xui-win32 --example umbrella
-        env:
-          WIN32UI_DEMO_AUTOCLOSE_MS: "4000"
 
   # The occlusion-proof capture backend is behind the off-by-default `wgc`
   # feature, so it needs its own build and test pass. Tests that require a real

@@ -80,73 +80,6 @@ pub(crate) fn window_background(_window: Hwnd, theme: Theme) -> Color {
     theme.background
 }
 
-/// Registers `child` (created under `window`) with its re-theme callback.
-/// Re-registering the same child replaces its callback.
-///
-/// The callback is keyed on the top-level window even when `child` lives in a
-/// nested container (a [`Panel`](crate::Panel)), so a live theme switch on the
-/// window reaches every widget however deep it is.
-pub(crate) fn register_child(window: Hwnd, child: Hwnd, apply: ApplyTheme) {
-    let window = crate::sys::window::root(window);
-    WINDOWS.with(|map| {
-        let mut map = map.borrow_mut();
-        let entry = map.entry(window.raw()).or_default();
-        if let Some(slot) = entry
-            .children
-            .iter_mut()
-            .find(|(hwnd, _)| *hwnd == child.raw())
-        {
-            *slot = (child.raw(), apply);
-        } else {
-            entry.children.push((child.raw(), apply));
-        }
-    });
-}
-
-/// Removes any registration for `child`, returning whether one existed.
-pub(crate) fn unregister_child(child: Hwnd) -> bool {
-    WINDOWS.with(|map| {
-        let mut map = map.borrow_mut();
-        let mut removed = false;
-        let mut empty = Vec::new();
-        for (window, entry) in map.iter_mut() {
-            let before = entry.children.len();
-            entry.children.retain(|(hwnd, _)| *hwnd != child.raw());
-            if entry.children.len() != before {
-                removed = true;
-            }
-            if entry.children.is_empty() && entry.theme.is_none() && !entry.backdrop_active {
-                empty.push(*window);
-            }
-        }
-        for window in empty {
-            map.remove(&window);
-        }
-        removed
-    })
-}
-
-/// Whether `child` is currently registered.
-#[cfg(test)]
-pub(crate) fn is_registered(child: Hwnd) -> bool {
-    WINDOWS.with(|map| {
-        map.borrow()
-            .values()
-            .any(|entry| entry.children.iter().any(|(hwnd, _)| *hwnd == child.raw()))
-    })
-}
-
-/// The number of themed children registered under `window`.
-#[cfg(test)]
-pub(crate) fn child_count(window: Hwnd) -> usize {
-    WINDOWS.with(|map| {
-        map.borrow()
-            .get(&window.raw())
-            .map(|entry| entry.children.len())
-            .unwrap_or(0)
-    })
-}
-
 /// Re-themes every child registered under `window`.
 pub(crate) fn retheme_children(window: Hwnd, theme: &Theme) {
     let callbacks: Vec<ApplyTheme> = WINDOWS.with(|map| {
@@ -201,12 +134,9 @@ pub(crate) fn forget_window(window: Hwnd) {
 
 #[cfg(test)]
 mod tests {
-    use super::{child_count, is_registered, register_child, retheme_children};
-    use super::{set_window_theme, unregister_child, window_theme};
+    use super::{set_window_theme, window_theme};
     use crate::hwnd::Hwnd;
     use crate::theme::Theme;
-    use std::cell::Cell;
-    use std::rc::Rc;
 
     #[test]
     fn window_theme_defaults_to_light() {
@@ -220,29 +150,6 @@ mod tests {
         let window = Hwnd::from_raw(0x3002);
         set_window_theme(window, Theme::dark());
         assert_eq!(window_theme(window), Theme::dark());
-        super::forget_window(window);
-    }
-
-    #[test]
-    fn destroyed_child_is_removed() {
-        let window = Hwnd::from_raw(0x3003);
-        let child = Hwnd::from_raw(0x3004);
-        let applied = Rc::new(Cell::new(false));
-        let applied_for_callback = applied.clone();
-        register_child(
-            window,
-            child,
-            Rc::new(move |_| applied_for_callback.set(true)),
-        );
-        assert!(is_registered(child));
-        assert_eq!(child_count(window), 1);
-
-        retheme_children(window, &Theme::dark());
-        assert!(applied.get());
-
-        assert!(unregister_child(child));
-        assert!(!is_registered(child));
-        assert_eq!(child_count(window), 0);
         super::forget_window(window);
     }
 }
