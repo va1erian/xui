@@ -137,11 +137,13 @@ Any app with an `App` type and a `build(ui)` can snapshot itself. LazyRAD has
 dev-dependency and write `tests/snapshots.rs`:
 
 ```rust
-use xui_canvas::snapshot::{Snapshot, render};
+use xui_canvas::snapshot::{Snapshot, try_render};
 use xui_core::{Dip, Theme};
 
 fn snapshot(name: &str, theme: Theme, width: f32, height: f32) {
-    let image = render(Snapshot::new(Dip(width), Dip(height)).theme(theme), |ui| {
+    // An app's build usually returns `Result<_, BackendError>` because widget
+    // constructors can fail, so use `try_render` rather than `render`.
+    let image = try_render(Snapshot::new(Dip(width), Dip(height)).theme(theme), |ui| {
         LazyRad::build(ui)
     })
     .expect("render");
