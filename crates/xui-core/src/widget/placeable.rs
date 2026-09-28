@@ -1,0 +1,169 @@
+#![forbid(unsafe_code)]
+
+//! [`Placeable`]: the capability a layout needs from a widget.
+//!
+//! A layout places a widget by its node and asks how big it would like to be.
+//! The natural sizes here follow the design values the painted widgets already
+//! use (a 28-dip control row, 12-dip text), measured through the backend so
+//! they track the font and the DPI.
+
+use super::separator::Orientation;
+use super::{
+    Button, CheckBox, ComboBox, Edit, HasText, Hyperlink, Label, MultilineEdit, NumberField,
+    ProgressBar, Separator, Slider, ToggleButton,
+};
+use crate::app::Ui;
+use crate::backend::{TextStyle, WidgetId};
+use crate::geometry::Size;
+use crate::units::Dip;
+
+/// The design size of widget text.
+const TEXT_SIZE: Dip = Dip(12.0);
+/// The height of a single-line control.
+const CONTROL_HEIGHT: Dip = Dip(28.0);
+/// The width of a field with no content to size it (an edit, a slider).
+const FIELD_WIDTH: Dip = Dip(160.0);
+/// The horizontal padding either side of a button's label.
+const BUTTON_PADDING: Dip = Dip(12.0);
+/// The narrowest a button gets, however short its label.
+const BUTTON_MIN_WIDTH: Dip = Dip(64.0);
+/// A check box's square plus the gap before its label.
+const CHECK_LEAD: Dip = Dip(24.0);
+/// The height of a progress bar.
+const PROGRESS_HEIGHT: Dip = Dip(8.0);
+/// The vertical padding around a bare text run.
+const TEXT_PADDING: Dip = Dip(4.0);
+
+/// A widget a layout can place.
+///
+/// A capability trait, not a base type: it needs only the widget's node and a
+/// preferred size. The default size is the widget's current bounds, so a widget
+/// that has not opted in keeps whatever size it was built at.
+pub trait Placeable<M: 'static> {
+    /// The widget's node.
+    fn id(&self) -> WidgetId;
+
+    /// The size the widget would like at `dpi`, in device pixels.
+    fn natural_size(&self, ui: &Ui<M>, dpi: u32) -> Size {
+        let _ = dpi;
+        ui.bounds(self.id()).size()
+    }
+}
+
+/// The measured size of `text` in the standard widget font.
+fn text_size<M: 'static>(ui: &Ui<M>, text: &str, dpi: u32) -> Size {
+    let style = TextStyle::new(ui.theme().text, TEXT_SIZE);
+    let metrics = ui.measure_text(text, &style, dpi);
+    Size::new(metrics.width, metrics.height)
+}
+
+fn px(value: Dip, dpi: u32) -> i32 {
+    value.to_px(dpi).value()
+}
+
+/// A single-line control `width` wide.
+fn row(width: i32, dpi: u32) -> Size {
+    Size::new(width, px(CONTROL_HEIGHT, dpi))
+}
+
+impl<M: 'static> Placeable<M> for Label<M> {
+    fn id(&self) -> WidgetId {
+        Label::id(self)
+    }
+
+    fn natural_size(&self, ui: &Ui<M>, dpi: u32) -> Size {
+        let text = text_size(ui, &self.text(), dpi);
+        Size::new(text.width, text.height + 2 * px(TEXT_PADDING, dpi))
+    }
+}
+
+impl<M: 'static> Placeable<M> for Hyperlink<M> {
+    fn id(&self) -> WidgetId {
+        Hyperlink::id(self)
+    }
+
+    fn natural_size(&self, ui: &Ui<M>, dpi: u32) -> Size {
+        let text = text_size(ui, &self.text(), dpi);
+        Size::new(text.width, text.height + 2 * px(TEXT_PADDING, dpi))
+    }
+}
+
+/// Implements [`Placeable`] for a widget sized by its label, as a push button.
+macro_rules! labelled_button {
+    ($($widget:ident),*) => {$(
+        impl<M: 'static> Placeable<M> for $widget<M> {
+            fn id(&self) -> WidgetId {
+                $widget::id(self)
+            }
+
+            fn natural_size(&self, ui: &Ui<M>, dpi: u32) -> Size {
+                let width = text_size(ui, &self.text(), dpi).width + 2 * px(BUTTON_PADDING, dpi);
+                row(width.max(px(BUTTON_MIN_WIDTH, dpi)), dpi)
+            }
+        }
+    )*};
+}
+labelled_button!(Button, ToggleButton);
+
+impl<M: 'static> Placeable<M> for CheckBox<M> {
+    fn id(&self) -> WidgetId {
+        CheckBox::id(self)
+    }
+
+    fn natural_size(&self, ui: &Ui<M>, dpi: u32) -> Size {
+        row(
+            text_size(ui, &self.text(), dpi).width + px(CHECK_LEAD, dpi),
+            dpi,
+        )
+    }
+}
+
+/// Implements [`Placeable`] for a field with no content to size it.
+macro_rules! field {
+    ($($widget:ident),*) => {$(
+        impl<M: 'static> Placeable<M> for $widget<M> {
+            fn id(&self) -> WidgetId {
+                $widget::id(self)
+            }
+
+            fn natural_size(&self, _ui: &Ui<M>, dpi: u32) -> Size {
+                row(px(FIELD_WIDTH, dpi), dpi)
+            }
+        }
+    )*};
+}
+field!(Edit, NumberField, ComboBox, Slider);
+
+impl<M: 'static> Placeable<M> for MultilineEdit<M> {
+    fn id(&self) -> WidgetId {
+        MultilineEdit::id(self)
+    }
+
+    fn natural_size(&self, _ui: &Ui<M>, dpi: u32) -> Size {
+        Size::new(px(FIELD_WIDTH, dpi), 3 * px(CONTROL_HEIGHT, dpi))
+    }
+}
+
+impl<M: 'static> Placeable<M> for ProgressBar<M> {
+    fn id(&self) -> WidgetId {
+        ProgressBar::id(self)
+    }
+
+    fn natural_size(&self, _ui: &Ui<M>, dpi: u32) -> Size {
+        Size::new(px(FIELD_WIDTH, dpi), px(PROGRESS_HEIGHT, dpi))
+    }
+}
+
+impl<M: 'static> Placeable<M> for Separator<M> {
+    fn id(&self) -> WidgetId {
+        Separator::id(self)
+    }
+
+    fn natural_size(&self, _ui: &Ui<M>, dpi: u32) -> Size {
+        let line = px(Dip(1.0), dpi).max(1);
+        match self.orientation() {
+            Orientation::Horizontal => Size::new(0, line),
+            Orientation::Vertical => Size::new(line, 0),
+        }
+    }
+}

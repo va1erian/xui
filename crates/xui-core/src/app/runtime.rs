@@ -42,6 +42,14 @@ impl<A: App> Runtime<A> {
         Runtime::new(core, app, true)
     }
 
+    /// Installs this runtime as `backend`'s event sink for its window, as
+    /// [`run_app`] does, so a test can deliver window-level events to it.
+    #[cfg(test)]
+    pub(crate) fn attach(self: &Rc<Runtime<A>>, backend: &dyn Backend) {
+        let host: Rc<dyn Host> = Rc::clone(self) as Rc<dyn Host>;
+        backend.set_event_sink(self.core.window, Rc::new(Sink::new(Rc::downgrade(&host))));
+    }
+
     /// A runtime over `core`, owning `app`. `quits_on_close` is whether closing
     /// the window also ends the loop (false for a secondary window).
     pub(crate) fn new(core: Rc<Core<A::Msg>>, app: A, quits_on_close: bool) -> Rc<Runtime<A>> {
@@ -121,6 +129,7 @@ impl<A: App> Runtime<A> {
                     return true;
                 }
                 Event::DpiChanged { dpi, suggested } => {
+                    self.core.run_layout_hooks();
                     let mapped = self
                         .core
                         .on_dpi_changed
@@ -132,6 +141,7 @@ impl<A: App> Runtime<A> {
                     }
                     return true;
                 }
+                Event::Resize { .. } => self.core.run_layout_hooks(),
                 _ => {}
             }
         }

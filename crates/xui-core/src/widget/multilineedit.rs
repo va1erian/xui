@@ -69,6 +69,12 @@ pub struct MultilineEdit<M: 'static> {
 }
 
 impl<M: 'static> MultilineEdit<M> {
+    /// Creates a multi-line edit with no bounds of its own, for a layout to place (see
+    /// [`crate::arrange`]); its size comes from [`Placeable`](super::Placeable).
+    pub fn auto(ui: &Ui<M>, text: &str) -> Result<MultilineEdit<M>> {
+        MultilineEdit::new(ui, Rect::default(), text)
+    }
+
     /// Creates a text area showing `text` at `bounds`.
     pub fn new(ui: &Ui<M>, bounds: Rect, text: &str) -> Result<MultilineEdit<M>> {
         let control = Control::new(

@@ -39,7 +39,7 @@ the platform (Win32 · winit + softbuffer/tiny-skia · a headless surface)
 | Runs on | every backend | Win32 only |
 | Entry point | `xui_core::run_app(backend, PlatformSpec, make)` | `xui_win32::run_app(WindowSpec, make)` |
 | Hosts widgets as | painted child windows (native `EDIT` for `Edit`) | native common controls (`ListView`, `TreeView`, …) |
-| Layout | widgets are positioned explicitly; containers arrange their children | `column!`/`row!`/`tabs!` layout tree |
+| Layout | `arrange::row`/`column` builders, or explicit `Rect`s; containers arrange their children | `column!`/`row!`/`tabs!` layout tree |
 | Best for | code that should build and run on every platform | Windows-only apps that want the deepest native integration |
 
 The `xui` umbrella crate selects between them:
@@ -170,9 +170,26 @@ them:
 - `ScrollView` stacks registered rows, clips descendants and scrolls.
 - `Dialog`, `Menu`, `ComboBox` and `Tooltip` share the popup elevation helper.
 
-The widget layer uses no `set_layout` call and no layout tree of its own; if you
-want the declarative `column!`/`row!` tree, that is the Win32-native layer (see
-[The Win32 layer](win32.md)).
+On top of that arithmetic, `xui_core::arrange` is a small declarative layer: nest
+`row()`/`column()` builders of widgets, then `ui.mount(layout)` places them and
+keeps them placed. The pieces:
+
+- `layout::Group`/`Item`/`Sizing` are a pure tree (leaves are opaque keys, natural
+  size and visibility are asked for at layout time), so it is testable with no
+  backend. `Sizing` is `Auto`, `Fixed`, `Min`, `Fill`, `Width` or `Height`.
+- `widget::Placeable` is the capability a layout needs from a widget: its node
+  and a natural size measured from its text and the design tokens. A widget
+  built with `::auto(ui, ..)` has no bounds of its own.
+- `arrange::Layout` owns the widgets it is given (a constructor's `Result` goes
+  straight in and the first error surfaces from `mount`); the app shares one it
+  wants to keep through an `Rc`. `Mounted` is what `mount` returns; keep it alive
+  and it re-flows on window resize, DPI change and `Ui::set_visible`, and
+  dropping it destroys the widgets.
+- `Ui::mount_in(container, layout)` lays a layout out inside a `Panel` (or any
+  container node) in the container's own coordinates.
+
+A layout does not observe a text change; call `Ui::relayout()` after one that
+alters a widget's natural size.
 
 ## Units, colour, theme
 

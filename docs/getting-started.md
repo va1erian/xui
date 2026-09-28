@@ -121,11 +121,46 @@ A few things to notice:
   `Dip::to_px(ui.dpi())`.
 - **Widgets are retained values.** Hold the ones you mutate later; dropping a
   widget destroys its node.
-- **Positions are explicit.** There is no layout tree in the portable layer; a
-  container widget (`Panel`, `ScrollView`, `Split`, `Tabs`) owns and arranges
-  its children, and the pure `Dock`/`Stack` arithmetic is available if you want
-  to compute positions yourself. The declarative `column!`/`row!` tree belongs
-  to the Win32-native layer — see [The Win32 layer](win32.md).
+- **Positions are explicit, or declared.** `Button::new(ui, rect, ..)` places a
+  widget yourself; a container widget (`Panel`, `ScrollView`, `Split`, `Tabs`)
+  owns and arranges its children. To avoid coordinates altogether, build with
+  `Button::auto(ui, ..)` and lay widgets out declaratively; see
+  [Layout without coordinates](#layout-without-coordinates) below.
+
+### Layout without coordinates
+
+The same counter, with no `Rect`s, no per-widget fields and no `unwrap` per
+widget. `xui_core::arrange` owns the widgets, sizes each from its content, and
+re-flows on resize, DPI change and `Ui::set_visible`:
+
+```rust
+use std::rc::Rc;
+use xui_core::arrange::{LayoutExt, Mounted, column, row, spacer};
+use xui_core::{Insets, dip};
+
+struct Counter {
+    echo: Rc<Label<Msg>>, // shared: the app updates it
+    clicks: i32,
+    _mounted: Mounted<Msg>, // owns the whole widget tree
+}
+
+fn build(ui: &Ui<Msg>) -> xui_core::backend::Result<Counter> {
+    let echo = Rc::new(Label::auto(ui, "type something")?);
+    let root = column()
+        .margins(Insets::all(dip(16.0)))
+        .spacing(dip(8.0))
+        .child(&echo)
+        .child(Edit::auto(ui, "").map(|e| e.on_change(|t| Some(Msg::Text(t.to_string())))))
+        .child(row().child(spacer()).child(
+            Button::auto(ui, "Count").map(|b| b.on_click(|| Some(Msg::Bump))),
+        ));
+    Ok(Counter { echo, clicks: 0, _mounted: ui.mount(root)? })
+}
+```
+
+Size an entry with `.fill(weight)`, `.fixed(dip)`, `.min(dip)`, `.width(dip)` or
+`.height(dip)`; `spacer()` is an empty flexible gap. A runnable version is
+`crates/xui/examples/layout.rs`.
 
 ## 4. Run it
 

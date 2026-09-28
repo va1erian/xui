@@ -49,6 +49,12 @@ pub struct Button<M: 'static> {
 }
 
 impl<M: 'static> Button<M> {
+    /// Creates a button with no bounds of its own, for a layout to place (see
+    /// [`crate::arrange`]); its size comes from [`Placeable`](super::Placeable).
+    pub fn auto(ui: &Ui<M>, text: &str) -> Result<Button<M>> {
+        Button::new(ui, Rect::default(), text)
+    }
+
     /// Creates a button labelled `text` at `bounds`.
     pub fn new(ui: &Ui<M>, bounds: Rect, text: &str) -> Result<Button<M>> {
         let control = Control::new(ui, &NodeSpec::new(NodeKind::Button, bounds).text(text))?;

@@ -32,6 +32,18 @@ pub struct Separator<M: 'static> {
 }
 
 impl<M: 'static> Separator<M> {
+    /// Creates a horizontal divider with no bounds of its own, for a layout to
+    /// place (see [`crate::arrange`]).
+    pub fn auto(ui: &Ui<M>) -> Result<Separator<M>> {
+        Separator::new(ui, Rect::default())
+    }
+
+    /// Creates a vertical divider with no bounds of its own, for a layout to
+    /// place (see [`crate::arrange`]).
+    pub fn auto_vertical(ui: &Ui<M>) -> Result<Separator<M>> {
+        Separator::vertical(ui, Rect::default())
+    }
+
     /// Creates a horizontal divider at `bounds`.
     pub fn new(ui: &Ui<M>, bounds: Rect) -> Result<Separator<M>> {
         Separator::create(ui, bounds, Orientation::Horizontal)
