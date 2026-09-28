@@ -15,6 +15,7 @@ mod combobox;
 mod control;
 mod dialog;
 mod edit;
+mod ellipsis;
 mod flow_text;
 mod gridview;
 mod groupbox;

@@ -13,6 +13,8 @@
   list's scrollbar thumb tracking its offset (#158).
 - A test guards that `Decorations::None` asks `winit` for an undecorated window
   on Windows, so the app's own caption is the only chrome (#150).
+- `StatusBar` no longer lets a part's text overflow past its divider into the next part: it is now clipped and end-ellipsized the same way `ListView`'s header cells are (#186).
+- `ListView`'s header now reserves room for the sort arrow, so a long sorted-column title is ellipsized before the arrow instead of drawn underneath it (#187).
 
 ### Features
 

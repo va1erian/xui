@@ -3,9 +3,11 @@
 //! Pure single-line end-ellipsis truncation: given a width budget and a way
 //! to measure a candidate string, decides how much of the text fits.
 //!
-//! Kept separate from `paint.rs` and tested with a fake measurer, in the
-//! style of [`super::super::flow_text::layout`]'s pure layout tests, so the
-//! truncation decision needs no backend.
+//! Kept separate from any one widget's painter and tested with a fake
+//! measurer, in the style of [`super::flow_text::layout`]'s pure layout
+//! tests, so the truncation decision needs no backend. Shared by
+//! [`super::listview`] and [`super::statusbar`], which both draw single-line
+//! cell text that must not run into a neighboring cell.
 
 use std::borrow::Cow;
 
