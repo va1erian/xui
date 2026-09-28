@@ -90,7 +90,7 @@ impl<M: 'static> Tabs<M> {
         }
         {
             let shared = Rc::clone(&shared);
-            let ui = ui.clone();
+            let ui = scoped.clone();
             strip.on_events(move |event| strip_event(&shared, &ui, event));
         }
         Ok(Tabs {
@@ -104,6 +104,13 @@ impl<M: 'static> Tabs<M> {
     /// The handle widgets built inside this container parent to.
     pub fn ui(&self) -> &Ui<M> {
         &self.scoped
+    }
+
+    /// Puts the widgets inside this tab control in or out of design mode: they
+    /// ignore their own input while everything outside stays live. Nested
+    /// containers inherit it.
+    pub fn set_design_mode(&self, on: bool) {
+        self.ui().set_design_mode(on);
     }
 
     /// The container's node identity.

@@ -46,6 +46,13 @@ impl<M: 'static> Panel<M> {
         &self.scoped
     }
 
+    /// Puts the widgets inside this panel in or out of design mode: they
+    /// ignore their own input while everything outside stays live. Nested
+    /// containers inherit it.
+    pub fn set_design_mode(&self, on: bool) {
+        self.ui().set_design_mode(on);
+    }
+
     /// The panel's node identity.
     pub fn id(&self) -> WidgetId {
         self.control.id()

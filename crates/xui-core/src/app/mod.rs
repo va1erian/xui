@@ -10,6 +10,7 @@
 //! which is never re-entered, because the app is borrowed for the whole call and
 //! a drain that runs while it is borrowed puts its message back.
 
+mod design;
 mod proxy;
 mod runtime;
 mod secondary;
@@ -75,9 +76,9 @@ pub(crate) struct Core<M> {
     queue: RefCell<VecDeque<M>>,
     inbox: Arc<Inbox<M>>,
     theme: Rc<Cell<Theme>>,
-    /// Whether the window is in design mode (a form designer): widgets ignore
-    /// their own input so the editor can select and move them.
-    design_mode: Cell<bool>,
+    /// The window's root design-mode scope (a form designer): widgets under it
+    /// ignore their own input so the editor can select and move them.
+    design_root: Rc<design::DesignScope>,
     router: Router,
     on_close: RefCell<Option<CloseMapper<M>>>,
     on_timer: RefCell<Option<TimerMapper<M>>>,
@@ -108,7 +109,7 @@ impl<M> Core<M> {
             queue: RefCell::new(VecDeque::new()),
             inbox: Inbox::new(),
             theme: Rc::new(Cell::new(Theme::light())),
-            design_mode: Cell::new(false),
+            design_root: design::DesignScope::root(),
             router: Router::new(),
             on_close: RefCell::new(None),
             on_timer: RefCell::new(None),
@@ -143,14 +144,9 @@ impl<M> Core<M> {
         Rc::clone(&self.theme)
     }
 
-    /// Whether the window is in design mode.
-    pub(crate) fn design_mode(&self) -> bool {
-        self.design_mode.get()
-    }
-
-    /// Turns design mode on or off.
-    pub(crate) fn set_design_mode(&self, on: bool) {
-        self.design_mode.set(on);
+    /// The window's root design-mode scope.
+    pub(crate) fn design_root(&self) -> Rc<design::DesignScope> {
+        Rc::clone(&self.design_root)
     }
 
     /// Appends `msg` and wakes the backend on the empty-to-non-empty edge, so a

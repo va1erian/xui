@@ -4,6 +4,7 @@
 
 use std::rc::Rc;
 
+use super::design::DesignScope;
 use super::{App, Core, Proxy, WindowHandle, secondary};
 use crate::backend::{Event, NativeWindowHandle, PlatformSpec, Result, TimerId, WidgetId};
 use crate::geometry::Rect;
@@ -24,12 +25,19 @@ pub struct Ui<M> {
     /// A container node this handle was scoped to, so widgets it creates become
     /// that container's children. `None` parents to the window.
     parent: Option<WidgetId>,
+    /// This handle's design-mode scope, chained to its creator's.
+    design: Rc<DesignScope>,
 }
 
 impl<M: 'static> Ui<M> {
     /// A handle over `core`.
     pub(crate) fn new(core: Rc<Core<M>>) -> Ui<M> {
-        Ui { core, parent: None }
+        let design = core.design_root();
+        Ui {
+            core,
+            parent: None,
+            design,
+        }
     }
 
     /// A handle scoped to the container `parent`: widgets created through it
@@ -39,6 +47,7 @@ impl<M: 'static> Ui<M> {
         Ui {
             core: Rc::clone(&self.core),
             parent: Some(parent),
+            design: DesignScope::child(&self.design),
         }
     }
 
@@ -267,6 +276,7 @@ impl<M> Clone for Ui<M> {
         Ui {
             core: Rc::clone(&self.core),
             parent: self.parent,
+            design: Rc::clone(&self.design),
         }
     }
 }

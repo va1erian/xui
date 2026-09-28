@@ -131,15 +131,20 @@ impl<M: 'static> Ui<M> {
         self.core.backend().bounds(id)
     }
 
-    /// Whether the window is in design mode. In design mode a widget ignores its
-    /// own input, so a form editor can select and move it.
+    /// Whether this handle is in design mode: its own scope or any enclosing
+    /// scope (down to the window) was switched on. In design mode a widget
+    /// ignores its own input, so a form editor can select and move it. The
+    /// answer reflects changes made after the widget was built.
     pub fn is_design_mode(&self) -> bool {
-        self.core.design_mode()
+        self.design.active()
     }
 
-    /// Turns design mode on or off.
+    /// Turns design mode on or off for this handle's scope: the window on the
+    /// top-level handle, a container's subtree on the handle a container
+    /// hands out (for example [`Panel::ui`](crate::widget::Panel::ui)).
+    /// Handles scoped below inherit it; siblings outside are unaffected.
     pub fn set_design_mode(&self, on: bool) {
-        self.core.set_design_mode(on);
+        self.design.set(on);
     }
 
     /// Schedules a repaint of a node.

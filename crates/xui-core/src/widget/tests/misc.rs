@@ -1,4 +1,5 @@
 use super::*;
+use crate::Panel;
 
 #[test]
 fn widgets_report_and_edit_properties() {
@@ -117,4 +118,72 @@ fn dropping_a_widget_unregisters_its_event_mapper() {
         core.router().is_empty(),
         "the mapper was unregistered, breaking the Core cycle"
     );
+}
+
+#[test]
+fn design_mode_is_scoped_to_a_container() {
+    let (_backend, core, ui) = setup();
+    let panel = Panel::new(&ui, Rect::new(0, 0, 200, 100)).unwrap();
+    let inner = Panel::new(panel.ui(), Rect::new(0, 0, 100, 50)).unwrap();
+    let inside = Button::new(panel.ui(), Rect::new(0, 0, 80, 28), "In")
+        .unwrap()
+        .on_click(|| Some(1));
+    let nested = Button::new(inner.ui(), Rect::new(0, 0, 40, 20), "Deep")
+        .unwrap()
+        .on_click(|| Some(2));
+    let outside = Button::new(&ui, Rect::new(0, 200, 80, 28), "Out")
+        .unwrap()
+        .on_click(|| Some(3));
+    let log = Rc::new(RefCell::new(Vec::new()));
+    let runtime = Runtime::primary(
+        core,
+        TestApp {
+            log: Rc::clone(&log),
+        },
+    );
+
+    panel.set_design_mode(true);
+    assert!(panel.ui().is_design_mode() && inner.ui().is_design_mode());
+    assert!(!ui.is_design_mode());
+    click(&runtime, inside.id());
+    click(&runtime, nested.id());
+    assert!(log.borrow().is_empty(), "the panel's subtree ignores input");
+    click(&runtime, outside.id());
+    assert_eq!(*log.borrow(), vec![3], "a sibling outside stays live");
+
+    panel.set_design_mode(false);
+    click(&runtime, inside.id());
+    click(&runtime, nested.id());
+    assert_eq!(*log.borrow(), vec![3, 1, 2]);
+
+    inner.set_design_mode(true);
+    click(&runtime, inside.id());
+    click(&runtime, nested.id());
+    assert_eq!(
+        *log.borrow(),
+        vec![3, 1, 2, 1],
+        "only the inner panel is off"
+    );
+}
+
+#[test]
+fn window_design_mode_reaches_scoped_containers() {
+    let (_backend, core, ui) = setup();
+    let panel = Panel::new(&ui, Rect::new(0, 0, 200, 100)).unwrap();
+    let inside = Button::new(panel.ui(), Rect::new(0, 0, 80, 28), "In")
+        .unwrap()
+        .on_click(|| Some(1));
+    let log = Rc::new(RefCell::new(Vec::new()));
+    let runtime = Runtime::primary(
+        core,
+        TestApp {
+            log: Rc::clone(&log),
+        },
+    );
+    ui.set_design_mode(true);
+    click(&runtime, inside.id());
+    assert!(log.borrow().is_empty());
+    ui.set_design_mode(false);
+    click(&runtime, inside.id());
+    assert_eq!(*log.borrow(), vec![1]);
 }

@@ -112,7 +112,7 @@ impl<M: 'static> Split<M> {
         );
         {
             let shared = Rc::clone(&shared);
-            let ui = ui.clone();
+            let ui = scoped.clone();
             divider.on_events(move |event| divider_event(&shared, &ui, event));
         }
         Ok(Split {
@@ -126,6 +126,13 @@ impl<M: 'static> Split<M> {
     /// The handle widgets built inside this split parent to.
     pub fn ui(&self) -> &Ui<M> {
         &self.scoped
+    }
+
+    /// Puts the widgets inside this split in or out of design mode: they
+    /// ignore their own input while everything outside stays live. Nested
+    /// containers inherit it.
+    pub fn set_design_mode(&self, on: bool) {
+        self.ui().set_design_mode(on);
     }
 
     /// The split's node identity.

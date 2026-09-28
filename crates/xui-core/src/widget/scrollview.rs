@@ -105,12 +105,12 @@ impl<M: 'static> ScrollView<M> {
         }
         {
             let shared = Rc::clone(&shared);
-            let ui = ui.clone();
+            let ui = scoped.clone();
             control.on_events(move |event| viewport_event(&shared, &ui, event));
         }
         {
             let shared = Rc::clone(&shared);
-            let ui = ui.clone();
+            let ui = scoped.clone();
             bar_node.on_events(move |event| bar_event(&shared, &ui, event));
         }
         ui.raise(shared.bar.id());
@@ -125,6 +125,13 @@ impl<M: 'static> ScrollView<M> {
     /// The handle widgets built inside this view parent to.
     pub fn ui(&self) -> &Ui<M> {
         &self.scoped
+    }
+
+    /// Puts the widgets inside this scroll view in or out of design mode: they
+    /// ignore their own input while everything outside stays live. Nested
+    /// containers inherit it.
+    pub fn set_design_mode(&self, on: bool) {
+        self.ui().set_design_mode(on);
     }
 
     /// The view's node identity.
