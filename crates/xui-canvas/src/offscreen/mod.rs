@@ -118,6 +118,11 @@ pub struct OffscreenBackend {
     /// own window (re-entering `render`) is refused instead of recursing.
     rendering: RefCell<HashSet<u64>>,
     text: OnceCell<CosmicShaper>,
+    /// The dots-per-inch `Backend::open_window` renders new windows at.
+    dpi: u32,
+    /// Work to do when the loop "runs": a scripted session for a headless
+    /// render, taken and executed once by `Backend::run`.
+    run_hook: RefCell<Option<Box<dyn FnOnce()>>>,
 }
 
 impl Default for OffscreenBackend {
@@ -137,6 +142,42 @@ impl OffscreenBackend {
             captured: RefCell::new(None),
             rendering: RefCell::new(HashSet::new()),
             text: OnceCell::new(),
+            dpi: DEFAULT_DPI,
+            run_hook: RefCell::new(None),
+        }
+    }
+
+    /// A backend whose windows are rendered at `dpi` (the layout is in design
+    /// units, so a higher value gives a proportionally larger image).
+    pub fn with_dpi(dpi: u32) -> OffscreenBackend {
+        OffscreenBackend {
+            dpi,
+            ..OffscreenBackend::new()
+        }
+    }
+
+    /// Sets the work `Backend::run` performs. The offscreen loop has nothing
+    /// to wait for, so `run` executes this once, after the app is built and
+    /// while its window is still open, then returns.
+    pub fn set_run_hook(&self, hook: impl FnOnce() + 'static) {
+        *self.run_hook.borrow_mut() = Some(Box::new(hook));
+    }
+
+    /// How many windows are open.
+    pub fn window_count(&self) -> usize {
+        self.windows.borrow().len()
+    }
+
+    /// Delivers a wake to `window`'s sink, so queued messages reach the app's
+    /// `update` as they would when a window system wakes the loop.
+    pub fn pump(&self, window: WindowId) {
+        let sink = self
+            .windows
+            .borrow()
+            .get(&window.raw())
+            .and_then(|entry| entry.sink.clone());
+        if let Some(sink) = sink {
+            sink.deliver(WidgetId::NONE, &Event::Wake);
         }
     }
 
@@ -148,7 +189,7 @@ impl OffscreenBackend {
 
     /// Opens a window rendered at `dpi`, so a test can exercise high-DPI
     /// layouts. [`xui_core::backend::Backend::open_window`] uses
-    /// [`DEFAULT_DPI`].
+    /// the backend's own DPI.
     pub fn open_window_at(&self, spec: &PlatformSpec, dpi: u32) -> BackendResult<WindowId> {
         let id = WindowId::from_raw(Self::allocate(&self.next_window));
         let width = spec.width.to_px(dpi).value().max(1) as u32;

@@ -54,7 +54,7 @@ take a screenshot.
 
 ## CI
 
-`.github/workflows/ci.yml` runs five jobs:
+`.github/workflows/ci.yml` runs six jobs:
 
 | Job | Runner | What it does |
 |---|---|---|
@@ -63,6 +63,7 @@ take a screenshot.
 | `cross-check` | ubuntu-latest | `cargo check --all-targets`, clippy on `xui-core`, and `xui-core`/`xui-canvas` tests — proving the front layer has no Win32 dependency and the empty backends compile |
 | `cross-check-macos` | macos-latest | check, `xui-core`/`xui-canvas` tests, and the canvas gallery example |
 | `coverage` | windows-latest | `cargo llvm-cov --workspace --all-features`, uploading LCOV to Codecov and as a `coverage-lcov` artifact |
+| `snapshots` | ubuntu-latest | `scripts/snapshots.sh`: every example rendered headlessly in light and dark, uploaded as the `snapshots` artifact (not a required check) |
 
 ## Coverage
 
@@ -96,6 +97,14 @@ add a pure function with a stated invariant.
 widget in an offscreen window, renders it light and dark, and asserts the
 gallery painted on each theme and that the two images differ. It writes
 `target/ui/widgets-{light,dark}.png` for eyeballing a suspected visual change.
+
+## Headless screenshots
+
+`scripts/snapshots.ps1` (or `scripts/snapshots.sh`) runs every `control_*`
+example and the larger demos on the offscreen backend and writes light and dark
+PNGs to `target/snapshots/`, with no window and no sandbox. CI uploads them as
+the `snapshots` artifact. See [headless-screenshots.md](headless-screenshots.md),
+which also covers the `xui_canvas::snapshot` API for tests in your own app.
 
 ## Mutation testing
 
@@ -152,7 +161,8 @@ etc. — before crossing the limit.
 
 ## Screenshots
 
-Never raise, activate, foreground a window or move the pointer to screenshot on a
+For portable widgets, render them headlessly first
+([headless-screenshots.md](headless-screenshots.md)). For a real window, never raise, activate, foreground a window or move the pointer to screenshot on a
 shared desktop. Use the composited capture (`--features wgc`):
 
 ```text

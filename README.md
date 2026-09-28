@@ -52,6 +52,8 @@ snapshots and tests. Dark mode is first-class on every backend.
   (media keys, taskbar, notifications) belong.
 - **[Migration from `win32ui`](docs/migration-win32ui-to-xui.md)**.
 - **[macOS](docs/macos.md)** and **[sandboxed testing](docs/sandbox-testing.md)**.
+- **[Headless screenshots](docs/headless-screenshots.md)** — render a window or
+  the whole example gallery to PNG with no window, and use it from your own app.
 - **[Development](docs/development.md)** — checks, CI and how to add a widget.
 
 ## Quick start

@@ -14,7 +14,7 @@ use std::cell::Cell;
 use std::rc::Rc;
 
 use xui_core::app::{App, Ui, run_app};
-use xui_core::backend::{Backend, PlatformSpec};
+use xui_core::backend::PlatformSpec;
 use xui_core::widget::{Fill, ListModel, ListView, SortDirection, StatusBar};
 use xui_core::{Dip, Point, Rect, Theme};
 
@@ -143,20 +143,11 @@ fn tracks(count: usize) -> Vec<Track> {
         .collect()
 }
 
-fn backend() -> Rc<dyn Backend> {
-    #[cfg(all(feature = "d2d", windows))]
-    {
-        if std::env::var("XUI_BACKEND").as_deref() == Ok("canvas") {
-            Rc::new(xui_canvas::WinitBackend::new())
-        } else {
-            Rc::new(xui_win32::Win32Backend::new())
-        }
-    }
-    #[cfg(not(all(feature = "d2d", windows)))]
-    {
-        Rc::new(xui_canvas::WinitBackend::new())
-    }
-}
+// Only the backend choice and the headless hook are used here.
+#[allow(dead_code)]
+#[path = "controls/support.rs"]
+mod support;
+use support::{backend, snapshot_hook};
 
 fn main() {
     let _ = run_app(
@@ -197,6 +188,7 @@ fn main() {
             )
             .unwrap();
 
+            snapshot_hook(ui);
             let autoclose = Rc::new(Cell::new(None));
             if let Ok(millis) = std::env::var("XUI_DEMO_AUTOCLOSE_MS") {
                 let _ = millis

@@ -63,7 +63,12 @@ cargo test
   host is only acceptable in CI or where the sandbox is unavailable.
 - Running the demo: always set `WIN32UI_DEMO_AUTOCLOSE_MS=4000` so it exits on
   its own, and never leave a demo process running when you finish.
-- **Screenshots.** Never raise, activate or foreground a window and never move
+- **Screenshots.** For portable widgets, take them headlessly:
+  `scripts/snapshots.ps1` (or `.sh`) renders every example, light and dark, into
+  `target/snapshots/`, and `xui_canvas::snapshot::render` does the same from a
+  test (`docs/headless-screenshots.md`). No window opens, so no sandbox is
+  needed. Use a real-window capture only for what headless cannot show: native
+  chrome, DWM materials and Win32-backend rendering. For a real window, never raise, activate or foreground a window and never move
   the pointer to take a screenshot; other agents are testing on the same
   desktop. Use `cargo run --features wgc --example capture -- --hwnd/--title/
   --pid … --out shot.png` (or, in tests, `Window::capture_composited` /
