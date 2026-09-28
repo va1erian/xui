@@ -7,8 +7,8 @@ use windows::Win32::UI::Input::KeyboardAndMouse::{
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     GCLP_HCURSOR, GetForegroundWindow, GetWindowThreadProcessId, IDC_ARROW, IDC_HAND, IDC_IBEAM,
-    IDC_SIZENS, IDC_SIZEWE, IDC_WAIT, IsIconic, LoadCursorW, SW_RESTORE, SetClassLongPtrW,
-    SetCursor, SetForegroundWindow, ShowWindow,
+    IDC_SIZENESW, IDC_SIZENS, IDC_SIZENWSE, IDC_SIZEWE, IDC_WAIT, IsIconic, LoadCursorW,
+    SW_RESTORE, SetClassLongPtrW, SetCursor, SetForegroundWindow, ShowWindow,
 };
 
 use crate::hwnd::Hwnd;
@@ -99,6 +99,8 @@ pub(crate) fn set_cursor(hwnd: Hwnd, shape: CursorShape) {
         CursorShape::IBeam => IDC_IBEAM,
         CursorShape::SizeHorizontal => IDC_SIZEWE,
         CursorShape::SizeVertical => IDC_SIZENS,
+        CursorShape::SizeNwSe => IDC_SIZENWSE,
+        CursorShape::SizeNeSw => IDC_SIZENESW,
         CursorShape::Wait => IDC_WAIT,
     };
     // SAFETY: `name` is a shared system cursor id and a null module selects the

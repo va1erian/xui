@@ -17,4 +17,10 @@ pub enum Cursor {
     /// A vertical (north-south) resize arrow, for dragging a horizontal
     /// divider.
     SizeVertical,
+    /// A diagonal (north-west to south-east) resize arrow, for a top-left or
+    /// bottom-right corner handle.
+    SizeNwSe,
+    /// A diagonal (north-east to south-west) resize arrow, for a top-right or
+    /// bottom-left corner handle.
+    SizeNeSw,
 }

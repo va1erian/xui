@@ -18,6 +18,10 @@ pub enum CursorShape {
     SizeHorizontal,
     /// A vertical (north-south) resize arrow.
     SizeVertical,
+    /// A diagonal (north-west to south-east) resize arrow.
+    SizeNwSe,
+    /// A diagonal (north-east to south-west) resize arrow.
+    SizeNeSw,
     /// A busy/hourglass indicator.
     Wait,
 }
