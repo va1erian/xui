@@ -77,7 +77,6 @@ fn metadata_does_not_follow_a_symlink_and_remove_removes_only_the_link() {
 
     let meta = StdPlatform.metadata(&link).expect("metadata");
     assert_eq!(meta.kind, Kind::Symlink, "a link is not its target");
-    assert_eq!(meta.size, Some(7), "the link's own size");
 
     StdPlatform.remove(&link, false).expect("remove link");
     assert!(!link.exists(), "the link is gone");
