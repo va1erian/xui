@@ -10,6 +10,7 @@ use crate::backend::{Backend, Event, PlatformSpec, WidgetId};
 use crate::geometry::Rect;
 use crate::message::{Key, Modifiers, MouseButton};
 
+mod icons;
 mod items;
 mod keyboard;
 mod opening;

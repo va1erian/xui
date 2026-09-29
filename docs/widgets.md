@@ -165,7 +165,14 @@ let context = Menu::context(ui)
 context.show_context(x, y);
 ```
 
-`MenuScope` offers `item`, `separator`, `check`, `radio`, `submenu`. Runtime:
+`MenuScope` offers `item`, `separator`, `check`, `radio`, `submenu`, and
+`icon(impl Into<IconRef>)`, which gives the entry just appended a leading 16 DIP
+icon (`m.item(id, "&Copy").icon(Lucide::Copy)`). A popup with any icon reserves
+an icon column so labels stay aligned (it replaces the mark column unless a
+check or radio entry needs that too); popups without icons are laid out as
+before. Icons follow the entry's text colour (dimmed when disabled) and show in
+bar dropdowns and context menus on every backend, since menus are always
+painted by the portable popup (there is no native `HMENU` path). Runtime:
 `set_enabled`/`is_enabled`, `set_checked`/`is_checked`, `open`/`close`.
 
 ### Containers

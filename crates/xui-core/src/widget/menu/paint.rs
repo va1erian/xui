@@ -8,6 +8,7 @@
 
 use crate::backend::{Canvas, TextStyle};
 use crate::geometry::{Point, Rect};
+use crate::icon::draw_icon;
 use crate::theme::Theme;
 use crate::widget::popup;
 
@@ -62,8 +63,9 @@ pub(super) fn popup(
     let origin = Point::new(bounds.left, bounds.top);
     let width = bounds.width();
     let pad = layout::PAD.to_px(dpi).value();
-    let mark = layout::MARK.to_px(dpi).value();
     let _ = model::with_entries(nodes, &level.path, |entries| {
+        let (mark_column, icon_column) = layout::columns(entries, dpi);
+        let mark = mark_column + icon_column;
         layout::each_row(entries, origin, width, dpi, |index, rect| {
             let node = &entries[index];
             if node.kind == Kind::Separator {
@@ -81,6 +83,7 @@ pub(super) fn popup(
             }
             let color = pick(node.enabled, theme.text, theme.text_disabled);
             draw_mark(canvas, node, rect, color, dpi);
+            draw_icon_column(canvas, node, rect, mark_column, icon_column, color, dpi);
             let style = TextStyle::new(color, layout::TEXT_SIZE).middle();
             canvas.draw_text(&node.text, set_left(rect, mark), &style);
             underline(canvas, node, rect, color, mark, dpi);
@@ -118,6 +121,33 @@ fn underline(
     let x = rect.left + pad + char_width * index as i32;
     let y = rect.top + rect.height() * 3 / 4;
     canvas.draw_line(Point::new(x, y), Point::new(x + char_width, y), color, 1.0);
+}
+
+/// Draws an entry's leading icon, centred in the icon column that starts
+/// `offset` past the row's left edge. Nothing is drawn for an entry without an
+/// icon or in a popup with no icon column.
+fn draw_icon_column(
+    canvas: &mut dyn Canvas,
+    node: &Node,
+    rect: Rect,
+    offset: i32,
+    width: i32,
+    color: crate::color::Color,
+    dpi: u32,
+) {
+    let Some(icon) = node.icon else {
+        return;
+    };
+    let side = layout::ICON.to_px(dpi).value().min(width).max(1);
+    let left = rect.left + offset + (width - side) / 2;
+    let top = rect.top + (rect.height() - side) / 2;
+    draw_icon(
+        canvas,
+        icon,
+        Rect::new(left, top, left + side, top + side),
+        color,
+        dpi,
+    );
 }
 
 /// Draws a check mark or radio dot in the mark column.

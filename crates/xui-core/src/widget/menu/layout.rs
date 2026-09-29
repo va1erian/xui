@@ -26,6 +26,9 @@ pub(super) const MARK: Dip = Dip(22.0);
 pub(super) const ARROW: Dip = Dip(18.0);
 /// The smallest popup width.
 pub(super) const MIN_WIDTH: Dip = Dip(140.0);
+/// The design size of an entry's leading icon; it is centred in a [`MARK`]-wide
+/// column, like the check and radio marks.
+pub(super) const ICON: Dip = Dip(16.0);
 /// The estimated width of one text character.
 ///
 /// The portable [`Canvas`](crate::Canvas) does not measure text, so a label's
@@ -71,10 +74,29 @@ fn row_height(node: &Node, dpi: u32) -> i32 {
     }
 }
 
+/// The widths, in device pixels, of the mark column and the icon column a
+/// popup showing `nodes` reserves before its labels.
+///
+/// A popup with no icons keeps the single mark column it always had. Once any
+/// entry has an icon the icon column is added after the mark column, and the
+/// mark column is kept only if a check or radio entry needs it, so an
+/// icon-only menu does not carry a blank gutter.
+pub(super) fn columns(nodes: &[Node], dpi: u32) -> (i32, i32) {
+    let column = MARK.to_px(dpi).value();
+    if !nodes.iter().any(|node| node.icon.is_some()) {
+        return (column, 0);
+    }
+    let marks = nodes
+        .iter()
+        .any(|node| matches!(node.kind, Kind::Check | Kind::Radio));
+    (if marks { column } else { 0 }, column)
+}
+
 /// The size a popup showing `nodes` needs.
 pub(super) fn measure(nodes: &[Node], dpi: u32) -> (i32, i32) {
     let pad = PAD.to_px(dpi).value();
-    let mark = MARK.to_px(dpi).value();
+    let (mark_column, icon_column) = columns(nodes, dpi);
+    let mark = mark_column + icon_column;
     let arrow = ARROW.to_px(dpi).value();
     let char_width = CHAR.to_px(dpi).value().max(1);
     let mut widest = 0;
