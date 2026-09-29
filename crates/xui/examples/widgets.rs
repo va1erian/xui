@@ -22,9 +22,9 @@ use xui_core::icon::Lucide;
 use xui_core::image::Image;
 use xui_core::widget::{
     Button, CheckBox, ColorPicker, ComboBox, Dialog, DialogAction, Edit, Glyph, GroupBox, HasText,
-    Hyperlink, Label, ListView, MaterialStatusBar, Menu, MenuId, MultilineEdit, NumberField, Panel,
-    ProgressBar, RadioGroup, ScrollView, Separator, Slider, Split, StatusBar, Tabs, ToggleButton,
-    Toolbar, Tooltip, TopBar, TopBarId, TreeRow, TreeView,
+    Hyperlink, IconView, Label, ListView, MaterialStatusBar, Menu, MenuId, MultilineEdit,
+    NumberField, Panel, ProgressBar, RadioGroup, ScrollView, Separator, Slider, Split, StatusBar,
+    Tabs, ToggleButton, Toolbar, Tooltip, TopBar, TopBarId, TreeRow, TreeView,
 };
 use xui_core::{Color, Dip, Properties, Rect, Theme, Value};
 
@@ -116,6 +116,7 @@ enum Msg {
     Combo(usize),
     Slide(f64),
     List(usize),
+    Icon(usize),
     Tree(usize),
     Tool(usize),
     TopBarNew,
@@ -154,6 +155,7 @@ struct Gallery {
     _slider: Slider<Msg>,
     _link: Hyperlink<Msg>,
     _list: ListView<Msg>,
+    _icons: IconView<Msg>,
     _tree: TreeView<Msg>,
     _group: GroupBox<Msg>,
     _grouped: CheckBox<Msg>,
@@ -199,6 +201,7 @@ impl App for Gallery {
                 format!("slider: {value:.0}")
             }
             Msg::List(index) => format!("list row #{index}"),
+            Msg::Icon(index) => format!("icon tile #{index}"),
             Msg::Tree(index) => format!("tree row #{index}"),
             Msg::Tool(index) => format!("toolbar #{index}"),
             Msg::TopBarNew => "topbar: new".to_string(),
@@ -330,6 +333,13 @@ fn run(renderer: Renderer, switch: Rc<Cell<Option<Renderer>>>) {
             )
             .unwrap()
             .on_select(|index| Some(Msg::List(index)));
+            let icons = IconView::new(
+                ui,
+                rect(1040.0, 176.0, 1280.0, 452.0),
+                &["Documents", "Pictures", "Music", "Videos"],
+            )
+            .unwrap()
+            .on_select(|index| Some(Msg::Icon(index)));
             let tree = TreeView::new(
                 ui,
                 rect(400.0, 168.0, 764.0, 264.0),
@@ -623,6 +633,7 @@ fn run(renderer: Renderer, switch: Rc<Cell<Option<Renderer>>>) {
                 _slider: slider,
                 _link: link,
                 _list: list,
+                _icons: icons,
                 _tree: tree,
                 _group: group,
                 _grouped: grouped,

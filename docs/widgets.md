@@ -141,6 +141,47 @@ let grid = GridView::with_model(ui, rect, model)
   `TilePaint<'a>` is the paint context; `TileSize` accepts a `Dip` or
   `(Dip, Dip)`.
 
+`IconView<M>` is a virtualized Windows XP-style icon view: each item is a tile
+with an icon on the left and up to three lines of text on the right, flowed left
+to right and wrapped. It uses only the portable `Backend` contract, so it is the
+same on every backend (there is no native `ListView`):
+
+```rust
+use xui_core::widget::{IconModel, IconSize, IconView};
+
+let view = IconView::with_model(ui, rect, model)
+    .unwrap()
+    .on_select(|item| Some(Msg::Select(item)))
+    .on_activate(|item| Some(Msg::Open(item)))
+    .on_context(|item, at| Some(Msg::Context(item, at)));
+// Small (16), Medium (32) or Large (48, the default); reflows and repaints.
+view.set_icon_size(IconSize::Large);
+```
+
+- `IconModel` supplies each tile lazily: `items()`, `icon(item) -> Option<IconRef>`
+  and `line(item, line) -> Option<&str>` for lines `0..3` (line 1 is the name in
+  the normal text token, lines 2 and 3 are secondary details in the muted token).
+  A `Vec<String>` and a `Vec<Vec<String>>` implement it already. Only visible
+  tiles are laid out and painted, so a model of 100 000 items costs the same as
+  ten.
+- A tile's width, height and text metrics derive from the icon size. A line that
+  does not fit is end-ellipsised; a missing line is simply not drawn. The small
+  tile is one line tall, so it shows the name alone.
+- States come from semantic tokens: hover, an active selection (accent fill on
+  the text block plus an accent-tinted icon), an inactive selection
+  (`selection_unfocused`), a dotted focus rectangle on the focused tile and a
+  disabled colour. Icons follow the tile's text colour.
+- Interaction: a left click selects (Ctrl toggles, Shift extends the range in
+  `SelectionMode::Multi`), empty space clears, a double click or Return
+  activates, a right click selects an unselected tile and reports its item and
+  pointer position through `on_context`, and the arrow keys, Home/End and
+  PageUp/PageDown move the focus with the focused tile kept in view.
+- Builders: `selection_mode(SelectionMode)`, `multi_select(bool)`, `on_select`,
+  `on_selection(&[usize])`, `on_activate`, `on_context`. Runtime: `set_model` /
+  `set_items`, `set_icon_size` / `icon_size`, `selected`, `selection`, `select`,
+  `set_selection`, `focused`, `ensure_visible`, `set_enabled`, `item_data`,
+  `len`, `id`.
+
 ### Menus
 
 ```rust
