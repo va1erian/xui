@@ -21,10 +21,10 @@ use xui_core::backend::{Backend, PlatformSpec};
 use xui_core::icon::Lucide;
 use xui_core::image::Image;
 use xui_core::widget::{
-    Button, CheckBox, ColorPicker, ComboBox, Dialog, DialogAction, Edit, Glyph, GroupBox, HasText,
-    Hyperlink, Label, ListView, MaterialStatusBar, Menu, MenuId, MultilineEdit, NumberField, Panel,
-    ProgressBar, RadioGroup, ScrollView, Separator, Slider, Split, StatusBar, Tabs, ToggleButton,
-    Toolbar, Tooltip, TopBar, TopBarId, TreeRow, TreeView,
+    Button, CheckBox, ColorPanel, ColorPicker, ComboBox, Dialog, DialogAction, Edit, Glyph,
+    GroupBox, HasText, Hyperlink, Label, ListView, MaterialStatusBar, Menu, MenuId, MultilineEdit,
+    NumberField, Panel, ProgressBar, RadioGroup, ScrollView, Separator, Slider, Split, StatusBar,
+    Tabs, ToggleButton, Toolbar, Tooltip, TopBar, TopBarId, TreeRow, TreeView,
 };
 use xui_core::{Color, Dip, Properties, Rect, Theme, Value};
 
@@ -132,6 +132,7 @@ enum Msg {
     Tab(usize),
     SplitPane(f32),
     Swatch(Color),
+    Panel(Color),
     DialogOpen,
     DialogAction(DialogAction),
     Switch,
@@ -175,6 +176,7 @@ struct Gallery {
     _tabs: Tabs<Msg>,
     _split: Split<Msg>,
     _swatches: ColorPicker<Msg>,
+    _colorpanel: ColorPanel<Msg>,
     _dialog: Dialog<Msg>,
     _dialog_button: Button<Msg>,
     _content: Vec<Label<Msg>>,
@@ -218,6 +220,7 @@ impl App for Gallery {
             Msg::Tab(index) => format!("tab #{index}"),
             Msg::SplitPane(position) => format!("split: {position:.0}"),
             Msg::Swatch(color) => format!("accent #{:02X}{:02X}{:02X}", color.r, color.g, color.b),
+            Msg::Panel(color) => format!("panel #{:02X}{:02X}{:02X}", color.r, color.g, color.b),
             Msg::DialogOpen => {
                 self._dialog.open();
                 "dialog: open".to_string()
@@ -557,6 +560,11 @@ fn run(renderer: Renderer, switch: Rc<Cell<Option<Renderer>>>) {
                 .accept_label("Save")
                 .on_action(|action| Some(Msg::DialogAction(action)));
 
+            let colorpanel = ColorPanel::new(ui, rect(1040.0, 168.0, 1280.0, 420.0))
+                .unwrap()
+                .with_color(Color::hex(0x87_64_B8))
+                .on_change(|color| Some(Msg::Panel(color)));
+
             let sep = Separator::new(ui, rect(16.0, 552.0, 764.0, 554.0)).unwrap();
             let status =
                 StatusBar::new(ui, rect(16.0, 560.0, 764.0, 584.0), &["Ready", ""]).unwrap();
@@ -644,6 +652,7 @@ fn run(renderer: Renderer, switch: Rc<Cell<Option<Renderer>>>) {
                 _tabs: tabs,
                 _split: split,
                 _swatches: swatches,
+                _colorpanel: colorpanel,
                 _dialog: dialog,
                 _dialog_button: dialog_button,
                 _content: content,

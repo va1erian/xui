@@ -62,6 +62,11 @@ path = "examples/controls/colorpicker.rs"
 required-features = ["canvas"]
 
 [[example]]
+name = "control_colorpanel"
+path = "examples/controls/colorpanel.rs"
+required-features = ["canvas"]
+
+[[example]]
 name = "control_combobox"
 path = "examples/controls/combobox.rs"
 required-features = ["canvas"]

@@ -10,6 +10,7 @@
 
 mod button;
 mod checkbox;
+mod colorpanel;
 mod colorpicker;
 mod combobox;
 mod control;
@@ -52,6 +53,7 @@ mod tests;
 
 pub use button::Button;
 pub use checkbox::CheckBox;
+pub use colorpanel::{BASIC_COLORS, ColorField, ColorPanel, Hsv, HueSlider};
 pub use colorpicker::ColorPicker;
 pub use combobox::ComboBox;
 pub use control::{Control, HasText};
