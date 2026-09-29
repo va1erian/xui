@@ -126,6 +126,18 @@ impl<M: 'static> Ui<M> {
         self.core.backend().text(id)
     }
 
+    /// Reads the window's clipboard text, or `None` when it holds none. The
+    /// backend provides the clipboard (the real one on Win32 and canvas, an
+    /// in-process store otherwise).
+    pub(crate) fn clipboard_text(&self) -> Option<String> {
+        self.core.backend().clipboard_text()
+    }
+
+    /// Replaces the window's clipboard text.
+    pub(crate) fn set_clipboard_text(&self, text: &str) {
+        self.core.backend().set_clipboard_text(text);
+    }
+
     /// A node's current bounds, in device pixels.
     pub fn bounds(&self, id: WidgetId) -> Rect {
         self.core.backend().bounds(id)

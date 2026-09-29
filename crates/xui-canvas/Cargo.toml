@@ -14,6 +14,10 @@ xui-gpu = { path = "../xui-gpu" }
 tiny-skia = "0.11"
 cosmic-text = "0.19"
 winit = "0.30"
+# The OS text clipboard for the winit backend. Text only: the default
+# `image-data` feature (and its per-platform image backends) is not needed, so
+# it is off, which keeps the dependency on `x11rb`/`clipboard-win` alone.
+arboard = { version = "3", default-features = false }
 # Keep softbuffer off its default `kms`/libdrm backend so the Linux cross-check
 # does not need system graphics headers; X11 and Wayland are dlopen'd.
 softbuffer = { version = "0.4", default-features = false, features = [

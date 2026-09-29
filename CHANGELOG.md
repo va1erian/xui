@@ -22,6 +22,9 @@
 
 ### Features
 
+- **`Edit` now has the standard Windows CUA keyboard and selection.** Shift+Left/Right/Home/End extend a selection, Ctrl+Left/Right move by word (adding Shift extends by word), Ctrl+A selects all, Ctrl+Backspace/Ctrl+Delete delete a word, and typing replaces the selection. Ctrl+Z/Ctrl+Y undo and redo with a typing run grouped into one step, and Ctrl+C/Ctrl+X/Ctrl+V plus Shift+Delete/Shift+Insert use a new portable clipboard. A mouse drag selects and a double-click selects a word; the selection is highlighted with theme tokens and the text scrolls so the caret stays visible. The pure edit model lives in `xui-core/src/widget/edit/model.rs` with thorough unit tests (#222).
+- **Portable text clipboard.** `Backend` gained `clipboard_text`/`set_clipboard_text`, defaulting to an in-process store so the headless and offscreen backends (and tests) support copy and paste. `Win32Backend` uses the existing Win32 clipboard, and the canvas/winit backend uses the OS clipboard through `arboard` (a new, text-only dependency; its default `image-data` feature is off) (#222).
+
 - `ListView` rows can carry a leading icon: `ListModel::icon(row)` returns an optional `IconRef` (a `Lucide` outline, `Icon` or `Glyph`) drawn before the first column's text in the row's text colour; rows without one are laid out as before (#209).
 - `Menu` entries can carry a leading icon: `MenuScope::icon(icon)` gives the entry just appended any `Into<IconRef>`, drawn in an icon column of bar dropdowns and context menus in the entry's text colour (dimmed when disabled); popups with no icons are unchanged (#211).
 - `ComboBox` items can carry a leading icon: `ComboBox::item_icon(index, icon)` takes any `Into<IconRef>`, and `set_item_icon(index, Some(icon.into()))` sets or `set_item_icon(index, None)` clears one at runtime; it is drawn before the item's text in the dropdown list and in the closed box for the selected item, in the text colour (#210).

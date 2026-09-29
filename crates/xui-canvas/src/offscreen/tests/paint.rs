@@ -236,3 +236,52 @@ fn a_scroll_view_clips_overflowing_content_light_and_dark() {
         assert!(rendered.is_some(), "the view rendered");
     }
 }
+
+#[test]
+fn an_edit_paints_at_high_dpi_on_both_themes() {
+    use xui_core::widget::Edit;
+
+    struct Field {
+        _edit: Edit<()>,
+    }
+    impl App for Field {
+        type Msg = ();
+        fn update(&mut self, _msg: (), _ui: &mut Ui<()>) {}
+    }
+
+    for dpi in [144u32, 192] {
+        for dark in [false, true] {
+            let backend = Rc::new(OffscreenBackend::with_dpi(dpi));
+            let backend_for_run: Rc<dyn Backend> = backend.clone();
+            let mut painted = false;
+
+            let _ = run_app(
+                backend_for_run,
+                PlatformSpec::new("edit").size(Dip(200.0), Dip(40.0)),
+                |ui| {
+                    let theme = if dark { Theme::dark() } else { Theme::light() };
+                    ui.set_theme(theme);
+                    let scale = dpi as f32 / 96.0;
+                    let bounds =
+                        Rect::new(8, 8, (200.0 * scale) as i32 - 8, (40.0 * scale) as i32 - 8);
+                    let edit = Edit::new(ui, bounds, "hello").unwrap();
+                    let image = backend.render(ui.window()).expect("a rendered window");
+                    let bg = [
+                        theme.input_background.r,
+                        theme.input_background.g,
+                        theme.input_background.b,
+                    ];
+                    painted = image
+                        .pixels
+                        .as_chunks::<4>()
+                        .0
+                        .iter()
+                        .any(|pixel| pixel[..3] != bg);
+                    Field { _edit: edit }
+                },
+            );
+
+            assert!(painted, "the edit painted at {dpi} DPI (dark: {dark})");
+        }
+    }
+}

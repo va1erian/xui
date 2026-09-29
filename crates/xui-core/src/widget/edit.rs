@@ -1,16 +1,17 @@
 #![forbid(unsafe_code)]
 
-//! [`Edit`]: a single-line text field.
+//! [`Edit`]: a single-line text field with CUA keyboard and selection.
 //!
-//! The text and the caret live in the widget, so it edits the same way on every
-//! backend. A form designer draws one to capture a property; a normal app maps
-//! each change to its `Msg` through [`Edit::on_change`].
+//! The text, caret and selection live in a pure [`model`], so every backend
+//! edits the same way. A form designer draws one to capture a property; a
+//! normal app maps each change to its `Msg` through [`Edit::on_change`].
 //!
 //! A backend that hosts a native control ([`ImplKind::Native`], as the Win32
-//! backend does for a real `EDIT`) draws and edits the field itself; the widget
-//! then draws nothing and syncs its text from the control's change events.
-//! Otherwise ([`Painted`](ImplKind::Painted)) the widget paints the field and
-//! handles its own input.
+//! backend does for a real `EDIT`) draws and edits the field itself, including
+//! selection, clipboard and undo; the widget then draws nothing and syncs its
+//! text from the control's change events. Otherwise
+//! ([`Painted`](ImplKind::Painted)) the widget paints the field and handles its
+//! own input through [`keys`].
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
@@ -18,10 +19,21 @@ use std::rc::Rc;
 use super::control::{Control, HasText};
 use crate::app::Ui;
 use crate::backend::{Cursor, Event, ImplKind, NodeKind, NodeSpec, Result, TextStyle};
-use crate::geometry::{Point, Rect};
-use crate::message::{Key, MouseButton};
+use crate::color::Color;
+use crate::geometry::Rect;
+use crate::message::MouseButton;
 use crate::property::{Properties, Property, Value};
 use crate::units::Dip;
+
+mod geometry;
+mod history;
+mod keys;
+mod model;
+mod paint;
+mod word;
+
+use keys::{Clipboard, KeyResult};
+use model::EditModel;
 
 /// Maps new text to an optional app message.
 type ChangeMapper<M> = Rc<RefCell<Option<Box<dyn Fn(&str) -> Option<M>>>>>;
@@ -34,17 +46,31 @@ const PADDING: Dip = Dip(4.0);
 /// A single-line text field.
 pub struct Edit<M: 'static> {
     control: Control<M>,
-    text: Rc<RefCell<String>>,
-    caret: Rc<Cell<usize>>,
+    model: Rc<RefCell<EditModel>>,
     /// The cue banner drawn while the text is empty (a native control shows
     /// its own).
     cue: Rc<RefCell<String>>,
+    /// The horizontal scroll offset in pixels, so the caret stays visible.
+    scroll: Rc<Cell<i32>>,
     /// Whether the backend hosts a native control that edits itself.
     native: bool,
     /// Set while the widget itself sets the native text, so the resulting
     /// change notification does not loop back through `on_change`.
     setting: Rc<Cell<bool>>,
     on_change: ChangeMapper<M>,
+}
+
+/// The [`keys::Clipboard`] over a window's backend.
+struct UiClipboard<'a, M>(&'a Ui<M>);
+
+impl<M: 'static> Clipboard for UiClipboard<'_, M> {
+    fn text(&self) -> Option<String> {
+        self.0.clipboard_text()
+    }
+
+    fn set(&self, text: &str) {
+        self.0.set_clipboard_text(text);
+    }
 }
 
 impl<M: 'static> Edit<M> {
@@ -62,68 +88,39 @@ impl<M: 'static> Edit<M> {
             &NodeSpec::new(NodeKind::Edit, bounds).text(text).tab_stop(),
         )?;
         ui.set_cursor(control.id(), Cursor::Text);
-        let state = Rc::new(RefCell::new(text.to_string()));
-        let caret = Rc::new(Cell::new(text.chars().count()));
+        let model = Rc::new(RefCell::new(EditModel::new(text)));
         let cue = Rc::new(RefCell::new(String::new()));
+        let scroll = Rc::new(Cell::new(0));
         let focused = Rc::new(Cell::new(false));
         let setting = Rc::new(Cell::new(false));
         let on_change: ChangeMapper<M> = Rc::new(RefCell::new(None));
 
         if !native {
-            let text = Rc::clone(&state);
-            let caret = Rc::clone(&caret);
+            let model = Rc::clone(&model);
             let cue = Rc::clone(&cue);
+            let scroll = Rc::clone(&scroll);
             let focused = Rc::clone(&focused);
             let theme = ui.theme_handle();
             let selected = control.selected_handle();
-            let ui = ui.clone();
             control.set_painter(Rc::new(move |canvas| {
-                let theme = theme.get();
-                let bounds = canvas.bounds();
-                canvas.clear(theme.input_background);
-                let border = if focused.get() {
-                    theme.border_focused
-                } else {
-                    theme.input_border
+                let state = paint::PaintState {
+                    model: model.as_ref(),
+                    cue: cue.as_ref(),
+                    scroll: scroll.as_ref(),
+                    focused: focused.as_ref(),
+                    selected: selected.as_ref(),
                 };
-                canvas.stroke_rect(bounds, border, 1.0);
-
-                let pad = PADDING.to_px(canvas.dpi()).value();
-                let inner = bounds.shrink(pad);
-                let value = text.borrow();
-                // Empty shows the cue instead, dimmed like a native banner.
-                let cue = cue.borrow();
-                let (shown, color) = if value.is_empty() {
-                    (cue.as_str(), theme.text_disabled)
-                } else {
-                    (value.as_str(), theme.text)
-                };
-                let style = TextStyle::new(color, TEXT_SIZE).middle();
-                canvas.draw_text(shown, inner, &style);
-
-                if focused.get() {
-                    let prefix: String = value.chars().take(caret.get()).collect();
-                    let advance = ui.measure_text(&prefix, &style, canvas.dpi()).width;
-                    let x = (inner.left + advance).min(inner.right);
-                    canvas.draw_line(
-                        Point::new(x, inner.top),
-                        Point::new(x, inner.bottom),
-                        theme.text,
-                        1.0,
-                    );
-                }
-                if selected.get() {
-                    canvas.stroke_rect(bounds, theme.accent, 2.0);
-                }
+                paint::paint(canvas, &theme.get(), &state);
             }));
         }
 
         {
-            let text = Rc::clone(&state);
-            let caret = Rc::clone(&caret);
+            let model = Rc::clone(&model);
             let focused = Rc::clone(&focused);
+            let scroll = Rc::clone(&scroll);
             let setting = Rc::clone(&setting);
             let on_change = Rc::clone(&on_change);
+            let dragging = Rc::new(Cell::new(false));
             let ui = ui.clone();
             let id = control.id();
             control.on_events(move |event| {
@@ -132,22 +129,88 @@ impl<M: 'static> Edit<M> {
                 if ui.is_design_mode() && event.is_input() {
                     return None;
                 }
+                let dpi = ui.dpi();
+                let style = TextStyle::new(Color::rgb(0, 0, 0), TEXT_SIZE).middle();
+                // Maps a node-local x to the nearest caret position. The model
+                // is borrowed only for the measurement, never across a call
+                // that can deliver an event.
+                let char_at = |x: i32| -> usize {
+                    let target = geometry::pointer_text_x(x, dpi, scroll.get());
+                    let model = model.borrow();
+                    let value = model.text();
+                    let total = value.chars().count();
+                    let mut best = 0;
+                    let mut best_distance = i32::MAX;
+                    let mut byte = 0;
+                    for chars in 0..=total {
+                        let width = ui.measure_text(&value[..byte], &style, dpi).width;
+                        let distance = (width - target).abs();
+                        if distance < best_distance {
+                            best_distance = distance;
+                            best = chars;
+                        }
+                        if chars < total {
+                            byte += value[byte..].chars().next().map_or(0, char::len_utf8);
+                        }
+                    }
+                    best
+                };
+
                 let mut changed = false;
+                let mut redraw = false;
                 match event {
                     Event::SetFocus => focused.set(true),
                     Event::KillFocus => focused.set(false),
                     Event::MouseDown {
+                        x,
                         button: MouseButton::Left,
+                        modifiers,
                         ..
                     } => {
                         focused.set(true);
                         ui.focus(id);
+                        if !native {
+                            let pos = char_at(*x);
+                            let mut model = model.borrow_mut();
+                            model.move_to(pos, modifiers.shift);
+                            drop(model);
+                            dragging.set(true);
+                            ui.set_capture(id);
+                        }
+                        redraw = true;
+                    }
+                    Event::MouseDoubleClick {
+                        x,
+                        button: MouseButton::Left,
+                        ..
+                    } if !native => {
+                        let pos = char_at(*x);
+                        model.borrow_mut().select_word_at(pos);
+                        dragging.set(false);
+                        ui.release_capture();
+                        redraw = true;
+                    }
+                    Event::MouseMove { x, .. } if !native && dragging.get() => {
+                        let pos = char_at(*x);
+                        model.borrow_mut().move_to(pos, true);
+                        redraw = true;
+                    }
+                    Event::MouseUp {
+                        button: MouseButton::Left,
+                        ..
+                    } if !native => {
+                        dragging.set(false);
+                        ui.release_capture();
+                    }
+                    Event::MouseLeave if !native && dragging.get() => {
+                        dragging.set(false);
+                        ui.release_capture();
                     }
                     // A native control edits itself and reports the change; read
                     // the new text back and raise it.
-                    Event::TextChanged => {
+                    Event::TextChanged if native => {
                         let value = ui.text(id);
-                        *text.borrow_mut() = value.clone();
+                        model.borrow_mut().set_text(&value);
                         // A change the widget itself made is not a user edit.
                         if setting.get() {
                             return None;
@@ -159,50 +222,42 @@ impl<M: 'static> Edit<M> {
                         return None;
                     }
                     // Only the focused field edits.
-                    Event::Char(character) if focused.get() && !character.is_control() => {
-                        let mut chars: Vec<char> = text.borrow().chars().collect();
-                        let at = caret.get().min(chars.len());
-                        chars.insert(at, *character);
-                        caret.set(at + 1);
-                        *text.borrow_mut() = chars.into_iter().collect();
+                    Event::Char(character)
+                        if !native && focused.get() && !character.is_control() =>
+                    {
+                        model.borrow_mut().insert_char(*character);
                         changed = true;
+                        redraw = true;
                     }
-                    Event::KeyDown { key, .. } if focused.get() => match *key {
-                        Key::BACK => {
-                            let mut chars: Vec<char> = text.borrow().chars().collect();
-                            let at = caret.get().min(chars.len());
-                            if at > 0 {
-                                chars.remove(at - 1);
-                                caret.set(at - 1);
-                                *text.borrow_mut() = chars.into_iter().collect();
+                    Event::KeyDown {
+                        key,
+                        modifiers,
+                        system,
+                        ..
+                    } if !native && focused.get() && !*system => {
+                        let clipboard = UiClipboard(&ui);
+                        let result = {
+                            let mut model = model.borrow_mut();
+                            keys::apply(&mut model, *key, *modifiers, &clipboard)
+                        };
+                        match result {
+                            KeyResult::Ignored => return None,
+                            KeyResult::Redraw => redraw = true,
+                            KeyResult::Changed => {
                                 changed = true;
+                                redraw = true;
                             }
                         }
-                        Key::DELETE => {
-                            let mut chars: Vec<char> = text.borrow().chars().collect();
-                            let at = caret.get().min(chars.len());
-                            if at < chars.len() {
-                                chars.remove(at);
-                                *text.borrow_mut() = chars.into_iter().collect();
-                                changed = true;
-                            }
-                        }
-                        Key::LEFT => caret.set(caret.get().saturating_sub(1)),
-                        Key::RIGHT => {
-                            let len = text.borrow().chars().count();
-                            caret.set((caret.get() + 1).min(len));
-                        }
-                        Key::HOME => caret.set(0),
-                        Key::END => caret.set(text.borrow().chars().count()),
-                        _ => return None,
-                    },
+                    }
                     _ => return None,
                 }
-                ui.invalidate(id);
+                if redraw {
+                    ui.invalidate(id);
+                }
                 if changed {
+                    let value = model.borrow().text().to_string();
                     let mapper = on_change.borrow();
                     if let Some(mapper) = mapper.as_ref() {
-                        let value = text.borrow().clone();
                         return mapper(&value);
                     }
                 }
@@ -212,9 +267,9 @@ impl<M: 'static> Edit<M> {
 
         Ok(Edit {
             control,
-            text: state,
-            caret,
+            model,
             cue,
+            scroll,
             native,
             setting,
             on_change,
@@ -264,12 +319,11 @@ impl<M: 'static> Edit<M> {
 
 impl<M: 'static> HasText for Edit<M> {
     fn text(&self) -> String {
-        self.text.borrow().clone()
+        self.model.borrow().text().to_string()
     }
 
     fn set_text(&self, text: &str) {
-        *self.text.borrow_mut() = text.to_string();
-        self.caret.set(text.chars().count());
+        self.model.borrow_mut().set_text(text);
         if self.native {
             // Push to the control; its change notification is suppressed so
             // `on_change` fires only for real edits.
@@ -277,6 +331,7 @@ impl<M: 'static> HasText for Edit<M> {
             self.control.set_text(text);
             self.setting.set(false);
         } else {
+            self.scroll.set(0);
             self.control.invalidate();
         }
     }
@@ -298,63 +353,5 @@ impl<M: 'static> Properties for Edit<M> {
             }
             _ => false,
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use std::rc::Rc;
-
-    use super::*;
-    use crate::app::{App, Core, Runtime};
-    use crate::backend::headless::{DrawOp, HeadlessBackend};
-    use crate::backend::{Backend, PlatformSpec};
-    use crate::theme::Theme;
-    use crate::widget::HasText;
-
-    struct TestApp;
-
-    impl App for TestApp {
-        type Msg = u32;
-
-        fn update(&mut self, _msg: u32, _ui: &mut Ui<u32>) {}
-    }
-
-    #[test]
-    fn an_empty_field_paints_its_cue_dimmed() {
-        let backend = Rc::new(HeadlessBackend::new());
-        let window = backend.open_window(&PlatformSpec::new("t")).unwrap();
-        let core = Core::new(backend.clone(), window);
-        let ui = Ui::new(Rc::clone(&core));
-        let _runtime = Runtime::primary(core, TestApp);
-
-        let edit = Edit::new(&ui, Rect::new(0, 0, 120, 22), "")
-            .unwrap()
-            .cue("Search…");
-        backend.render(edit.id());
-        let ops = backend.ops(edit.id());
-        let theme = Theme::light();
-        assert!(
-            ops.iter().any(|op| matches!(
-                op,
-                DrawOp::Text(_, text, color)
-                    if text == "Search…" && *color == theme.text_disabled
-            )),
-            "an empty field draws its cue in the disabled colour: {ops:?}"
-        );
-
-        edit.set_text("Réverie");
-        backend.render(edit.id());
-        let ops = backend.ops(edit.id());
-        assert!(
-            ops.iter()
-                .any(|op| matches!(op, DrawOp::Text(_, text, _) if text == "Réverie")),
-            "text replaces the cue: {ops:?}"
-        );
-        assert!(
-            !ops.iter()
-                .any(|op| matches!(op, DrawOp::Text(_, text, _) if text == "Search…")),
-            "no cue once the field has text: {ops:?}"
-        );
     }
 }

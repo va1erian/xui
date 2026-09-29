@@ -17,6 +17,7 @@
 
 mod backend;
 mod canvas;
+mod clipboard;
 mod gl;
 mod image_cache;
 mod offscreen;
