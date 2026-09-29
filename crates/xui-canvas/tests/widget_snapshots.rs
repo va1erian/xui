@@ -17,8 +17,8 @@ use xui_core::backend::{Backend, PlatformSpec};
 use xui_core::geometry::Rect;
 use xui_core::image::Image;
 use xui_core::widget::{
-    Button, CheckBox, ColorPicker, ComboBox, Dialog, Edit, FlowText, Glyph, GridView, GroupBox,
-    Hyperlink, IconView, Label, ListView, MaterialStatusBar, Menu, MenuId, MultilineEdit,
+    Button, CheckBox, ColorPanel, ColorPicker, ComboBox, Dialog, Edit, FlowText, Glyph, GridView,
+    GroupBox, Hyperlink, IconView, Label, ListView, MaterialStatusBar, Menu, MenuId, MultilineEdit,
     NumberField, Panel, ProgressBar, RadioGroup, Run, ScrollView, Separator, Slider, Split,
     StatusBar, Tabs, ToggleButton, Toolbar, Tooltip, TopBar, TopBarId, TreeRow, TreeView,
 };
@@ -238,6 +238,17 @@ fn build(ui: &Ui<()>) -> Vec<Box<dyn Any>> {
             .unwrap()
             .columns(3),
     ));
+    // The tabbed colour panel, one instance on each tab.
+    keep.push(Box::new(
+        ColorPanel::new(ui, rect(1040, 350, 1260, 650))
+            .unwrap()
+            .with_color(Color::hex(0xEB_40_34)),
+    ));
+    let full = ColorPanel::new(ui, rect(1266, 350, 1486, 650))
+        .unwrap()
+        .with_color(Color::hex(0x00_78_D4));
+    full.select_tab(1);
+    keep.push(Box::new(full));
     keep.push(Box::new(
         Dialog::confirm(ui, "Save changes?", "Your edits will be lost otherwise.").unwrap(),
     ));
@@ -309,7 +320,7 @@ fn every_portable_widget_renders_light_and_dark() {
 
     run_app(
         run,
-        PlatformSpec::new("xui widget gallery").size(Dip(1300.0), Dip(700.0)),
+        PlatformSpec::new("xui widget gallery").size(Dip(1500.0), Dip(900.0)),
         move |ui| {
             let alive = build(ui);
 

@@ -57,6 +57,34 @@ Event builders return `Self`, so they chain at construction.
 | `ToggleButton<M>` | `ToggleButton::new(ui, rect, text)` | `on_toggle(bool)` |
 | `RadioGroup<M>` | `RadioGroup::new(ui, rect, &[labels])` | `on_select(usize)`; `selected`/`select` |
 | `ColorPicker<M>` | `ColorPicker::new(ui, rect, &[Color])` | `columns(n)`, `selected(Color)`, `on_select(Color)` |
+| `ColorPanel<M>` | `ColorPanel::new(ui, rect)` | tabbed picker: `with_color(Color)`, `color`, `set_color`, `select_tab`, `on_change(Color)`, `on_commit(Color)`; `ColorField`/`HueSlider` are reusable parts |
+
+### Colour
+
+`ColorPanel<M>` is a tabbed colour picker drawn entirely by xui, so it runs on
+every backend (no `ChooseColor`, GTK or portal). Its **Simple** tab is the
+32-colour `BASIC_COLORS` grid built on [`ColorPicker`](#buttons-and-choices);
+its **Full** tab has a flat preview, an SV `ColorField`, a `HueSlider`, and
+editable HEX, RGB, CMYK, HSV and HSL boxes. The panel keeps an `Hsv` triple as
+its source of truth, so dragging through black or white preserves the hue.
+
+```rust
+use xui_core::widget::ColorPanel;
+
+let panel = ColorPanel::new(ui, rect)?
+    .with_color(Color::rgb(0xEB, 0x40, 0x34))
+    // Every change, including drag ticks.
+    .on_change(|color| Some(Msg::Preview(color)))
+    // A mouse-up, Enter, a swatch pick or a valid text commit.
+    .on_commit(|color| Some(Msg::Apply(color)));
+
+panel.set_color(Color::rgb(0, 0x78, 0xD4)); // programmatic; fires nothing
+```
+
+The colour maths (RGB/HSV/HSL/CMYK, hex parse/format) is a pure module; the
+`#eb4034` reference is `235, 64, 52` / `0%, 73%, 78%, 8%` / `4°, 78%, 92%` /
+`4°, 82%, 56%`. A text box parses its own format on Enter or focus loss and
+reverts invalid input, firing `on_commit` only for a valid commit.
 
 ### Text entry and ranges
 
