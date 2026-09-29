@@ -88,11 +88,13 @@ fn paint_tile(
     }
 
     let (primary, secondary, icon_color) = colors(state, theme, selected);
-    if let Some(icon) = state.model.icon(index) {
-        canvas.push_clip(tile);
+    canvas.push_clip(tile);
+    if !state.model.paint_icon(index, canvas, icon_rect, theme, dpi)
+        && let Some(icon) = state.model.icon(index)
+    {
         draw_icon(canvas, icon, icon_rect, icon_color, dpi);
-        canvas.pop_clip();
     }
+    canvas.pop_clip();
 
     for line in 0..metrics.lines {
         let Some(rect) = metrics.line_rect(text_rect, line) else {

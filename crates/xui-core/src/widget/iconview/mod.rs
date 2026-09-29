@@ -7,7 +7,9 @@
 //! vertically behind its own scrollbar. Like [`ListView`](super::ListView) it
 //! stores no items of its own when built with [`with_model`](IconView::with_model):
 //! it asks the [`IconModel`] for the visible tiles only, so a model of 100 000
-//! items costs the same to paint as ten.
+//! items costs the same to paint as ten. A model draws a multi-colour or
+//! app-drawn icon itself with [`IconModel::paint_icon`]; when it declines, the
+//! view falls back to its single-colour [`IconModel::icon`].
 //!
 //! Events map to the app's `Msg` through the closures given at construction:
 //! [`on_select`](IconView::on_select)/[`on_selection`](IconView::on_selection),
