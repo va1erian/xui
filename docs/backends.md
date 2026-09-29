@@ -171,6 +171,39 @@ scrolling and text selection; Ctrl+C raises `HtmlViewEvent::CopyRequested` for
 the app to put on its clipboard. It has no platform code and is not part of the
 umbrella crate.
 
+## File dialogs and the filesystem seam
+
+`FileDialog` is the portable open/save picker. Before it draws, `open()` asks
+the backend through `Backend::file_dialog(window, &FileDialogRequest)` with plain
+xui values (mode, title, initial directory, suggested name, extension filters,
+whether the result must exist):
+
+- The default returns `FileDialogOutcome::Declined`, so the portable modal runs.
+- `Chosen(PathBuf)` / `Cancelled` skip the modal and call the app's
+  `on_accept`/`on_cancel` directly, so the application never knows which picker
+  answered.
+
+`Win32Backend` does not implement the hook yet. The intended implementation is
+the Common Item Dialog (`IFileOpenDialog`/`IFileSaveDialog`), which needs
+`unsafe` and so belongs in `xui-win32`'s `sys/` layer; a canvas build on a
+desktop could add a portal later.
+
+The portable card reads directories through `widget::FileSystem`:
+
+- `list(dir) -> io::Result<Vec<Entry>>`, `is_dir`, `exists`, `home() ->
+  Option<PathBuf>` and `roots() -> Vec<PathBuf>` (possibly empty).
+- `StdFileSystem` (the default) uses only `std::fs`/`std::env`.
+- Every call may fail — an unreadable directory, a missing home, no roots — and
+  the dialog shows the error inline, keeps the previous listing and never
+  panics. It does not require symlink resolution, permissions, timestamps or
+  sizes.
+
+A new backend or OS therefore only has to provide the standard library's
+filesystem calls (`std::fs::read_dir`/`metadata`) **or** its own `FileSystem`
+impl passed to `FileDialog::file_system` — nothing else: no native picker, no
+portal, no new dependency. LazyOS, while its Linux syscalls are incomplete, is
+the motivating case for the second option.
+
 ## Combining backends
 
 **Same app, either backend.** `run_app` takes `Rc<dyn Backend>`, so the choice

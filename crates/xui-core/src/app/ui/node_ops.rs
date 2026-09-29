@@ -5,8 +5,8 @@
 //! limit.
 
 use crate::backend::{
-    Cursor, ImplKind, NodeKind, NodeSpec, Painter, ParentRef, Result, TextMetrics, TextStyle,
-    WidgetId,
+    Cursor, FileDialogOutcome, FileDialogRequest, ImplKind, NodeKind, NodeSpec, Painter, ParentRef,
+    Result, TextMetrics, TextStyle, WidgetId,
 };
 use crate::geometry::Rect;
 
@@ -188,5 +188,11 @@ impl<M: 'static> Ui<M> {
     /// Whether the backend provides a native widget for `kind`.
     pub fn supports(&self, kind: NodeKind) -> ImplKind {
         self.core.backend().supports(kind)
+    }
+
+    /// Asks the backend for a native file picker. The default backend declines,
+    /// so [`FileDialog`](crate::widget::FileDialog) falls back to its own modal.
+    pub(crate) fn file_dialog(&self, request: &FileDialogRequest) -> FileDialogOutcome {
+        self.core.backend().file_dialog(self.core.window(), request)
     }
 }
