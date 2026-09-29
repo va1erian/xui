@@ -3,6 +3,7 @@
 //! Unit tests for the window backend that do not need a live window.
 
 use super::{Decorations, PlatformSpec, WindowState};
+use xui_core::Image;
 use xui_core::units::dip;
 
 #[test]
@@ -28,4 +29,24 @@ fn window_state_records_whether_the_window_is_resizable() {
     let mut spec = PlatformSpec::new("t");
     spec.resizable = false;
     assert!(!WindowState::new(&spec).resizable);
+}
+
+#[test]
+fn a_window_that_does_not_exist_yet_remembers_its_icon() {
+    let mut state = WindowState::new(&PlatformSpec::new("t"));
+    assert!(
+        state.winit_icon().is_none(),
+        "no icon until the app sets one"
+    );
+    state.icon = Some(Image::from_rgba(2, 2, vec![0xFF; 16]).expect("image"));
+    assert!(
+        state.winit_icon().is_some(),
+        "the pending icon converts when the window is created"
+    );
+}
+
+#[test]
+fn an_image_becomes_a_winit_icon() {
+    let image = Image::from_rgba(4, 4, vec![0x80; 64]).expect("image");
+    assert!(super::to_winit_icon(&image).is_some());
 }

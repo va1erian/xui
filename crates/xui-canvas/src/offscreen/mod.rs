@@ -16,7 +16,7 @@ use xui_core::backend::{
     WindowId,
 };
 use xui_core::router::WidgetHost;
-use xui_core::{Rect, Theme};
+use xui_core::{Image, Rect, Theme};
 
 use crate::gl::GlWidget;
 use crate::text_layout::CosmicShaper;
@@ -50,6 +50,8 @@ struct OffscreenWindow {
     /// Per-node GL content, keyed by the node it fills, also painted through its
     /// software fallback.
     gl_nodes: HashMap<u64, Rc<dyn GlWidget>>,
+    /// The last icon the app set with `Backend::set_window_icon`.
+    icon: Option<Image>,
 }
 
 struct Node {
@@ -167,6 +169,16 @@ impl OffscreenBackend {
         *self.run_hook.borrow_mut() = Some(Box::new(hook));
     }
 
+    /// The last icon set on `window` with
+    /// [`Backend::set_window_icon`](xui_core::backend::Backend::set_window_icon),
+    /// so an app's tests can check that it set one.
+    pub fn window_icon(&self, window: WindowId) -> Option<Image> {
+        self.windows
+            .borrow()
+            .get(&window.raw())
+            .and_then(|entry| entry.icon.clone())
+    }
+
     /// How many windows are open.
     pub fn window_count(&self) -> usize {
         self.windows.borrow().len()
@@ -209,6 +221,7 @@ impl OffscreenBackend {
                 height: height as i32,
                 gl: None,
                 gl_nodes: HashMap::new(),
+                icon: None,
             },
         );
         Ok(id)

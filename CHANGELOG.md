@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Additions
+
+- `Backend::set_window_icon(window, &Image)` sets a top-level window's icon from
+  portable RGBA pixels (no-op by default). The canvas (`winit`) backend applies
+  it with `Window::set_window_icon`, remembering an icon set before the native
+  window exists; the Win32 backend converts it to an `Icon`; `OffscreenBackend`
+  records it and exposes `window_icon(window)` for app tests.
+
 ### Fixes
 
 - The canvas (`winit`) backend delivers typed text for keys that have no portable

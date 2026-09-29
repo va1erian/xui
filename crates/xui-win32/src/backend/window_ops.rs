@@ -5,7 +5,7 @@
 //! modal loop. Split from `contract.rs` (which delegates to these) so both files
 //! stay under the size limit.
 
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use xui_core::backend::{
@@ -55,6 +55,7 @@ impl Win32Backend {
                 window,
                 shared,
                 theme: Cell::new(Theme::light()),
+                icon: RefCell::new(None),
             },
         );
         Ok(id)

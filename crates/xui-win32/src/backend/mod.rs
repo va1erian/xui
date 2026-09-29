@@ -42,6 +42,10 @@ struct BackendWindow {
     window: Window,
     shared: Rc<WindowShared>,
     theme: Cell<Theme>,
+    /// The icon set through the portable contract. Windows keeps a reference
+    /// to it, so it lives as long as the window (declared after `window`, it
+    /// drops after the window is destroyed).
+    icon: RefCell<Option<crate::Icon>>,
 }
 
 /// The Win32 backend.
