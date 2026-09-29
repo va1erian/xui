@@ -110,6 +110,11 @@ path = "examples/controls/icon.rs"
 required-features = ["canvas"]
 
 [[example]]
+name = "control_iconview"
+path = "examples/controls/iconview.rs"
+required-features = ["canvas"]
+
+[[example]]
 name = "control_label"
 path = "examples/controls/label.rs"
 required-features = ["canvas"]

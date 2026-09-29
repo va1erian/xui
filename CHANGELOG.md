@@ -11,7 +11,16 @@
   it with `tiny-skia` and `xui-win32` with Direct2D. `Palette` retints the set.
   The SVGs, PNG exports and `.ico` files are vendored under
   `crates/xui-icons/assets/`; `generate.py` compiles them into Rust data.
-
+- **Portable `IconView`.** `xui-core` gains `widget::IconView`, a virtualized
+  Windows XP-style icon view: tiles of an icon plus up to three ellipsised text
+  lines, flowed left to right and wrapped, with a scrollbar, three icon sizes
+  (`IconSize::{Small, Medium, Large}` = 16/32/48 DIP, default `Large`),
+  single/multi/range selection, hover/selected/focused/disabled states from
+  semantic tokens, and pointer, keyboard, wheel and context interaction. It is
+  backed by an `IconModel` and reuses `CellData`. It lives in `xui-core` and
+  draws only through the `Backend` contract, so it runs on every backend — the
+  software (`xui-canvas`) path included — with no new dependencies and no
+  `unsafe`.
 - **Portable file open/save picker.** `xui-core` gains `widget::FileDialog`
   (open and save modes) with a constructor-closure API (`open_file`/`save_file`,
   `initial_dir`, `suggested_name`, `filter`, `require_existing`,

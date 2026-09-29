@@ -23,6 +23,7 @@ mod gridview;
 mod groupbox;
 mod hyperlink;
 mod icon;
+mod iconview;
 mod label;
 mod listview;
 pub(crate) mod lucide;
@@ -66,6 +67,7 @@ pub use gridview::{GridModel, GridView, Tile, TilePaint, TileSize};
 pub use groupbox::GroupBox;
 pub use hyperlink::Hyperlink;
 pub use icon::Icon;
+pub use iconview::{IconModel, IconSize, IconView};
 pub use label::Label;
 pub use listview::{
     CellData, Column, ColumnWidth, Fill, ListModel, ListView, SelectionMode, SortDirection,

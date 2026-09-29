@@ -18,7 +18,7 @@ use xui_core::geometry::Rect;
 use xui_core::image::Image;
 use xui_core::widget::{
     Button, CheckBox, ColorPanel, ColorPicker, ComboBox, Dialog, Edit, FlowText, Glyph, GridView,
-    GroupBox, Hyperlink, Label, ListView, MaterialStatusBar, Menu, MenuId, MultilineEdit,
+    GroupBox, Hyperlink, IconView, Label, ListView, MaterialStatusBar, Menu, MenuId, MultilineEdit,
     NumberField, Panel, ProgressBar, RadioGroup, Run, ScrollView, Separator, Slider, Split,
     StatusBar, Tabs, ToggleButton, Toolbar, Tooltip, TopBar, TopBarId, TreeRow, TreeView,
 };
@@ -147,6 +147,14 @@ fn build(ui: &Ui<()>) -> Vec<Box<dyn Any>> {
             ui,
             rect(1040, 48, 1280, 240),
             vec!["A".to_string(), "B".to_string(), "C".to_string()],
+        )
+        .unwrap(),
+    ));
+    keep.push(Box::new(
+        IconView::new(
+            ui,
+            rect(1040, 148, 1280, 300),
+            &["Documents", "Pictures", "Music", "Videos"],
         )
         .unwrap(),
     ));
