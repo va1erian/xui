@@ -115,6 +115,67 @@ fn a_dpi_change_maps_to_a_message_with_the_new_dpi() {
 }
 
 #[test]
+fn a_shortcut_key_maps_to_a_message_and_still_reaches_the_widget() {
+    use crate::message::{Key, Modifiers};
+
+    let (backend, window, core, ui) = setup();
+    let node = backend
+        .create(
+            ParentRef::Window(window),
+            &NodeSpec::new(NodeKind::Custom, Rect::default()),
+        )
+        .unwrap();
+    let seen = Rc::new(Cell::new(0));
+    let seen_for_widget = Rc::clone(&seen);
+    ui.register_events(node, move |event| {
+        if matches!(event, Event::KeyDown { .. }) {
+            seen_for_widget.set(seen_for_widget.get() + 1);
+        }
+        None
+    });
+    ui.on_key(|key, modifiers| (key == Key::S && modifiers.ctrl).then_some(7));
+
+    let log = Rc::new(RefCell::new(Vec::new()));
+    let runtime = Runtime::primary(Rc::clone(&core), test_app(&log));
+    let ctrl_s = Event::KeyDown {
+        key: Key::S,
+        modifiers: Modifiers {
+            ctrl: true,
+            ..Modifiers::NONE
+        },
+        repeat: 1,
+        system: false,
+    };
+    runtime.deliver(node, &ctrl_s);
+    runtime.deliver(WidgetId::NONE, &Event::Wake);
+
+    assert_eq!(*log.borrow(), vec![7], "the shortcut was mapped");
+    assert_eq!(seen.get(), 1, "the widget still saw the key");
+}
+
+#[test]
+fn a_key_the_shortcut_mapper_declines_stays_unmapped() {
+    use crate::message::{Key, Modifiers};
+
+    let (_backend, _window, core, ui) = setup();
+    ui.on_key(|key, _| (key == Key::S).then_some(7));
+    let log = Rc::new(RefCell::new(Vec::new()));
+    let runtime = Runtime::primary(Rc::clone(&core), test_app(&log));
+
+    runtime.deliver(
+        WidgetId::NONE,
+        &Event::KeyDown {
+            key: Key::A,
+            modifiers: Modifiers::NONE,
+            repeat: 1,
+            system: false,
+        },
+    );
+    runtime.deliver(WidgetId::NONE, &Event::Wake);
+    assert!(log.borrow().is_empty(), "only the mapped key raises");
+}
+
+#[test]
 fn a_dpi_change_without_a_mapper_is_a_no_op() {
     let (_backend, _window, core, _ui) = setup();
     let log = Rc::new(RefCell::new(Vec::new()));

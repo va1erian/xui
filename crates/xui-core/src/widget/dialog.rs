@@ -331,6 +331,14 @@ impl<M: 'static> Dialog<M> {
         }
     }
 
+    /// Replaces the message body; a visible dialog resizes to fit.
+    pub fn set_message(&self, message: &str) {
+        *self.shared.message.borrow_mut() = message.to_string();
+        if self.shared.open.get() {
+            self.open();
+        }
+    }
+
     /// The prompt field's current text (empty for a message/confirm).
     pub fn text(&self) -> String {
         self.shared.field.borrow().clone()

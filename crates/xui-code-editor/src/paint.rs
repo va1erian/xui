@@ -12,6 +12,7 @@ use xui_core::backend::{Canvas, TextAlign, TextVAlign};
 use xui_core::geometry::{Point, Rect};
 use xui_core::theme::Theme;
 
+use crate::lexer::{Token, TokenClass};
 use crate::markers::MarkerKind;
 use crate::metrics::{CELL_PROBE, Metrics, Viewport};
 use crate::state::EditorState;
@@ -241,7 +242,22 @@ fn paint_lines(
         let raw = state.buffer.line_string(line);
         let line_chars: Vec<char> = expand_tabs(&raw, tab).chars().collect();
         let y = metrics.y_of_line(text, line, first_line);
-        for token in state.highlight.tokens(line) {
+        // A plain-text cache stores no tokens, so treat a tokenless line as one
+        // whole plain token: the default highlighter still shows the text (in
+        // the same colour as an identifier, which is the editor's text token).
+        let cached = state.highlight.tokens(line);
+        let plain;
+        let tokens = if cached.is_empty() && !raw.is_empty() {
+            plain = [Token {
+                start: 0,
+                end: raw.chars().count(),
+                class: TokenClass::Identifier,
+            }];
+            plain.as_slice()
+        } else {
+            cached
+        };
+        for token in tokens {
             let start = display_col(&raw, token.start, tab);
             let end = display_col(&raw, token.end, tab);
             // Visibility uses the same one-column overhang margin as the drawn
@@ -697,6 +713,24 @@ mod tests {
         assert_ne!(
             image.pixels, blank.pixels,
             "a selected document differs from a blank one"
+        );
+    }
+
+    #[test]
+    fn plain_text_is_painted() {
+        // The default `PlainText` highlighter emits no tokens; the painter must
+        // still draw the line. Unfocused and with the caret off, an empty buffer
+        // paints only the background and border, so any difference is glyphs.
+        let mut with_text = editor_state("hello");
+        with_text.focused = false;
+        with_text.blink_on = false;
+        let mut blank = editor_state("");
+        blank.focused = false;
+        blank.blink_on = false;
+        assert_ne!(
+            render(&with_text).pixels,
+            render(&blank).pixels,
+            "a plain-text line is still painted"
         );
     }
 

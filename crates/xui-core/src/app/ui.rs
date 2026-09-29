@@ -230,6 +230,20 @@ impl<M: 'static> Ui<M> {
         self.core.set_on_close(f);
     }
 
+    /// Maps a shortcut key to the app's message, ahead of the focused widget.
+    ///
+    /// The mapper sees every `KeyDown` and returns `Some(msg)` to raise it (or
+    /// `None` to ignore the key). The event is still delivered to the focused
+    /// widget afterwards, so the mapper must only claim keys that widget leaves
+    /// unhandled; a key it does handle (Ctrl+C in an editor) passes through
+    /// because the mapper returns `None` for it.
+    pub fn on_key(
+        &self,
+        f: impl Fn(crate::message::Key, crate::message::Modifiers) -> Option<M> + 'static,
+    ) {
+        self.core.set_on_key(f);
+    }
+
     /// Maps a display-layout change to a message.
     pub fn on_display_change(&self, f: impl Fn() -> Option<M> + 'static) {
         self.core.set_on_display_change(f);
