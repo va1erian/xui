@@ -30,13 +30,23 @@ fn marked(image: &Image, (x, y, w, h): (u32, u32, u32, u32), background: [u8; 4]
     count
 }
 
-/// The distance from `color` of the pixel in the box that comes closest to it:
-/// small when the icon is drawn in `color`, large when it is drawn in another.
-fn closest(image: &Image, (x, y, w, h): (u32, u32, u32, u32), color: Color) -> u32 {
+/// The distance from `color` of the painted pixel (one that is not
+/// `background`) in the box that comes closest to it: small when the icon is
+/// drawn in `color`, large when it is drawn in another, `u32::MAX` when nothing
+/// is painted at all.
+fn closest(
+    image: &Image,
+    (x, y, w, h): (u32, u32, u32, u32),
+    background: [u8; 4],
+    color: Color,
+) -> u32 {
     let mut best = u32::MAX;
     for py in y..y + h {
         for px in x..x + w {
             let pixel = image.pixel(px, py).expect("pixel in bounds");
+            if pixel == background {
+                continue;
+            }
             let distance = [
                 (pixel[0], color.r),
                 (pixel[1], color.g),
@@ -107,11 +117,17 @@ fn check(theme: Theme, dpi: u32) {
     // The icon takes the text colour, and the disabled colour when disabled.
     let disabled = shot(theme, dpi, 0, false, false);
     assert!(
-        closest(&disabled, slot, theme.text_disabled) < closest(&disabled, slot, theme.text),
+        marked(&disabled, slot, background) > 20,
+        "a disabled combo still shows the icon ({theme:?}, {dpi} dpi)"
+    );
+    assert!(
+        closest(&disabled, slot, background, theme.text_disabled)
+            < closest(&disabled, slot, background, theme.text),
         "a disabled combo draws the icon dimmed ({theme:?}, {dpi} dpi)"
     );
     assert!(
-        closest(&with_icon, slot, theme.text) < closest(&with_icon, slot, theme.text_disabled),
+        closest(&with_icon, slot, background, theme.text)
+            < closest(&with_icon, slot, background, theme.text_disabled),
         "an enabled combo draws the icon in the text colour ({theme:?}, {dpi} dpi)"
     );
 
@@ -133,8 +149,16 @@ fn check(theme: Theme, dpi: u32) {
     );
     // Row 0 is the highlighted row, so its icon takes the on-accent colour.
     let hot = scaled(dpi, (4, 28 + 4, 16, 16));
+    let hot_background = open
+        .pixel(dpi * 120 / 96, dpi * (28 + 12) / 96)
+        .expect("highlighted row background");
     assert!(
-        closest(&open, hot, theme.text_on_accent) < closest(&open, hot, theme.text),
+        marked(&open, hot, hot_background) > 20,
+        "the highlighted row's icon paints ({theme:?}, {dpi} dpi)"
+    );
+    assert!(
+        closest(&open, hot, hot_background, theme.text_on_accent)
+            < closest(&open, hot, hot_background, theme.text),
         "the highlighted row's icon is on-accent ({theme:?}, {dpi} dpi)"
     );
     assert!(
