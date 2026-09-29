@@ -244,6 +244,24 @@ dialog.open();
 `Cancel`; `TaskDialogIcon` is `None` (the default), `Info`, `Warning`, `Error`
 or `Shield`. Enter picks the first command, Escape cancels.
 
+`FileDialog<M>` is the portable file open/save picker: a modal card with a path
+bar, a directory list, a filename field, an extension filter and overwrite
+confirmation. It never writes; `on_accept` receives the chosen `PathBuf`.
+`open()` asks the backend for a native picker first and falls back to the card
+(see [Backends](backends.md#file-dialogs-and-the-filesystem-seam)), so the app
+code is the same either way.
+
+```rust
+use xui_core::widget::FileDialog;
+
+let dialog = FileDialog::save_file(ui, "Save As").unwrap()
+    .suggested_name("untitled.txt")
+    .filter("Text files", &["txt", "md"])
+    .on_accept(|path| Some(Msg::SaveAs(path)))
+    .on_cancel(|| None);
+dialog.open();
+```
+
 `Tooltip<M>` attaches to any widget by id and is owned by one hidden node per
 window:
 

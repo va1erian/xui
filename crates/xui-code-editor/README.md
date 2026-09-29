@@ -60,10 +60,10 @@ cargo run -p xui-code-editor --example notepad -- path/to/file.txt
 
 Features:
 
-* File: New, Open..., Save, Save As..., Quit. A path comes from the
-  command-line argument or from a prompt dialog, because xui has **no native
-  file picker** yet; relative paths resolve against the working directory. A
-  native picker is future work.
+* File: New, Open..., Save, Save As..., Quit. Open and Save As use the portable
+  `xui_core::FileDialog`, which lists directories and confirms an overwrite; a
+  path can also come from the command-line argument. On a backend with a native
+  picker the dialog hands off to it, so the app code is unchanged.
 * Edit: Undo, Redo, Cut, Copy, Paste, Select All, Find..., Replace...
 * Find/replace bar with Next, Previous, Replace, Replace all, a Regex and a
   Match case check box, and a "3 of 17" or error label. Replace all is a single

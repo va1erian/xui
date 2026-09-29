@@ -42,6 +42,33 @@ fn the_wheel_scrolls_the_virtual_window() {
 }
 
 #[test]
+fn a_wheel_notch_scrolls_the_same_rows_whatever_its_unit() {
+    let (backend, core, ui) = setup();
+    let model: Vec<String> = (0..1000).map(|index| format!("row {index}")).collect();
+    let list = ListView::with_model(&ui, Rect::new(0, 0, 200, 88), model).unwrap();
+    let runtime = Runtime::primary(core, TestApp(log()));
+
+    // 120 is one Win32/winit notch: it must not scroll 120 times as far as 1.
+    runtime.deliver(
+        list.id(),
+        &Event::MouseWheel {
+            delta: -120,
+            horizontal: false,
+            x: 5,
+            y: 5,
+            modifiers: Modifiers::NONE,
+        },
+    );
+    runtime.deliver(WidgetId::NONE, &Event::Wake);
+    backend.render(list.id());
+
+    assert_eq!(
+        texts(&backend, list.id()),
+        vec!["row 3", "row 4", "row 5", "row 6"]
+    );
+}
+
+#[test]
 fn columns_with_a_fixed_and_a_fill_width_align() {
     let (backend, _core, ui) = setup();
     let model: Vec<Vec<String>> = vec![

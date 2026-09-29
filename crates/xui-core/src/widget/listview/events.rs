@@ -151,11 +151,26 @@ fn handle<M: 'static>(
             button: MouseButton::Left,
             ..
         } => {
+            let header_h = header_px(state.borrow().has_header(), dpi);
+            if *y >= header_h {
+                let row = {
+                    let state = state.borrow();
+                    row_at(
+                        ROW.to_px(dpi).value().max(1),
+                        state.offset,
+                        state.len(),
+                        header_h,
+                        *y,
+                    )
+                }?;
+                return mappers
+                    .activate
+                    .borrow()
+                    .as_ref()
+                    .and_then(|activate| activate(row));
+            }
             let (column, width) = {
                 let mut state = state.borrow_mut();
-                if *y >= header_px(state.has_header(), dpi) {
-                    return None;
-                }
                 let widths = column_widths(dpi, ui.bounds(id).width(), &state.columns);
                 let column = resize::boundary_at(&widths, *x, resize::GRAB.to_px(dpi).value())?;
                 // Drop any drag the preceding press began, then auto-size.
@@ -238,7 +253,9 @@ fn handle<M: 'static>(
             let visible = visible_rows(ui, id, header, dpi);
             let mut state = state.borrow_mut();
             let max = state.len().saturating_sub(visible);
-            let step = i64::from(*delta) * WHEEL_ROWS as i64;
+            // Backends report a notch as 1 or as 120 (`WHEEL_DELTA`), so scroll
+            // by the direction, not the magnitude, as `ScrollView` does.
+            let step = i64::from(delta.signum()) * WHEEL_ROWS as i64;
             let next = (state.offset as i64 - step).clamp(0, max as i64) as usize;
             if next != state.offset {
                 state.offset = next;

@@ -4,6 +4,18 @@
 
 ### Additions
 
+- **Portable file open/save picker.** `xui-core` gains `widget::FileDialog`
+  (open and save modes) with a constructor-closure API (`open_file`/`save_file`,
+  `initial_dir`, `suggested_name`, `filter`, `require_existing`,
+  `on_accept(PathBuf)`, `on_cancel`), keyboard navigation, type-to-filter,
+  extension filtering and overwrite confirmation. It never writes: it lists
+  directories through a new `FileSystem` seam (`StdFileSystem` uses only
+  `std::fs`/`std::env`; an in-memory impl backs the tests) that a partial
+  filesystem such as LazyOS can replace. `Backend::file_dialog` is a new
+  optional hook — the default declines, so the portable themed modal is used
+  everywhere and the app cannot tell which picker answered. No new
+  dependencies, no `unsafe`. The notepad example's Open and Save As now use it
+  instead of a typed-path prompt (#235).
 - `xui-code-editor` gains `document`, a UI-free file model: line-ending detection
   and round-tripping (LF/CRLF), a preserved UTF-8 BOM, atomic saves (temp file,
   `sync_all`, rename, resolved symlinks, preserved permissions) and a
@@ -19,8 +31,8 @@
 - `xui-code-editor`'s `notepad` example is now a small cross-platform text
   editor: a menu bar, a find/replace bar, a status bar, keyboard shortcuts
   (Ctrl/Cmd, F3), unsaved-change confirmations, error dialogs and atomic saves,
-  running on `xui_canvas::WinitBackend` on Windows, Linux and macOS. It has no
-  native file picker; paths come from an argument or a prompt dialog.
+  running on `xui_canvas::WinitBackend` on Windows, Linux and macOS. Open and
+  Save As use the portable `FileDialog`; a path can also come from an argument.
 
 - `xui-code-editor`: a reusable code-editor widget (rope buffer with undo, monospace view, find/replace, diagnostics markers, pluggable `Highlighter`, and the `rhai-syntax` feature for a Rhai lexer), moved from LazyRAD (#231). It copies and pastes through the backend's portable clipboard; `Editor::with_clipboard` overrides it.
 - The shared scrollbar is public as `xui_core::widget::scrollbar` (#231): `ScrollBar` (vertical or horizontal, over a bar node), `Scroll`, and the geometry and painting helpers (`thumb`, `hit`, `offset_from_drag`, `paged_offset`, `paint_state`), so a custom widget that paints its own bar matches `ScrollView`, `ListView` and `TreeView`. `ScrollBar` is also re-exported from `xui_core::widget`.

@@ -12,7 +12,9 @@ use xui_core::app::Ui;
 use xui_core::arrange::{LayoutExt, column, row, widget};
 use xui_core::backend::{Result, WidgetId};
 use xui_core::geometry::{Rect, Size};
-use xui_core::widget::{Button, CheckBox, Dialog, Edit, Label, Menu, MenuId, Placeable, StatusBar};
+use xui_core::widget::{
+    Button, CheckBox, Dialog, Edit, FileDialog, Label, Menu, MenuId, Placeable, StatusBar,
+};
 
 use crate::app::{FindBar, Msg, Notepad};
 
@@ -133,7 +135,6 @@ pub fn build(ui: &Ui<Msg>) -> Result<Notepad> {
         &["Ln 1, Col 1", "Sel 0", "LF", "Saved"],
     )?);
 
-    let prompt = Dialog::prompt(ui, "Open", "Path:", "")?.on_action(dialog_msg);
     let confirm = Dialog::confirm(
         ui,
         "Discard unsaved changes?",
@@ -144,6 +145,34 @@ pub fn build(ui: &Ui<Msg>) -> Result<Notepad> {
 
     let dialog_open = Rc::new(Cell::new(false));
     let find_open = Rc::new(Cell::new(false));
+
+    let cancel = {
+        let editor = Rc::clone(&editor);
+        let dialog_open = Rc::clone(&dialog_open);
+        move || {
+            dialog_open.set(false);
+            editor.focus();
+            None
+        }
+    };
+    let open_dialog = FileDialog::open_file(ui, "Open")?
+        .require_existing(true)
+        .on_accept(|path| Some(Msg::OpenChosen(path)))
+        .on_cancel(cancel);
+    let cancel = {
+        let editor = Rc::clone(&editor);
+        let dialog_open = Rc::clone(&dialog_open);
+        move || {
+            dialog_open.set(false);
+            editor.focus();
+            None
+        }
+    };
+    let save_dialog = FileDialog::save_file(ui, "Save As")?
+        .filter("Text files", &["txt", "md", "rs"])
+        .filter("All files", &[])
+        .on_accept(|path| Some(Msg::SaveChosen(path)))
+        .on_cancel(cancel);
     ui.on_close(|| Some(Msg::CloseRequested));
     {
         let dialog_open = Rc::clone(&dialog_open);
@@ -181,7 +210,8 @@ pub fn build(ui: &Ui<Msg>) -> Result<Notepad> {
         search: Default::default(),
         find_bar,
         status,
-        prompt,
+        open_dialog,
+        save_dialog,
         confirm,
         message,
         pending: crate::app::Pending::None,
