@@ -142,8 +142,40 @@ impl Win32Backend {
             .map(|entry| entry.window.hwnd())
     }
 
+    /// Sets `window`'s large and small icons from `icon`. Does nothing once the
+    /// window is closed.
+    ///
+    /// Windows keeps a reference to the icon rather than copying it, so `icon`
+    /// must outlive the window.
+    pub fn set_window_icon(&self, window: WindowId, icon: &crate::Icon) {
+        if let Some(entry) = self.windows.borrow().get(&window.raw()) {
+            entry.window.set_icon(icon);
+        }
+    }
+
     /// The handle behind a node, for interop with the platform layer.
     pub fn node_hwnd(&self, id: WidgetId) -> Option<crate::hwnd::Hwnd> {
         self.node(id).map(|(hwnd, _)| hwnd)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use xui_core::backend::{Backend, PlatformSpec};
+
+    #[test]
+    fn set_window_icon_installs_both_sizes() {
+        let backend = Win32Backend::new();
+        backend.init();
+        let window = backend
+            .open_window(&PlatformSpec::new("xui.icon"))
+            .expect("the icon test requires a desktop");
+        let icon = crate::Icon::from_rgba(16, 16, &[0xFF; 16 * 16 * 4]).expect("icon");
+        backend.set_window_icon(window, &icon);
+        let hwnd = backend.window_hwnd(window).expect("hwnd");
+        assert!(crate::sys::window_icon::has_icon(hwnd, true));
+        assert!(crate::sys::window_icon::has_icon(hwnd, false));
+        backend.close_window(window);
     }
 }
