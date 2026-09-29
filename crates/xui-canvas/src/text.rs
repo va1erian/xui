@@ -57,7 +57,13 @@ pub(crate) fn attrs_for<'a>(
 ) -> Attrs<'a> {
     let mut attrs = Attrs::new();
     if let Some(family) = family {
-        attrs = attrs.family(Family::Name(family));
+        // The generic name asks the font system for its monospace face, so a
+        // host need not name a platform font.
+        attrs = attrs.family(if family.eq_ignore_ascii_case("monospace") {
+            Family::Monospace
+        } else {
+            Family::Name(family)
+        });
     }
     if weight.value() != 400 {
         attrs = attrs.weight(Weight(weight.value()));

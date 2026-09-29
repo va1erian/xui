@@ -57,6 +57,8 @@ pub trait App: 'static {
 
 /// A close request mapped to an optional app message.
 type CloseMapper<M> = Box<dyn Fn() -> Option<M>>;
+/// A shortcut key mapped to an optional app message.
+type KeyMapper<M> = Box<dyn Fn(crate::message::Key, crate::message::Modifiers) -> Option<M>>;
 /// A timer tick mapped to an optional app message.
 type TimerMapper<M> = Box<dyn Fn(TimerId) -> Option<M>>;
 /// A widget's own timer listener, shared so one may be cloned out to run.
@@ -81,6 +83,7 @@ pub(crate) struct Core<M> {
     design_root: Rc<design::DesignScope>,
     router: Router,
     on_close: RefCell<Option<CloseMapper<M>>>,
+    on_key: RefCell<Option<KeyMapper<M>>>,
     on_timer: RefCell<Option<TimerMapper<M>>>,
     /// Per-widget timer listeners, told apart from the app's mapping so a
     /// widget can watch its own timer without displacing [`Ui::on_timer`].
@@ -112,6 +115,7 @@ impl<M> Core<M> {
             design_root: design::DesignScope::root(),
             router: Router::new(),
             on_close: RefCell::new(None),
+            on_key: RefCell::new(None),
             on_timer: RefCell::new(None),
             timer_listeners: RefCell::new(Vec::new()),
             next_timer_listener: Cell::new(0),
@@ -180,6 +184,14 @@ impl<M> Core<M> {
     /// Records the close mapper.
     pub(crate) fn set_on_close(&self, f: impl Fn() -> Option<M> + 'static) {
         self.on_close.replace(Some(Box::new(f)));
+    }
+
+    /// Records the shortcut-key mapper.
+    pub(crate) fn set_on_key(
+        &self,
+        f: impl Fn(crate::message::Key, crate::message::Modifiers) -> Option<M> + 'static,
+    ) {
+        self.on_key.replace(Some(Box::new(f)));
     }
 
     /// Records the timer mapper.

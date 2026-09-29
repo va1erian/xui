@@ -236,6 +236,21 @@ impl<M: 'static> Editor<M> {
         self.state.borrow().view.caret
     }
 
+    /// The caret as a zero-based `(line, column)` pair, `column` in chars.
+    pub fn caret_line_col(&self) -> (usize, usize) {
+        let state = self.state.borrow();
+        let caret = state.view.caret;
+        let line = state.buffer.line_of_char(caret);
+        (line, caret - state.buffer.line_start(line))
+    }
+
+    /// The buffer's revision counter: it moves on every text change and stays
+    /// put otherwise, so a caller can tell whether a command changed the text
+    /// without comparing it.
+    pub fn revision(&self) -> u64 {
+        self.state.borrow().buffer.revision()
+    }
+
     /// Moves the caret to the char offset `offset`, clearing any selection and
     /// scrolling it into view.
     pub fn set_caret(&self, offset: usize) {

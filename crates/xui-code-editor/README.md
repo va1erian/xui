@@ -47,11 +47,51 @@ fn build<M: 'static>(ui: &Ui<M>) -> xui_core::backend::Result<Editor<M>> {
 }
 ```
 
-Run the plain-text example on the canvas backend:
+## Notepad example
+
+`examples/notepad/` is a small, cross-platform text editor built on the widget:
+a menu bar, an editor filling the middle, a find/replace bar and a status bar.
+It runs on the portable `xui_canvas::WinitBackend`, so it behaves the same on
+Windows, Linux and macOS.
 
 ```text
-cargo run -p xui-code-editor --example notepad
+cargo run -p xui-code-editor --example notepad -- path/to/file.txt
 ```
+
+Features:
+
+* File: New, Open..., Save, Save As..., Quit. A path comes from the
+  command-line argument or from a prompt dialog, because xui has **no native
+  file picker** yet; relative paths resolve against the working directory. A
+  native picker is future work.
+* Edit: Undo, Redo, Cut, Copy, Paste, Select All, Find..., Replace...
+* Find/replace bar with Next, Previous, Replace, Replace all, a Regex and a
+  Match case check box, and a "3 of 17" or error label. Replace all is a single
+  undo step.
+* Status bar: `Ln X, Col Y`, selection length, `LF`/`CRLF` and dirty state.
+* Unsaved changes are confirmed before New, Open, Quit and the window's close
+  button; a failed open or save shows the error and changes nothing. Files are
+  written atomically, line endings and a UTF-8 BOM round-trip, and an invalid
+  UTF-8 or oversized file is refused.
+
+Shortcuts (the command modifier is Ctrl on Windows/Linux and Cmd on macOS):
+
+| Shortcut | Action |
+|---|---|
+| Ctrl/Cmd+N | New |
+| Ctrl/Cmd+O | Open... |
+| Ctrl/Cmd+S | Save |
+| Ctrl/Cmd+Shift+S | Save As... |
+| Ctrl/Cmd+F | Find... |
+| Ctrl/Cmd+H | Replace... |
+| F3 / Shift+F3 | Next / previous match |
+| Escape | Close the find bar |
+| Editor defaults | Ctrl/Cmd+C, X, V, Z, Y, A and navigation |
+
+The pure file and find models live in `document` and `search`, so they are
+tested without a window; `scripts/snapshots.*` does not enumerate this crate's
+examples, but `tests/notepad_ui.rs` renders the editor and find bar headlessly in
+light and dark into `target/snapshots/`.
 
 ## Features
 

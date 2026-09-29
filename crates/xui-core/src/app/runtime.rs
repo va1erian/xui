@@ -81,6 +81,20 @@ impl<A: App> Runtime<A> {
     /// Offers `event` to the app: window-level events first, then the target's
     /// widget mapper. Returns whether it was handled.
     pub(crate) fn deliver(&self, target: WidgetId, event: &Event) -> bool {
+        // Shortcuts are offered to the app before the focused widget, so a menu
+        // accelerator (Ctrl+N) works wherever focus sits. The event still goes to
+        // the widget, so the mapper must leave the widget's own keys alone.
+        if let Event::KeyDown { key, modifiers, .. } = event {
+            let mapped = self
+                .core
+                .on_key
+                .borrow()
+                .as_ref()
+                .and_then(|f| f(*key, *modifiers));
+            if let Some(msg) = mapped {
+                self.core.enqueue(msg);
+            }
+        }
         if target.is_none() {
             match event {
                 Event::Wake => {

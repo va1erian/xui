@@ -4,6 +4,24 @@
 
 ### Additions
 
+- `xui-code-editor` gains `document`, a UI-free file model: line-ending detection
+  and round-tripping (LF/CRLF), a preserved UTF-8 BOM, atomic saves (temp file,
+  `sync_all`, rename, resolved symlinks, preserved permissions) and a
+  revision-based dirty state, with `DocumentError` variants for I/O, invalid
+  UTF-8 (with the byte offset), oversize files and non-files. `search` is a
+  find/replace session over `find` for a thin UI, with match counts, the current
+  index and capture-group replacement. `Editor` gains `revision` and
+  `caret_line_col` accessors.
+- `Ui::on_key` maps shortcut keys to the app's message ahead of the focused
+  widget; the event still reaches the widget, so a shortcut must be a key the
+  widget leaves unhandled. `Dialog::set_message` replaces a message/confirm
+  dialog's body at run time.
+- `xui-code-editor`'s `notepad` example is now a small cross-platform text
+  editor: a menu bar, a find/replace bar, a status bar, keyboard shortcuts
+  (Ctrl/Cmd, F3), unsaved-change confirmations, error dialogs and atomic saves,
+  running on `xui_canvas::WinitBackend` on Windows, Linux and macOS. It has no
+  native file picker; paths come from an argument or a prompt dialog.
+
 - `xui-code-editor`: a reusable code-editor widget (rope buffer with undo, monospace view, find/replace, diagnostics markers, pluggable `Highlighter`, and the `rhai-syntax` feature for a Rhai lexer), moved from LazyRAD (#231). It copies and pastes through the backend's portable clipboard; `Editor::with_clipboard` overrides it.
 - The shared scrollbar is public as `xui_core::widget::scrollbar` (#231): `ScrollBar` (vertical or horizontal, over a bar node), `Scroll`, and the geometry and painting helpers (`thumb`, `hit`, `offset_from_drag`, `paged_offset`, `paint_state`), so a custom widget that paints its own bar matches `ScrollView`, `ListView` and `TreeView`. `ScrollBar` is also re-exported from `xui_core::widget`.
 - `Ui::clipboard_text` and `Ui::set_clipboard_text` are public.
@@ -15,6 +33,10 @@
 
 ### Fixes
 
+- `xui-code-editor` now paints text when the highlighter emits no tokens
+  (`PlainText`, the default). Previously `paint` drew only token spans, so a
+  plain-text editor showed an empty grid; a tokenless line is now drawn as one
+  plain token in the editor's text colour.
 - The canvas backend no longer types the letter of a Ctrl (or Windows/Command) shortcut: `winit` reports Ctrl+C with the text "c", which was delivered as a `Char` after the shortcut, so copy and paste also inserted a letter. Ctrl+Alt (AltGr) still types.
 - The canvas (`winit`) backend delivers typed text for keys that have no portable
   `Key` code: punctuation, symbols and accented letters (`;`, `{`, `é`, AltGr

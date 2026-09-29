@@ -40,6 +40,10 @@
 //! # Layout
 //!
 //! * [`buffer`] — the rope, line index and coalescing undo stack. No UI code.
+//! * [`document`] — the file model: line endings, a UTF-8 BOM, atomic saves and
+//!   the dirty state. No UI code.
+//! * [`find`] — matching and replacement, plain or by regular expression.
+//! * [`search`] — a find/replace session over [`find`], for a thin UI.
 //! * [`lexer`] — the [`Highlighter`] trait, the incremental cache and the
 //!   optional Rhai lexer.
 //! * [`view`] — the caret, selection and scroll state and its navigation rules.
@@ -57,6 +61,7 @@
 //!   advances.
 
 pub mod buffer;
+pub mod document;
 mod edit;
 mod editor;
 mod events;
@@ -67,18 +72,21 @@ mod metrics;
 pub mod options;
 mod paint;
 pub mod platform;
+pub mod search;
 mod state;
 mod text;
 pub mod theme;
 pub mod view;
 
 pub use buffer::Buffer;
+pub use document::{Document, DocumentError, LineEnding};
 pub use editor::Editor;
 pub use find::Query;
 pub use lexer::{HighlightCache, Highlighter, LineState, PlainText, Token, TokenClass};
 pub use markers::{Marker, MarkerKind};
 pub use options::{FontConfig, Options};
 pub use platform::Clipboard;
+pub use search::SearchState;
 pub use theme::EditorTheme;
 pub use view::View;
 
