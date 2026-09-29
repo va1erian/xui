@@ -16,7 +16,7 @@ use xui_core::message::MouseButton;
 
 use super::App;
 use super::keymap::{
-    RESIZE_BORDER_PX, cursor_icon, mouse_button, resize_cursor, resize_direction, virtual_key,
+    RESIZE_BORDER_PX, cursor_icon, key_events, mouse_button, resize_cursor, resize_direction,
 };
 
 impl App<'_> {
@@ -255,37 +255,9 @@ impl App<'_> {
         let Some(id) = focused else {
             return;
         };
-        let Some(key) = virtual_key(logical) else {
-            return;
-        };
-        if state == ElementState::Pressed {
-            self.shared.deliver(
-                window,
-                id,
-                &Event::KeyDown {
-                    key,
-                    modifiers: self.modifiers,
-                    repeat: if repeat { 2 } else { 1 },
-                    system: false,
-                },
-            );
-            if let Some(text) = text {
-                for character in text.chars() {
-                    if !character.is_control() {
-                        self.shared.deliver(window, id, &Event::Char(character));
-                    }
-                }
-            }
-        } else {
-            self.shared.deliver(
-                window,
-                id,
-                &Event::KeyUp {
-                    key,
-                    modifiers: self.modifiers,
-                    system: false,
-                },
-            );
+        let pressed = state == ElementState::Pressed;
+        for event in key_events(pressed, repeat, logical, text, self.modifiers) {
+            self.shared.deliver(window, id, &event);
         }
     }
 }

@@ -4,6 +4,10 @@
 
 ### Fixes
 
+- The canvas (`winit`) backend delivers typed text for keys that have no portable
+  `Key` code: punctuation, symbols and accented letters (`;`, `{`, `é`, AltGr
+  combinations on non-US layouts) were dropped entirely, so they could not be
+  typed in any text widget.
 - The canvas (`winit`) backend now synthesizes `Event::MouseDoubleClick` from a
   second press of the same button, within the platform's double-click time and
   distance of the first, on the same widget, producing the same

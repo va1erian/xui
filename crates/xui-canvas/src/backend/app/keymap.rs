@@ -7,8 +7,50 @@ use winit::event::MouseButton as WinitButton;
 use winit::keyboard::{Key as WinitKey, NamedKey};
 use winit::window::{CursorIcon, ResizeDirection};
 
-use xui_core::backend::Cursor;
-use xui_core::message::{Key, MouseButton};
+use xui_core::backend::{Cursor, Event};
+use xui_core::message::{Key, Modifiers, MouseButton};
+
+/// The portable events one `winit` key event produces.
+///
+/// A key with a portable code raises `KeyDown` (or `KeyUp`). A press that
+/// produces text also raises one `Char` per non-control character, **whether or
+/// not the key has a code**: punctuation, symbols and accented letters (`;`,
+/// `{`, `é`, AltGr combinations on non-US layouts) have no [`Key`] of their own
+/// but must still type.
+pub(super) fn key_events(
+    pressed: bool,
+    repeat: bool,
+    logical: &WinitKey,
+    text: Option<&str>,
+    modifiers: Modifiers,
+) -> Vec<Event> {
+    let mut events = Vec::new();
+    if let Some(key) = virtual_key(logical) {
+        events.push(if pressed {
+            Event::KeyDown {
+                key,
+                modifiers,
+                repeat: if repeat { 2 } else { 1 },
+                system: false,
+            }
+        } else {
+            Event::KeyUp {
+                key,
+                modifiers,
+                system: false,
+            }
+        });
+    }
+    if pressed {
+        events.extend(
+            text.into_iter()
+                .flat_map(str::chars)
+                .filter(|character| !character.is_control())
+                .map(Event::Char),
+        );
+    }
+    events
+}
 
 /// The frame thickness, in device pixels, within which a borderless resizable
 /// window treats a pointer as being on a resize edge.
@@ -248,6 +290,72 @@ mod tests {
         assert_eq!(
             resize_cursor(ResizeDirection::NorthWest),
             CursorIcon::NwseResize
+        );
+    }
+
+    #[test]
+    fn punctuation_and_accents_type_although_they_have_no_key_code() {
+        for text in [";", ",", ".", "{", "(", "\"", "é", "à", "ç"] {
+            let events = key_events(
+                true,
+                false,
+                &WinitKey::Character(text.into()),
+                Some(text),
+                Modifiers::NONE,
+            );
+            let typed = text.chars().next().unwrap();
+            assert_eq!(events, vec![Event::Char(typed)], "{text:?} types");
+        }
+    }
+
+    #[test]
+    fn a_letter_raises_key_down_then_its_character() {
+        let events = key_events(
+            true,
+            false,
+            &WinitKey::Character("a".into()),
+            Some("a"),
+            Modifiers::NONE,
+        );
+        assert!(matches!(
+            events[0],
+            Event::KeyDown {
+                key: Key::A,
+                repeat: 1,
+                ..
+            }
+        ));
+        assert_eq!(events[1], Event::Char('a'));
+        assert_eq!(events.len(), 2);
+    }
+
+    #[test]
+    fn releases_and_control_text_type_nothing() {
+        let release = key_events(
+            false,
+            false,
+            &WinitKey::Character(";".into()),
+            Some(";"),
+            Modifiers::NONE,
+        );
+        assert!(
+            release.is_empty(),
+            "a released punctuation key raises nothing"
+        );
+        let ctrl_c = key_events(
+            true,
+            false,
+            &WinitKey::Character("c".into()),
+            Some("\u{3}"),
+            Modifiers {
+                ctrl: true,
+                ..Modifiers::NONE
+            },
+        );
+        assert_eq!(
+            ctrl_c.len(),
+            1,
+            "Ctrl+C is a key, not a typed control character"
         );
     }
 }
