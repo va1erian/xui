@@ -18,6 +18,7 @@ use std::rc::Rc;
 
 use xui_core::app::{App, Ui, run_app};
 use xui_core::backend::{Backend, PlatformSpec};
+use xui_core::icon::Lucide;
 use xui_core::image::Image;
 use xui_core::widget::{
     Button, CheckBox, ColorPicker, ComboBox, Dialog, DialogAction, Edit, Glyph, GroupBox, HasText,
@@ -358,13 +359,13 @@ fn run(renderer: Renderer, switch: Rc<Cell<Option<Renderer>>>) {
             let inside =
                 Label::new(panel.ui(), rect(12.0, 12.0, 300.0, 40.0), "In a panel").unwrap();
 
-            let toolbar = Toolbar::new(
-                ui,
-                rect(400.0, 512.0, 764.0, 544.0),
-                &["New", "Open", "Save"],
-            )
-            .unwrap()
-            .on_click(|index| Some(Msg::Tool(index)));
+            let toolbar = Toolbar::empty(ui, rect(400.0, 512.0, 764.0, 544.0))
+                .unwrap()
+                .item(Lucide::FilePlus, "New")
+                .item(Lucide::FolderOpen, "Open")
+                .separator()
+                .item_with_text(Lucide::Save, "Save", "Save")
+                .on_click(|index| Some(Msg::Tool(index)));
 
             let new_id = TopBarId::new(1);
             let star_id = TopBarId::new(2);

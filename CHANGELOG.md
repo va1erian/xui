@@ -16,6 +16,10 @@
 - `StatusBar` no longer lets a part's text overflow past its divider into the next part: it is now clipped and end-ellipsized the same way `ListView`'s header cells are (#186).
 - `ListView`'s header now reserves room for the sort arrow, so a long sorted-column title is ellipsized before the arrow instead of drawn underneath it (#187).
 
+### Changes
+
+- **`Toolbar` is now compact by default.** Buttons are packed from the left and each is only as wide as its content: an icon-only button is square (as wide as the strip is tall), a labelled one is icon, gap, measured label and padding, and the space right of the last item stays empty. The divider that was drawn between every cell is gone; group items with the new `Toolbar::separator()`, a thin non-clickable line that takes room but no item index, so `on_click` indices are unchanged. Items that do not fit are clipped at the right edge (no overflow menu yet). Call `Toolbar::fill()` to get the previous equal split of the whole width. Painting and hit-testing share one layout function (#217).
+
 ### Features
 
 - `ListView` rows can carry a leading icon: `ListModel::icon(row)` returns an optional `IconRef` (a `Lucide` outline, `Icon` or `Glyph`) drawn before the first column's text in the row's text colour; rows without one are laid out as before (#209).

@@ -199,7 +199,7 @@ panel.set_bounds(Rect::new(0, 0, 336, 120)); // move/resize the panel node
 
 | Widget | Constructor | Notes |
 |---|---|---|
-| `Toolbar<M>` | `Toolbar::new(ui, rect, &[labels])` | `on_click(usize)` |
+| `Toolbar<M>` | `Toolbar::new(ui, rect, &[labels])` or `Toolbar::empty` + `item`/`item_with_text`/`separator` | `on_click(usize)` counts items, not separators; buttons are content-sized and left-packed, `fill()` splits the width equally; items that do not fit are clipped (no overflow menu yet) |
 | `StatusBar<M>` | `StatusBar::new(ui, rect, &[parts])` | `set_text(part, text)`, `set_parts` |
 | `MaterialStatusBar<M>` | `MaterialStatusBar::new(ui, rect, &[parts])` | status bar drawn on a material band |
 | `TopBar<M>` | `TopBar::new(ui, rect)` | `icon`/`toggle`/`label`/`slider`/`spacer`, keyed by `TopBarId`; `width`/`expand` resize an item; `on_click`/`on_toggle`/`on_change`. `Glyph` icons are vendored [Lucide](https://lucide.dev) outlines (ISC; see the README credits) and include the transport set (`Play`, `Pause`, `Stop`, `Previous`, `Next`, `Repeat`, `Shuffle`) and the navigation set (`Audio`, `Album`, `People`, `Tag`, `Folder`, `Star`, `StarFilled`, `History`, `Monitor`, `Settings`) |
