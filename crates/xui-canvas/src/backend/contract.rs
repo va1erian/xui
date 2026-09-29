@@ -298,6 +298,14 @@ impl Backend for WinitBackend {
             .unwrap_or_default()
     }
 
+    fn clipboard_text(&self) -> Option<String> {
+        crate::clipboard::get()
+    }
+
+    fn set_clipboard_text(&self, text: &str) {
+        crate::clipboard::set(text);
+    }
+
     fn bounds(&self, id: WidgetId) -> Rect {
         self.shared
             .nodes

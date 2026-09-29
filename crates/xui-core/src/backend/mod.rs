@@ -12,6 +12,7 @@
 //! operations the widget layer needs today rather than a speculative full API.
 
 mod canvas;
+mod clipboard;
 mod cursor;
 mod event;
 mod ids;
@@ -270,6 +271,23 @@ pub trait Backend {
     fn text(&self, id: WidgetId) -> String {
         let _ = id;
         String::new()
+    }
+
+    /// Reads the clipboard's text, or `None` when it holds none (or holds no
+    /// text at all, such as an image only).
+    ///
+    /// The default is an in-process store, so a backend with no OS clipboard
+    /// — the headless and offscreen backends, a minimal implementation — still
+    /// supports copy and paste. Win32 and the canvas backend override it with
+    /// the real clipboard.
+    fn clipboard_text(&self) -> Option<String> {
+        clipboard::get()
+    }
+
+    /// Replaces the clipboard's text. See [`Backend::clipboard_text`] on the
+    /// default in-process store.
+    fn set_clipboard_text(&self, text: &str) {
+        clipboard::set(text);
     }
 
     /// A node's current bounds, in device pixels.

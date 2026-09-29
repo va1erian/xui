@@ -76,3 +76,26 @@ fn key(key: Key) -> Event {
         system: false,
     }
 }
+
+fn key_with(key: Key, modifiers: Modifiers) -> Event {
+    Event::KeyDown {
+        key,
+        modifiers,
+        repeat: 1,
+        system: false,
+    }
+}
+
+fn ctrl() -> Modifiers {
+    Modifiers {
+        ctrl: true,
+        ..Modifiers::NONE
+    }
+}
+
+fn shift() -> Modifiers {
+    Modifiers {
+        shift: true,
+        ..Modifiers::NONE
+    }
+}

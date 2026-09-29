@@ -215,6 +215,29 @@ impl Backend for Win32Backend {
             .map_or_else(String::new, BackendNode::text)
     }
 
+    fn clipboard_text(&self) -> Option<String> {
+        // `OpenClipboard` needs a live owner window; any open one will do.
+        let hwnd = self
+            .windows
+            .borrow()
+            .values()
+            .next()
+            .map(|entry| entry.window.hwnd())?;
+        crate::clipboard::text(hwnd).ok().flatten()
+    }
+
+    fn set_clipboard_text(&self, text: &str) {
+        let hwnd = self
+            .windows
+            .borrow()
+            .values()
+            .next()
+            .map(|entry| entry.window.hwnd());
+        if let Some(hwnd) = hwnd {
+            let _ = crate::clipboard::set_text(hwnd, text);
+        }
+    }
+
     fn bounds(&self, id: WidgetId) -> Rect {
         self.nodes
             .borrow()

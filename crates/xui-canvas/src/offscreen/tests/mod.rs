@@ -16,6 +16,7 @@ use super::OffscreenBackend;
 use crate::tests::save;
 
 mod capture;
+mod clipboard;
 mod hit;
 mod paint;
 
