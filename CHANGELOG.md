@@ -20,6 +20,7 @@
 
 - `ListView` rows can carry a leading icon: `ListModel::icon(row)` returns an optional `IconRef` (a `Lucide` outline, `Icon` or `Glyph`) drawn before the first column's text in the row's text colour; rows without one are laid out as before (#209).
 - `Menu` entries can carry a leading icon: `MenuScope::icon(icon)` gives the entry just appended any `Into<IconRef>`, drawn in an icon column of bar dropdowns and context menus in the entry's text colour (dimmed when disabled); popups with no icons are unchanged (#211).
+- `ComboBox` items can carry a leading icon: `ComboBox::item_icon(index, icon)` / `set_item_icon` accept any `Into<IconRef>`; it is drawn before the item's text in the dropdown list and in the closed box for the selected item, in the text colour (#210).
 - **One public Lucide icon API.** The vendored outlines generate a public
   `xui_core::icon::Lucide` enum (one variant per SVG), `IconRef` unifies it with
   the legacy `Icon`/`Glyph` sets, and `xui_core::icon::draw_icon` is the single

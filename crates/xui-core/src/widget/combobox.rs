@@ -10,6 +10,7 @@ use super::control::{Control, HasText};
 use crate::app::Ui;
 use crate::backend::{NodeKind, NodeSpec, Result, WidgetId};
 use crate::geometry::Rect;
+use crate::icon::IconRef;
 use crate::property::{Properties, Property, Value};
 use crate::units::Dip;
 
@@ -19,10 +20,16 @@ const TEXT_SIZE: Dip = Dip(12.0);
 const ROW: Dip = Dip(24.0);
 const PADDING: Dip = Dip(4.0);
 const ARROW: Dip = Dip(8.0);
+/// The design side of an item's leading icon.
+const ICON: Dip = Dip(16.0);
+/// The design gap between an item's icon and its text.
+const ICON_GAP: Dip = Dip(6.0);
 
 /// State the field and popup painters and event mappers share.
 struct Shared<M: 'static> {
     items: Vec<String>,
+    /// One optional leading icon per item, parallel to `items`.
+    icons: RefCell<Vec<Option<IconRef>>>,
     selected: Cell<usize>,
     open: Cell<bool>,
     hover: Cell<Option<usize>>,
@@ -52,6 +59,7 @@ impl<M: 'static> ComboBox<M> {
     pub fn new(ui: &Ui<M>, bounds: Rect, items: &[&str]) -> Result<ComboBox<M>> {
         let shared = Rc::new(Shared {
             items: items.iter().map(|i| i.to_string()).collect(),
+            icons: RefCell::new(vec![None; items.len()]),
             selected: Cell::new(0),
             open: Cell::new(false),
             hover: Cell::new(None),
@@ -100,6 +108,28 @@ impl<M: 'static> ComboBox<M> {
     pub fn on_select(self, mapper: impl Fn(usize) -> Option<M> + 'static) -> ComboBox<M> {
         *self.shared.on_select.borrow_mut() = Some(Box::new(mapper));
         self
+    }
+
+    /// Gives item `index` a leading icon, shown before its text in the dropdown
+    /// list and, while it is selected, in the closed box. An index past the end
+    /// is ignored; items without an icon keep their layout.
+    pub fn item_icon(self, index: usize, icon: impl Into<IconRef>) -> ComboBox<M> {
+        self.set_item_icon(index, Some(icon.into()));
+        self
+    }
+
+    /// Sets or clears (`None`) item `index`'s leading icon at runtime.
+    pub fn set_item_icon(&self, index: usize, icon: Option<IconRef>) {
+        if let Some(slot) = self.shared.icons.borrow_mut().get_mut(index) {
+            *slot = icon;
+            self.field.invalidate();
+            self.popup.invalidate();
+        }
+    }
+
+    /// Item `index`'s leading icon, if it has one.
+    pub fn icon(&self, index: usize) -> Option<IconRef> {
+        self.shared.icons.borrow().get(index).copied().flatten()
     }
 
     /// The selected index.
@@ -232,6 +262,70 @@ mod tests {
         assert_eq!(combo.selected(), 2);
         assert_eq!(combo.text(), "three");
         assert_eq!(*log.borrow(), vec![2]);
+    }
+
+    use crate::backend::headless::DrawOp;
+    use crate::icon::Lucide;
+
+    fn text_rect(ops: &[DrawOp], needle: &str) -> Option<Rect> {
+        ops.iter().find_map(|op| match op {
+            DrawOp::Text(rect, text, _) if text == needle => Some(*rect),
+            _ => None,
+        })
+    }
+
+    fn strokes(ops: &[DrawOp]) -> usize {
+        ops.iter()
+            .filter(|op| {
+                matches!(
+                    op,
+                    DrawOp::LineStroked(..) | DrawOp::StrokeEllipseStroked(..)
+                )
+            })
+            .count()
+    }
+
+    #[test]
+    fn an_item_icon_shifts_only_its_own_text_in_the_list_and_the_field() {
+        let (backend, _core, ui) = setup();
+        let combo = ComboBox::new(&ui, Rect::new(0, 0, 160, 28), &["one", "two"])
+            .unwrap()
+            .item_icon(1, Lucide::Info);
+        assert_eq!(combo.icon(0), None);
+        assert_eq!(combo.icon(1), Some(IconRef::Lucide(Lucide::Info)));
+        assert_eq!(combo.icon(9), None, "an index past the end has no icon");
+
+        // The list: `two` carries an icon, `one` keeps the 4 px inset.
+        backend.render(combo.popup.id());
+        let ops = backend.ops(combo.popup.id());
+        assert_eq!(text_rect(&ops, "one").expect("row").left, 4);
+        // 4 inset + 16 icon + 6 gap at 96 dpi.
+        assert_eq!(text_rect(&ops, "two").expect("row").left, 26);
+        assert!(strokes(&ops) > 0, "the icon painted strokes: {ops:?}");
+
+        // The closed field shows the selected item's icon, if any.
+        backend.render(combo.id());
+        let plain = backend.ops(combo.id());
+        assert_eq!(text_rect(&plain, "one").expect("text").left, 4);
+        assert_eq!(strokes(&plain), 0, "item 0 has no icon");
+        combo.select(1);
+        backend.render(combo.id());
+        let iconed = backend.ops(combo.id());
+        assert_eq!(text_rect(&iconed, "two").expect("text").left, 26);
+        assert!(strokes(&iconed) > 0);
+
+        combo.set_item_icon(1, None);
+        assert_eq!(combo.icon(1), None);
+        backend.render(combo.id());
+        assert_eq!(text_rect(&backend.ops(combo.id()), "two").unwrap().left, 4);
+    }
+
+    #[test]
+    fn a_combo_without_icons_draws_no_icon_strokes() {
+        let (backend, _core, ui) = setup();
+        let combo = ComboBox::new(&ui, Rect::new(0, 0, 160, 28), &["one", "two"]).unwrap();
+        backend.render(combo.popup.id());
+        assert_eq!(strokes(&backend.ops(combo.popup.id())), 0);
     }
 
     #[test]
