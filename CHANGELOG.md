@@ -18,6 +18,7 @@
 
 ### Features
 
+- `ListView` rows can carry a leading icon: `ListModel::icon(row)` returns an optional `IconRef` (a `Lucide` outline, `Icon` or `Glyph`) drawn before the first column's text in the row's text colour; rows without one are laid out as before (#209).
 - **One public Lucide icon API.** The vendored outlines generate a public
   `xui_core::icon::Lucide` enum (one variant per SVG), `IconRef` unifies it with
   the legacy `Icon`/`Glyph` sets, and `xui_core::icon::draw_icon` is the single

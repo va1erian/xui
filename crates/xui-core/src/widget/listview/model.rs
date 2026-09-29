@@ -10,6 +10,7 @@
 use std::any::Any;
 use std::rc::Rc;
 
+use crate::icon::IconRef;
 use crate::units::Dip;
 
 /// An opaque per-cell payload a [`ListModel`] can attach to a cell. It is
@@ -39,6 +40,14 @@ pub trait ListModel {
     /// An optional opaque payload attached to a cell, e.g. an id the app's
     /// context handler keys off. `None` by default.
     fn data(&self, _row: usize, _column: usize) -> Option<CellData> {
+        None
+    }
+
+    /// An optional leading icon for `row`, drawn before the first column's
+    /// text in the row's text colour (so it follows the theme, the selection
+    /// and the disabled state). `None` by default, and a row without one keeps
+    /// its text at the ordinary inset.
+    fn icon(&self, _row: usize) -> Option<IconRef> {
         None
     }
 }
