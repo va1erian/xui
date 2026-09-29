@@ -8,6 +8,7 @@ use std::rc::Rc;
 use super::super::fs::{MemoryFileSystem, dir_entry, file_entry};
 use super::super::state::{Accept, Config, FileState};
 use crate::backend::{FileDialogMode, FileFilter};
+use crate::icon::Lucide;
 
 /// A non-UTF-8 file name, built the platform's way.
 #[cfg(unix)]
@@ -300,4 +301,23 @@ fn open_requires_an_existing_file() {
     state.set_name("missing.txt");
     assert!(matches!(state.accept(), Accept::Error(_)));
     assert!(state.error().contains("no such file"));
+}
+
+#[test]
+fn rows_get_a_parent_folder_or_file_icon_in_label_order() {
+    let fs = MemoryFileSystem::new().dir("/a", vec![dir_entry("sub"), file_entry("f.txt")]);
+    let state = FileState::new(config(
+        FileDialogMode::Open,
+        fs,
+        Some("/a"),
+        "",
+        Vec::new(),
+        false,
+    ));
+
+    assert_eq!(state.row_labels(), vec!["..", "sub/", "f.txt"]);
+    assert_eq!(
+        state.row_icons(),
+        vec![Lucide::ChevronUp, Lucide::Folder, Lucide::File]
+    );
 }

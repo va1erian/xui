@@ -332,6 +332,7 @@ impl<M: 'static> FileDialog<M> {
             self.shared.ui.raise(*id);
         }
         drop(nodes);
+        self.shared.raise_list();
 
         self.shared.open.set(true);
         self.shared.sync_fields();

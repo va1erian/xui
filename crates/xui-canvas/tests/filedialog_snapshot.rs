@@ -14,7 +14,7 @@ use xui_core::app::{App, Ui};
 use xui_core::backend::BackendError;
 use xui_core::{Dip, Entry, FileDialog, FileSystem, Image, Theme};
 
-/// A small fixed filesystem: one root with two directories and three files.
+/// A small fixed filesystem: one root with two directories and enough files to overflow the list.
 struct DemoFs;
 
 fn entry(name: &str, is_dir: bool) -> Entry {
@@ -29,13 +29,15 @@ fn entry(name: &str, is_dir: bool) -> Entry {
 impl FileSystem for DemoFs {
     fn list(&self, dir: &Path) -> io::Result<Vec<Entry>> {
         if dir == Path::new("/") {
-            Ok(vec![
+            let mut entries = vec![
                 entry("docs", true),
                 entry("src", true),
                 entry("main.rs", false),
                 entry("notes.txt", false),
                 entry("readme.md", false),
-            ])
+            ];
+            entries.extend((0..30).map(|n| entry(&format!("log-{n:02}.txt"), false)));
+            Ok(entries)
         } else {
             Ok(Vec::new())
         }
@@ -121,6 +123,12 @@ fn the_file_dialog_renders_open_and_save_in_light_and_dark() {
     }
 
     let open_light = render(Theme::light(), "open");
+    // The list overflows, so its scrollbar thumb paints in the trailing gutter
+    // (x 613..623 DIP of the 660 DIP window) and is not the list background.
+    let background = open_light.pixel(619, 250).expect("track pixel");
+    let thumb = open_light.pixel(619, 130).expect("thumb pixel");
+    assert_ne!(thumb, background, "the scrollbar thumb is painted");
+
     let open_dark = render(Theme::dark(), "open");
     let save_light = render(Theme::light(), "save");
     assert_ne!(open_light, open_dark, "the themes render differently");

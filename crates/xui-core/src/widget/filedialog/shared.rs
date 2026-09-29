@@ -17,11 +17,12 @@ use super::super::button::Button;
 use super::super::control::HasText;
 use super::super::edit::Edit;
 use super::super::label::Label;
-use super::super::listview::ListView;
+use super::super::listview::{ListModel, ListView};
 use super::fs::FileSystem;
 use super::state::{Accept, Config, FileState};
 use crate::app::Ui;
 use crate::backend::{FileDialogMode, FileFilter, WidgetId};
+use crate::icon::{IconRef, Lucide};
 
 /// Maps an accepted path to an optional app message.
 pub(super) type AcceptMapper<M> = Rc<RefCell<Option<Box<dyn Fn(PathBuf) -> Option<M>>>>>;
@@ -87,6 +88,13 @@ struct View<M: 'static> {
 }
 
 impl<M: 'static> Shared<M> {
+    /// Raises the entry list with its scrollbar above the other card nodes.
+    pub(super) fn raise_list(&self) {
+        if let Some(view) = self.view() {
+            view.list.raise();
+        }
+    }
+
     fn view(&self) -> Option<View<M>> {
         let fields = self.fields.borrow();
         let fields = fields.as_ref()?;
@@ -107,7 +115,7 @@ impl<M: 'static> Shared<M> {
         let Some(view) = self.view() else {
             return;
         };
-        let (labels, selection, message, filter_label, show_filter, confirming, mode) = {
+        let (labels, icons, selection, message, filter_label, show_filter, confirming, mode) = {
             let state = self.state.borrow();
             let message = state
                 .overwrite_prompt()
@@ -115,6 +123,7 @@ impl<M: 'static> Shared<M> {
                 .unwrap_or_default();
             (
                 state.row_labels(),
+                state.row_icons(),
                 state.selection(),
                 message,
                 state.filter_label(),
@@ -123,9 +132,9 @@ impl<M: 'static> Shared<M> {
                 state.mode(),
             )
         };
-        let items: Vec<&str> = labels.iter().map(String::as_str).collect();
-        view.list.set_items(&items);
-        if !items.is_empty() {
+        let has_rows = !labels.is_empty();
+        view.list.set_model(EntryRows { labels, icons });
+        if has_rows {
             view.list.select(Some(selection));
         }
         view.error.set_text(&message);
@@ -242,5 +251,27 @@ impl<M: 'static> Shared<M> {
         let message = mapper.as_ref().and_then(|mapper| mapper());
         *self.on_cancel.borrow_mut() = mapper;
         message
+    }
+}
+
+/// The entry list's rows: one label and one leading icon per visible entry.
+struct EntryRows {
+    labels: Vec<String>,
+    icons: Vec<Lucide>,
+}
+
+impl ListModel for EntryRows {
+    fn rows(&self) -> usize {
+        self.labels.len()
+    }
+
+    fn cell(&self, row: usize, column: usize) -> Option<&str> {
+        (column == 0)
+            .then(|| self.labels.get(row).map(String::as_str))
+            .flatten()
+    }
+
+    fn icon(&self, row: usize) -> Option<IconRef> {
+        self.icons.get(row).map(|icon| (*icon).into())
     }
 }

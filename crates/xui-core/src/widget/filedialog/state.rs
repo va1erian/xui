@@ -14,6 +14,7 @@ use std::rc::Rc;
 
 use super::fs::{Entry, FileSystem, normalize};
 use crate::backend::{FileDialogMode, FileFilter};
+use crate::icon::Lucide;
 
 /// A row the entry list can show, by index into the current listing.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -207,6 +208,19 @@ impl FileState {
                 Row::Parent => "..".to_string(),
                 Row::Dir(index) => format!("{}/", self.entries[index].name.to_string_lossy()),
                 Row::File(index) => self.entries[index].name.to_string_lossy().into_owned(),
+            })
+            .collect()
+    }
+
+    /// The leading icon of each visible row, in the same order as
+    /// [`FileState::row_labels`]: a chevron for `..`, a folder, a file.
+    pub(crate) fn row_icons(&self) -> Vec<Lucide> {
+        self.rows()
+            .into_iter()
+            .map(|row| match row {
+                Row::Parent => Lucide::ChevronUp,
+                Row::Dir(_) => Lucide::Folder,
+                Row::File(_) => Lucide::File,
             })
             .collect()
     }

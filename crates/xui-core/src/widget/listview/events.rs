@@ -253,7 +253,9 @@ fn handle<M: 'static>(
             let visible = visible_rows(ui, id, header, dpi);
             let mut state = state.borrow_mut();
             let max = state.len().saturating_sub(visible);
-            let step = i64::from(*delta) * WHEEL_ROWS as i64;
+            // Backends report a notch as 1 or as 120 (`WHEEL_DELTA`), so scroll
+            // by the direction, not the magnitude, as `ScrollView` does.
+            let step = i64::from(delta.signum()) * WHEEL_ROWS as i64;
             let next = (state.offset as i64 - step).clamp(0, max as i64) as usize;
             if next != state.offset {
                 state.offset = next;
