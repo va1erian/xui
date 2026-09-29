@@ -51,11 +51,11 @@ pub use widget::{
     BASIC_COLORS, Button, CellData, CheckBox, CheckState, ColorField, ColorPanel, ColorPicker,
     Column, ColumnWidth, ComboBox, Control, Dialog, DialogAction, Edit, Entry, FileDialog,
     FileSystem, Fill, FlowText, Glyph, GridModel, GridView, GroupBox, HasText, Hsv, HueSlider,
-    Hyperlink, Icon, Label, ListModel, ListView, MaterialStatusBar, Menu, MenuId, MenuScope,
-    MultilineEdit, NodeId, NumberField, Panel, ProgressBar, RadioGroup, RowIcon, Run, RunStyle,
-    ScrollView, SelectionMode, Separator, Slider, SortDirection, Split, StatusBar, StdFileSystem,
-    Tabs, Tile, TilePaint, TileSize, ToggleButton, Toolbar, Tooltip, TopBar, TopBarId, TreeModel,
-    TreeNode, TreeRow, TreeView,
+    Hyperlink, Icon, IconModel, IconSize, IconView, Label, ListModel, ListView, MaterialStatusBar,
+    Menu, MenuId, MenuScope, MultilineEdit, NodeId, NumberField, Panel, ProgressBar, RadioGroup,
+    RowIcon, Run, RunStyle, ScrollView, SelectionMode, Separator, Slider, SortDirection, Split,
+    StatusBar, StdFileSystem, Tabs, Tile, TilePaint, TileSize, ToggleButton, Toolbar, Tooltip,
+    TopBar, TopBarId, TreeModel, TreeNode, TreeRow, TreeView,
 };
 
 /// The core types a frontend or a backend usually needs, in one `use`.
