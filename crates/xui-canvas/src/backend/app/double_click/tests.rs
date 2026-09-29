@@ -227,3 +227,22 @@ fn the_platform_tracker_has_usable_thresholds() {
         PressKind::DoubleClick
     );
 }
+
+#[test]
+fn x_and_y_limits_are_independent() {
+    // A wide, short box: 6px either side horizontally, 1px vertically.
+    let mut tracker = ClickTracker::with_extent(TIME, 6, 1);
+    let first = Instant::now();
+    let _ = tracker.press(first, 0, 0, MouseButton::Left, WIDGET);
+    assert_eq!(
+        tracker.press(first, 6, 0, MouseButton::Left, WIDGET),
+        PressKind::DoubleClick,
+        "6px across is inside the box"
+    );
+    let _ = tracker.press(first, 0, 0, MouseButton::Left, WIDGET);
+    assert_ne!(
+        tracker.press(first, 0, 2, MouseButton::Left, WIDGET),
+        PressKind::DoubleClick,
+        "2px down is outside a 1px-high box"
+    );
+}

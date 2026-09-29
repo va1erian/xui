@@ -66,18 +66,27 @@ struct Press {
 /// second double-click.
 pub(super) struct ClickTracker {
     time: Duration,
-    distance: i32,
+    /// How far the second press may land from the first, on x and on y.
+    distance: (i32, i32),
     last: Option<Press>,
 }
 
 impl ClickTracker {
     /// A tracker that pairs presses no further apart than `time` and no more
-    /// than `distance` device pixels from each other. A negative `distance` is
-    /// treated as zero.
+    /// than `distance` device pixels from each other on either axis. A
+    /// negative `distance` is treated as zero.
+    #[cfg(test)]
     pub(super) fn new(time: Duration, distance: i32) -> ClickTracker {
+        ClickTracker::with_extent(time, distance, distance)
+    }
+
+    /// Like [`ClickTracker::new`], with separate limits on x (`dx`) and y
+    /// (`dy`): the second press must land in the rectangle they span around
+    /// the first, as Win32's `SM_CXDOUBLECLK` by `SM_CYDOUBLECLK` box does.
+    pub(super) fn with_extent(time: Duration, dx: i32, dy: i32) -> ClickTracker {
         ClickTracker {
             time,
-            distance: distance.max(0),
+            distance: (dx.max(0), dy.max(0)),
             last: None,
         }
     }
@@ -85,8 +94,8 @@ impl ClickTracker {
     /// A tracker using the platform's configured double-click interval and
     /// distance, or a documented fallback where the platform has no query.
     pub(super) fn system() -> ClickTracker {
-        let (time, distance) = crate::sys::double_click::system();
-        ClickTracker::new(time, distance)
+        let (time, (dx, dy)) = crate::sys::double_click::system();
+        ClickTracker::with_extent(time, dx, dy)
     }
 
     /// Classifies a press of `button` on `target` at `(x, y)` in window
@@ -136,8 +145,8 @@ impl ClickTracker {
         last.button == button
             && last.target == target
             && now.saturating_duration_since(last.at) <= self.time
-            && within(x, last.x, self.distance)
-            && within(y, last.y, self.distance)
+            && within(x, last.x, self.distance.0)
+            && within(y, last.y, self.distance.1)
     }
 }
 

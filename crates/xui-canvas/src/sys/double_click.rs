@@ -12,17 +12,18 @@ use std::time::Duration;
 /// milliseconds.
 pub(crate) const FALLBACK_TIME: Duration = Duration::from_millis(500);
 
-/// The double-click distance used when the platform has no query, in device
-/// pixels.
+/// How far the second press may land from the first on each axis when the
+/// platform has no query, in device pixels.
 pub(crate) const FALLBACK_DISTANCE: i32 = 4;
 
-/// The platform's double-click interval and distance (device pixels).
+/// The platform's double-click interval and its allowed offset from the first
+/// press, per axis (device pixels): `(time, (dx, dy))`.
 ///
 /// On Windows these are the user's configured values, falling back when the
 /// system reports none; elsewhere they are [`FALLBACK_TIME`] and
-/// [`FALLBACK_DISTANCE`], since `winit` exposes no query.
+/// [`FALLBACK_DISTANCE`] on both axes, since `winit` exposes no query.
 #[cfg(windows)]
-pub(crate) fn system() -> (Duration, i32) {
+pub(crate) fn system() -> (Duration, (i32, i32)) {
     use windows::Win32::UI::Input::KeyboardAndMouse::GetDoubleClickTime;
     use windows::Win32::UI::WindowsAndMessaging::{
         GetSystemMetrics, SM_CXDOUBLECLK, SM_CYDOUBLECLK,
@@ -42,21 +43,36 @@ pub(crate) fn system() -> (Duration, i32) {
     } else {
         Duration::from_millis(u64::from(milliseconds))
     };
-    // Win32 compares against a rectangle of `SM_CXDOUBLECLK` by
-    // `SM_CYDOUBLECLK`; a single distance keeps the common case, where the two
-    // are equal, and stays permissive when they are not.
-    let distance = wide.max(high);
-    let distance = if distance > 0 {
-        distance
+    (time, (half_extent(wide), half_extent(high)))
+}
+
+/// The allowed offset on one axis for a Win32 double-click rectangle `extent`
+/// wide: the rectangle is centred on the first press, so each side gets half.
+#[cfg(windows)]
+fn half_extent(extent: i32) -> i32 {
+    if extent > 0 {
+        extent / 2
     } else {
         FALLBACK_DISTANCE
-    };
-    (time, distance)
+    }
 }
 
 /// The documented fallback, for platforms whose `winit` backend exposes no
 /// double-click query.
 #[cfg(not(windows))]
-pub(crate) fn system() -> (Duration, i32) {
-    (FALLBACK_TIME, FALLBACK_DISTANCE)
+pub(crate) fn system() -> (Duration, (i32, i32)) {
+    (FALLBACK_TIME, (FALLBACK_DISTANCE, FALLBACK_DISTANCE))
+}
+
+#[cfg(all(test, windows))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_win32_rectangle_is_centred_so_each_side_gets_half() {
+        assert_eq!(half_extent(4), 2, "the Windows default 4px box is +-2px");
+        assert_eq!(half_extent(9), 4);
+        assert_eq!(half_extent(0), FALLBACK_DISTANCE, "no value falls back");
+        assert_eq!(half_extent(-3), FALLBACK_DISTANCE);
+    }
 }
