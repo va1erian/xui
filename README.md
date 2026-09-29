@@ -35,6 +35,7 @@ snapshots and tests. Dark mode is first-class on every backend.
 | `xui-gpu` | The shared OpenGL seam behind both backends' GL widgets: the opaque `GlContext` handle, the `GlSurface` frame/offscreen lifecycle and the offscreen readback. Keeps `glow` out of `xui-core`. |
 | `xui` | The umbrella crate most applications depend on. Selects a backend by feature (`canvas` by default, `d2d` for the Windows Direct2D backend) and re-exports the portable front layer. |
 | `xui-code-editor` | A code-editor widget: rope buffer, monospace view, find/replace, pluggable syntax highlighting. |
+| `xui-icons` | An optional, multi-colour vector icon set ("Global Village", 36 icons) drawn through the portable `Canvas` path API, so the software backend rasterises it with `tiny-skia`. Depends on `xui-core` only. |
 | `xui-litehtml` | An HTML view built on `litehtml` and Direct2D. A portable custom-painted node that runs on every backend. |
 
 ## Documentation
