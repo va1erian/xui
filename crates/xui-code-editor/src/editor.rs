@@ -149,8 +149,14 @@ impl<M: 'static> Editor<M> {
     /// wants another store implements [`Clipboard`](crate::Clipboard) and
     /// passes it here.
     pub fn with_clipboard(self, clipboard: impl Clipboard + 'static) -> Editor<M> {
-        self.state.borrow_mut().clipboard = Box::new(clipboard);
+        self.set_clipboard(clipboard);
         self
+    }
+
+    /// Replaces the clipboard on a live editor, like
+    /// [`Editor::with_clipboard`] for an editor that is already built.
+    pub fn set_clipboard(&self, clipboard: impl Clipboard + 'static) {
+        self.state.borrow_mut().clipboard = Box::new(clipboard);
     }
 
     /// Replaces the highlighter on a live editor, re-lexing the whole buffer.
@@ -438,6 +444,30 @@ impl<M: 'static> Editor<M> {
         self.control.invalidate();
     }
 
+    /// Whether Undo has an edit to undo.
+    pub fn can_undo(&self) -> bool {
+        self.state.borrow().buffer.can_undo()
+    }
+
+    /// Whether Redo has an edit to redo.
+    pub fn can_redo(&self) -> bool {
+        self.state.borrow().buffer.can_redo()
+    }
+
+    /// Whether the clipboard holds text a paste would insert.
+    pub fn can_paste(&self) -> bool {
+        self.state
+            .borrow()
+            .clipboard
+            .text()
+            .is_some_and(|text| !text.is_empty())
+    }
+
+    /// Whether the buffer holds no text.
+    pub fn is_empty(&self) -> bool {
+        self.state.borrow().buffer.len_chars() == 0
+    }
+
     /// The selected char range, ordered, or `None` when nothing is selected.
     pub fn selection(&self) -> Option<(usize, usize)> {
         self.state.borrow().view.selection()
@@ -475,6 +505,49 @@ mod tests {
                 ui.set_clipboard_text("world");
                 assert!(editor.paste());
                 assert_eq!(editor.text(), "world");
+                Empty
+            },
+        )
+        .expect("run_app");
+    }
+
+    #[test]
+    fn command_state_queries_follow_the_buffer_and_clipboard() {
+        use std::rc::Rc;
+
+        use xui_canvas::OffscreenBackend;
+        use xui_core::app::{App, Ui, run_app};
+        use xui_core::backend::PlatformSpec;
+        use xui_core::geometry::Rect;
+        use xui_core::units::Dip;
+
+        use crate::Clipboard;
+        use crate::platform::InProcessClipboard;
+
+        struct Empty;
+        impl App for Empty {
+            type Msg = ();
+            fn update(&mut self, _msg: (), _ui: &mut Ui<()>) {}
+        }
+
+        run_app(
+            Rc::new(OffscreenBackend::new()),
+            PlatformSpec::new("queries").size(Dip(200.0), Dip(100.0)),
+            |ui| {
+                let editor =
+                    super::Editor::<()>::new(ui, Rect::new(0, 0, 200, 100)).expect("editor");
+                editor.set_clipboard(InProcessClipboard);
+                InProcessClipboard.set_text("");
+                assert!(editor.is_empty());
+                assert!(!editor.can_undo() && !editor.can_redo() && !editor.can_paste());
+                assert!(!editor.insert_text(""), "an empty insert is a no-op");
+                assert!(!editor.can_undo());
+                assert!(editor.insert_text("hi"));
+                assert!(!editor.is_empty() && editor.can_undo());
+                assert!(editor.undo());
+                assert!(editor.can_redo());
+                InProcessClipboard.set_text("x");
+                assert!(editor.can_paste());
                 Empty
             },
         )
