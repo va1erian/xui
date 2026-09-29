@@ -117,6 +117,47 @@ fn the_sv_field_captures_on_press_and_commits_once_on_release() {
 }
 
 #[test]
+fn a_captured_drag_survives_mouse_leave_and_commits_when_capture_is_lost() {
+    let (backend, core, ui) = setup();
+    let field = ColorField::new(&ui, Rect::new(0, 0, 200, 100), Hsv::new(0.0, 1.0, 1.0))
+        .unwrap()
+        .on_change(|_| Some(1))
+        .on_commit(|_| Some(2));
+    let slider = HueSlider::new(&ui, Rect::new(0, 200, 360, 220), 0.0)
+        .unwrap()
+        .on_change(|_| Some(3))
+        .on_commit(|_| Some(4));
+    let log = Rc::new(RefCell::new(Vec::new()));
+    let runtime = runtime(core, &log);
+
+    runtime.deliver(field.id(), &down(20, 20));
+    runtime.deliver(field.id(), &Event::MouseLeave);
+    assert_eq!(
+        backend.captured(),
+        Some(field.id()),
+        "leave keeps the capture"
+    );
+    runtime.deliver(field.id(), &moved(60, 40));
+    runtime.deliver(field.id(), &Event::CaptureChanged);
+    runtime.deliver(field.id(), &moved(90, 60));
+    drain(&runtime);
+    assert_eq!(log.borrow().iter().filter(|m| **m == 2).count(), 1);
+    assert_eq!(log.borrow().iter().filter(|m| **m == 1).count(), 2);
+
+    log.borrow_mut().clear();
+    runtime.deliver(slider.id(), &down(90, 210));
+    runtime.deliver(slider.id(), &Event::MouseLeave);
+    runtime.deliver(slider.id(), &moved(180, 210));
+    runtime.deliver(slider.id(), &Event::CaptureChanged);
+    drain(&runtime);
+    assert!(
+        (slider.hue() - 180.0).abs() < 1.0,
+        "drag continued after leave"
+    );
+    assert_eq!(log.borrow().iter().filter(|m| **m == 4).count(), 1);
+}
+
+#[test]
 fn the_sv_field_clamps_a_pointer_dragged_outside() {
     let (_backend, core, ui) = setup();
     let field = ColorField::new(&ui, Rect::new(0, 0, 200, 100), Hsv::new(30.0, 0.5, 0.5)).unwrap();

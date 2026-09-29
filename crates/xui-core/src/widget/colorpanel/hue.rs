@@ -171,9 +171,9 @@ impl<M: 'static> HueSlider<M> {
                         commit = true;
                         false
                     }
-                    Event::MouseLeave | Event::CaptureChanged if dragging.get() => {
+                    Event::CaptureChanged if dragging.get() => {
                         dragging.set(false);
-                        ui.release_capture();
+                        commit = true;
                         false
                     }
                     Event::KeyDown {
