@@ -107,7 +107,13 @@ impl<M: 'static> ToggleButton<M> {
                         button: MouseButton::Left,
                         ..
                     } => pressed.set(true),
-                    Event::MouseMove { .. } => hover.set(true),
+                    // Only entering hover changes the face; a move while
+                    // already hovered repaints nothing.
+                    Event::MouseMove { .. } => {
+                        if hover.replace(true) {
+                            return None;
+                        }
+                    }
                     Event::MouseLeave | Event::CaptureChanged => {
                         hover.set(false);
                         pressed.set(false);
@@ -301,5 +307,42 @@ mod tests {
         button.set_checked(true);
         assert!(button.is_checked());
         assert!(log.borrow().is_empty(), "a programmatic set raised nothing");
+    }
+    #[test]
+    fn hovering_repaints_once_then_stays_quiet() {
+        let backend = Rc::new(HeadlessBackend::new());
+        let window = backend.open_window(&PlatformSpec::new("test")).unwrap();
+        let core = Core::new(backend.clone(), window);
+        let ui = Ui::new(Rc::clone(&core));
+        let button = ToggleButton::new(&ui, Rect::new(0, 0, 80, 28), "Bold").unwrap();
+        let runtime = Runtime::primary(
+            core,
+            TestApp {
+                log: Rc::new(RefCell::new(Vec::new())),
+            },
+        );
+        let mv = |x| Event::MouseMove {
+            x,
+            y: 5,
+            modifiers: Modifiers::NONE,
+        };
+
+        let before = backend.invalidations();
+        runtime.deliver(button.id(), &mv(4));
+        assert_eq!(
+            backend.invalidations(),
+            before + 1,
+            "entering hover repaints"
+        );
+        for x in 5..25 {
+            runtime.deliver(button.id(), &mv(x));
+        }
+        assert_eq!(
+            backend.invalidations(),
+            before + 1,
+            "moves while hovered repaint nothing"
+        );
+        runtime.deliver(button.id(), &Event::MouseLeave);
+        assert_eq!(backend.invalidations(), before + 2, "leaving repaints");
     }
 }
