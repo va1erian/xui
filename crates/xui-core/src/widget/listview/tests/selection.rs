@@ -99,3 +99,25 @@ fn the_range_mode_extends_from_the_anchor() {
     assert_eq!(list.selection(), vec![1, 2, 3]);
     runtime.deliver(WidgetId::NONE, &Event::Wake);
 }
+
+#[test]
+fn double_clicking_a_row_activates_it_and_empty_space_does_not() {
+    let (_backend, core, ui) = setup();
+    let log = log();
+    let list = ListView::new(&ui, Rect::new(0, 0, 120, 200), &["one", "two"])
+        .unwrap()
+        .on_activate(|index| Some(index as u32 + 10));
+    let runtime = Runtime::primary(core, TestApp(Rc::clone(&log)));
+    let double = |y| Event::MouseDoubleClick {
+        x: 5,
+        y,
+        button: MouseButton::Left,
+        modifiers: Modifiers::NONE,
+    };
+
+    runtime.deliver(list.id(), &double(row_y(1)));
+    runtime.deliver(list.id(), &double(row_y(5)));
+    runtime.deliver(WidgetId::NONE, &Event::Wake);
+
+    assert_eq!(*log.borrow(), vec![11]);
+}

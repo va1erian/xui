@@ -151,11 +151,26 @@ fn handle<M: 'static>(
             button: MouseButton::Left,
             ..
         } => {
+            let header_h = header_px(state.borrow().has_header(), dpi);
+            if *y >= header_h {
+                let row = {
+                    let state = state.borrow();
+                    row_at(
+                        ROW.to_px(dpi).value().max(1),
+                        state.offset,
+                        state.len(),
+                        header_h,
+                        *y,
+                    )
+                }?;
+                return mappers
+                    .activate
+                    .borrow()
+                    .as_ref()
+                    .and_then(|activate| activate(row));
+            }
             let (column, width) = {
                 let mut state = state.borrow_mut();
-                if *y >= header_px(state.has_header(), dpi) {
-                    return None;
-                }
                 let widths = column_widths(dpi, ui.bounds(id).width(), &state.columns);
                 let column = resize::boundary_at(&widths, *x, resize::GRAB.to_px(dpi).value())?;
                 // Drop any drag the preceding press began, then auto-size.
