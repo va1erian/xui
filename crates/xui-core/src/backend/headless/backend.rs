@@ -7,9 +7,9 @@ use std::rc::Rc;
 use super::text::HeadlessShaper;
 use super::{HeadlessBackend, Node, SinkWindow, remove_orphans};
 use crate::backend::{
-    Backend, BackendError, FontSpec, ImplKind, NodeKind, NodeSpec, Painter, ParentRef,
-    PlatformSpec, Result, TextLayout, TextMetrics, TextShaper, TextStyle, TimerId, Waker, WidgetId,
-    WindowId,
+    Backend, BackendError, FileDialogOutcome, FileDialogRequest, FontSpec, ImplKind, NodeKind,
+    NodeSpec, Painter, ParentRef, PlatformSpec, Result, TextLayout, TextMetrics, TextShaper,
+    TextStyle, TimerId, Waker, WidgetId, WindowId,
 };
 use crate::geometry::Rect;
 use crate::image::Image;
@@ -97,6 +97,12 @@ impl Backend for HeadlessBackend {
 
     fn run_modal(&self, _window: WindowId) -> Result<()> {
         Ok(())
+    }
+
+    fn file_dialog(&self, _window: WindowId, request: &FileDialogRequest) -> FileDialogOutcome {
+        let mut state = self.state.borrow_mut();
+        state.file_dialog_request = Some(request.clone());
+        state.file_dialog.clone()
     }
 
     fn create(&self, parent: ParentRef, spec: &NodeSpec) -> Result<WidgetId> {

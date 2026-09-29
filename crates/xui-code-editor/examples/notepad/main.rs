@@ -3,8 +3,10 @@
 //! A small, cross-platform text editor: load, save, edit and search.
 //!
 //! It runs on the portable canvas backend ([`WinitBackend`]), so it works the
-//! same on Windows, Linux and macOS. Paths are chosen by a command-line argument
-//! or by typing one into a prompt dialog; xui has no native file picker yet.
+//! same on Windows, Linux and macOS. Open and Save As use the portable
+//! [`FileDialog`](xui_core::widget::FileDialog), which asks the backend for a
+//! native picker first and falls back to its own themed modal; a command-line
+//! argument still opens a file directly.
 //!
 //! Run with:
 //!
@@ -13,8 +15,7 @@
 //! ```
 //!
 //! `XUI_DEMO_AUTOCLOSE_MS` makes it quit itself for smoke runs; it skips the
-//! discard confirmation. See the crate README for the shortcuts and the
-//! no-native-dialog limitation.
+//! discard confirmation. See the crate README for the shortcuts.
 
 mod app;
 mod commands;

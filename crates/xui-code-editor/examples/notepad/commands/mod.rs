@@ -99,10 +99,18 @@ pub fn save_as_prompt(app: &mut Notepad, _ui: &mut Ui<Msg>) {
     if app.dialog_open.get() {
         return;
     }
-    app.pending = Pending::SaveAsPath;
-    app.prompt.set_title("Save As");
-    app.prompt.open();
+    let suggested = app
+        .document
+        .path()
+        .and_then(Path::file_name)
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "untitled.txt".to_string());
+    app.save_dialog.set_suggested_name(&suggested);
+    if let Some(dir) = app.document.path().and_then(Path::parent) {
+        app.save_dialog.set_initial_dir(dir);
+    }
     app.dialog_open.set(true);
+    app.save_dialog.open();
 }
 
 /// Quit: confirm discard when dirty, otherwise end the loop.
@@ -125,18 +133,6 @@ pub fn dialog_action(app: &mut Notepad, ui: &mut Ui<Msg>, action: DialogAction) 
     app.dialog_open.set(false);
     match std::mem::replace(&mut app.pending, Pending::None) {
         Pending::None => {}
-        Pending::OpenPath => match action {
-            DialogAction::Accept(path) if !path.trim().is_empty() => {
-                open_path(app, ui, PathBuf::from(path));
-            }
-            _ => app.editor.focus(),
-        },
-        Pending::SaveAsPath => match action {
-            DialogAction::Accept(path) if !path.trim().is_empty() => {
-                save_as_path(app, ui, PathBuf::from(path));
-            }
-            _ => app.editor.focus(),
-        },
         Pending::DiscardThen(after) => {
             if matches!(action, DialogAction::Accept(_)) {
                 match after {
@@ -144,16 +140,23 @@ pub fn dialog_action(app: &mut Notepad, ui: &mut Ui<Msg>, action: DialogAction) 
                     After::Open => open_prompt(app, ui),
                     After::Quit => ui.quit(),
                 }
-            }
-        }
-        Pending::OverwriteThen(path) => {
-            if matches!(action, DialogAction::Accept(_)) {
-                save_to(app, ui, path);
             } else {
                 app.editor.focus();
             }
         }
     }
+}
+
+/// The Open picker returned a path: load it.
+pub fn open_chosen(app: &mut Notepad, ui: &mut Ui<Msg>, path: PathBuf) {
+    app.dialog_open.set(false);
+    open_path(app, ui, path);
+}
+
+/// The Save As picker returned a path: write there.
+pub fn save_chosen(app: &mut Notepad, ui: &mut Ui<Msg>, path: PathBuf) {
+    app.dialog_open.set(false);
+    save_to(app, ui, path);
 }
 
 /// Load `path` into the editor without touching the current document first.
@@ -185,26 +188,13 @@ fn untitled(app: &mut Notepad, ui: &mut Ui<Msg>) {
     refresh(app, ui);
 }
 
-/// Ask for a path to open.
+/// Ask for a path to open through the portable picker.
 fn open_prompt(app: &mut Notepad, _ui: &mut Ui<Msg>) {
-    app.pending = Pending::OpenPath;
-    app.prompt.set_title("Open");
-    app.prompt.open();
-    app.dialog_open.set(true);
-}
-
-/// Save to `path`, confirming when the file already exists.
-fn save_as_path(app: &mut Notepad, ui: &mut Ui<Msg>, path: PathBuf) {
-    if path.exists() {
-        app.pending = Pending::OverwriteThen(path.clone());
-        app.confirm.set_title("Overwrite file?");
-        app.confirm
-            .set_message(&format!("{} already exists. Overwrite it?", path.display()));
-        app.confirm.open();
-        app.dialog_open.set(true);
-    } else {
-        save_to(app, ui, path);
+    if let Some(dir) = app.document.path().and_then(Path::parent) {
+        app.open_dialog.set_initial_dir(dir);
     }
+    app.dialog_open.set(true);
+    app.open_dialog.open();
 }
 
 /// Write the buffer to `path` and record the clean revision.

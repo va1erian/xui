@@ -11,6 +11,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
+use super::dialog::{FileDialogOutcome, FileDialogRequest};
 use super::event::Event;
 use super::ids::{WidgetId, WindowId};
 use super::node::{NodeKind, ParentRef};
@@ -75,6 +76,15 @@ struct State {
     invalidations: u32,
     windows: HashMap<u64, SinkWindow>,
     nodes: HashMap<u64, Node>,
+    /// The answer the next [`Backend::file_dialog`] gives. `Declined` by
+    /// default; a test scripts `Chosen`/`Cancelled` to skip the portable modal.
+    ///
+    /// [`Backend::file_dialog`]: super::Backend::file_dialog
+    file_dialog: FileDialogOutcome,
+    /// The last request handed to [`Backend::file_dialog`], for tests.
+    ///
+    /// [`Backend::file_dialog`]: super::Backend::file_dialog
+    file_dialog_request: Option<FileDialogRequest>,
 }
 
 impl HeadlessBackend {
@@ -92,8 +102,24 @@ impl HeadlessBackend {
                 invalidations: 0,
                 windows: HashMap::new(),
                 nodes: HashMap::new(),
+                file_dialog: FileDialogOutcome::Declined,
+                file_dialog_request: None,
             }),
         }
+    }
+
+    /// Scripts the outcome the next [`Backend::file_dialog`] returns.
+    ///
+    /// [`Backend::file_dialog`]: super::Backend::file_dialog
+    pub fn set_file_dialog(&self, outcome: FileDialogOutcome) {
+        self.state.borrow_mut().file_dialog = outcome;
+    }
+
+    /// The last request the front layer handed [`Backend::file_dialog`].
+    ///
+    /// [`Backend::file_dialog`]: super::Backend::file_dialog
+    pub fn file_dialog_request(&self) -> Option<FileDialogRequest> {
+        self.state.borrow().file_dialog_request.clone()
     }
 
     /// Whether the loop was asked to quit.

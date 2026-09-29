@@ -14,6 +14,7 @@
 mod canvas;
 mod clipboard;
 mod cursor;
+mod dialog;
 mod event;
 mod ids;
 mod native;
@@ -28,6 +29,7 @@ pub(crate) mod headless;
 
 pub use canvas::{Canvas, TextAlign, TextMetrics, TextStyle, TextVAlign, TextWeight};
 pub use cursor::Cursor;
+pub use dialog::{FileDialogMode, FileDialogOutcome, FileDialogRequest, FileFilter};
 pub use event::{Event, TimerId};
 pub use ids::{WidgetId, WindowId};
 pub use native::NativeWindowHandle;
@@ -175,6 +177,18 @@ pub trait Backend {
     fn run_modal(&self, window: WindowId) -> Result<()> {
         let _ = window;
         Err(BackendError::Unsupported("modal window"))
+    }
+
+    /// Shows the platform's own file picker for `window`, if the backend has
+    /// one. The default declines, so the portable
+    /// [`FileDialog`](crate::widget::FileDialog) covers the request instead;
+    /// a backend with a native picker (the Win32 Common Item Dialog, a desktop
+    /// portal) returns [`FileDialogOutcome::Chosen`] or
+    /// [`FileDialogOutcome::Cancelled`]. The application never sees which
+    /// picker answered.
+    fn file_dialog(&self, window: WindowId, request: &FileDialogRequest) -> FileDialogOutcome {
+        let _ = (window, request);
+        FileDialogOutcome::Declined
     }
 
     /// Minimizes `window` to the taskbar. A backend that cannot minimize a

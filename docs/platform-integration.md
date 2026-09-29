@@ -236,6 +236,13 @@ exposing a `windows` type:
   `Themed` and describes itself through the portable accessibility model, so
   the app's own painted widget uses the same theming and UIA paths as a bundled
   control.
+- **A file-picker hook.** `Backend::file_dialog` lets a backend answer with the
+  platform's picker (`FileDialogOutcome::Chosen`/`Cancelled`) or decline, in
+  which case the portable `FileDialog` runs; the app's
+  `on_accept`/`on_cancel` are identical either way. The Win32 Common Item Dialog
+  is the intended `xui-win32` implementation (it needs `unsafe`, so it lives in
+  that crate's `sys/` layer). A target with no desktop portal, no picker at all,
+  still gets the portable card.
 
 To make the raw message hook portable, the app calls `on_raw_message` only
 inside a `#[cfg(windows)]` function; the portable `App::update` sees the

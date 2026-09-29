@@ -11,6 +11,15 @@ use crate::backend::WidgetId;
 use crate::property::{Properties, Property, Value};
 
 impl<M: 'static> ListView<M> {
+    /// Raises the list above its siblings together with its scrollbar. Raising
+    /// only the list would draw it over its own scrollbar, so use this when a
+    /// surface stacks the list above other nodes.
+    pub fn raise(&self) {
+        let ui = self.control.ui();
+        ui.raise(self.control.id());
+        ui.raise(self.bar.id());
+    }
+
     /// Replaces the rows with a virtual `model` and refreshes the view. The
     /// selection is kept where it still exists.
     pub fn set_model(&self, model: impl ListModel + 'static) {

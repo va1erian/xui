@@ -15,7 +15,9 @@ use xui_core::app::Ui;
 use xui_core::arrange::Mounted;
 use xui_core::backend::WidgetId;
 use xui_core::message::{Key, Modifiers};
-use xui_core::widget::{Button, CheckBox, Dialog, DialogAction, Edit, Label, StatusBar};
+use xui_core::widget::{
+    Button, CheckBox, Dialog, DialogAction, Edit, FileDialog, Label, StatusBar,
+};
 
 use crate::commands;
 
@@ -63,6 +65,10 @@ pub enum Msg {
     CloseFind,
     /// A dialog was dismissed.
     Dialog(DialogAction),
+    /// The Open picker returned a path.
+    OpenChosen(PathBuf),
+    /// The Save As picker returned a path.
+    SaveChosen(PathBuf),
     /// The editor's text changed.
     Edited,
     /// Refresh the status bar (a caret move with no text change).
@@ -85,14 +91,8 @@ pub enum After {
 pub enum Pending {
     /// Nothing.
     None,
-    /// A path for Open.
-    OpenPath,
-    /// A path for Save As.
-    SaveAsPath,
     /// Confirmation to discard unsaved changes before `After`.
     DiscardThen(After),
-    /// Confirmation to overwrite an existing path.
-    OverwriteThen(PathBuf),
 }
 
 /// The find/replace bar's widgets. They are hidden together and shown after
@@ -141,9 +141,11 @@ pub struct Notepad {
     pub find_bar: FindBar,
     /// The status bar.
     pub status: Rc<StatusBar<Msg>>,
-    /// The single path prompt, reused for Open and Save As.
-    pub prompt: Dialog<Msg>,
-    /// The discard/overwrite confirmation.
+    /// The portable file picker for opening a file.
+    pub open_dialog: FileDialog<Msg>,
+    /// The portable file picker for Save As.
+    pub save_dialog: FileDialog<Msg>,
+    /// The discard confirmation.
     pub confirm: Dialog<Msg>,
     /// The error message dialog.
     pub message: Dialog<Msg>,
@@ -272,6 +274,8 @@ impl xui_core::app::App for Notepad {
             }
             Msg::CloseFind => commands::close_find(self, ui),
             Msg::Dialog(action) => commands::dialog_action(self, ui, action),
+            Msg::OpenChosen(path) => commands::open_chosen(self, ui, path),
+            Msg::SaveChosen(path) => commands::save_chosen(self, ui, path),
             Msg::Edited => commands::edited(self, ui),
             Msg::RefreshStatus => commands::refresh(self, ui),
             Msg::Autoclose => ui.quit(),
