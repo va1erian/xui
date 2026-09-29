@@ -4,6 +4,11 @@
 
 ### Fixes
 
+- The canvas (`winit`) backend now synthesizes `Event::MouseDoubleClick` from a
+  second press of the same button, within the platform's double-click time and
+  distance of the first, on the same widget, producing the same
+  `Down, Up, DoubleClick, Up` sequence as the Win32 backend
+  (`WM_*BUTTONDBLCLK`); a third quick press starts a new sequence (#219).
 - A modal `Dialog`/`TaskDialog` now dims the content behind it with a translucent
   scrim (`Theme::scrim`: black at 40% alpha in light mode, 55% in dark) instead
   of painting the window an opaque grey. On compositing backends (canvas) the

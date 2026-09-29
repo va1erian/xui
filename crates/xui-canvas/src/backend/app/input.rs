@@ -5,6 +5,7 @@
 //! the portable [`Event`] vocabulary.
 
 use std::rc::Rc;
+use std::time::Instant;
 
 use winit::event::{ElementState, MouseButton as WinitButton, MouseScrollDelta};
 use winit::keyboard::Key as WinitKey;
@@ -192,12 +193,11 @@ impl App<'_> {
         }
         let event = if state == ElementState::Pressed {
             self.set_focus(raw, id);
-            Event::MouseDown {
-                x: lx,
-                y: ly,
-                button,
-                modifiers: self.modifiers,
-            }
+            // `winit` never reports a double-click, so recognize the second
+            // press of one here: deliver `MouseDoubleClick` in place of the
+            // second `MouseDown`, as Win32's `WM_*BUTTONDBLCLK` does.
+            let kind = self.double_click.press(Instant::now(), x, y, button, id);
+            kind.event(lx, ly, button, self.modifiers)
         } else {
             Event::MouseUp {
                 x: lx,
