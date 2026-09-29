@@ -58,7 +58,8 @@ pub(super) fn key_events(
 /// no text, except Ctrl+Alt, which is how Windows reports AltGr, the key that
 /// types `{ [ @ #` on many non-US layouts.
 fn types_text(modifiers: Modifiers) -> bool {
-    let altgr = modifiers.ctrl && modifiers.alt;
+    // Only a bare Ctrl+Alt is AltGr; with Win/Command it is still a shortcut.
+    let altgr = modifiers.ctrl && modifiers.alt && !modifiers.win;
     altgr || !(modifiers.ctrl || modifiers.win)
 }
 
@@ -400,6 +401,18 @@ mod tests {
         assert!(
             unmapped.is_empty(),
             "Ctrl+; neither types nor has a key code"
+        );
+        let with_win = Modifiers {
+            ctrl: true,
+            alt: true,
+            win: true,
+            ..Modifiers::NONE
+        };
+        assert!(
+            !press("c", with_win)
+                .iter()
+                .any(|event| matches!(event, Event::Char(_))),
+            "Ctrl+Alt+Win is a shortcut, not AltGr"
         );
         let win = press(
             "c",
