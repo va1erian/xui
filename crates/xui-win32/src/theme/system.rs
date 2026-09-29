@@ -7,6 +7,7 @@
 use crate::message::Message;
 use crate::sys;
 use crate::sys::theme_system::HighContrastColors;
+use xui_core::backend::Rgba;
 
 use super::Theme;
 
@@ -89,6 +90,10 @@ fn from_high_contrast(colors: HighContrastColors) -> Theme {
         scrollbar: colors.window_frame,
         scrollbar_track: colors.window,
         track: colors.window_frame,
+        // A high-contrast palette has no dimmer token of its own, so the modal
+        // scrim uses translucent black at the dark variant's 55%, which keeps
+        // the (high-contrast) content legible through it.
+        scrim: Rgba::with_alpha(0x00, 0x00, 0x00, 0x8C),
     }
 }
 

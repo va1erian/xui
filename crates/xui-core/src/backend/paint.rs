@@ -13,8 +13,9 @@ use crate::geometry::Point;
 
 /// A colour with an alpha channel, for a fill or stroke that blends.
 ///
-/// [`Color`] stays opaque so it can be a theme token; a recorded fill carries
-/// its alpha here. The alpha is straight (not premultiplied).
+/// [`Color`] is opaque, so it can be a plain theme token; the alpha a blending
+/// token needs (the modal scrim) and a recorded fill that must blend carry it
+/// here. The alpha is straight (not premultiplied).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Rgba {
     /// Red channel.

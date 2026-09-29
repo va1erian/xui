@@ -4,6 +4,12 @@
 
 ### Fixes
 
+- A modal `Dialog`/`TaskDialog` now dims the content behind it with a translucent
+  scrim (`Theme::scrim`: black at 40% alpha in light mode, 55% in dark) instead
+  of painting the window an opaque grey. On compositing backends (canvas) the
+  app stays visible through the backdrop; the Win32 backend's separate child
+  windows do not composite the scrim over sibling windows. Either way the scrim
+  still blocks input to the widgets behind it (#221).
 - `TopBar` lays its items out and hit-tests them in node-local coordinates, so a
   bar anywhere other than the window origin responds to clicks, hovers and
   slider drags (#157).
@@ -38,6 +44,8 @@
 
 ### Breaking
 
+- `Theme` gained a `scrim: Rgba` field for the modal backdrop, so a full struct
+  literal of the palette must set it (#221).
 - `RowIcon` gained an `Icon(IconRef)` variant, so an exhaustive match on it must
   handle it; `Button::set_icon` now takes `Option<impl Into<IconRef>>`
   (`Button::clear_icon` removes the icon; a bare `None` needs a type

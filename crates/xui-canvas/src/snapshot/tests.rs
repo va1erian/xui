@@ -7,7 +7,7 @@ use std::rc::Rc;
 
 use xui_core::app::{App, Ui};
 use xui_core::backend::BackendError;
-use xui_core::widget::{Button, CheckBox, Edit, HasText, Label};
+use xui_core::widget::{Button, CheckBox, Dialog, Edit, HasText, Label};
 use xui_core::{Dip, Rect, Theme};
 
 use super::session::capture_on;
@@ -17,6 +17,7 @@ use crate::OffscreenBackend;
 enum Msg {
     Text(&'static str),
     Toggled,
+    Clicked,
 }
 
 /// Keeps the widgets alive and records what reached `update`.
@@ -33,9 +34,47 @@ impl App for Demo {
         self.seen.set(self.seen.get() + 1);
         match msg {
             Msg::Text(text) => self.label.set_text(text),
-            Msg::Toggled => {}
+            Msg::Toggled | Msg::Clicked => {}
         }
     }
+}
+
+/// A content button with an optional modal dialog over it.
+struct Modal {
+    seen: Rc<Cell<u32>>,
+    _button: Button<Msg>,
+    _dialog: Dialog<Msg>,
+}
+
+impl App for Modal {
+    type Msg = Msg;
+
+    fn update(&mut self, msg: Msg, _ui: &mut Ui<Msg>) {
+        if let Msg::Clicked = msg {
+            self.seen.set(self.seen.get() + 1);
+        }
+    }
+}
+
+/// A button that fills the top of a 320x200 window, with the dialog centred
+/// over it and clear of the pixels the scrim tests sample.
+fn build_modal(ui: &mut Ui<Msg>, seen: Rc<Cell<u32>>, open: bool) -> Result<Modal, BackendError> {
+    let button =
+        Button::new(ui, Rect::new(0, 0, 320, 96), "Behind")?.on_click(|| Some(Msg::Clicked));
+    let dialog = Dialog::message(ui, "Saved", "Your changes were saved.")?;
+    if open {
+        dialog.open();
+    }
+    Ok(Modal {
+        seen,
+        _button: button,
+        _dialog: dialog,
+    })
+}
+
+/// Sums the RGB channels, a cheap relative brightness for a dark/light test.
+fn brightness(pixel: [u8; 4]) -> u32 {
+    pixel[0] as u32 + pixel[1] as u32 + pixel[2] as u32
 }
 
 fn build(ui: &mut Ui<Msg>, seen: Rc<Cell<u32>>) -> Result<Demo, BackendError> {
@@ -183,4 +222,72 @@ fn a_message_in_the_step_reaches_the_app_before_the_capture() {
 fn render_matches_try_render() {
     let via_render = render(snapshot(), |ui| build(ui, Rc::default()).unwrap()).unwrap();
     assert_eq!(via_render, shot(snapshot()));
+}
+
+#[test]
+fn an_open_dialog_dims_the_content_but_lets_it_show_through() {
+    // The dialog's card is centred and clear of x=10 in a 320x200 window, so
+    // both sampled pixels are scrim over content: (10, 48) over the button and
+    // (10, 190) over the bare background.
+    for theme in [Theme::light(), Theme::dark()] {
+        let plain = render_with(
+            snapshot().theme(theme),
+            |ui| build_modal(ui, Rc::new(Cell::new(0)), false),
+            |_| {},
+        )
+        .unwrap();
+        let dimmed = render_with(
+            snapshot().theme(theme),
+            |ui| build_modal(ui, Rc::new(Cell::new(0)), true),
+            |_| {},
+        )
+        .unwrap();
+
+        let over_button = dimmed.pixel(10, 48).unwrap();
+        let over_background = dimmed.pixel(10, 190).unwrap();
+        assert!(
+            brightness(over_button) < brightness(plain.pixel(10, 48).unwrap()),
+            "{theme:?}: the scrim darkens the button it covers"
+        );
+        assert!(
+            brightness(over_background) < brightness(plain.pixel(10, 190).unwrap()),
+            "{theme:?}: the scrim darkens the background it covers"
+        );
+        assert_ne!(
+            over_button, over_background,
+            "{theme:?}: the scrim is translucent, so the content behind it still shows"
+        );
+    }
+}
+
+#[test]
+fn an_open_dialog_blocks_clicks_to_the_content_behind_it() {
+    let reached = Rc::new(Cell::new(0));
+    render_with(
+        snapshot(),
+        {
+            let reached = Rc::clone(&reached);
+            move |ui| build_modal(ui, reached, false)
+        },
+        |stage| assert!(stage.click(10, 48), "the button takes the click"),
+    )
+    .unwrap();
+    assert_eq!(reached.get(), 1, "without a dialog the button is clickable");
+
+    let blocked = Rc::new(Cell::new(0));
+    render_with(
+        snapshot(),
+        {
+            let blocked = Rc::clone(&blocked);
+            move |ui| build_modal(ui, blocked, true)
+        },
+        |stage| {
+            // The scrim covers the whole client, so both the button and the
+            // bare background are behind it and never receive the event.
+            stage.click(10, 48);
+            stage.click(10, 190);
+        },
+    )
+    .unwrap();
+    assert_eq!(blocked.get(), 0, "the scrim swallows clicks behind it");
 }

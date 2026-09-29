@@ -171,3 +171,29 @@ fn a_dialog_paints_its_card_title_and_message() {
         "the card has a border: {ops:?}"
     );
 }
+
+#[test]
+fn the_scrim_is_a_translucent_overlay_not_an_opaque_clear() {
+    let (backend, _core, ui) = setup();
+    let dialog = Dialog::message(&ui, "Saved", "Your changes were saved.").unwrap();
+    dialog.open();
+    let theme = ui.theme();
+    let client = ui.client_rect();
+
+    backend.render(dialog.id());
+    let ops = backend.ops(dialog.id());
+
+    assert!(
+        ops.iter().any(|op| matches!(op, DrawOp::FillRgba(rect, color) if *rect == client && *color == theme.scrim)),
+        "the scrim is one translucent fill over the whole client: {ops:?}"
+    );
+    assert!(
+        !ops.iter().any(|op| matches!(op, DrawOp::Clear(_))),
+        "the scrim must blend over the content, not clear it: {ops:?}"
+    );
+    assert!(
+        theme.scrim.a > 0 && theme.scrim.a < 255,
+        "the scrim token must carry partial alpha: {:?}",
+        theme.scrim
+    );
+}
