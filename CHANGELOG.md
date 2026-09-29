@@ -4,6 +4,13 @@
 
 ### Additions
 
+- **Global Village icon set (`xui-icons`).** An optional crate (also the
+  `icons` feature of `xui`) with 36 multi-colour, 90s-styled vector icons in
+  four categories: `Village` names an icon, `draw(canvas, icon, rect, &Palette)`
+  draws it through `Canvas::fill_path`/`stroke_path`, so `xui-canvas` rasterises
+  it with `tiny-skia` and `xui-win32` with Direct2D. `Palette` retints the set.
+  The SVGs, PNG exports and `.ico` files are vendored under
+  `crates/xui-icons/assets/`; `generate.py` compiles them into Rust data.
 - **Portable `IconView`.** `xui-core` gains `widget::IconView`, a virtualized
   Windows XP-style icon view: tiles of an icon plus up to three ellipsised text
   lines, flowed left to right and wrapped, with a scrollbar, three icon sizes

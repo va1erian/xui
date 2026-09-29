@@ -1,3 +1,3 @@
 [workspace]
-members = ["crates/xui-core", "crates/xui-code-editor", "crates/xui-gpu", "crates/xui-win32", "crates/xui-canvas", "crates/xui", "crates/xui-litehtml", "crates/xui-paint"]
+members = ["crates/xui-core", "crates/xui-code-editor", "crates/xui-gpu", "crates/xui-win32", "crates/xui-canvas", "crates/xui", "crates/xui-litehtml", "crates/xui-paint", "crates/xui-icons"]
 resolver = "3"

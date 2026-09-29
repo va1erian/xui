@@ -15,11 +15,14 @@ canvas = ["dep:xui-canvas"]
 # The Windows-only backend: native window chrome, Direct2D/DirectWrite
 # painting, GDI fallback. Opt in for higher-fidelity/perf Windows apps.
 d2d = ["dep:xui-win32"]
+# The optional Global Village icon set (`xui::xui_icons`).
+icons = ["dep:xui-icons"]
 
 [dependencies]
 xui-core = { path = "../xui-core" }
 xui-win32 = { path = "../xui-win32", optional = true }
 xui-canvas = { path = "../xui-canvas", optional = true }
+xui-icons = { path = "../xui-icons", optional = true }
 
 [[example]]
 name = "widgets"
