@@ -7,7 +7,7 @@ use xui_core::app::{App, Ui};
 use xui_core::icon::Lucide;
 use xui_core::image::Image;
 use xui_core::widget::ComboBox;
-use xui_core::{Dip, Rect, Theme};
+use xui_core::{Color, Dip, Rect, Theme};
 
 struct Demo(#[allow(dead_code)] ComboBox<()>);
 
@@ -30,10 +30,31 @@ fn marked(image: &Image, (x, y, w, h): (u32, u32, u32, u32), background: [u8; 4]
     count
 }
 
+/// The distance from `color` of the pixel in the box that comes closest to it:
+/// small when the icon is drawn in `color`, large when it is drawn in another.
+fn closest(image: &Image, (x, y, w, h): (u32, u32, u32, u32), color: Color) -> u32 {
+    let mut best = u32::MAX;
+    for py in y..y + h {
+        for px in x..x + w {
+            let pixel = image.pixel(px, py).expect("pixel in bounds");
+            let distance = [
+                (pixel[0], color.r),
+                (pixel[1], color.g),
+                (pixel[2], color.b),
+            ]
+            .iter()
+            .map(|&(a, b)| i32::from(a).abs_diff(i32::from(b)))
+            .sum();
+            best = best.min(distance);
+        }
+    }
+    best
+}
+
 /// Renders a 28 DIP-high combo over three items (icons on 0 and 2; item 1 is a
 /// blank label, so its text cannot mark the icon slot) with
 /// `selected` chosen, optionally with the list open.
-fn shot(theme: Theme, dpi: u32, selected: usize, open: bool) -> Image {
+fn shot(theme: Theme, dpi: u32, selected: usize, open: bool, enabled: bool) -> Image {
     let scale = move |dip: i32| dip * dpi as i32 / 96;
     render_with(
         Snapshot::new(Dip(200.0), Dip(140.0)).theme(theme).dpi(dpi),
@@ -46,6 +67,7 @@ fn shot(theme: Theme, dpi: u32, selected: usize, open: bool) -> Image {
             .item_icon(0, Lucide::CircleDot)
             .item_icon(2, Lucide::TriangleAlert);
             combo.select(selected);
+            combo.set_enabled(enabled);
             Ok(Demo(combo))
         },
         move |stage| {
@@ -67,7 +89,7 @@ fn check(theme: Theme, dpi: u32) {
     // its 4 DIP inset (centred in the 28 DIP field), and nothing for a
     // selected item without one.
     let slot = scaled(dpi, (4, 6, 16, 16));
-    let with_icon = shot(theme, dpi, 0, false);
+    let with_icon = shot(theme, dpi, 0, false, true);
     let background = with_icon
         .pixel(dpi * 100 / 96, dpi * 14 / 96)
         .expect("field background");
@@ -75,17 +97,28 @@ fn check(theme: Theme, dpi: u32) {
         marked(&with_icon, slot, background) > 20,
         "the selected item's icon paints in the closed box ({theme:?}, {dpi} dpi)"
     );
-    let without = shot(theme, dpi, 1, false);
+    let without = shot(theme, dpi, 1, false, true);
     assert_eq!(
         marked(&without, slot, background),
         0,
         "a selected item without an icon leaves the slot blank ({theme:?}, {dpi} dpi)"
     );
 
+    // The icon takes the text colour, and the disabled colour when disabled.
+    let disabled = shot(theme, dpi, 0, false, false);
+    assert!(
+        closest(&disabled, slot, theme.text_disabled) < closest(&disabled, slot, theme.text),
+        "a disabled combo draws the icon dimmed ({theme:?}, {dpi} dpi)"
+    );
+    assert!(
+        closest(&with_icon, slot, theme.text) < closest(&with_icon, slot, theme.text_disabled),
+        "an enabled combo draws the icon in the text colour ({theme:?}, {dpi} dpi)"
+    );
+
     // Open: rows are 24 DIP high, directly below the field; row 1 has no icon,
     // row 2 has one. The hovered row is row 0 (under the click), so the
     // background is sampled from row 1's own band.
-    let open = shot(theme, dpi, 0, true);
+    let open = shot(theme, dpi, 0, true, true);
     let list_background = open
         .pixel(dpi * 120 / 96, dpi * (28 + 24 + 12) / 96)
         .expect("list background");
@@ -97,6 +130,12 @@ fn check(theme: Theme, dpi: u32) {
         ),
         0,
         "an item without an icon leaves its slot blank in the list ({theme:?}, {dpi} dpi)"
+    );
+    // Row 0 is the highlighted row, so its icon takes the on-accent colour.
+    let hot = scaled(dpi, (4, 28 + 4, 16, 16));
+    assert!(
+        closest(&open, hot, theme.text_on_accent) < closest(&open, hot, theme.text),
+        "the highlighted row's icon is on-accent ({theme:?}, {dpi} dpi)"
     );
     assert!(
         marked(

@@ -162,6 +162,7 @@ pub(super) fn field_event<M: 'static>(
                     _ => cur.saturating_sub(1),
                 });
                 ui.invalidate(field);
+                ui.invalidate(popup);
             }
             _ => {}
         },
