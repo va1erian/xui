@@ -306,12 +306,14 @@ impl<M: 'static> Input<M> {
         ((self.ui.bounds(self.id).height().max(0) / row_px) as usize).max(1)
     }
 
-    /// Scrolls the wheel by `delta` notches.
+    /// Scrolls `WHEEL_ROWS` rows per wheel event, in the direction of `delta`.
+    /// Backends report a notch as 1 or as 120 (`WHEEL_DELTA`), so the
+    /// magnitude is ignored, as `ScrollView` does.
     fn wheel(&self, delta: i16) -> Option<M> {
         let visible = self.visible_slots();
         let mut state = self.state.borrow_mut();
         let max = state.visible_len().saturating_sub(visible);
-        let step = i64::from(delta) * flatten::WHEEL_ROWS as i64;
+        let step = i64::from(delta.signum()) * flatten::WHEEL_ROWS as i64;
         let next = (state.offset as i64 - step).clamp(0, max as i64) as usize;
         if next != state.offset {
             state.offset = next;
