@@ -45,6 +45,18 @@ fn mouse_move(x: i32) -> Event {
     }
 }
 
+/// The divider-local coordinate (x for a row, y for a column) that puts the
+/// pointer at window `axis`, as a backend computes it from the divider's
+/// current bounds. The splits below sit at the window origin.
+fn local_axis(backend: &HeadlessBackend, divider: WidgetId, axis: i32, horizontal: bool) -> i32 {
+    let bounds = backend.node(divider).unwrap().1;
+    if horizontal {
+        axis - bounds.left
+    } else {
+        axis - bounds.top
+    }
+}
+
 #[test]
 fn the_divider_splits_the_panes_at_the_position() {
     let (backend, _core, ui) = setup();
@@ -121,6 +133,96 @@ fn dragging_the_divider_resizes_and_raises_the_message() {
     assert!(
         (split.position().value() - 200.0).abs() < 0.01,
         "a released divider stops following"
+    );
+}
+
+#[test]
+fn dragging_tracks_the_cursor_one_to_one_without_oscillating() {
+    let (backend, core, ui) = setup();
+    let split = Split::row(&ui, Rect::new(0, 0, 300, 100)).unwrap();
+    split.set_position(dip(100.0));
+    let runtime = Runtime::primary(core, TestApp(Rc::new(RefCell::new(Vec::new()))));
+    let divider = split.shared.divider_id;
+    let grab = 2;
+
+    runtime.deliver(divider, &mouse_down(grab));
+    // The divider moves under the cursor between events, so the local point
+    // must be recomputed from its new bounds, as a backend does.
+    for cursor in [150, 200, 260, 120, 40, 294, 10] {
+        let local = local_axis(&backend, divider, cursor, true);
+        runtime.deliver(divider, &mouse_move(local));
+        // The panes span 300px with a 5px divider, so the extent ranges 0..295.
+        let expected = (cursor - grab).clamp(0, 295);
+        assert!(
+            (split.position().value() - expected as f32).abs() < 0.01,
+            "cursor {cursor} should put the divider at {expected}, got {}",
+            split.position().value()
+        );
+    }
+}
+
+#[test]
+fn dragging_respects_the_clamps_and_tracks_again_after_them() {
+    let (backend, core, ui) = setup();
+    let split = Split::row(&ui, Rect::new(0, 0, 300, 100)).unwrap();
+    split.set_min(dip(40.0), dip(40.0));
+    split.set_position(dip(100.0));
+    let runtime = Runtime::primary(core, TestApp(Rc::new(RefCell::new(Vec::new()))));
+    let divider = split.shared.divider_id;
+
+    runtime.deliver(divider, &mouse_down(2));
+    // Past the maximum: 295 available minus pane B's 40 leaves 255.
+    let local = local_axis(&backend, divider, 290, true);
+    runtime.deliver(divider, &mouse_move(local));
+    assert!(
+        (split.position().value() - 255.0).abs() < 0.01,
+        "the drag clamps to the maximum"
+    );
+    // Back before the start: target 100 + (10 - 102) = 8, clamped to 40.
+    let local = local_axis(&backend, divider, 10, true);
+    runtime.deliver(divider, &mouse_move(local));
+    assert!(
+        (split.position().value() - 40.0).abs() < 0.01,
+        "the drag clamps to the minimum"
+    );
+    // Back in the middle it tracks the cursor again, not the clamped edge.
+    let local = local_axis(&backend, divider, 150, true);
+    runtime.deliver(divider, &mouse_move(local));
+    assert!(
+        (split.position().value() - 148.0).abs() < 0.01,
+        "the drag follows the cursor after leaving a clamp"
+    );
+}
+
+#[test]
+fn dragging_a_column_tracks_the_vertical_axis() {
+    let (backend, core, ui) = setup();
+    let split = Split::column(&ui, Rect::new(0, 0, 100, 300)).unwrap();
+    split.set_position(dip(100.0));
+    let runtime = Runtime::primary(core, TestApp(Rc::new(RefCell::new(Vec::new()))));
+    let divider = split.shared.divider_id;
+
+    runtime.deliver(
+        divider,
+        &Event::MouseDown {
+            x: 50,
+            y: 2,
+            button: MouseButton::Left,
+            modifiers: Modifiers::NONE,
+        },
+    );
+    let local = local_axis(&backend, divider, 200, false);
+    runtime.deliver(
+        divider,
+        &Event::MouseMove {
+            x: 50,
+            y: local,
+            modifiers: Modifiers::NONE,
+        },
+    );
+    assert!(
+        (split.position().value() - 198.0).abs() < 0.01,
+        "a vertical drag follows the pointer on y"
     );
 }
 
