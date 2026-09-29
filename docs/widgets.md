@@ -187,8 +187,8 @@ view.set_icon_size(IconSize::Large);
 ```
 
 - `IconModel` supplies each tile lazily: `items()`, `icon(item) -> Option<IconRef>`
-  and `line(item, line) -> Option<&str>` for lines `0..3` (line 1 is the name in
-  the normal text token, lines 2 and 3 are secondary details in the muted token).
+  and `line(item, line) -> Option<&str>` for lines `0..3` (line 0 is the name in
+  the normal text token, lines 1 and 2 are secondary details in the muted token).
   A `Vec<String>` and a `Vec<Vec<String>>` implement it already. Only visible
   tiles are laid out and painted, so a model of 100 000 items costs the same as
   ten.

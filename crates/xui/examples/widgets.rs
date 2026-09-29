@@ -338,7 +338,7 @@ fn run(renderer: Renderer, switch: Rc<Cell<Option<Renderer>>>) {
             .on_select(|index| Some(Msg::List(index)));
             let icons = IconView::new(
                 ui,
-                rect(1040.0, 176.0, 1280.0, 452.0),
+                rect(1040.0, 432.0, 1280.0, 700.0),
                 &["Documents", "Pictures", "Music", "Videos"],
             )
             .unwrap()

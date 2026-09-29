@@ -153,7 +153,7 @@ fn build(ui: &Ui<()>) -> Vec<Box<dyn Any>> {
     keep.push(Box::new(
         IconView::new(
             ui,
-            rect(1040, 148, 1280, 300),
+            rect(1040, 660, 1280, 880),
             &["Documents", "Pictures", "Music", "Videos"],
         )
         .unwrap(),
