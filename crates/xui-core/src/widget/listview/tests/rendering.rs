@@ -195,9 +195,11 @@ fn a_row_icon_is_drawn_and_pushes_only_its_own_text_right() {
     let icon_ops = ops
         .iter()
         .filter(|op| {
+            // Icons stroke with `LineStroked`/`StrokeEllipseStroked`; the plain
+            // `Line` ops are the header and separators, not the icon.
             matches!(
                 op,
-                DrawOp::LineStroked(..) | DrawOp::Line(..) | DrawOp::StrokeEllipseStroked(..)
+                DrawOp::LineStroked(..) | DrawOp::StrokeEllipseStroked(..)
             )
         })
         .count();
