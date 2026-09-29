@@ -33,7 +33,7 @@ pub(crate) fn paint(canvas: &mut dyn Canvas, state: &State, theme: &Theme, optio
     let overflows = state.visible_len() as i32 * row_height > bounds.height().max(0);
     let right = bounds.right
         - if overflows {
-            scrollbar::BAR.to_px(dpi).value()
+            scrollbar::THICKNESS.to_px(dpi).value()
         } else {
             0
         };

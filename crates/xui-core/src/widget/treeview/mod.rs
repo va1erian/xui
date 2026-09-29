@@ -20,8 +20,9 @@
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
+use super::Orientation;
 use super::control::Control;
-use super::scrollbar::{self, Bar};
+use super::scrollbar::{self, ScrollBar};
 use crate::app::Ui;
 use crate::backend::{NodeKind, NodeSpec, Result, WidgetId};
 use crate::geometry::{Point, Rect};
@@ -74,7 +75,7 @@ impl<M> Mappers<M> {
 pub struct TreeView<M: 'static> {
     control: Control<M>,
     _bar: Control<M>,
-    bar: Rc<Bar>,
+    bar: Rc<ScrollBar>,
     state: Rc<RefCell<State>>,
     selected: Rc<Cell<Option<NodeId>>>,
     hover: Rc<Cell<Option<NodeId>>>,
@@ -115,7 +116,7 @@ impl<M: 'static> TreeView<M> {
         let tri_state = Rc::new(Cell::new(false));
         let guides = Rc::new(Cell::new(true));
         let mappers = Rc::new(Mappers::new());
-        let bar = Rc::new(Bar::new(bar_control.id()));
+        let bar = Rc::new(ScrollBar::new(bar_control.id()));
 
         {
             let state = Rc::clone(&state);
@@ -149,7 +150,7 @@ impl<M: 'static> TreeView<M> {
             let theme = ui.theme_handle();
             bar_control.set_painter(Rc::new(move |canvas| {
                 let metrics = bar::metrics(&scoped, id, &state.borrow());
-                scrollbar::paint(canvas, metrics, theme.get());
+                scrollbar::paint(canvas, metrics, Orientation::Vertical, theme.get());
             }));
         }
         {

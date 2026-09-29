@@ -17,7 +17,7 @@ use crate::app::Ui;
 use crate::backend::{Cursor, Event, WidgetId};
 use crate::geometry::Point;
 use crate::message::{Key, Modifiers, MouseButton};
-use crate::widget::scrollbar::Bar;
+use crate::widget::scrollbar::ScrollBar;
 
 /// Builds the event closure a [`ListView`](super::ListView) registers.
 pub(crate) fn mapper<M: 'static>(
@@ -25,7 +25,7 @@ pub(crate) fn mapper<M: 'static>(
     id: WidgetId,
     state: Rc<RefCell<State>>,
     mappers: Rc<Mappers<M>>,
-    bar: Rc<Bar>,
+    bar: Rc<ScrollBar>,
 ) -> impl Fn(&Event) -> Option<M> + 'static {
     move |event| {
         if let Event::Resize { .. } = event {
@@ -45,7 +45,7 @@ fn handle<M: 'static>(
     id: WidgetId,
     state: &Rc<RefCell<State>>,
     mappers: &Mappers<M>,
-    bar: &Bar,
+    bar: &ScrollBar,
     event: &Event,
 ) -> Option<M> {
     let dpi = ui.dpi();
@@ -263,7 +263,7 @@ fn handle_key<M: 'static>(
     id: WidgetId,
     state: &Rc<RefCell<State>>,
     mappers: &Mappers<M>,
-    bar: &Bar,
+    bar: &ScrollBar,
     key: Key,
     modifiers: Modifiers,
 ) -> Option<M> {
