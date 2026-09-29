@@ -4,13 +4,15 @@
 //! paints from. See the README's *Theming* section for the model.
 
 use crate::Color;
+use crate::backend::Rgba;
 
 /// Semantic colours used by the bundled controls.
 ///
-/// Every colour is opaque. Palettes are sampled from Windows 11's own
-/// light/dark apps (Explorer chrome and address bar, Settings pages and
-/// cards, WinUI text/accent values on 24H2); each constructor documents the
-/// source per token group. Per-control structs
+/// Every colour is opaque except [`Theme::scrim`], which carries the alpha a
+/// modal backdrop needs to blend over the content behind it. Palettes are
+/// sampled from Windows 11's own light/dark apps (Explorer chrome and address
+/// bar, Settings pages and cards, WinUI text/accent values on 24H2); each
+/// constructor documents the source per token group. Per-control structs
 /// (`ListViewTheme::from_theme`, …) are derived, overridable views over
 /// these tokens.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -80,6 +82,13 @@ pub struct Theme {
     /// slider's or progress bar's unfilled groove is drawn over the plain
     /// background and must stay visible against it (#160).
     pub track: Color,
+    /// The modal backdrop a [`Dialog`](crate::widget::Dialog) or
+    /// [`TaskDialog`](crate::widget::TaskDialog) paints over the window while
+    /// it is open: black at 40% alpha in light mode and 55% in dark mode, so
+    /// the content stays visible but clearly recedes. Translucent rather than
+    /// an opaque dimmed [`Theme::background`] so it blends with whatever is
+    /// behind it on a compositing backend.
+    pub scrim: Rgba,
 }
 
 impl Theme {
@@ -109,6 +118,7 @@ impl Theme {
             scrollbar: Color::hex(0x8B_89_86),
             scrollbar_track: Color::hex(0xF3_F3_F3),
             track: Color::hex(0xB4_B4_B4),
+            scrim: Rgba::with_alpha(0x00, 0x00, 0x00, 0x66),
         }
     }
 
@@ -138,6 +148,7 @@ impl Theme {
             scrollbar: Color::hex(0x60_5E_5C),
             scrollbar_track: Color::hex(0x20_20_20),
             track: Color::hex(0x3F_3F_3F),
+            scrim: Rgba::with_alpha(0x00, 0x00, 0x00, 0x8C),
         }
     }
 }
@@ -217,5 +228,18 @@ mod tests {
         for theme in [Theme::light(), Theme::dark()] {
             assert_eq!(theme.shadow, crate::Color::rgb(0, 0, 0));
         }
+    }
+
+    /// The modal scrim is translucent black, and the dark variant dims harder
+    /// so the same content recedes further against the darker background.
+    #[test]
+    fn the_scrim_is_translucent_black_in_both_variants() {
+        use crate::backend::Rgba;
+        let light = Theme::light().scrim;
+        let dark = Theme::dark().scrim;
+        assert_eq!(light, Rgba::with_alpha(0, 0, 0, 102));
+        assert_eq!(dark, Rgba::with_alpha(0, 0, 0, 140));
+        assert!(light.a > 0 && light.a < 255, "the scrim blends, not opaque");
+        assert!(dark.a > light.a, "dark mode dims more than light");
     }
 }

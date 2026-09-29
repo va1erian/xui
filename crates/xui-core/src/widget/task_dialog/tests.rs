@@ -159,6 +159,30 @@ fn a_task_dialog_paints_its_icon_title_and_message() {
 }
 
 #[test]
+fn the_scrim_is_a_translucent_overlay_not_an_opaque_clear() {
+    let (backend, _core, ui) = setup();
+    let dialog = TaskDialog::new(&ui, "Title", "Message")
+        .unwrap()
+        .command("OK")
+        .unwrap();
+    dialog.open();
+    let theme = ui.theme();
+    let client = ui.client_rect();
+
+    backend.render(dialog.id());
+    let ops = backend.ops(dialog.id());
+
+    assert!(
+        ops.iter().any(|op| matches!(op, DrawOp::FillRgba(rect, color) if *rect == client && *color == theme.scrim)),
+        "the scrim is one translucent fill over the whole client: {ops:?}"
+    );
+    assert!(
+        !ops.iter().any(|op| matches!(op, DrawOp::Clear(_))),
+        "the scrim must blend over the content, not clear it: {ops:?}"
+    );
+}
+
+#[test]
 fn every_icon_variant_paints_a_glyph() {
     for icon in [
         TaskDialogIcon::Info,
