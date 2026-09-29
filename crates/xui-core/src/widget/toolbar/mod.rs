@@ -15,97 +15,83 @@ use crate::icon::IconRef;
 use crate::message::{Key, MouseButton};
 use crate::property::{Properties, Property, Value};
 
+mod layout;
 mod paint;
+mod strip;
+
+use layout::{Layout, Mode};
+use strip::{Entry, Item, State};
 
 /// Maps the index of a clicked item to an optional app message.
 type ClickMapper<M> = Rc<RefCell<Option<Box<dyn Fn(usize) -> Option<M>>>>>;
 
-/// One toolbar entry: an optional icon, an optional label and an optional
-/// tooltip. At least one of the icon and the label is shown; a text-only item
-/// has no icon.
-pub(crate) struct Item {
-    /// The item's leading icon.
-    pub(crate) icon: Option<IconRef>,
-    /// The item's text label, or `None` for an icon-only item.
-    pub(crate) label: Option<String>,
-    /// The item's hover tooltip, if any.
-    pub(crate) tooltip: Option<String>,
-}
-
-impl Item {
-    /// A text-only item.
-    fn text(label: &str) -> Item {
-        Item {
-            icon: None,
-            label: Some(label.to_string()),
-            tooltip: None,
-        }
-    }
-}
-
-/// The node-local `[start, end)` span of item `index` in a strip `width`
-/// pixels wide holding `count` items.
+/// The strip's current layout, measured with the backend's text metrics.
 ///
-/// Edges are spread proportionally, so every cell stays inside the strip even
-/// when it is narrower than the item count (some cells are then empty) and the
-/// division remainder is shared out rather than piled onto one cell. Painting
-/// and hit-testing both use it, so what is drawn is what is hit.
-fn cell_span(width: i32, count: usize, index: usize) -> (i32, i32) {
-    if count == 0 || width <= 0 {
-        return (0, 0);
-    }
-    let edge = |i: usize| (i64::from(width) * i as i64 / count as i64) as i32;
-    (edge(index), edge(index + 1))
-}
-
-/// The item an event `x` (node-local) falls on; `None` outside the strip.
-/// `bounds` supplies the strip's total width.
-fn item_at(bounds: Rect, x: i32, count: usize) -> Option<usize> {
-    let width = bounds.width();
-    if count == 0 || width <= 0 || x < 0 || x >= width {
-        return None;
-    }
-    (0..count).find(|&index| {
-        let (start, end) = cell_span(width, count, index);
-        (start..end).contains(&x)
-    })
+/// The entries borrow ends before this returns, and measuring text delivers no
+/// events, so no borrow is held across a call that could re-enter the toolbar.
+fn layout_of<M: 'static>(ui: &Ui<M>, id: WidgetId, state: &State) -> Layout {
+    let bounds = ui.bounds(id);
+    let dpi = ui.dpi();
+    let style = layout::label_style(ui.theme_handle().get().text);
+    let entries = state.entries.borrow();
+    layout::compute(
+        &entries,
+        state.mode.get(),
+        (bounds.width(), bounds.height()),
+        dpi,
+        &mut |text| ui.measure_text(text, &style, dpi).width,
+    )
 }
 
 /// The hover tooltip text of item `index`, if it names one.
-fn tooltip_at(items: &Rc<RefCell<Vec<Item>>>, index: Option<usize>) -> Option<String> {
-    let items = items.borrow();
+fn tooltip_at(state: &State, index: Option<usize>) -> Option<String> {
+    let entries = state.entries.borrow();
     index
-        .and_then(|index| items.get(index))
+        .and_then(|index| entries.item(index))
         .and_then(|item| item.tooltip.clone())
 }
 
-/// A horizontal strip of equally-spaced clickable items.
+/// A horizontal strip of clickable items, packed from the left.
 ///
 /// An item is a text label, an icon, or an icon with a label, and may name a
-/// tooltip. Clicking an item maps its index to the app's `Msg` through
+/// tooltip. By default each button is only as wide as its content: an
+/// icon-only button is square (as wide as the strip is tall), a labelled one is
+/// its icon, gap, measured label and padding. The space right of the last item
+/// stays empty. [`Toolbar::fill`] restores an equal split of the whole width.
+///
+/// [`Toolbar::separator`] adds a thin non-clickable line between groups. It
+/// takes room but no index: `on_click`, [`Toolbar::icon`], [`Toolbar::label`],
+/// [`Toolbar::tooltip`] and [`Toolbar::len`] count items only.
+///
+/// Items that do not fit are clipped at the right edge: a trailing item that
+/// does not fit completely is neither drawn nor clickable. An overflow menu is
+/// not supported yet.
+///
+/// Clicking an item maps its index to the app's `Msg` through
 /// [`Toolbar::on_click`]. The left and right arrow keys move a focused item
 /// (shown with the hover highlight) and Return activates it; a disabled
 /// toolbar ignores input and dims its items.
 pub struct Toolbar<M: 'static> {
     control: Control<M>,
-    items: Rc<RefCell<Vec<Item>>>,
-    hover: Rc<Cell<Option<usize>>>,
-    enabled: Rc<Cell<bool>>,
+    state: Rc<State>,
     activated: Rc<Cell<i64>>,
     _tooltip: Option<Rc<Tooltip<M>>>,
     on_click: ClickMapper<M>,
 }
 
 impl<M: 'static> Toolbar<M> {
-    /// Creates a text-only toolbar of `items` along `bounds`.
+    /// Creates a text-only toolbar of `items` along `bounds`, each button as
+    /// wide as its label plus padding.
     ///
     /// Add icon items to an empty toolbar with [`Toolbar::empty`] and
     /// [`Toolbar::item`].
     pub fn new(ui: &Ui<M>, bounds: Rect, items: &[&str]) -> Result<Toolbar<M>> {
         let toolbar = Toolbar::empty(ui, bounds)?;
         {
-            let mut slot = toolbar.items.borrow_mut();
-            slot.extend(items.iter().map(|item| Item::text(item)));
+            let mut slot = toolbar.state.entries.borrow_mut();
+            for item in items {
+                slot.push(Entry::Item(Item::text(item)));
+            }
         }
         toolbar.control.invalidate();
         Ok(toolbar)
@@ -115,10 +101,7 @@ impl<M: 'static> Toolbar<M> {
     /// and [`Toolbar::item_with_text`].
     pub fn empty(ui: &Ui<M>, bounds: Rect) -> Result<Toolbar<M>> {
         let control = Control::new(ui, &NodeSpec::new(NodeKind::Toolbar, bounds).tab_stop())?;
-        let items: Rc<RefCell<Vec<Item>>> = Rc::new(RefCell::new(Vec::new()));
-        let hover = Rc::new(Cell::new(None));
-        let pressed = Rc::new(Cell::new(None));
-        let enabled = Rc::new(Cell::new(true));
+        let state = Rc::new(State::new());
         let activated = Rc::new(Cell::new(-1i64));
         let on_click: ClickMapper<M> = Rc::new(RefCell::new(None));
 
@@ -127,30 +110,16 @@ impl<M: 'static> Toolbar<M> {
         let tooltip = Tooltip::attach(ui, control.id(), "").ok().map(Rc::new);
 
         {
-            let items = Rc::clone(&items);
-            let hover = Rc::clone(&hover);
-            let pressed = Rc::clone(&pressed);
-            let enabled = Rc::clone(&enabled);
+            let state = Rc::clone(&state);
             let theme = ui.theme_handle();
             let selected = control.selected_handle();
             control.set_painter(Rc::new(move |canvas| {
-                paint::paint(
-                    canvas,
-                    &items,
-                    &hover,
-                    &pressed,
-                    &enabled,
-                    &selected,
-                    theme.get(),
-                );
+                paint::paint(canvas, &state, &selected, theme.get());
             }));
         }
 
         {
-            let items = Rc::clone(&items);
-            let hover = Rc::clone(&hover);
-            let pressed = Rc::clone(&pressed);
-            let enabled = Rc::clone(&enabled);
+            let state = Rc::clone(&state);
             let activated = Rc::clone(&activated);
             let tooltip = tooltip.clone();
             let on_click = Rc::clone(&on_click);
@@ -161,17 +130,16 @@ impl<M: 'static> Toolbar<M> {
                 if ui.is_design_mode() && event.is_input() {
                     return None;
                 }
-                if !enabled.get() {
+                if !state.enabled.get() {
                     return None;
                 }
-                let bounds = ui.bounds(id);
                 match event {
                     Event::MouseMove { x, .. } => {
-                        let index = item_at(bounds, *x, items.borrow().len());
-                        if hover.get() != index {
-                            hover.set(index);
+                        let index = layout_of(&ui, id, &state).item_at(*x);
+                        if state.hover.get() != index {
+                            state.hover.set(index);
                             if let Some(tip) = &tooltip {
-                                match tooltip_at(&items, index) {
+                                match tooltip_at(&state, index) {
                                     Some(text) => tip.set_text(&text),
                                     None => tip.hide(),
                                 }
@@ -181,9 +149,9 @@ impl<M: 'static> Toolbar<M> {
                         None
                     }
                     Event::MouseLeave | Event::CaptureChanged => {
-                        if hover.get().is_some() || pressed.get().is_some() {
-                            hover.set(None);
-                            pressed.set(None);
+                        if state.hover.get().is_some() || state.pressed.get().is_some() {
+                            state.hover.set(None);
+                            state.pressed.set(None);
                             if let Some(tip) = &tooltip {
                                 tip.hide();
                             }
@@ -196,7 +164,7 @@ impl<M: 'static> Toolbar<M> {
                         button: MouseButton::Left,
                         ..
                     } => {
-                        pressed.set(item_at(bounds, *x, items.borrow().len()));
+                        state.pressed.set(layout_of(&ui, id, &state).item_at(*x));
                         ui.invalidate(id);
                         None
                     }
@@ -205,9 +173,9 @@ impl<M: 'static> Toolbar<M> {
                         button: MouseButton::Left,
                         ..
                     } => {
-                        let index = item_at(bounds, *x, items.borrow().len());
-                        let was_pressed = pressed.get();
-                        pressed.set(None);
+                        let index = layout_of(&ui, id, &state).item_at(*x);
+                        let was_pressed = state.pressed.get();
+                        state.pressed.set(None);
                         ui.invalidate(id);
                         if index.is_none() || index != was_pressed {
                             return None;
@@ -223,25 +191,37 @@ impl<M: 'static> Toolbar<M> {
                         system,
                         ..
                     } if *repeat <= 1 && !*system => {
-                        let count = items.borrow().len();
+                        // Only items that fit are reachable: clipped items have
+                        // empty spans and trail the visible ones, as for the mouse.
+                        let count = layout_of(&ui, id, &state)
+                            .items
+                            .iter()
+                            .take_while(|&&(start, end)| end > start)
+                            .count();
                         if count == 0 {
                             return None;
                         }
                         match *key {
                             Key::LEFT => {
-                                let index = hover.get().unwrap_or(0).saturating_sub(1);
-                                hover.set(Some(index));
+                                let index = state
+                                    .hover
+                                    .get()
+                                    .unwrap_or(0)
+                                    .min(count - 1)
+                                    .saturating_sub(1);
+                                state.hover.set(Some(index));
                                 ui.invalidate(id);
                                 None
                             }
                             Key::RIGHT => {
-                                let index = (hover.get().unwrap_or(0) + 1).min(count - 1);
-                                hover.set(Some(index));
+                                let index = (state.hover.get().unwrap_or(0) + 1).min(count - 1);
+                                state.hover.set(Some(index));
                                 ui.invalidate(id);
                                 None
                             }
                             Key::RETURN => {
-                                let index = hover.get()?;
+                                // A hover left over from a wider strip may now be clipped.
+                                let index = state.hover.get().filter(|&index| index < count)?;
                                 activated.set(index as i64);
                                 ui.invalidate(id);
                                 let mapper = on_click.borrow();
@@ -257,9 +237,7 @@ impl<M: 'static> Toolbar<M> {
 
         Ok(Toolbar {
             control,
-            items,
-            hover,
-            enabled,
+            state,
             activated,
             _tooltip: tooltip,
             on_click,
@@ -285,9 +263,31 @@ impl<M: 'static> Toolbar<M> {
         })
     }
 
+    /// Appends a thin vertical separator line after the last entry.
+    ///
+    /// It is not clickable, has no tooltip and takes no item index, so the
+    /// indices `on_click` receives are unchanged by it.
+    pub fn separator(self) -> Toolbar<M> {
+        self.push_entry(Entry::Separator)
+    }
+
+    /// Splits the strip's whole width equally between the items instead of
+    /// sizing each to its content (the layout before the compact default).
+    /// Separators are drawn on the boundary before the next item.
+    pub fn fill(self) -> Toolbar<M> {
+        self.state.mode.set(Mode::Fill);
+        self.control.invalidate();
+        self
+    }
+
     /// Appends a prepared item and repaints.
     fn push(self, item: Item) -> Toolbar<M> {
-        self.items.borrow_mut().push(item);
+        self.push_entry(Entry::Item(item))
+    }
+
+    /// Appends an entry and repaints.
+    fn push_entry(self, entry: Entry) -> Toolbar<M> {
+        self.state.entries.borrow_mut().push(entry);
         self.control.invalidate();
         self
     }
@@ -299,35 +299,37 @@ impl<M: 'static> Toolbar<M> {
         self
     }
 
-    /// The number of items.
+    /// The number of items; separators are not counted.
     pub fn len(&self) -> usize {
-        self.items.borrow().len()
+        self.state.entries.borrow().item_count()
     }
 
     /// Whether the toolbar has no items.
     pub fn is_empty(&self) -> bool {
-        self.items.borrow().is_empty()
+        self.len() == 0
     }
 
     /// Item `index`'s icon, if it has one.
     pub fn icon(&self, index: usize) -> Option<IconRef> {
-        self.items.borrow().get(index).and_then(|item| item.icon)
+        self.state
+            .entries
+            .borrow()
+            .item(index)
+            .and_then(|item| item.icon)
     }
 
     /// Item `index`'s label, if it has one.
     pub fn label(&self, index: usize) -> Option<String> {
-        self.items
+        self.state
+            .entries
             .borrow()
-            .get(index)
+            .item(index)
             .and_then(|item| item.label.clone())
     }
 
     /// Item `index`'s tooltip text, if it names one.
     pub fn tooltip(&self, index: usize) -> Option<String> {
-        self.items
-            .borrow()
-            .get(index)
-            .and_then(|item| item.tooltip.clone())
+        tooltip_at(&self.state, Some(index))
     }
 
     /// The toolbar's node identity.
@@ -338,14 +340,14 @@ impl<M: 'static> Toolbar<M> {
     /// Enables or disables the toolbar. A disabled toolbar is dimmed and
     /// ignores input.
     pub fn set_enabled(&self, enabled: bool) {
-        self.enabled.set(enabled);
+        self.state.enabled.set(enabled);
         self.control.set_enabled(enabled);
         self.control.invalidate();
     }
 
     /// Whether the toolbar is enabled.
     pub fn is_enabled(&self) -> bool {
-        self.enabled.get()
+        self.state.enabled.get()
     }
 
     /// Marks the toolbar selected, so its painter draws an outline (a form
@@ -369,7 +371,7 @@ impl<M: 'static> Properties for Toolbar<M> {
                 let in_range = index >= 0 && (index as usize) < self.len();
                 let index = if in_range { index } else { -1 };
                 self.activated.set(index);
-                self.hover.set((index >= 0).then_some(index as usize));
+                self.state.hover.set((index >= 0).then_some(index as usize));
                 self.control.invalidate();
                 true
             }
@@ -378,5 +380,7 @@ impl<M: 'static> Properties for Toolbar<M> {
     }
 }
 
+#[cfg(test)]
+mod layout_tests;
 #[cfg(test)]
 mod tests;
