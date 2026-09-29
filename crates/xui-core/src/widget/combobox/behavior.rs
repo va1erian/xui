@@ -6,11 +6,12 @@
 use crate::app::Ui;
 use crate::backend::{Canvas, Event, TextStyle, WidgetId};
 use crate::geometry::{Point, Rect};
+use crate::icon::draw_icon;
 use crate::message::{Key, MouseButton};
 use crate::theme::Theme;
 use crate::widget::popup;
 
-use super::{ARROW, PADDING, ROW, Shared, TEXT_SIZE};
+use super::{ARROW, ICON, ICON_GAP, PADDING, ROW, Shared, TEXT_SIZE};
 
 fn pick<T>(cond: bool, yes: T, no: T) -> T {
     if cond { yes } else { no }
@@ -53,6 +54,32 @@ fn row_at(dpi: u32, y: i32, count: usize) -> Option<usize> {
         .filter(|index| *index < count)
 }
 
+/// Draws item `index`'s icon, if it has one, at the left of `text` and returns
+/// `text` moved right past it (unchanged for an item without an icon).
+fn lead<M: 'static>(
+    s: &Shared<M>,
+    canvas: &mut dyn Canvas,
+    index: usize,
+    text: Rect,
+    color: crate::color::Color,
+) -> Rect {
+    let Some(icon) = s.icons.borrow().get(index).copied().flatten() else {
+        return text;
+    };
+    let dpi = canvas.dpi();
+    let side = ICON.to_px(dpi).value();
+    let top = text.top + (text.height() - side) / 2;
+    let slot = Rect::new(text.left, top, text.left + side, top + side);
+    draw_icon(canvas, icon, slot, color, dpi);
+    let shift = side + ICON_GAP.to_px(dpi).value();
+    Rect::new(
+        (text.left + shift).min(text.right),
+        text.top,
+        text.right,
+        text.bottom,
+    )
+}
+
 /// Paints the field: input background, border, selected text and a chevron.
 pub(super) fn paint_field<M: 'static>(
     s: &Shared<M>,
@@ -70,6 +97,7 @@ pub(super) fn paint_field<M: 'static>(
     let i = b.shrink(pad);
     let text = Rect::new(i.left, i.top, (i.right - arrow).max(i.left), i.bottom);
     if let Some(item) = s.items.get(s.selected.get()) {
+        let text = lead(s, canvas, s.selected.get(), text, color);
         canvas.draw_text(item, text, &TextStyle::new(color, TEXT_SIZE).middle());
     }
     let (cx, cy) = (b.right - pad - arrow / 2, b.top + b.height() / 2);
@@ -100,7 +128,8 @@ pub(super) fn paint_popup<M: 'static>(s: &Shared<M>, canvas: &mut dyn Canvas, th
         let hot_color = pick(hot, theme.text_on_accent, theme.text);
         let color = pick(s.enabled.get(), hot_color, theme.text_disabled);
         let style = TextStyle::new(color, TEXT_SIZE).middle();
-        canvas.draw_text(item, rect.shrink(pad), &style);
+        let text = lead(s, canvas, index, rect.shrink(pad), color);
+        canvas.draw_text(item, text, &style);
     }
 }
 
@@ -133,6 +162,7 @@ pub(super) fn field_event<M: 'static>(
                     _ => cur.saturating_sub(1),
                 });
                 ui.invalidate(field);
+                ui.invalidate(popup);
             }
             _ => {}
         },

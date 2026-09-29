@@ -10,6 +10,7 @@
 use xui_core::Dip;
 use xui_core::app::{App, Ui, run_app};
 use xui_core::backend::PlatformSpec;
+use xui_core::icon::Lucide;
 use xui_core::widget::{ComboBox, HasText, Label};
 
 #[path = "support.rs"]
@@ -51,6 +52,9 @@ fn main() -> xui_core::backend::Result<()> {
             let result = Label::new(ui, l.rect(16.0, 16.0, 504.0, 48.0), "Nothing chosen").unwrap();
             let combo = ComboBox::new(ui, l.rect(16.0, 64.0, 320.0, 104.0), &ITEMS)
                 .unwrap()
+                .item_icon(0, Lucide::CircleDot)
+                .item_icon(1, Lucide::Info)
+                .item_icon(2, Lucide::TriangleAlert)
                 .on_select(|index| Some(Msg::Select(index)));
             autoclose(ui, || Msg::Quit);
             Demo {

@@ -66,7 +66,7 @@ Event builders return `Self`, so they chain at construction.
 | `MultilineEdit<M>` | `MultilineEdit::new(ui, rect, text)` | `on_change(&str)` |
 | `NumberField<M>` | `NumberField::new(ui, rect, min, max, step)` | `on_change(f64)`, `on_commit(f64)` |
 | `Slider<M>` | `Slider::new(ui, rect, min, max)` | `on_change(f64)`, `on_commit(f64)`; `set_range` |
-| `ComboBox<M>` | `ComboBox::new(ui, rect, &[items])` | `on_select(usize)` |
+| `ComboBox<M>` | `ComboBox::new(ui, rect, &[items])` | `on_select(usize)`; `item_icon(index, impl Into<IconRef>)` / `set_item_icon(index, Option<IconRef>)` add a leading 16 DIP icon to an item, in the list and in the closed box while selected (`icon(index)` reads it back) |
 
 ### Collections
 
