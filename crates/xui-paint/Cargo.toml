@@ -1,0 +1,35 @@
+[package]
+name = "xui-paint"
+version = "0.0.0"
+edition = "2024"
+publish = false
+description = "A minimal MS-Paint-style doodler built on xui, portable to a toy OS."
+
+[lib]
+name = "xui_paint"
+path = "src/lib.rs"
+
+[[bin]]
+name = "xpaint"
+path = "src/main.rs"
+required-features = ["canvas"]
+
+[features]
+# xui gap: G13 — `xui-canvas` compiles winit/softbuffer unconditionally, so the
+# portable frontend is only winit-backed here; a toy OS builds without it and
+# supplies its own `Backend`.
+default = ["canvas"]
+# The `xui-canvas` backend for `main.rs` and the offscreen self-test render.
+# The library source (model + view logic) uses `xui-core` only; with
+# `--no-default-features` the crate still builds and `--self-test` runs its
+# model checks.
+canvas = ["dep:xui-canvas"]
+# Optional filesystem persistence; off by default so nothing touches disk.
+fs = []
+
+[dependencies]
+xui-core = { path = "../xui-core" }
+xui-canvas = { path = "../xui-canvas", optional = true }
+
+[dev-dependencies]
+xui-canvas = { path = "../xui-canvas" }
