@@ -41,7 +41,7 @@ pub(super) fn key_events(
             }
         });
     }
-    if pressed {
+    if pressed && types_text(modifiers) {
         events.extend(
             text.into_iter()
                 .flat_map(str::chars)
@@ -50,6 +50,16 @@ pub(super) fn key_events(
         );
     }
     events
+}
+
+/// Whether a press with `modifiers` types its text. `winit`'s `text` ignores
+/// Ctrl, so Ctrl+C reports "c": typing it would insert the letter after the
+/// shortcut runs. A shortcut modifier (Ctrl or the Windows/Command key) means
+/// no text, except Ctrl+Alt, which is how Windows reports AltGr, the key that
+/// types `{ [ @ #` on many non-US layouts.
+fn types_text(modifiers: Modifiers) -> bool {
+    let altgr = modifiers.ctrl && modifiers.alt;
+    altgr || !(modifiers.ctrl || modifiers.win)
 }
 
 /// The frame thickness, in device pixels, within which a borderless resizable
@@ -357,5 +367,70 @@ mod tests {
             1,
             "Ctrl+C is a key, not a typed control character"
         );
+    }
+
+    fn press(text: &str, modifiers: Modifiers) -> Vec<Event> {
+        key_events(
+            true,
+            false,
+            &WinitKey::Character(text.into()),
+            Some(text),
+            modifiers,
+        )
+    }
+
+    #[test]
+    fn shortcuts_do_not_type_their_letter() {
+        let ctrl = Modifiers {
+            ctrl: true,
+            ..Modifiers::NONE
+        };
+        for letter in ["c", "v", "x", "a", "z", "s"] {
+            let events = press(letter, ctrl);
+            assert!(
+                !events.iter().any(|event| matches!(event, Event::Char(_))),
+                "Ctrl+{letter} types nothing: {events:?}"
+            );
+            assert!(
+                matches!(events[0], Event::KeyDown { .. }),
+                "Ctrl+{letter} is still a key"
+            );
+        }
+        let unmapped = press(";", ctrl);
+        assert!(
+            unmapped.is_empty(),
+            "Ctrl+; neither types nor has a key code"
+        );
+        let win = press(
+            "c",
+            Modifiers {
+                win: true,
+                ..Modifiers::NONE
+            },
+        );
+        assert!(
+            !win.iter().any(|event| matches!(event, Event::Char(_))),
+            "Win/Cmd+C types nothing"
+        );
+    }
+
+    #[test]
+    fn altgr_and_shift_still_type() {
+        let altgr = Modifiers {
+            ctrl: true,
+            alt: true,
+            ..Modifiers::NONE
+        };
+        assert_eq!(
+            press("{", altgr),
+            vec![Event::Char('{')],
+            "AltGr+4 on AZERTY types {{"
+        );
+        let shift = Modifiers {
+            shift: true,
+            ..Modifiers::NONE
+        };
+        let events = press("A", shift);
+        assert_eq!(events.last(), Some(&Event::Char('A')), "Shift+a types A");
     }
 }

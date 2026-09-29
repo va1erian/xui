@@ -12,6 +12,7 @@
 
 ### Fixes
 
+- The canvas backend no longer types the letter of a Ctrl (or Windows/Command) shortcut: `winit` reports Ctrl+C with the text "c", which was delivered as a `Char` after the shortcut, so copy and paste also inserted a letter. Ctrl+Alt (AltGr) still types.
 - The canvas (`winit`) backend delivers typed text for keys that have no portable
   `Key` code: punctuation, symbols and accented letters (`;`, `{`, `é`, AltGr
   combinations on non-US layouts) were dropped entirely, so they could not be
