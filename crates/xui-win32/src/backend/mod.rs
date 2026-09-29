@@ -168,9 +168,9 @@ mod tests {
     fn set_window_icon_installs_both_sizes() {
         let backend = Win32Backend::new();
         backend.init();
-        let Ok(window) = backend.open_window(&PlatformSpec::new("xui.icon")) else {
-            return; // no desktop; skip
-        };
+        let window = backend
+            .open_window(&PlatformSpec::new("xui.icon"))
+            .expect("the icon test requires a desktop");
         let icon = crate::Icon::from_rgba(16, 16, &[0xFF; 16 * 16 * 4]).expect("icon");
         backend.set_window_icon(window, &icon);
         let hwnd = backend.window_hwnd(window).expect("hwnd");
