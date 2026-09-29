@@ -4,9 +4,9 @@
 //! optional verification checkbox.
 //!
 //! It is the richer sibling of [`Dialog`](super::Dialog): same full-window
-//! scrim and centred card, but every dismissal is one of the app's own command
-//! buttons, and the caller can add a checkbox whose state is read after the
-//! action. Build one with [`TaskDialog::new`], add commands with
+//! translucent scrim and centred card, but every dismissal is one of the app's
+//! own command buttons, and the caller can add a checkbox whose state is read
+//! after the action. Build one with [`TaskDialog::new`], add commands with
 //! [`TaskDialog::command`], then [`TaskDialog::open`] it.
 
 use std::cell::{Cell, RefCell};
@@ -20,9 +20,7 @@ use super::checkbox::CheckBox;
 use super::control::Control;
 use crate::app::Ui;
 use crate::backend::{NodeKind, NodeSpec, Result, TextStyle, WidgetId};
-use crate::color::Color;
 use crate::geometry::Rect;
-use crate::theme::Theme;
 use crate::units::Dip;
 
 mod events;
@@ -115,7 +113,7 @@ impl<M: 'static> TaskDialog<M> {
             scrim.set_painter(Rc::new(move |canvas| {
                 let theme = theme.get();
                 let layout = layout.get();
-                canvas.clear(scrim_color(theme));
+                canvas.fill_rect_rgba(canvas.bounds(), theme.scrim);
                 if !layout.visible {
                     return;
                 }
@@ -319,13 +317,6 @@ impl<M: 'static> TaskDialog<M> {
         }
         self.shared.ui.invalidate(self.scrim.id());
     }
-}
-
-/// The scrim colour: the window background darkened. It is opaque because a
-/// painted child window does not blend with the widgets behind it on every
-/// backend, so a translucent fill would show uninitialised pixels.
-fn scrim_color(theme: Theme) -> Color {
-    theme.background.lerp(Color::rgb(0, 0, 0), 0.35)
 }
 
 #[cfg(test)]

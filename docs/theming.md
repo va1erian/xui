@@ -22,6 +22,7 @@ application picks a `Theme` and everything follows. Every backend shares the sam
 | `input_background` | Text fields and other inputs |
 | `input_border` | Border around inputs (fields, check boxes) |
 | `scrollbar`, `scrollbar_track` | Scrollbars |
+| `scrim` | The translucent modal backdrop a `Dialog`/`TaskDialog` paints over the window |
 
 `Theme::light()` and `Theme::dark()` sample Windows 11 Explorer/Settings/WinUI
 values; each field documents its source. `Theme::default()` is light.

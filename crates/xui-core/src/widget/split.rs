@@ -46,7 +46,8 @@ struct Shared<M: 'static> {
     current: Cell<i32>,
     /// The divider's rectangle in the split's own coordinates.
     divider: Cell<Rect>,
-    /// The pointer coordinate a drag started at, while dragging.
+    /// The pointer's coordinate on the drag axis when a drag started, in the
+    /// split's own coordinates: stable while the divider moves under it.
     drag: Cell<Option<i32>>,
     /// The first pane's extent in pixels when the drag started.
     drag_start: Cell<i32>,
@@ -335,6 +336,19 @@ fn paint_divider(canvas: &mut dyn Canvas, theme: Theme) {
     );
 }
 
+/// The pointer's coordinate on the drag axis, in the split's own (stable)
+/// coordinates: the event's divider-local point plus the divider's current
+/// origin. The divider moves as the pane resizes, so its local origin shifts
+/// under the cursor; converting on every event keeps the delta meaningful.
+fn pointer_axis<M>(ui: &Ui<M>, s: &Shared<M>, x: i32, y: i32) -> i32 {
+    let divider = ui.bounds(s.divider_id);
+    if s.horizontal {
+        divider.left + x
+    } else {
+        divider.top + y
+    }
+}
+
 /// Handles divider input: drag, release and arrow keys.
 fn divider_event<M>(s: &Shared<M>, ui: &Ui<M>, event: &Event) -> Option<M> {
     if ui.is_design_mode() && event.is_input() {
@@ -348,13 +362,13 @@ fn divider_event<M>(s: &Shared<M>, ui: &Ui<M>, event: &Event) -> Option<M> {
             button: MouseButton::Left,
             ..
         } => {
-            s.drag.set(Some(if s.horizontal { *x } else { *y }));
+            s.drag.set(Some(pointer_axis(ui, s, *x, *y)));
             s.drag_start.set(s.current.get());
             ui.set_capture(s.divider_id);
         }
         Event::MouseMove { x, y, .. } => {
             if let Some(start) = s.drag.get() {
-                let at = if s.horizontal { *x } else { *y };
+                let at = pointer_axis(ui, s, *x, *y);
                 let target = s.drag_start.get() + (at - start);
                 apply_position(ui, s, target, true);
             }

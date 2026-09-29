@@ -9,6 +9,12 @@
   distance of the first, on the same widget, producing the same
   `Down, Up, DoubleClick, Up` sequence as the Win32 backend
   (`WM_*BUTTONDBLCLK`); a third quick press starts a new sequence (#219).
+- A modal `Dialog`/`TaskDialog` now dims the content behind it with a translucent
+  scrim (`Theme::scrim`: black at 40% alpha in light mode, 55% in dark) instead
+  of painting the window an opaque grey. On compositing backends (canvas) the
+  app stays visible through the backdrop; the Win32 backend's separate child
+  windows do not composite the scrim over sibling windows. Either way the scrim
+  still blocks input to the widgets behind it (#221).
 - `TopBar` lays its items out and hit-tests them in node-local coordinates, so a
   bar anywhere other than the window origin responds to clicks, hovers and
   slider drags (#157).
@@ -20,6 +26,7 @@
   on Windows, so the app's own caption is the only chrome (#150).
 - `StatusBar` no longer lets a part's text overflow past its divider into the next part: it is now clipped and end-ellipsized the same way `ListView`'s header cells are (#186).
 - `ListView`'s header now reserves room for the sort arrow, so a long sorted-column title is ellipsized before the arrow instead of drawn underneath it (#187).
+- Dragging a `Split` divider now tracks the cursor 1:1 instead of jumping: the drag delta is computed in the split's own coordinates (the divider-local point plus the divider's current origin), which do not move as the divider is resized, rather than in the moving divider's local coordinates (#220).
 
 ### Changes
 
@@ -42,6 +49,8 @@
 
 ### Breaking
 
+- `Theme` gained a `scrim: Rgba` field for the modal backdrop, so a full struct
+  literal of the palette must set it (#221).
 - `RowIcon` gained an `Icon(IconRef)` variant, so an exhaustive match on it must
   handle it; `Button::set_icon` now takes `Option<impl Into<IconRef>>`
   (`Button::clear_icon` removes the icon; a bare `None` needs a type
