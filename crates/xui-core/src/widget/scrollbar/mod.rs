@@ -146,17 +146,13 @@ impl ScrollBar {
                     ));
                 }
             }
+            // Only a drag this bar started holds the capture; a host that
+            // forwards every event must not lose a capture of its own.
             Event::MouseUp {
                 button: MouseButton::Left,
                 ..
-            }
-            | Event::CaptureChanged => {
-                // Only a drag this bar started holds the capture; a host that
-                // forwards every event must not lose a capture of its own.
-                if self.drag.take().is_some() && matches!(event, Event::MouseUp { .. }) {
-                    ui.release_capture();
-                }
-            }
+            } if self.drag.take().is_some() => ui.release_capture(),
+            Event::CaptureChanged => self.drag.set(None),
             _ => {}
         }
     }
