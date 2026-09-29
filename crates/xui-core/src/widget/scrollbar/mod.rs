@@ -151,8 +151,11 @@ impl ScrollBar {
                 ..
             }
             | Event::CaptureChanged => {
-                self.drag.set(None);
-                ui.release_capture();
+                // Only a drag this bar started holds the capture; a host that
+                // forwards every event must not lose a capture of its own.
+                if self.drag.take().is_some() && matches!(event, Event::MouseUp { .. }) {
+                    ui.release_capture();
+                }
             }
             _ => {}
         }

@@ -71,13 +71,6 @@ fn matcher(query: &Query, case_sensitive: bool) -> Result<Regex, String> {
         .map_err(|error| error.to_string())
 }
 
-/// The char index of `byte` in `text`.
-///
-/// `byte` must sit on a character boundary, which every regex match does.
-fn byte_to_char(text: &str, byte: usize) -> usize {
-    text[..byte.min(text.len())].chars().count()
-}
-
 /// Every non-overlapping match of `query`, as char ranges in order.
 ///
 /// An empty query (or a pattern that never matches) yields no matches. An
@@ -87,9 +80,21 @@ pub fn matches(text: &str, query: &Query, case_sensitive: bool) -> Result<Vec<Ma
         return Ok(Vec::new());
     }
     let regex = matcher(query, case_sensitive)?;
+    // One forward scan: matches arrive in order, so the char index is carried
+    // from the previous byte offset instead of recounted from the start. Every
+    // regex match sits on a character boundary.
+    let (mut byte, mut chars) = (0usize, 0usize);
+    let mut advance = |to: usize| {
+        chars += text[byte..to].chars().count();
+        byte = to;
+        chars
+    };
     Ok(regex
         .find_iter(text)
-        .map(|m| (byte_to_char(text, m.start()), byte_to_char(text, m.end())))
+        .map(|m| {
+            let start = advance(m.start());
+            (start, advance(m.end()))
+        })
         .collect())
 }
 

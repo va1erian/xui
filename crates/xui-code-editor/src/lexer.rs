@@ -696,9 +696,7 @@ mod rhai {
                     '/' if self.at(self.pos + 1) == Some('*') => self.block_comment_start(),
                     '"' => self.double_string_body(self.pos, self.pos + 1),
                     '`' => self.backtick_body(self.pos, self.pos + 1),
-                    '#' if matches!(self.at(self.pos + 1), Some('"') | Some('#')) => {
-                        self.raw_string_start();
-                    }
+                    '#' if self.raw_string_opens() => self.raw_string_start(),
                     '\'' => self.char_literal(),
                     c if c.is_ascii_digit() => self.number(),
                     c if is_id_start(c) => self.identifier(),
@@ -820,6 +818,16 @@ mod rhai {
             self.pos = end;
         }
 
+        /// Whether the `#`s at the cursor are followed by the opening `"` of a
+        /// raw string (a bare `##` is not one).
+        fn raw_string_opens(&self) -> bool {
+            let mut j = self.pos;
+            while self.at(j) == Some('#') {
+                j += 1;
+            }
+            self.at(j) == Some('"')
+        }
+
         /// The start of a `#"..."#` raw string.
         fn raw_string_start(&mut self) {
             let start = self.pos;
@@ -827,8 +835,8 @@ mod rhai {
             while self.at(j) == Some('#') {
                 j += 1;
             }
-            // The caller only routes here when the next char is `"`, so `j` is
-            // the quote and `j - start` is the number of hashes.
+            // The caller checked `raw_string_opens`, so `j` is the quote and
+            // `j - start` is the number of hashes.
             self.raw_string_body(start, j + 1, j - start);
         }
 
@@ -1171,6 +1179,13 @@ mod rhai {
             assert!(matches!(state.mode, Mode::RawString { hashes: 1 }));
             let (tokens, state) = lex_line("second\"#;", state);
             assert_eq!(tokens[0].class, TokenClass::String);
+            assert_eq!(state, LexState::default());
+        }
+
+        #[test]
+        fn hashes_without_a_quote_are_not_a_raw_string() {
+            let (tokens, state) = lex_line("a ##", LexState::default());
+            assert!(tokens.iter().all(|t| t.class != TokenClass::String));
             assert_eq!(state, LexState::default());
         }
 

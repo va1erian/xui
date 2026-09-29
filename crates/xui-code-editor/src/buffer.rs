@@ -458,11 +458,13 @@ impl Buffer {
     /// Records `edit`, either into the pending explicit group, into the last
     /// coalescing group, or as a new group.
     fn record(&mut self, edit: Edit, coalesce: bool) {
+        // The rope changed either way, so the line index is stale even while an
+        // explicit group is open and its edits are not yet on the undo stack.
+        self.invalidate_index();
         if let Some(group) = self.pending.as_mut() {
             group.edits.push(edit);
             return;
         }
-        self.invalidate_index();
         self.redo.clear();
         if coalesce
             && let Some(group) = self.undo.last_mut()
@@ -584,6 +586,29 @@ mod tests {
         assert_eq!(buffer.text(), "  a\n  b\n  c");
         buffer.undo();
         assert_eq!(buffer.text(), "a\nb\nc");
+    }
+
+    #[test]
+    fn the_line_index_follows_edits_inside_an_explicit_group() {
+        let mut buffer = Buffer::new(
+            "a
+b",
+        );
+        buffer.begin_edit();
+        buffer.insert(
+            0, "x
+", false,
+        );
+        assert_eq!(buffer.line_count(), 3);
+        assert_eq!(buffer.line_start(2), 4);
+        buffer.insert(buffer.line_start(2), "y", false);
+        buffer.end_edit();
+        assert_eq!(
+            buffer.text(),
+            "x
+a
+yb"
+        );
     }
 
     #[test]

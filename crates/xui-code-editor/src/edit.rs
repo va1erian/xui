@@ -40,11 +40,14 @@ pub fn type_text(buffer: &mut Buffer, view: &mut View, text: &str) {
     splice(buffer, view, text, true);
 }
 
-/// Inserts a newline and copies the current line's indentation.
+/// Replaces the selection (if any) with a newline that copies the indentation
+/// of the line the selection starts on.
 pub fn enter(buffer: &mut Buffer, view: &mut View) {
-    let line = buffer.line_of_char(view.caret);
+    let selection = view.selection();
+    let at = selection.map_or(view.caret, |(start, _)| start);
+    let line = buffer.line_of_char(at);
     let start = buffer.line_start(line);
-    let column = view.caret - start;
+    let column = at - start;
     let indent = {
         let text = buffer.line_string(line);
         let leading = leading_whitespace(&text);
@@ -55,9 +58,12 @@ pub fn enter(buffer: &mut Buffer, view: &mut View) {
     // An explicit edit so the newline and the indentation undo together, but
     // separately from the typing run before it.
     buffer.begin_edit();
-    buffer.insert(view.caret, &inserted, false);
+    if let Some((start, end)) = selection {
+        buffer.remove(start..end, false);
+    }
+    buffer.insert(at, &inserted, false);
     buffer.end_edit();
-    view.caret += inserted.chars().count();
+    view.caret = at + inserted.chars().count();
     view.anchor = view.caret;
     view.goal_col = None;
 }
@@ -100,11 +106,11 @@ fn selected_lines(buffer: &Buffer, view: &View) -> (usize, usize) {
 }
 
 /// Indents every line the selection touches, or inserts one indent at the
-/// caret.
-pub fn indent(buffer: &mut Buffer, view: &mut View, options: &Options) {
+/// caret. Returns whether the text changed.
+pub fn indent(buffer: &mut Buffer, view: &mut View, options: &Options) -> bool {
     if view.selection().is_none() {
         splice(buffer, view, &options.indent(), false);
-        return;
+        return !options.indent().is_empty();
     }
     let (first, last) = selected_lines(buffer, view);
     let unit = options.indent();
@@ -118,11 +124,12 @@ pub fn indent(buffer: &mut Buffer, view: &mut View, options: &Options) {
     }
     buffer.end_edit();
     view.goal_col = None;
+    !unit.is_empty()
 }
 
 /// Removes one indent level from every line the selection touches, or from the
-/// caret's line.
-pub fn outdent(buffer: &mut Buffer, view: &mut View, options: &Options) {
+/// caret's line. Returns whether the text changed.
+pub fn outdent(buffer: &mut Buffer, view: &mut View, options: &Options) -> bool {
     let (first, last) = selected_lines(buffer, view);
     let width = options.tab_width.max(1);
     let mut removals: Vec<(usize, usize)> = Vec::new();
@@ -145,7 +152,7 @@ pub fn outdent(buffer: &mut Buffer, view: &mut View, options: &Options) {
         }
     }
     if removals.is_empty() {
-        return;
+        return false;
     }
     buffer.begin_edit();
     for (start, count) in removals.into_iter().rev() {
@@ -154,6 +161,7 @@ pub fn outdent(buffer: &mut Buffer, view: &mut View, options: &Options) {
     }
     buffer.end_edit();
     view.goal_col = None;
+    true
 }
 
 /// Moves `view`'s caret and anchor by `delta` when they sit after `at`.
@@ -319,6 +327,35 @@ mod tests {
         enter(&mut buffer, &mut view);
         assert_eq!(buffer.text(), "    \n    let x = 1;");
         assert_eq!(view.caret, 9);
+    }
+
+    #[test]
+    fn enter_replaces_the_selection() {
+        let (mut buffer, mut view, _) = editor("xabcx");
+        view.anchor = 1;
+        view.caret = 4;
+        enter(&mut buffer, &mut view);
+        assert_eq!(
+            buffer.text(),
+            "x
+x"
+        );
+        assert_eq!(view.caret, 2);
+        assert_eq!(view.selection(), None);
+        undo(&mut buffer, &mut view);
+        assert_eq!(buffer.text(), "xabcx", "one undo step");
+    }
+
+    #[test]
+    fn indent_and_outdent_report_whether_the_text_changed() {
+        let (mut buffer, mut view, options) = editor("a");
+        place(&mut view, 0);
+        assert!(indent(&mut buffer, &mut view, &options));
+        assert!(outdent(&mut buffer, &mut view, &options));
+        assert!(
+            !outdent(&mut buffer, &mut view, &options),
+            "nothing to remove"
+        );
     }
 
     #[test]

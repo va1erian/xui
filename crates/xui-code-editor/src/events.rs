@@ -349,8 +349,10 @@ fn key_down<M: 'static>(
             edit::enter(&mut state.buffer, &mut state.view);
             changed = true;
         }
-        Key::TAB if shift => edit::outdent(&mut state.buffer, &mut state.view, &state.options),
-        Key::TAB => edit::indent(&mut state.buffer, &mut state.view, &state.options),
+        Key::TAB if shift => {
+            changed = edit::outdent(&mut state.buffer, &mut state.view, &state.options)
+        }
+        Key::TAB => changed = edit::indent(&mut state.buffer, &mut state.view, &state.options),
         Key::A if ctrl => state.view.select_all(&state.buffer),
         Key::C if ctrl => {
             edit::copy(&state.buffer, &state.view, state.clipboard.as_ref());
@@ -708,6 +710,31 @@ mod tests {
                 "bye",
                 "paste read the injected clipboard"
             );
+        });
+    }
+
+    #[test]
+    fn tab_and_shift_tab_report_a_change() {
+        use xui_core::message::{Key, Modifiers};
+
+        with_ui(|ui, id| {
+            let mut state = state("a");
+            handle(&mut state, ui, id, &Event::SetFocus);
+            let key = |shift| Event::KeyDown {
+                key: Key::TAB,
+                modifiers: Modifiers {
+                    shift,
+                    ..Modifiers::NONE
+                },
+                repeat: 1,
+                system: false,
+            };
+            let indented = handle(&mut state, ui, id, &key(false)).expect("tab");
+            assert!(indented.changed);
+            let outdented = handle(&mut state, ui, id, &key(true)).expect("shift+tab");
+            assert!(outdented.changed);
+            let nothing = handle(&mut state, ui, id, &key(true)).expect("shift+tab");
+            assert!(!nothing.changed, "no indent left to remove");
         });
     }
 

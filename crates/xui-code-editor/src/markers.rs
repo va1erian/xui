@@ -19,14 +19,15 @@ pub enum MarkerKind {
 
 /// A spanned diagnostic on one line.
 ///
-/// Columns are display columns, zero-based, and `end` is exclusive. An empty
+/// Columns are character columns within the line (what a diagnostic reports),
+/// zero-based, and `end` is exclusive; the painter expands tabs when drawing. An empty
 /// span (`start == end`) marks the whole line for the kinds that tint it, as a
 /// breakpoint does.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Marker {
     /// The zero-based line.
     pub line: usize,
-    /// The first display column of the mark.
+    /// The first character column of the mark.
     pub start: usize,
     /// The column just past the mark.
     pub end: usize,
@@ -35,7 +36,7 @@ pub struct Marker {
 }
 
 impl Marker {
-    /// A marker spanning `start..end` display columns on `line`.
+    /// A marker spanning `start..end` character columns on `line`.
     pub fn new(line: usize, start: usize, end: usize, kind: MarkerKind) -> Marker {
         Marker {
             line,

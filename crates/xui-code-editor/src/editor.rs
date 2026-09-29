@@ -393,19 +393,23 @@ impl<M: 'static> Editor<M> {
         let state = self.state.borrow();
         let text = state.buffer.text();
         let found = find::matches(&text, query, case_sensitive)?;
+        // Search from the ordered selection bounds, not the caret: the caret
+        // sits at one end of the match just selected (the far end after a
+        // forward find), so a backward find from it would pick that match again.
         let caret = state.view.caret;
+        let (from, to) = state.view.selection().unwrap_or((caret, caret));
         let chosen = if forward {
             found
                 .iter()
                 .copied()
-                .find(|(start, _)| *start >= caret)
+                .find(|(start, _)| *start >= to)
                 .or_else(|| found.first().copied())
         } else {
             found
                 .iter()
                 .rev()
                 .copied()
-                .find(|(_, end)| *end <= caret)
+                .find(|(_, end)| *end <= from)
                 .or_else(|| found.last().copied())
         };
         Ok(chosen)
@@ -680,6 +684,50 @@ mod tests {
         )
         .expect("render");
         assert_eq!(result.get(), expected.get());
+    }
+
+    #[test]
+    fn repeated_find_previous_walks_back_through_the_matches() {
+        use std::rc::Rc;
+
+        use xui_canvas::OffscreenBackend;
+        use xui_core::backend::PlatformSpec;
+        use xui_core::geometry::Rect;
+        use xui_core::units::Dip;
+        use xui_core::{App, run_app};
+
+        use crate::find::Query;
+
+        struct Empty;
+
+        impl App for Empty {
+            type Msg = ();
+            fn update(&mut self, _msg: (), _ui: &mut xui_core::Ui<()>) {}
+        }
+
+        run_app(
+            Rc::new(OffscreenBackend::new()),
+            PlatformSpec::new("find").size(Dip(300.0), Dip(200.0)),
+            |ui| {
+                let editor = crate::Editor::new(ui, Rect::new(0, 0, 300, 200)).expect("editor");
+                editor.set_text("ab ab ab");
+                let query = Query::literal("ab");
+                let mut seen = Vec::new();
+                for _ in 0..4 {
+                    assert!(editor.find_next(&query, true, false).expect("valid"));
+                    seen.push(editor.selection().expect("selected"));
+                }
+                assert_eq!(seen, [(6, 8), (3, 5), (0, 2), (6, 8)]);
+                let mut seen = Vec::new();
+                for _ in 0..3 {
+                    assert!(editor.find_next(&query, true, true).expect("valid"));
+                    seen.push(editor.selection().expect("selected"));
+                }
+                assert_eq!(seen, [(0, 2), (3, 5), (6, 8)]);
+                Empty
+            },
+        )
+        .expect("run_app");
     }
 
     #[test]
