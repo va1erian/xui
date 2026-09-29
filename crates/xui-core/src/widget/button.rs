@@ -120,9 +120,12 @@ impl<M: 'static> Button<M> {
                     Event::MouseMove { .. } => {
                         // Do not disturb an active press: a pointer that
                         // jitters between press and release must still click.
-                        if state.get() == ButtonState::Normal {
-                            state.set(ButtonState::Hover);
+                        // Only the Normal -> Hover edge changes the face, so
+                        // any other move repaints nothing.
+                        if state.get() != ButtonState::Normal {
+                            return None;
                         }
+                        state.set(ButtonState::Hover);
                     }
                     Event::MouseLeave | Event::CaptureChanged => {
                         if state.get() != ButtonState::Disabled {
