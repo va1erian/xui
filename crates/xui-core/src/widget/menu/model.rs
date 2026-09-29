@@ -4,6 +4,7 @@
 //! lookups. Layout lives in [`super::layout`].
 
 use super::{MenuId, SEPARATOR};
+use crate::icon::IconRef;
 
 /// What a menu entry is.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -36,6 +37,8 @@ pub(super) struct Node {
     pub(super) enabled: bool,
     /// Whether a check or radio entry is checked.
     pub(super) checked: bool,
+    /// The entry's leading icon, if any.
+    pub(super) icon: Option<IconRef>,
     /// The children a [`Submenu`](Kind::Submenu) opens.
     pub(super) children: Vec<Node>,
 }
@@ -64,6 +67,7 @@ impl Node {
             kind,
             enabled: true,
             checked,
+            icon: None,
             children: Vec::new(),
         }
     }
@@ -98,6 +102,7 @@ impl Node {
             kind: Kind::Separator,
             enabled: true,
             checked: false,
+            icon: None,
             children: Vec::new(),
         }
     }

@@ -10,6 +10,7 @@
 use xui_core::Dip;
 use xui_core::app::{App, Ui, run_app};
 use xui_core::backend::PlatformSpec;
+use xui_core::icon::Lucide;
 use xui_core::widget::{Button, HasText, Label, Menu, MenuId};
 
 #[path = "support.rs"]
@@ -72,7 +73,7 @@ fn main() -> xui_core::backend::Result<()> {
                 })
                 .build(|m| {
                     m.submenu(MenuId::new(0), "&File", |file| {
-                        file.item(new_id, "&New");
+                        file.item(new_id, "&New").icon(Lucide::FilePlus);
                         file.separator();
                         file.check(save_id, "Auto &save", true);
                     });
@@ -89,9 +90,10 @@ fn main() -> xui_core::backend::Result<()> {
                     }))
                 })
                 .build(|m| {
-                    m.item(cut_id, "Cu&t");
-                    m.item(copy_id, "&Copy");
-                    m.item(MenuId::new(12), "&Paste");
+                    m.item(cut_id, "Cu&t").icon(Lucide::Scissors);
+                    m.item(copy_id, "&Copy").icon(Lucide::Copy);
+                    m.item(MenuId::new(12), "&Paste")
+                        .icon(Lucide::ClipboardPaste);
                 });
             let button = Button::new(ui, l.rect(16.0, 64.0, 256.0, 104.0), "Show context menu")
                 .unwrap()

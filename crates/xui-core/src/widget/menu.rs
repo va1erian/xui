@@ -32,6 +32,7 @@ use super::control::Control;
 use crate::app::Ui;
 use crate::backend::{NodeKind, NodeSpec, Result, WidgetId};
 use crate::geometry::{Point, Rect};
+use crate::icon::IconRef;
 use crate::property::{Properties, Property, Value};
 
 use model::Node;
@@ -67,6 +68,19 @@ impl MenuScope<'_> {
     /// Appends a command that raises its id when chosen.
     pub fn item(&mut self, id: MenuId, text: &str) -> &mut Self {
         self.entries.push(Node::command(id, text));
+        self
+    }
+
+    /// Gives the entry appended last a leading icon, drawn in an icon column
+    /// before the labels of its popup (a bar's own titles never show one). It
+    /// follows the entry's text colour, dimmed when the entry is disabled. A
+    /// popup where no entry has an icon is laid out exactly as before; one where
+    /// any does reserves the column for every row so the labels stay aligned.
+    /// Does nothing when no entry has been appended yet.
+    pub fn icon(&mut self, icon: impl Into<IconRef>) -> &mut Self {
+        if let Some(entry) = self.entries.last_mut() {
+            entry.icon = Some(icon.into());
+        }
         self
     }
 
