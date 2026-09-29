@@ -114,6 +114,9 @@ pub struct OffscreenBackend {
     next_widget: std::cell::Cell<u64>,
     /// The node the pointer is captured by, if any.
     captured: RefCell<Option<WidgetId>>,
+    /// The node with keyboard focus, which receives injected key and character
+    /// events as it would from a real backend.
+    focused: RefCell<Option<WidgetId>>,
     /// The windows currently being composited, so a painter that captures its
     /// own window (re-entering `render`) is refused instead of recursing.
     rendering: RefCell<HashSet<u64>>,
@@ -140,6 +143,7 @@ impl OffscreenBackend {
             next_window: std::cell::Cell::new(1),
             next_widget: std::cell::Cell::new(1),
             captured: RefCell::new(None),
+            focused: RefCell::new(None),
             rendering: RefCell::new(HashSet::new()),
             text: OnceCell::new(),
             dpi: DEFAULT_DPI,
@@ -363,12 +367,50 @@ impl OffscreenBackend {
         }
     }
 
-    /// Delivers `event` to the topmost node under its position, as a window
-    /// system would, returning whether it was consumed. A captured node
-    /// receives every pointer move and release, even outside its bounds.
+    /// Delivers a positionless event to the focused node of `window`.
+    fn inject_to_focus(&self, window: WindowId, event: &Event) -> bool {
+        let Some(target) = *self.focused.borrow() else {
+            return false;
+        };
+        let in_window = self
+            .nodes
+            .borrow()
+            .iter()
+            .any(|(id, node)| *id == target && node.window == window);
+        if !in_window {
+            return false;
+        }
+        let sink = self
+            .windows
+            .borrow()
+            .get(&window.raw())
+            .and_then(|entry| entry.sink.clone());
+        sink.is_some_and(|sink| sink.deliver(target, event))
+    }
+
+    /// Records `id` as the node with keyboard focus.
+    pub(super) fn set_focus(&self, id: WidgetId) {
+        *self.focused.borrow_mut() = Some(id);
+    }
+
+    /// Forgets the focus when its node is gone.
+    pub(super) fn forget_focus_if_gone(&self) {
+        let mut focused = self.focused.borrow_mut();
+        if let Some(id) = *focused
+            && !self.nodes.borrow().iter().any(|(node, _)| *node == id)
+        {
+            *focused = None;
+        }
+    }
+
+    /// Delivers `event` as a window system would, returning whether it was
+    /// consumed. A pointer event goes to the topmost node under its position,
+    /// and a captured node receives every pointer move and release, even
+    /// outside its bounds. An event without a position (a key or a character)
+    /// goes to the focused node in `window`, if any.
     pub fn inject(&self, window: WindowId, event: Event) -> bool {
         let Some((x, y)) = event.position() else {
-            return false;
+            return self.inject_to_focus(window, &event);
         };
         let captured = *self.captured.borrow();
         let target = match captured {

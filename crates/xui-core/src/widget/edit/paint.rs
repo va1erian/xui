@@ -115,19 +115,17 @@ fn paint_text(
     canvas.push_clip(inner);
     canvas.save();
     canvas.set_translation(-(scroll as f32), 0.0);
+    // The translation already applies the scroll, so positions inside this
+    // block are unscrolled (`scroll` 0); subtracting it again would shift the
+    // selection and caret left of the text.
     if selection_end > selection_start {
         let from = text_x(
             left,
             width_at(canvas, value, selection_start, style),
             dpi,
-            scroll,
+            0,
         );
-        let to = text_x(
-            left,
-            width_at(canvas, value, selection_end, style),
-            dpi,
-            scroll,
-        );
+        let to = text_x(left, width_at(canvas, value, selection_end, style), dpi, 0);
         let highlight = if state.focused.get() {
             theme.selection
         } else {
@@ -137,7 +135,7 @@ fn paint_text(
     }
     canvas.draw_text(value, inner, style);
     if state.focused.get() {
-        let x = text_x(left, caret_width, dpi, scroll);
+        let x = text_x(left, caret_width, dpi, 0);
         draw_caret(canvas, x, inner.top, inner.bottom, theme.text);
     }
     canvas.restore();

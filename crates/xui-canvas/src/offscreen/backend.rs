@@ -108,6 +108,8 @@ impl Backend for OffscreenBackend {
             }
             nodes.retain(|(id, _)| !gone.contains(id));
         }
+        drop(nodes);
+        self.forget_focus_if_gone();
     }
 
     fn apply_moves(&self, window: WindowId, moves: &[(WidgetId, Rect)]) {
@@ -192,7 +194,9 @@ impl Backend for OffscreenBackend {
         }
     }
 
-    fn focus(&self, _id: WidgetId) {}
+    fn focus(&self, id: WidgetId) {
+        self.set_focus(id);
+    }
 
     fn set_text(&self, id: WidgetId, text: &str) {
         self.with_node(id, |node| node.text = text.to_string());
