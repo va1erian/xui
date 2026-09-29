@@ -9,12 +9,12 @@ use super::flatten::{self, State};
 use crate::app::Ui;
 use crate::backend::{Event, WidgetId};
 use crate::geometry::Rect;
-use crate::widget::scrollbar::{self, Bar, Metrics};
+use crate::widget::scrollbar::{self, Scroll, ScrollBar};
 
 /// The scroll metrics of the tree's body: every visible row is content.
-pub(crate) fn metrics<M: 'static>(ui: &Ui<M>, id: WidgetId, state: &State) -> Metrics {
+pub(crate) fn metrics<M: 'static>(ui: &Ui<M>, id: WidgetId, state: &State) -> Scroll {
     let dpi = ui.dpi();
-    Metrics {
+    Scroll {
         viewport: ui.bounds(id).height().max(0),
         content: state.visible_len() as i32 * row_px(dpi),
         offset: state.offset as i32 * row_px(dpi),
@@ -22,12 +22,12 @@ pub(crate) fn metrics<M: 'static>(ui: &Ui<M>, id: WidgetId, state: &State) -> Me
 }
 
 /// Lays the bar along the trailing edge and shows it only on overflow.
-pub(crate) fn layout<M: 'static>(ui: &Ui<M>, id: WidgetId, bar: &Bar, state: &State) {
+pub(crate) fn layout<M: 'static>(ui: &Ui<M>, id: WidgetId, bar: &ScrollBar, state: &State) {
     let bounds = ui.bounds(id);
     let dpi = ui.dpi();
     let overflows = state.visible_len() as i32 * row_px(dpi) > bounds.height().max(0);
     let width = if overflows {
-        scrollbar::BAR.to_px(dpi).value()
+        scrollbar::THICKNESS.to_px(dpi).value()
     } else {
         0
     };
@@ -41,7 +41,7 @@ pub(crate) fn layout<M: 'static>(ui: &Ui<M>, id: WidgetId, bar: &Bar, state: &St
 pub(crate) fn mapper<M: 'static>(
     ui: Ui<M>,
     id: WidgetId,
-    bar: Rc<Bar>,
+    bar: Rc<ScrollBar>,
     state: Rc<RefCell<State>>,
     enabled: Rc<Cell<bool>>,
 ) -> impl Fn(&Event) -> Option<M> + 'static {
@@ -70,7 +70,7 @@ fn row_px(dpi: u32) -> i32 {
 fn set_offset<M: 'static>(
     ui: &Ui<M>,
     id: WidgetId,
-    bar: &Bar,
+    bar: &ScrollBar,
     state: &Rc<RefCell<State>>,
     target: i32,
     dpi: u32,

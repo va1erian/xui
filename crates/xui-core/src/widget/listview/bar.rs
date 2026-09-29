@@ -9,13 +9,13 @@ use super::state::{ROW, State, header_px};
 use crate::app::Ui;
 use crate::backend::{Event, WidgetId};
 use crate::geometry::Rect;
-use crate::widget::scrollbar::{self, Bar, Metrics};
+use crate::widget::scrollbar::{self, Scroll, ScrollBar};
 
 /// The scroll metrics of the list's body: every row is content.
-pub(crate) fn metrics<M: 'static>(ui: &Ui<M>, id: WidgetId, state: &State) -> Metrics {
+pub(crate) fn metrics<M: 'static>(ui: &Ui<M>, id: WidgetId, state: &State) -> Scroll {
     let bounds = ui.bounds(id);
     let dpi = ui.dpi();
-    Metrics {
+    Scroll {
         viewport: body_height(state.has_header(), bounds.height(), dpi),
         content: state.len() as i32 * row_px(dpi),
         offset: state.offset as i32 * row_px(dpi),
@@ -23,14 +23,14 @@ pub(crate) fn metrics<M: 'static>(ui: &Ui<M>, id: WidgetId, state: &State) -> Me
 }
 
 /// Lays the bar along the body's trailing edge and shows it only on overflow.
-pub(crate) fn layout<M: 'static>(ui: &Ui<M>, id: WidgetId, bar: &Bar, state: &State) {
+pub(crate) fn layout<M: 'static>(ui: &Ui<M>, id: WidgetId, bar: &ScrollBar, state: &State) {
     let bounds = ui.bounds(id);
     let dpi = ui.dpi();
     let header = header_px(state.has_header(), dpi);
     let body = body_height(state.has_header(), bounds.height(), dpi);
     let overflows = state.len() as i32 * row_px(dpi) > body;
     let width = if overflows {
-        scrollbar::BAR.to_px(dpi).value()
+        scrollbar::THICKNESS.to_px(dpi).value()
     } else {
         0
     };
@@ -44,7 +44,7 @@ pub(crate) fn layout<M: 'static>(ui: &Ui<M>, id: WidgetId, bar: &Bar, state: &St
 pub(crate) fn mapper<M: 'static>(
     ui: Ui<M>,
     id: WidgetId,
-    bar: Rc<Bar>,
+    bar: Rc<ScrollBar>,
     state: Rc<RefCell<State>>,
 ) -> impl Fn(&Event) -> Option<M> + 'static {
     move |event| {
@@ -77,7 +77,7 @@ fn row_px(dpi: u32) -> i32 {
 fn set_offset<M: 'static>(
     ui: &Ui<M>,
     id: WidgetId,
-    bar: &Bar,
+    bar: &ScrollBar,
     state: &Rc<RefCell<State>>,
     target: i32,
     dpi: u32,

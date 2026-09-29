@@ -47,6 +47,8 @@ jobs:
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: cargo test
+      # The editor's Rhai lexer is an opt-in feature its tests need.
+      - run: cargo test -p xui-code-editor --features rhai-syntax
       # The window-level GL path is opt-in (it needs an OpenGL driver). Run it
       # explicitly so a regression is CI-visible; on a runner without a driver
       # the test skips cleanly, but the step still attempts it.
@@ -79,6 +81,7 @@ jobs:
       - run: cargo check --all-targets
       - run: cargo clippy -p xui-core --all-targets -- -D warnings
       - run: cargo test -p xui-core
+      - run: cargo test -p xui-code-editor --features rhai-syntax
       # The software backend must build and its non-window tests pass here too.
       - run: cargo test -p xui-canvas
 
