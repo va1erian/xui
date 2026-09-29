@@ -73,8 +73,10 @@ fn matcher(query: &Query, case_sensitive: bool) -> Result<Regex, String> {
 
 /// Every non-overlapping match of `query`, as char ranges in order.
 ///
-/// An empty query (or a pattern that never matches) yields no matches. An
-/// invalid regular expression is reported as `Err`.
+/// An empty query (or a pattern that never matches) yields no matches, and a
+/// zero-length match (such as ``) is skipped: there is nothing to select, and
+/// repeating a search would land on it again. An invalid regular expression is
+/// reported as `Err`.
 pub fn matches(text: &str, query: &Query, case_sensitive: bool) -> Result<Vec<Match>, String> {
     if query.pattern.is_empty() {
         return Ok(Vec::new());
@@ -91,6 +93,7 @@ pub fn matches(text: &str, query: &Query, case_sensitive: bool) -> Result<Vec<Ma
     };
     Ok(regex
         .find_iter(text)
+        .filter(|m| !m.is_empty())
         .map(|m| {
             let start = advance(m.start());
             (start, advance(m.end()))
@@ -170,6 +173,12 @@ mod tests {
     fn replacing_when_nothing_matches_is_none() {
         let query = Query::literal("zzz");
         assert_eq!(replace_all("abc", &query, true, "y").expect("ok"), None);
+    }
+
+    #[test]
+    fn zero_length_matches_are_skipped() {
+        let found = matches("ab cd", &Query::regex(r""), true).expect("ok");
+        assert!(found.is_empty());
     }
 
     #[test]
