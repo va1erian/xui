@@ -7,6 +7,7 @@ use std::collections::BTreeSet;
 use std::rc::Rc;
 
 use super::model::{CellData, Column, ColumnWidth, ListModel, SelectionMode, SortDirection};
+use crate::icon::IconRef;
 use crate::units::Dip;
 
 /// The design height of one row.
@@ -17,6 +18,10 @@ pub(crate) const HEADER: Dip = Dip(24.0);
 pub(crate) const TEXT_SIZE: Dip = Dip(12.0);
 /// The horizontal text inset inside a cell.
 pub(crate) const PADDING: Dip = Dip(6.0);
+/// The design side of a row's leading icon.
+pub(crate) const ICON: Dip = Dip(16.0);
+/// The design gap between a leading icon and the text after it.
+pub(crate) const ICON_GAP: Dip = Dip(6.0);
 /// A `Fill` column never collapses below this design width.
 const MIN_FILL: Dip = Dip(48.0);
 /// Rows scrolled per wheel notch.
@@ -44,6 +49,13 @@ impl Rows {
                 .then(|| items.get(row).map(String::as_str))
                 .flatten(),
             Rows::Model(model) => model.cell(row, column),
+        }
+    }
+
+    pub(crate) fn icon(&self, row: usize) -> Option<IconRef> {
+        match self {
+            Rows::Simple(_) => None,
+            Rows::Model(model) => model.icon(row),
         }
     }
 

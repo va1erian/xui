@@ -15,6 +15,7 @@ use std::rc::Rc;
 
 use xui_core::app::{App, Ui, run_app};
 use xui_core::backend::PlatformSpec;
+use xui_core::icon::{IconRef, Lucide};
 use xui_core::widget::{Fill, ListModel, ListView, SortDirection, StatusBar};
 use xui_core::{Dip, Point, Rect, Theme};
 
@@ -47,6 +48,16 @@ impl ListModel for TrackModel {
             3 => track.year.as_str(),
             _ => "",
         })
+    }
+
+    /// Flags a few tracks with a leading icon, so the demo shows row icons.
+    fn icon(&self, row: usize) -> Option<IconRef> {
+        let index = *self.order.get(row)?;
+        match index % 11 {
+            0 => Some(Lucide::CircleX.into()),
+            5 => Some(Lucide::TriangleAlert.into()),
+            _ => None,
+        }
     }
 }
 

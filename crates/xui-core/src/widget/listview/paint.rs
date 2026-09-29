@@ -3,9 +3,13 @@
 //! The list view's painter: the header row, then only the visible body rows.
 
 use super::super::ellipsis;
-use super::state::{PADDING, ROW, State, TEXT_SIZE, column_spans, column_widths, header_px};
+use super::state::{
+    ICON, ICON_GAP, PADDING, ROW, State, TEXT_SIZE, column_spans, column_widths, header_px,
+};
 use crate::backend::{Canvas, TextAlign, TextStyle};
+use crate::color::Color;
 use crate::geometry::{Point, Rect};
+use crate::icon::draw_icon;
 use crate::theme::Theme;
 use crate::widget::scrollbar;
 
@@ -200,7 +204,13 @@ fn paint_row(
                 1.0,
             );
         }
-        let text = Rect::new(rect.left + pad, rect.top, rect.right - pad, rect.bottom);
+        let inset = paint_row_icon(canvas, state, row, rect, color, dpi);
+        let text = Rect::new(
+            rect.left + pad + inset,
+            rect.top,
+            rect.right - pad,
+            rect.bottom,
+        );
         let style = TextStyle::new(color, TEXT_SIZE).middle();
         draw_cell_text(
             canvas,
@@ -225,7 +235,18 @@ fn paint_row(
             );
         }
         let cell = Rect::new(rect.left + left, rect.top, rect.left + right, rect.bottom);
-        let text = Rect::new(cell.left + pad, cell.top, cell.right - pad, cell.bottom);
+        // The row's icon leads the first column only.
+        let inset = if index == 0 {
+            paint_row_icon(canvas, state, row, cell, color, dpi)
+        } else {
+            0
+        };
+        let text = Rect::new(
+            cell.left + pad + inset,
+            cell.top,
+            cell.right - pad,
+            cell.bottom,
+        );
         let style = aligned(TextStyle::new(color, TEXT_SIZE).middle(), column);
         // A long value must not run into the next column: ellipsize it, and
         // clip the cell too in case the measurer and rasterizer disagree.
@@ -237,6 +258,35 @@ fn paint_row(
             &style,
         );
     }
+}
+
+/// Draws `row`'s leading icon, if the model gives it one, at the left of
+/// `cell`, and returns how far the text after it must move right (`0` for a
+/// row without an icon, so those keep their layout exactly).
+fn paint_row_icon(
+    canvas: &mut dyn Canvas,
+    state: &State,
+    row: usize,
+    cell: Rect,
+    color: Color,
+    dpi: u32,
+) -> i32 {
+    let Some(icon) = state.rows.icon(row) else {
+        return 0;
+    };
+    let side = ICON.to_px(dpi).value();
+    let left = cell.left + PADDING.to_px(dpi).value();
+    let top = cell.top + (cell.height() - side) / 2;
+    canvas.push_clip(cell);
+    draw_icon(
+        canvas,
+        icon,
+        Rect::new(left, top, left + side, top + side),
+        color,
+        dpi,
+    );
+    canvas.pop_clip();
+    side + ICON_GAP.to_px(dpi).value()
 }
 
 /// Applies a column's alignment to `style`.

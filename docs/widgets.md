@@ -92,6 +92,11 @@ list.set_items(&["A", "B", "C"]);
   `column_count`.
 - `with_model(ui, rect, impl ListModel)` takes a custom model; a `Vec<String>`
   and `Vec<Vec<String>>` implement `ListModel` already.
+- `ListModel::icon(row) -> Option<IconRef>` (default `None`) gives a row a
+  leading 16 DIP icon before its first column's text, e.g.
+  `(row < errors).then(|| Lucide::CircleX.into())`. It is drawn in the row's
+  text colour (on-accent when selected, disabled colour when disabled); a row
+  without one keeps its text at the ordinary inset.
 
 `TreeView<M>` is keyed and lazy, with checkboxes optional and indent guides
 behind `indent_guides(bool)` (on by default):
