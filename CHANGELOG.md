@@ -4,6 +4,9 @@
 
 ### Additions
 
+- `xui-code-editor`: a reusable code-editor widget (rope buffer with undo, monospace view, find/replace, diagnostics markers, pluggable `Highlighter`, and the `rhai-syntax` feature for a Rhai lexer), moved from LazyRAD (#231). It copies and pastes through the backend's portable clipboard; `Editor::with_clipboard` overrides it.
+- The shared scrollbar is public as `xui_core::widget::scrollbar` (#231): `ScrollBar` (vertical or horizontal, over a bar node), `Scroll`, and the geometry and painting helpers (`thumb`, `hit`, `offset_from_drag`, `paged_offset`, `paint_state`), so a custom widget that paints its own bar matches `ScrollView`, `ListView` and `TreeView`. `ScrollBar` is also re-exported from `xui_core::widget`.
+- `Ui::clipboard_text` and `Ui::set_clipboard_text` are public.
 - `Backend::set_window_icon(window, &Image)` sets a top-level window's icon from
   portable RGBA pixels (no-op by default). The canvas (`winit`) backend applies
   it with `Window::set_window_icon`, remembering an icon set before the native

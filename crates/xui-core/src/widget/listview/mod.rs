@@ -19,9 +19,10 @@ use std::cell::RefCell;
 use std::collections::BTreeSet;
 use std::rc::Rc;
 
+use super::Orientation;
 use super::control::Control;
 use super::placeable::Placeable;
-use super::scrollbar::{self, Bar};
+use super::scrollbar::{self, ScrollBar};
 use crate::app::Ui;
 use crate::backend::{NodeKind, NodeSpec, Result, WidgetId};
 use crate::geometry::{Point, Rect, Size};
@@ -93,7 +94,7 @@ impl<M> Mappers<M> {
 pub struct ListView<M: 'static> {
     control: Control<M>,
     _bar: Control<M>,
-    bar: Rc<Bar>,
+    bar: Rc<ScrollBar>,
     state: Rc<RefCell<State>>,
     mappers: Rc<Mappers<M>>,
 }
@@ -151,7 +152,7 @@ impl<M: 'static> ListView<M> {
             enabled: true,
         }));
         let mappers = Rc::new(Mappers::new());
-        let bar = Rc::new(Bar::new(bar_control.id()));
+        let bar = Rc::new(ScrollBar::new(bar_control.id()));
 
         {
             let state = Rc::clone(&state);
@@ -170,7 +171,7 @@ impl<M: 'static> ListView<M> {
             let theme = ui.theme_handle();
             bar_control.set_painter(Rc::new(move |canvas| {
                 let metrics = bar::metrics(&scoped, id, &state.borrow());
-                scrollbar::paint(canvas, metrics, theme.get());
+                scrollbar::paint(canvas, metrics, Orientation::Vertical, theme.get());
             }));
         }
         {

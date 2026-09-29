@@ -2,7 +2,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use super::ScrollView;
-use super::scrollbar::thumb_rect;
+use super::scrollbar::{Orientation, thumb};
 use crate::app::{App, Core, Runtime, Ui};
 use crate::backend::headless::HeadlessBackend;
 use crate::backend::{Backend, Event, PlatformSpec, WidgetId};
@@ -131,7 +131,13 @@ fn dragging_the_thumb_scrolls() {
     let runtime = app(core);
 
     let track = view.shared.bar.track();
-    let thumb = thumb_rect(track, view.shared.metrics(), ui.dpi()).expect("a thumb");
+    let thumb = thumb(
+        track,
+        view.shared.metrics(),
+        Orientation::Vertical,
+        ui.dpi(),
+    )
+    .expect("a thumb");
     let middle = thumb.top + thumb.height() / 2;
     runtime.deliver(view.shared.bar.id(), &down(middle));
     assert_eq!(

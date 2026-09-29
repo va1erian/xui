@@ -13,7 +13,7 @@ use crate::app::Ui;
 use crate::backend::{Event, WidgetId};
 use crate::geometry::Point;
 use crate::message::{Key, MouseButton};
-use crate::widget::scrollbar::Bar;
+use crate::widget::scrollbar::ScrollBar;
 
 /// The shared handles an event mapper reads and writes.
 pub(crate) struct Input<M: 'static> {
@@ -26,7 +26,7 @@ pub(crate) struct Input<M: 'static> {
     pub(crate) checkboxes: Rc<Cell<bool>>,
     pub(crate) tri_state: Rc<Cell<bool>>,
     pub(crate) mappers: Rc<Mappers<M>>,
-    pub(crate) bar: Rc<Bar>,
+    pub(crate) bar: Rc<ScrollBar>,
 }
 
 impl<M: 'static> Input<M> {

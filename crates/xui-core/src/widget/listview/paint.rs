@@ -38,7 +38,7 @@ pub(crate) fn paint(canvas: &mut dyn Canvas, state: &State, theme: &Theme, outli
     // Reserve the bar's width so the last column does not run under it.
     let overflows = state.len() as i32 * row_px > (bounds.height() - header_h).max(0);
     let reserve = if overflows {
-        scrollbar::BAR.to_px(dpi).value()
+        scrollbar::THICKNESS.to_px(dpi).value()
     } else {
         0
     };

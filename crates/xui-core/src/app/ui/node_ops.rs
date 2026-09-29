@@ -129,12 +129,12 @@ impl<M: 'static> Ui<M> {
     /// Reads the window's clipboard text, or `None` when it holds none. The
     /// backend provides the clipboard (the real one on Win32 and canvas, an
     /// in-process store otherwise).
-    pub(crate) fn clipboard_text(&self) -> Option<String> {
+    pub fn clipboard_text(&self) -> Option<String> {
         self.core.backend().clipboard_text()
     }
 
     /// Replaces the window's clipboard text.
-    pub(crate) fn set_clipboard_text(&self, text: &str) {
+    pub fn set_clipboard_text(&self, text: &str) {
         self.core.backend().set_clipboard_text(text);
     }
 

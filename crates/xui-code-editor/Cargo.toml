@@ -1,0 +1,25 @@
+[package]
+name = "xui-code-editor"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "A reusable xui code-editor widget: rope buffer, monospace view, pluggable highlighting"
+repository = "https://github.com/va1erian/xui"
+readme = "README.md"
+
+[dependencies]
+regex = "1"
+ropey = "1"
+xui-core = { path = "../xui-core" }
+
+[features]
+# The hand-written, line-incremental Rhai lexer (`lexer::RhaiHighlighter`).
+# It is off by default, so a plain-text editor carries no language rules.
+rhai-syntax = []
+
+[dev-dependencies]
+xui-canvas = { path = "../xui-canvas" }
+# Rhai's own tokenizer, the oracle the hand-written lexer's tests compare token
+# boundaries against. The lexer itself never uses it, so `rhai-syntax` builds
+# carry no Rhai crate either.
+rhai = { version = "1", features = ["internals"] }

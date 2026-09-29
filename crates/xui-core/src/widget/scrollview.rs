@@ -17,8 +17,9 @@ mod view;
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
+use super::Orientation;
 use super::control::Control;
-use super::scrollbar::{self, Bar, Metrics};
+use super::scrollbar::{self, Scroll, ScrollBar};
 use crate::app::Ui;
 use crate::backend::{NodeKind, NodeSpec, Result, WidgetId};
 use crate::geometry::Rect;
@@ -50,15 +51,15 @@ struct Shared<M: 'static> {
     /// The scroll offset in pixels.
     offset: Cell<i32>,
     /// The scrollbar's geometry and drag.
-    bar: Bar,
+    bar: ScrollBar,
     rows: RefCell<Vec<Row>>,
     on_scroll: ScrollMapper<M>,
 }
 
 impl<M: 'static> Shared<M> {
     /// The scroll metrics of the viewport.
-    fn metrics(&self) -> Metrics {
-        Metrics {
+    fn metrics(&self) -> Scroll {
+        Scroll {
             viewport: self.viewport.get().height(),
             content: self.content.get(),
             offset: self.offset.get(),
@@ -88,7 +89,7 @@ impl<M: 'static> ScrollView<M> {
             viewport: Cell::new(bounds),
             content: Cell::new(0),
             offset: Cell::new(0),
-            bar: Bar::new(bar_node.id()),
+            bar: ScrollBar::new(bar_node.id()),
             rows: RefCell::new(Vec::new()),
             on_scroll: RefCell::new(None),
         });
@@ -100,7 +101,7 @@ impl<M: 'static> ScrollView<M> {
             let shared = Rc::clone(&shared);
             let theme = ui.theme_handle();
             bar_node.set_painter(Rc::new(move |canvas| {
-                scrollbar::paint(canvas, shared.metrics(), theme.get())
+                scrollbar::paint(canvas, shared.metrics(), Orientation::Vertical, theme.get())
             }));
         }
         {
@@ -232,7 +233,7 @@ fn relayout<M>(ui: &Ui<M>, s: &Shared<M>) {
         .sum();
     let overflows = content > bounds.height();
     let bar_width = if overflows {
-        scrollbar::BAR.to_px(dpi).value()
+        scrollbar::THICKNESS.to_px(dpi).value()
     } else {
         0
     };
