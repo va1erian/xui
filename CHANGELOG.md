@@ -6,8 +6,10 @@
 
 - A modal `Dialog`/`TaskDialog` now dims the content behind it with a translucent
   scrim (`Theme::scrim`: black at 40% alpha in light mode, 55% in dark) instead
-  of painting the window an opaque grey, so the app stays visible through the
-  backdrop; the scrim still blocks input to the widgets behind it (#221).
+  of painting the window an opaque grey. On compositing backends (canvas) the
+  app stays visible through the backdrop; the Win32 backend's separate child
+  windows do not composite the scrim over sibling windows. Either way the scrim
+  still blocks input to the widgets behind it (#221).
 - `TopBar` lays its items out and hit-tests them in node-local coordinates, so a
   bar anywhere other than the window origin responds to clicks, hovers and
   slider drags (#157).
