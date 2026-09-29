@@ -108,28 +108,49 @@ pub(super) fn compute(
         return layout;
     }
     match mode {
-        Mode::Fill => fill(entries, width, &mut layout),
+        Mode::Fill => fill(entries, width, dpi, &mut layout),
         Mode::Compact => compact(entries, (width, height), dpi, measure, &mut layout),
     }
     layout
 }
 
-/// Equal cells; a separator is a line on the boundary before the next item.
-fn fill(entries: &Entries, width: i32, layout: &mut Layout) {
+/// Equal cells; a separator is a line in its own gap before the next item.
+///
+/// Each separator that has an item after it reserves [`SEPARATOR_WIDTH`], and
+/// the items share what is left, so the line belongs to no item and a click on
+/// it hits nothing. A separator with no item after it is not drawn.
+fn fill(entries: &Entries, width: i32, dpi: u32, layout: &mut Layout) {
     let count = layout.items.len();
+    let line = SEPARATOR_WIDTH.to_px(dpi).0.max(1);
+    let all: &[Entry] = entries.all();
+    let placed = |at: usize| {
+        all[at + 1..]
+            .iter()
+            .any(|entry| matches!(entry, Entry::Item(_)))
+    };
+    let gaps = (0..all.len())
+        .filter(|&at| matches!(all[at], Entry::Separator) && placed(at))
+        .count() as i32;
+    let available = width - gaps * line;
+    if count == 0 || available <= 0 {
+        return;
+    }
     let mut index = 0;
-    for entry in entries.all() {
+    let mut offset = 0;
+    for (at, entry) in all.iter().enumerate() {
         match entry {
             Entry::Item(_) => {
-                layout.items[index] = cell_span(width, count, index);
+                let (start, end) = cell_span(available, count, index);
+                layout.items[index] = (start + offset, end + offset);
                 index += 1;
             }
-            Entry::Separator => {
-                let x = edge(width, count.max(1), index);
-                if x < width {
-                    layout.separators.push(x);
-                }
+            Entry::Separator if placed(at) => {
+                layout
+                    .separators
+                    .push(edge(available, count, index) + offset);
+                offset += line;
             }
+            Entry::Separator => {}
         }
     }
 }

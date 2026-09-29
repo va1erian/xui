@@ -191,13 +191,24 @@ impl<M: 'static> Toolbar<M> {
                         system,
                         ..
                     } if *repeat <= 1 && !*system => {
-                        let count = state.entries.borrow().item_count();
+                        // Only items that fit are reachable: clipped items have
+                        // empty spans and trail the visible ones, as for the mouse.
+                        let count = layout_of(&ui, id, &state)
+                            .items
+                            .iter()
+                            .take_while(|&&(start, end)| end > start)
+                            .count();
                         if count == 0 {
                             return None;
                         }
                         match *key {
                             Key::LEFT => {
-                                let index = state.hover.get().unwrap_or(0).saturating_sub(1);
+                                let index = state
+                                    .hover
+                                    .get()
+                                    .unwrap_or(0)
+                                    .min(count - 1)
+                                    .saturating_sub(1);
                                 state.hover.set(Some(index));
                                 ui.invalidate(id);
                                 None
@@ -209,7 +220,8 @@ impl<M: 'static> Toolbar<M> {
                                 None
                             }
                             Key::RETURN => {
-                                let index = state.hover.get()?;
+                                // A hover left over from a wider strip may now be clipped.
+                                let index = state.hover.get().filter(|&index| index < count)?;
                                 activated.set(index as i64);
                                 ui.invalidate(id);
                                 let mapper = on_click.borrow();

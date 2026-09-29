@@ -229,3 +229,40 @@ fn a_clipped_trailing_item_cannot_be_clicked() {
     runtime.deliver(WidgetId::NONE, &Event::Wake);
     assert!(log.borrow().is_empty());
 }
+
+/// A key press.
+fn key(key: crate::Key) -> Event {
+    Event::KeyDown {
+        key,
+        modifiers: crate::Modifiers::NONE,
+        repeat: 1,
+        system: false,
+    }
+}
+
+#[test]
+fn the_keyboard_cannot_reach_or_activate_a_clipped_item() {
+    use crate::Key;
+    use crate::icon::Lucide;
+
+    let (_backend, core, ui) = setup();
+    // Two 40px squares fit in 100px; the third is clipped.
+    let toolbar = Toolbar::empty(&ui, Rect::new(0, 0, 100, 40))
+        .unwrap()
+        .item(Lucide::Save, "a")
+        .item(Lucide::Copy, "b")
+        .item(Lucide::Play, "c")
+        .on_click(|index| Some(index as u32));
+    let log = Rc::new(RefCell::new(Vec::new()));
+    let runtime = Runtime::primary(core, TestApp(Rc::clone(&log)));
+    for _ in 0..5 {
+        runtime.deliver(toolbar.id(), &key(Key::RIGHT));
+    }
+    runtime.deliver(toolbar.id(), &key(Key::RETURN));
+    runtime.deliver(WidgetId::NONE, &Event::Wake);
+    assert_eq!(
+        *log.borrow(),
+        vec![1],
+        "Right stops at the last visible item"
+    );
+}

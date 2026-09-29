@@ -159,10 +159,33 @@ fn degenerate_strips_lay_out_nothing_and_do_not_panic() {
 
 #[test]
 fn fill_splits_the_width_equally_and_places_separators() {
+    // One 1px separator gap is reserved; the three items share 89px.
     let strip = lay("ii|i", Mode::Fill, (90, 40), 96);
-    assert_eq!(strip.items, vec![(0, 30), (30, 60), (60, 90)]);
-    assert_eq!(strip.separators, vec![60], "on the boundary before item 2");
-    assert_eq!(lay("|i", Mode::Fill, (90, 40), 96).separators, vec![0]);
+    assert_eq!(strip.items, vec![(0, 29), (29, 59), (60, 90)]);
+    assert_eq!(strip.separators, vec![59], "in its own gap before item 2");
+    assert_eq!(
+        strip.item_at(59),
+        None,
+        "a click on the separator hits nothing"
+    );
+    assert_eq!(strip.item_at(58), Some(1));
+    assert_eq!(strip.item_at(60), Some(2));
+
+    let leading = lay("|i", Mode::Fill, (90, 40), 96);
+    assert_eq!(leading.separators, vec![0]);
+    assert_eq!(leading.items, vec![(1, 90)]);
+    assert_eq!(leading.item_at(0), None);
     assert!(lay("i|", Mode::Fill, (90, 40), 96).separators.is_empty());
-    assert_eq!(lay("|", Mode::Fill, (90, 40), 96).separators, vec![0]);
+    assert!(lay("|", Mode::Fill, (90, 40), 96).separators.is_empty());
+}
+
+#[test]
+fn fill_separator_gaps_scale_with_dpi() {
+    // At 192 dpi a separator is 2px wide and both of its pixels hit nothing.
+    let strip = lay("i|i", Mode::Fill, (100, 40), 192);
+    let x = strip.separators[0];
+    assert_eq!(strip.item_at(x), None);
+    assert_eq!(strip.item_at(x + 1), None);
+    assert_eq!(strip.items[1].0, x + 2);
+    assert_eq!(strip.items[1].1, 100);
 }
