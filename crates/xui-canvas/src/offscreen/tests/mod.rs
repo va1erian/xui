@@ -19,6 +19,7 @@ mod capture;
 mod clipboard;
 mod hit;
 mod paint;
+mod window_icon;
 
 /// A sink that records every event it is handed.
 pub(super) struct Recorder(pub(super) Rc<RefCell<Vec<(WidgetId, Event)>>>);

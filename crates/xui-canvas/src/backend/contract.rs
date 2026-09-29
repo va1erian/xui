@@ -94,6 +94,15 @@ impl Backend for WinitBackend {
         self.window_handle(window, |handle| handle.set_title(&title));
     }
 
+    fn set_window_icon(&self, window: WindowId, icon: &Image) {
+        if let Some(state) = self.shared.windows.borrow_mut().get_mut(&window.raw()) {
+            state.icon = Some(icon.clone());
+        }
+        if let Some(icon) = super::to_winit_icon(icon) {
+            self.window_handle(window, |handle| handle.set_window_icon(Some(icon)));
+        }
+    }
+
     fn capture(&self, window: WindowId) -> BackendResult<Image> {
         let (width, height) = self
             .shared

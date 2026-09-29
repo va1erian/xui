@@ -15,7 +15,7 @@ use xui_core::geometry::Rect;
 
 use super::App;
 use crate::backend::software::RealWindow;
-use crate::backend::{DEFAULT_DPI, Shared};
+use crate::backend::{DEFAULT_DPI, Shared, WindowState};
 
 impl App<'_> {
     /// Creates the OS window for any backend window that lacks one. Its
@@ -46,6 +46,15 @@ impl App<'_> {
                 continue;
             };
             let window = Rc::new(window);
+            if let Some(icon) = self
+                .shared
+                .windows
+                .borrow()
+                .get(&raw)
+                .and_then(WindowState::winit_icon)
+            {
+                window.set_window_icon(Some(icon));
+            }
             let metrics = window_metrics(&window);
             if let Some(state) = self.shared.windows.borrow_mut().get_mut(&raw) {
                 state.size = metrics.0;

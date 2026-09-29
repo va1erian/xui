@@ -81,6 +81,20 @@ impl Backend for Win32Backend {
         self.set_title(window, title);
     }
 
+    fn set_window_icon(&self, window: WindowId, icon: &xui_core::image::Image) {
+        let (Ok(width), Ok(height)) = (i32::try_from(icon.width()), i32::try_from(icon.height()))
+        else {
+            return;
+        };
+        let Ok(icon) = crate::Icon::from_rgba(width, height, icon.pixels()) else {
+            return;
+        };
+        if let Some(entry) = self.windows.borrow().get(&window.raw()) {
+            entry.window.set_icon(&icon);
+            *entry.icon.borrow_mut() = Some(icon);
+        }
+    }
+
     fn set_window_enabled(&self, window: WindowId, enabled: bool) {
         self.set_enabled(window, enabled);
     }

@@ -51,6 +51,12 @@ impl Backend for OffscreenBackend {
             .retain(|(_, node)| node.window != window);
     }
 
+    fn set_window_icon(&self, window: WindowId, icon: &Image) {
+        if let Some(entry) = self.windows.borrow_mut().get_mut(&window.raw()) {
+            entry.icon = Some(icon.clone());
+        }
+    }
+
     fn capture(&self, window: WindowId) -> BackendResult<Image> {
         let image = self
             .render(window)

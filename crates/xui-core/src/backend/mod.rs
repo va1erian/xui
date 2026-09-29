@@ -141,6 +141,13 @@ pub trait Backend {
         let _ = (window, title);
     }
 
+    /// Sets a top-level window's icon (title bar, task bar, window switcher)
+    /// from an RGBA image. A backend without window icons does nothing; one
+    /// that opens its window lazily keeps the icon until the window exists.
+    fn set_window_icon(&self, window: WindowId, icon: &Image) {
+        let _ = (window, icon);
+    }
+
     /// Enables or disables a whole top-level window, so a modal dialog can make
     /// its owner inert. A backend that cannot disable a window does nothing.
     fn set_window_enabled(&self, window: WindowId, enabled: bool) {

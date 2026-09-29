@@ -35,7 +35,7 @@ use xui_core::backend::{
     Cursor, Decorations, Painter, ParentRef, PlatformSpec, WidgetId, WindowId,
 };
 use xui_core::router::WidgetHost;
-use xui_core::{Dip, Rect, Theme};
+use xui_core::{Dip, Image, Rect, Theme};
 
 use crate::gl::{GlWidget, RendererState};
 use crate::text_layout::CosmicShaper;
@@ -54,6 +54,12 @@ impl HasDisplayHandle for SharedWindow {
     fn display_handle(&self) -> Result<DisplayHandle<'_>, HandleError> {
         self.0.display_handle()
     }
+}
+
+/// Converts an RGBA image to a `winit` window icon; `None` if `winit` rejects
+/// its dimensions.
+pub(crate) fn to_winit_icon(image: &Image) -> Option<winit::window::Icon> {
+    winit::window::Icon::from_rgba(image.pixels().to_vec(), image.width(), image.height()).ok()
 }
 
 /// The default dots-per-inch a window is rendered at before the platform
@@ -90,6 +96,9 @@ pub(crate) struct WindowState {
     pub(crate) theme: Theme,
     pub(crate) sink: Option<Rc<dyn WidgetHost>>,
     pub(crate) window: Option<Rc<Window>>,
+    /// The icon the app asked for. Kept so a window that does not exist yet
+    /// gets it when it is created.
+    pub(crate) icon: Option<Image>,
     /// Whether the window shows the system title bar.
     pub(crate) decorations: Decorations,
     /// Whether the user may resize the window.
@@ -116,6 +125,12 @@ pub(crate) struct WindowState {
 }
 
 impl WindowState {
+    /// The `winit` icon for the image the app asked for, if it set one that
+    /// `winit` accepts.
+    pub(crate) fn winit_icon(&self) -> Option<winit::window::Icon> {
+        self.icon.as_ref().and_then(to_winit_icon)
+    }
+
     fn new(spec: &PlatformSpec) -> WindowState {
         WindowState {
             title: spec.title.clone(),
@@ -127,6 +142,7 @@ impl WindowState {
             theme: Theme::light(),
             sink: None,
             window: None,
+            icon: None,
             decorations: spec.decorations,
             resizable: spec.resizable,
             caption_inset: spec.caption_inset,
