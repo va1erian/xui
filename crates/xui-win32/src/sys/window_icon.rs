@@ -109,3 +109,21 @@ pub(crate) fn set_icon(hwnd: Hwnd, icon: HICON) {
         );
     }
 }
+
+/// Whether the window currently has an icon of the given size (`big` selects
+/// `ICON_BIG`, otherwise `ICON_SMALL`).
+#[cfg(test)]
+pub(crate) fn has_icon(hwnd: Hwnd, big: bool) -> bool {
+    use windows::Win32::UI::WindowsAndMessaging::WM_GETICON;
+    let kind = if big { ICON_BIG } else { ICON_SMALL };
+    // SAFETY: `WM_GETICON` takes no pointers and only returns a handle.
+    let result = unsafe {
+        SendMessageW(
+            raw_hwnd(hwnd),
+            WM_GETICON,
+            Some(WPARAM(kind as usize)),
+            Some(LPARAM(0)),
+        )
+    };
+    result.0 != 0
+}
