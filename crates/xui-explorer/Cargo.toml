@@ -1,0 +1,24 @@
+[package]
+name = "xui-explorer"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "A portable spatial file explorer core for xui, with all OS specifics behind small traits"
+repository = "https://github.com/va1erian/xui"
+readme = "README.md"
+
+[dependencies]
+xui-core = { path = "../xui-core" }
+
+[features]
+# The std-backed `Platform`/`Launcher` (`StdPlatform`, `DesktopLauncher`). Off
+# for a target with its own filesystem and shell, such as LazyOS.
+default = ["std-platform"]
+std-platform = []
+
+[dev-dependencies]
+xui-canvas = { path = "../xui-canvas" }
+
+[[example]]
+name = "explorer"
+required-features = ["std-platform"]

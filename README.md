@@ -36,6 +36,7 @@ snapshots and tests. Dark mode is first-class on every backend.
 | `xui` | The umbrella crate most applications depend on. Selects a backend by feature (`canvas` by default, `d2d` for the Windows Direct2D backend) and re-exports the portable front layer. |
 | `xui-code-editor` | A code-editor widget: rope buffer, monospace view, find/replace, pluggable syntax highlighting. |
 | `xui-icons` | An optional, multi-colour vector icon set ("Global Village", 36 icons) drawn through the portable `Canvas` path API, so the software backend rasterises it with `tiny-skia`. Depends on `xui-core` only. |
+| `xui-explorer` | A portable spatial file explorer: one window per folder, with all OS specifics behind `Platform`/`Launcher` traits and a std-backed desktop shell. |
 | `xui-litehtml` | An HTML view built on `litehtml` and Direct2D. A portable custom-painted node that runs on every backend. |
 
 ## Documentation

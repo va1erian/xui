@@ -11,6 +11,19 @@
   it with `tiny-skia` and `xui-win32` with Direct2D. `Palette` retints the set.
   The SVGs, PNG exports and `.ico` files are vendored under
   `crates/xui-icons/assets/`; `generate.py` compiles them into Rust data.
+- **Portable spatial file explorer.** New `xui-explorer` crate: one window per
+  open folder, an `IconView` listing (folders first, then files, grouped and
+  sorted case-insensitively), a `StatusBar` summary, a context menu, Delete /
+  Properties dialogs and `Delete` / `Alt+Enter` / `F5` shortcuts. All OS
+  specifics sit behind two object-safe traits — `Platform` (list, symlink-aware
+  metadata, delete, home) and `Launcher` — that mention only `Path`/`OsStr` and
+  `io::Result`; a `testing::MemPlatform` backs every test so none touches the
+  real disk, and the default `std-platform` feature supplies `StdPlatform` and
+  `DesktopLauncher`. A target with its own filesystem and shell (such as LazyOS)
+  implements the two traits plus a `Backend` and nothing else. Deletion never
+  follows a symlink, refuses a filesystem root, always asks first and reports
+  per-item failures; a shared path-to-window registry makes an already-open
+  folder a no-op and closes the windows below a deleted folder.
 - **Portable `IconView`.** `xui-core` gains `widget::IconView`, a virtualized
   Windows XP-style icon view: tiles of an icon plus up to three ellipsised text
   lines, flowed left to right and wrapped, with a scrollbar, three icon sizes
