@@ -276,6 +276,46 @@ fn is_within_compares_path_components() {
 }
 
 #[test]
+fn the_model_reports_the_open_icon_only_while_the_folder_flashes() {
+    use std::cell::Cell;
+    use std::ffi::OsStr;
+    use std::rc::Rc;
+    use std::time::Instant;
+
+    use xui_core::icon::{IconRef, Lucide};
+    use xui_core::widget::IconModel;
+
+    let now = Rc::new(Cell::new(Instant::now()));
+    let clock: Clock = {
+        let now = Rc::clone(&now);
+        Rc::new(move || now.get())
+    };
+    let flash = Rc::new(Flash::with_clock(clock));
+    let mut listing = Listing::empty(Path::new("/a"));
+    listing.entries = vec![
+        entry("docs", Kind::Dir, None),
+        entry("notes.txt", Kind::File, Some(4)),
+    ];
+    let model = SharedListing::with_flash(Rc::new(listing), Rc::clone(&flash));
+
+    assert_eq!(model.icon(0), Some(IconRef::Lucide(Lucide::Folder)));
+    flash.flash(OsStr::new("docs"));
+    assert_eq!(model.icon(0), Some(IconRef::Lucide(Lucide::FolderOpen)));
+    assert_eq!(
+        model.icon(1),
+        Some(IconRef::Lucide(Lucide::File)),
+        "a file never opens its icon"
+    );
+
+    now.set(now.get() + Duration::from_millis(2_000));
+    assert_eq!(
+        model.icon(0),
+        Some(IconRef::Lucide(Lucide::Folder)),
+        "the open icon reverts at the deadline"
+    );
+}
+
+#[test]
 fn listing_remaps_a_selection_by_name() {
     let mut listing = Listing::empty(Path::new("/a"));
     listing.entries = vec![

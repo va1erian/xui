@@ -237,6 +237,101 @@ fn two_views_in_one_window_keep_separate_state() {
 }
 
 #[test]
+fn the_icon_hook_runs_for_visible_tiles_only_and_falls_back_to_icon() {
+    use std::cell::Cell;
+
+    use crate::backend::Canvas;
+    use crate::color::Color;
+    use crate::icon::Lucide;
+    use crate::theme::Theme;
+
+    const MARK: Color = Color::rgb(0x12, 0x34, 0x56);
+
+    struct Hook {
+        calls: Rc<Cell<usize>>,
+        draws: bool,
+    }
+
+    impl IconModel for Hook {
+        fn items(&self) -> usize {
+            100
+        }
+
+        fn icon(&self, _item: usize) -> Option<crate::icon::IconRef> {
+            Some(Lucide::Folder.into())
+        }
+
+        fn line(&self, _item: usize, _line: usize) -> Option<&str> {
+            None
+        }
+
+        fn paint_icon(
+            &self,
+            _item: usize,
+            canvas: &mut dyn Canvas,
+            rect: Rect,
+            _theme: &Theme,
+            _dpi: u32,
+        ) -> bool {
+            self.calls.set(self.calls.get() + 1);
+            if self.draws {
+                canvas.fill_rect(rect, MARK);
+            }
+            self.draws
+        }
+    }
+
+    let (backend, _core, ui) = setup();
+    let calls = Rc::new(Cell::new(0));
+    let hook = IconView::with_model(
+        &ui,
+        Rect::new(0, 0, WIDTH, HEIGHT),
+        Hook {
+            calls: Rc::clone(&calls),
+            draws: true,
+        },
+    )
+    .unwrap();
+    backend.render(hook.id());
+    let ops = backend.ops(hook.id());
+    let marked = ops
+        .iter()
+        .filter(|op| matches!(op, DrawOp::Fill(_, color) if *color == MARK))
+        .count();
+    assert!(marked > 0, "the hook drew at least one visible tile");
+    assert_eq!(calls.get(), marked, "the hook ran once per tile that drew");
+    assert!(
+        calls.get() < 100,
+        "only the visible tiles were painted: {}",
+        calls.get()
+    );
+
+    // Returning `false` draws nothing and falls back to `icon`.
+    let calls = Rc::new(Cell::new(0));
+    let fallback = IconView::with_model(
+        &ui,
+        Rect::new(0, 0, WIDTH, HEIGHT),
+        Hook {
+            calls: Rc::clone(&calls),
+            draws: false,
+        },
+    )
+    .unwrap();
+    backend.render(fallback.id());
+    let ops = backend.ops(fallback.id());
+    assert!(calls.get() > 0, "the hook still ran for the visible tiles");
+    assert!(
+        ops.iter()
+            .all(|op| !matches!(op, DrawOp::Fill(_, color) if *color == MARK)),
+        "the hook drew nothing"
+    );
+    assert!(
+        ops.iter().any(|op| matches!(op, DrawOp::LineStroked(..))),
+        "the Lucide icon was drawn instead"
+    );
+}
+
+#[test]
 fn an_empty_model_paints_and_never_panics() {
     struct Empty;
 

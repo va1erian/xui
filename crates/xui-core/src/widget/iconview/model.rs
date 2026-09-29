@@ -6,7 +6,10 @@
 //! lazily, so a large model paints only the tiles that are visible. [`IconSize`]
 //! picks one of the three Windows XP tile sizes (16, 32 and 48 DIP icons).
 
+use crate::backend::Canvas;
+use crate::geometry::Rect;
 use crate::icon::IconRef;
+use crate::theme::Theme;
 use crate::units::Dip;
 use crate::widget::CellData;
 
@@ -24,6 +27,24 @@ pub trait IconModel {
     /// The icon follows the tile's text colour, so it tracks the theme, the
     /// selection and the disabled state.
     fn icon(&self, item: usize) -> Option<IconRef>;
+
+    /// Draws `item`'s icon itself, for a multi-colour or app-drawn icon; return
+    /// `true` if it drew, in which case [`icon`](IconModel::icon) is not used.
+    ///
+    /// The default draws nothing and returns `false`, so a single-colour
+    /// [`IconRef`] model is unchanged. The view calls this inside the tile's
+    /// clip for every visible item only, so the hook allocates nothing per
+    /// tile.
+    fn paint_icon(
+        &self,
+        _item: usize,
+        _canvas: &mut dyn Canvas,
+        _rect: Rect,
+        _theme: &Theme,
+        _dpi: u32,
+    ) -> bool {
+        false
+    }
 
     /// The text of `line` (`0` is the name, `1` and `2` are secondary details)
     /// in `item`, or `None` when the line is absent. Lines past `2` are ignored.

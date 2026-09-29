@@ -6,10 +6,11 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
-use xui_canvas::snapshot::{Snapshot, try_render};
+use xui_canvas::snapshot::{Snapshot, render_with};
 use xui_core::units::Dip;
 use xui_core::{Image, Theme};
 use xui_explorer::platform::{Launcher, Platform};
+use xui_explorer::window::Msg;
 use xui_explorer::{Explorer, ExplorerWindow, MemPlatform};
 
 /// A launcher that does nothing: the snapshot never activates a file.
@@ -37,12 +38,15 @@ fn demo_platform() -> Rc<MemPlatform> {
 
 fn render_explorer(theme: Theme) -> Image {
     let platform: Rc<dyn Platform> = demo_platform();
-    try_render(
+    render_with(
         Snapshot::new(Dip(720.0), Dip(480.0)).theme(theme),
         move |ui| {
             let explorer = Explorer::new(platform, Rc::new(NoLauncher));
             ExplorerWindow::new(ui, explorer, PathBuf::from("/demo"))
         },
+        // Activate the Reports folder so the image shows the open-folder icon.
+        // Entries are folders first: Images is item 0, Reports item 1.
+        |stage| stage.emit(Msg::Activate(1)),
     )
     .expect("the explorer renders")
 }

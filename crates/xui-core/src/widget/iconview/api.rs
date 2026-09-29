@@ -215,6 +215,13 @@ impl<M: 'static> IconView<M> {
         self.control.set_selected(selected);
     }
 
+    /// Schedules a repaint of the view. Call this after the model's *appearance*
+    /// changed without its items changing, such as a live icon state the model
+    /// reads in [`IconModel::paint_icon`](super::IconModel::paint_icon).
+    pub fn invalidate(&self) {
+        self.control.invalidate();
+    }
+
     /// Re-lays the scrollbar out and repaints against the current state.
     fn reflow(&self) {
         let ui = self.control.ui();

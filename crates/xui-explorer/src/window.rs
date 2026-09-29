@@ -8,24 +8,34 @@
 //! lives in this struct, not in shared cells.
 
 mod actions;
+mod flash;
 
+use std::cell::Cell;
 use std::ffi::OsString;
 use std::path::PathBuf;
 use std::rc::Rc;
 
+pub use flash::FlashHandle;
+
 use xui_core::app::{App, Ui};
-use xui_core::backend::BackendError;
+use xui_core::backend::{BackendError, NodeKind, NodeSpec, TimerId};
 use xui_core::geometry::{Point, Rect};
 use xui_core::message::Key;
 use xui_core::units::Dip;
-use xui_core::widget::{Dialog, IconView, Menu, MenuId, StatusBar, TaskDialog, TaskDialogAction};
+use xui_core::widget::{
+    Control, Dialog, IconView, Menu, MenuId, StatusBar, TaskDialog, TaskDialogAction,
+};
 
-use crate::model::{Listing, SharedListing, summarize, title};
+use crate::model::{Clock, Flash, Listing, SharedListing, summarize, title};
 use crate::platform::Kind;
 use crate::shell::Explorer;
 
 /// The status bar's design height.
 const STATUS_HEIGHT: Dip = Dip(24.0);
+
+/// How often the open-folder flash is checked, in milliseconds. Short enough
+/// that a folder reverts close to its two-second deadline.
+const FLASH_TICK_MS: u32 = 200;
 
 /// The context menu's command ids.
 const MENU_OPEN: MenuId = MenuId::new(0);
@@ -55,6 +65,8 @@ pub enum Msg {
     Confirm(TaskDialogAction),
     /// The properties dialog was dismissed.
     PropertiesClosed,
+    /// The open-folder flash's repeating timer fired.
+    FlashTick,
 }
 
 /// One open folder window.
@@ -63,9 +75,18 @@ pub struct ExplorerWindow {
     dir: PathBuf,
     title: String,
     listing: Rc<Listing>,
+    flash: Rc<Flash>,
     view: Rc<IconView<Msg>>,
     status: Rc<StatusBar<Msg>>,
     menu: Menu<Msg>,
+    /// A zero-size container that owns the flash's repeating timer; dropping
+    /// the control (on window close) stops the timer.
+    timer: Control<Msg>,
+    /// The backend's id for the running tick timer, and whether one should be
+    /// running. The flag is the single source of truth so a second timer is
+    /// never started; the id is what `kill_timer` needs.
+    timer_id: Rc<Cell<Option<TimerId>>>,
+    ticking: Rc<Cell<bool>>,
     context_item: Option<usize>,
     pending_delete: Vec<OsString>,
     confirm: Option<TaskDialog<Msg>>,
@@ -74,20 +95,39 @@ pub struct ExplorerWindow {
 
 impl ExplorerWindow {
     /// Builds a window showing `dir`, wired to `explorer`'s platform and
-    /// launcher. The listing is read immediately, on the UI thread.
+    /// launcher. The listing is read immediately, on the UI thread. The
+    /// open-folder flash uses the system clock.
     pub fn new(
         ui: &mut Ui<Msg>,
         explorer: Rc<Explorer>,
         dir: PathBuf,
     ) -> Result<ExplorerWindow, BackendError> {
+        let clock: Clock = Rc::new(std::time::Instant::now);
+        ExplorerWindow::with_clock(ui, explorer, dir, clock)
+    }
+
+    /// Builds a window whose open-folder flash reads `clock`; a test injects a
+    /// clock it can advance.
+    pub fn with_clock(
+        ui: &mut Ui<Msg>,
+        explorer: Rc<Explorer>,
+        dir: PathBuf,
+        clock: Clock,
+    ) -> Result<ExplorerWindow, BackendError> {
         let listing = Rc::new(Listing::load(explorer.platform(), &dir));
+        let flash = Rc::new(Flash::with_clock(clock));
+        let timer = Control::new(ui, &NodeSpec::new(NodeKind::Container, Rect::default()))?;
         let (view_rect, status_rect) = layout(ui);
         let view = Rc::new(
-            IconView::with_model(ui, view_rect, SharedListing::new(Rc::clone(&listing)))?
-                .multi_select(true)
-                .on_selection(|_| Some(Msg::Selection))
-                .on_activate(|index| Some(Msg::Activate(index)))
-                .on_context(|item, at| Some(Msg::Context(item, at))),
+            IconView::with_model(
+                ui,
+                view_rect,
+                SharedListing::with_flash(Rc::clone(&listing), Rc::clone(&flash)),
+            )?
+            .multi_select(true)
+            .on_selection(|_| Some(Msg::Selection))
+            .on_activate(|index| Some(Msg::Activate(index)))
+            .on_context(|item, at| Some(Msg::Context(item, at))),
         );
         let status = Rc::new(StatusBar::new(ui, status_rect, &[""])?);
         let menu = Menu::context(ui)
@@ -113,9 +153,13 @@ impl ExplorerWindow {
             dir,
             title: String::new(),
             listing,
+            flash,
             view,
             status,
             menu,
+            timer,
+            timer_id: Rc::new(Cell::new(None)),
+            ticking: Rc::new(Cell::new(false)),
             context_item: None,
             pending_delete: Vec::new(),
             confirm: None,
@@ -144,12 +188,17 @@ impl ExplorerWindow {
     }
 
     /// Re-lists the folder, keeps the selection where the items still exist,
-    /// and updates the title and status bar.
+    /// drops any flash whose folder vanished, and updates the title and status
+    /// bar.
     fn refresh(&mut self, ui: &mut Ui<Msg>) {
         let selected_names = self.listing.names_of(&self.view.selection());
         let listing = Rc::new(Listing::load(self.explorer.platform(), &self.dir));
         self.listing = Rc::clone(&listing);
-        self.view.set_model(SharedListing::new(Rc::clone(&listing)));
+        self.prune_flash(&listing);
+        self.view.set_model(SharedListing::with_flash(
+            Rc::clone(&listing),
+            Rc::clone(&self.flash),
+        ));
         self.view
             .set_selection(&listing.indices_of(&selected_names));
 
@@ -181,6 +230,10 @@ impl ExplorerWindow {
         let path = self.dir.join(&entry.name);
         match entry.kind {
             Kind::Dir => {
+                // Purely visual: flag the tile open (even when the window is
+                // already showing that folder) without touching selection or
+                // opening behaviour.
+                self.flash_name(&entry.name);
                 if !self.explorer.open_or_reuse(ui, path) {
                     self.status.set_parts(&["already open"]);
                 }
@@ -272,6 +325,7 @@ impl App for ExplorerWindow {
             }
             Msg::Confirm(action) => self.resolve_delete(action, ui),
             Msg::PropertiesClosed => self.properties = None,
+            Msg::FlashTick => self.flash_tick(),
         }
     }
 }

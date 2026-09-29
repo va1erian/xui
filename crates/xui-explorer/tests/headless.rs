@@ -4,18 +4,20 @@
 //! offscreen backend's synthetic input and messages. No real window opens and
 //! the loop runs to completion synchronously, so there is no watchdog to arm.
 
-use std::cell::RefCell;
-use std::ffi::OsString;
+use std::cell::{Cell, RefCell};
+use std::ffi::{OsStr, OsString};
 use std::io::{self, Error, ErrorKind};
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
+use std::time::{Duration, Instant};
 
 use xui_canvas::snapshot::{Snapshot, Stage, render_with};
 use xui_core::backend::{BackendError, WindowId};
 use xui_core::units::Dip;
 use xui_core::widget::{IconView, StatusBar, TaskDialogAction};
+use xui_explorer::model::Clock;
 use xui_explorer::platform::{Launcher, Platform};
-use xui_explorer::window::Msg;
+use xui_explorer::window::{FlashHandle, Msg};
 use xui_explorer::{Explorer, ExplorerWindow, MemPlatform};
 
 /// A launcher that records what it was asked to open, or fails on demand.
@@ -48,6 +50,7 @@ impl Launcher for TestLauncher {
 struct Handles {
     view: Rc<IconView<Msg>>,
     status: Rc<StatusBar<Msg>>,
+    flash: FlashHandle,
     window: WindowId,
 }
 
@@ -55,12 +58,29 @@ fn has(part: Option<String>, needle: &str) -> bool {
     part.map(|part| part.contains(needle)).unwrap_or(false)
 }
 
-/// Builds one explorer window over `platform` and runs `step` before the
-/// capture. Returns the shell (for registry assertions) and the handles.
+/// Builds one explorer window over `platform` on the system clock and runs
+/// `step` before the capture.
 fn drive<F>(
     platform: Rc<dyn Platform>,
     launcher: Rc<dyn Launcher>,
     dir: &str,
+    step: F,
+) -> (Rc<Explorer>, Handles)
+where
+    F: FnOnce(&Stage<'_, Msg>, &Handles) + 'static,
+{
+    let clock: Clock = Rc::new(Instant::now);
+    drive_with_clock(platform, launcher, dir, clock, step)
+}
+
+/// Builds one explorer window over `platform` whose flash reads `clock`, and
+/// runs `step` before the capture. Returns the shell (for registry assertions)
+/// and the handles.
+fn drive_with_clock<F>(
+    platform: Rc<dyn Platform>,
+    launcher: Rc<dyn Launcher>,
+    dir: &str,
+    clock: Clock,
     step: F,
 ) -> (Rc<Explorer>, Handles)
 where
@@ -76,10 +96,16 @@ where
     render_with(
         Snapshot::new(Dip(420.0), Dip(320.0)),
         move |ui| {
-            let window = ExplorerWindow::new(ui, Rc::clone(&explorer_build), PathBuf::from(&dir))?;
+            let window = ExplorerWindow::with_clock(
+                ui,
+                Rc::clone(&explorer_build),
+                PathBuf::from(&dir),
+                clock,
+            )?;
             *slot_build.borrow_mut() = Some(Handles {
                 view: window.view_handle(),
                 status: window.status_bar(),
+                flash: window.flash_handle(),
                 window: ui.window(),
             });
             Ok::<_, BackendError>(window)
@@ -284,6 +310,140 @@ fn a_launcher_error_goes_to_the_status_bar() {
     );
     assert!(has(handles.status.text(0), "Cannot open"));
     assert!(has(handles.status.text(0), "note.txt"));
+}
+
+/// A clock a test can advance, shared with the window's flash.
+fn advanceable_clock() -> (Rc<Cell<Instant>>, Clock) {
+    let now = Rc::new(Cell::new(Instant::now()));
+    let clock: Clock = {
+        let now = Rc::clone(&now);
+        Rc::new(move || now.get())
+    };
+    (now, clock)
+}
+
+#[test]
+fn activating_a_folder_flashes_it_open_until_the_timer_expires() {
+    let (now, clock) = advanceable_clock();
+    let step_now = Rc::clone(&now);
+    let (_, _) = drive_with_clock(
+        mem(),
+        Rc::new(TestLauncher::default()),
+        "/a",
+        clock,
+        move |stage, handles| {
+            // Entries are folders first: b is item 0.
+            handles.view.set_selection(&[1]);
+            stage.emit(Msg::Activate(0));
+            assert!(handles.flash.is_flashing(OsStr::new("b")), "b flashes");
+            assert!(handles.flash.timer_running(), "the tick timer started");
+            assert_eq!(
+                handles.view.selection(),
+                vec![1],
+                "flashing does not change the selection"
+            );
+
+            step_now.set(step_now.get() + Duration::from_millis(2_000));
+            stage.emit(Msg::FlashTick);
+            assert!(
+                !handles.flash.is_flashing(OsStr::new("b")),
+                "b reverted at the deadline"
+            );
+            assert!(handles.flash.is_empty());
+            assert!(
+                !handles.flash.timer_running(),
+                "the tick timer stopped when the list emptied"
+            );
+        },
+    );
+}
+
+#[test]
+fn re_activating_a_folder_restarts_its_flash() {
+    let (now, clock) = advanceable_clock();
+    let step_now = Rc::clone(&now);
+    let (_, _) = drive_with_clock(
+        mem(),
+        Rc::new(TestLauncher::default()),
+        "/a",
+        clock,
+        move |stage, handles| {
+            stage.emit(Msg::Activate(0));
+            step_now.set(step_now.get() + Duration::from_millis(1_500));
+            stage.emit(Msg::Activate(0));
+            step_now.set(step_now.get() + Duration::from_millis(1_500));
+            assert!(
+                handles.flash.is_flashing(OsStr::new("b")),
+                "1000 ms since the restart, not yet expired"
+            );
+            assert_eq!(handles.flash.len(), 1, "no duplicate entry");
+
+            step_now.set(step_now.get() + Duration::from_millis(500));
+            stage.emit(Msg::FlashTick);
+            assert!(!handles.flash.is_flashing(OsStr::new("b")));
+        },
+    );
+}
+
+#[test]
+fn several_folders_flash_at_once_under_one_timer() {
+    let platform = Rc::new(
+        MemPlatform::new()
+            .dir("/a")
+            .dir("/a/b")
+            .dir("/a/c")
+            .file("/a/z.txt", 1),
+    );
+    let (now, clock) = advanceable_clock();
+    let step_now = Rc::clone(&now);
+    let (_, _) = drive_with_clock(
+        platform,
+        Rc::new(TestLauncher::default()),
+        "/a",
+        clock,
+        move |stage, handles| {
+            stage.emit(Msg::Activate(0)); // b
+            stage.emit(Msg::Activate(1)); // c
+            assert!(handles.flash.is_flashing(OsStr::new("b")));
+            assert!(handles.flash.is_flashing(OsStr::new("c")));
+            assert_eq!(handles.flash.len(), 2);
+            assert!(handles.flash.timer_running(), "one timer serves both");
+
+            step_now.set(step_now.get() + Duration::from_millis(2_000));
+            stage.emit(Msg::FlashTick);
+            assert!(handles.flash.is_empty());
+            assert!(!handles.flash.timer_running());
+        },
+    );
+}
+
+#[test]
+fn deleting_a_flashing_folder_drops_its_flash_on_refresh() {
+    let mem = Rc::new(
+        MemPlatform::new()
+            .dir("/a")
+            .dir("/a/b")
+            .file("/a/top.txt", 1),
+    );
+    let platform: Rc<dyn Platform> = mem.clone();
+    let remover = Rc::clone(&mem);
+    let (_, _) = drive(
+        platform,
+        Rc::new(TestLauncher::default()),
+        "/a",
+        move |stage, handles| {
+            stage.emit(Msg::Activate(0)); // b
+            assert!(handles.flash.is_flashing(OsStr::new("b")));
+            remover.remove(Path::new("/a/b"), true).expect("remove");
+            stage.emit(Msg::Refresh);
+            assert!(
+                !handles.flash.is_flashing(OsStr::new("b")),
+                "a folder that vanished stops flashing"
+            );
+            assert!(handles.flash.is_empty());
+            assert!(!handles.flash.timer_running(), "no idle timer is left");
+        },
+    );
 }
 
 #[test]

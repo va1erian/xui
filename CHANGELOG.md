@@ -34,6 +34,18 @@
   draws only through the `Backend` contract, so it runs on every backend — the
   software (`xui-canvas`) path included — with no new dependencies and no
   `unsafe`.
+- **Global Village tiles and an open-folder flash in `xui-explorer`.** The
+  explorer draws its tiles with `xui-icons` under the new default
+  `village-icons` feature (a shared `FileClass` picks folder/image/music/
+  archive/document; on a dark theme only the set's ink is retinted so outlines
+  stay visible); with the feature off it falls back to the Lucide icons.
+  Opening a folder, including one already open, shows its open icon for two
+  seconds via a per-window list pruned by a single repeating timer that stops
+  when idle and is stopped on window close.
+- `IconModel::paint_icon` lets a model draw a multi-colour or app-drawn tile
+  icon itself: `IconView` calls it for each visible tile first and falls back to
+  the single-colour `IconModel::icon` when it returns `false`. `IconView::invalidate`
+  repaints after a live appearance change.
 - **Portable file open/save picker.** `xui-core` gains `widget::FileDialog`
   (open and save modes) with a constructor-closure API (`open_file`/`save_file`,
   `initial_dir`, `suggested_name`, `filter`, `require_existing`,

@@ -9,16 +9,19 @@
 
 mod details;
 mod entry;
+mod flash;
 mod format;
 mod path;
 mod sort;
 mod summary;
+mod village;
 
 #[cfg(test)]
 mod tests;
 
 pub use details::describe;
 pub use entry::{Entry, Listing, SharedListing};
+pub use flash::{Clock, FLASH_DURATION, Flash};
 pub use format::{format_size, format_time};
 pub use path::{deletion_refused, is_root, is_within, title};
 pub use summary::summarize;

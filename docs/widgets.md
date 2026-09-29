@@ -191,7 +191,10 @@ view.set_icon_size(IconSize::Large);
   the normal text token, lines 2 and 3 are secondary details in the muted token).
   A `Vec<String>` and a `Vec<Vec<String>>` implement it already. Only visible
   tiles are laid out and painted, so a model of 100 000 items costs the same as
-  ten.
+  ten. A model that draws its own multi-colour icon implements
+  `paint_icon(item, canvas, rect, theme, dpi)`, called before `icon` for each
+  visible tile; returning `true` means the `IconRef` fallback is not used.
+  `IconView::invalidate` repaints after a live appearance change.
 - A tile's width, height and text metrics derive from the icon size. A line that
   does not fit is end-ellipsised; a missing line is simply not drawn. The small
   tile is one line tall, so it shows the name alone.

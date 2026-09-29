@@ -9,12 +9,17 @@ readme = "README.md"
 
 [dependencies]
 xui-core = { path = "../xui-core" }
+# The optional Global Village multi-colour icon set. Off for a target that
+# prefers the single-colour Lucide fallback (or cannot afford the crate).
+xui-icons = { path = "../xui-icons", optional = true }
 
 [features]
 # The std-backed `Platform`/`Launcher` (`StdPlatform`, `DesktopLauncher`). Off
 # for a target with its own filesystem and shell, such as LazyOS.
-default = ["std-platform"]
+default = ["std-platform", "village-icons"]
 std-platform = []
+# Draw tiles with the multi-colour Global Village icons instead of Lucide.
+village-icons = ["dep:xui-icons"]
 
 [dev-dependencies]
 xui-canvas = { path = "../xui-canvas" }

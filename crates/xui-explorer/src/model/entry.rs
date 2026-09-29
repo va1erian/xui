@@ -6,11 +6,16 @@ use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
-use xui_core::icon::{IconRef, Lucide};
+use xui_core::backend::Canvas;
+use xui_core::geometry::Rect;
+use xui_core::icon::IconRef;
+use xui_core::theme::Theme;
 use xui_core::widget::IconModel;
 
+use super::flash::Flash;
 use super::format_size;
 use super::sort::sort_entries;
+use super::village;
 use crate::platform::{Kind, Platform, RawEntry};
 
 /// One listed item, with its display strings resolved once at load time so the
@@ -131,56 +136,67 @@ impl Listing {
 
 /// A shared [`Listing`] as an [`IconModel`], so the app and the view read the
 /// same entries without copying them.
+///
+/// It also reads the window's [`Flash`] (by borrowed name, so no per-tile
+/// allocation), so a just-opened folder draws its open icon for two seconds.
 #[derive(Clone)]
-pub struct SharedListing(pub Rc<Listing>);
+pub struct SharedListing {
+    listing: Rc<Listing>,
+    flash: Rc<Flash>,
+}
 
 impl SharedListing {
-    /// Wraps `listing`.
+    /// Wraps `listing` with a private flash, so nothing flashes.
     pub fn new(listing: Rc<Listing>) -> SharedListing {
-        SharedListing(listing)
+        SharedListing::with_flash(listing, Rc::new(Flash::new()))
+    }
+
+    /// Wraps `listing`, reading `flash` for the open-folder state.
+    pub fn with_flash(listing: Rc<Listing>, flash: Rc<Flash>) -> SharedListing {
+        SharedListing { listing, flash }
     }
 }
 
 impl IconModel for SharedListing {
     fn items(&self) -> usize {
-        self.0.entries.len()
+        self.listing.entries.len()
     }
 
     fn icon(&self, item: usize) -> Option<IconRef> {
-        self.0.entries.get(item).map(|entry| icon_for(entry).into())
+        let entry = self.listing.entries.get(item)?;
+        Some(village::icon_ref(
+            entry,
+            self.flash.is_flashing(&entry.name),
+        ))
+    }
+
+    fn paint_icon(
+        &self,
+        item: usize,
+        canvas: &mut dyn Canvas,
+        rect: Rect,
+        theme: &Theme,
+        dpi: u32,
+    ) -> bool {
+        let Some(entry) = self.listing.entries.get(item) else {
+            return false;
+        };
+        village::paint(
+            entry,
+            self.flash.is_flashing(&entry.name),
+            canvas,
+            rect,
+            theme,
+            dpi,
+        )
     }
 
     fn line(&self, item: usize, line: usize) -> Option<&str> {
-        let entry = self.0.entries.get(item)?;
+        let entry = self.listing.entries.get(item)?;
         match line {
             0 => Some(&entry.display),
             1 => Some(&entry.detail),
             _ => None,
         }
-    }
-}
-
-/// The icon for an entry: [`Lucide::Folder`] for a directory, otherwise a
-/// Lucide outline picked from the file's extension (falling back to
-/// [`Lucide::File`]).
-pub fn icon_for(entry: &Entry) -> Lucide {
-    match entry.kind {
-        Kind::Dir => Lucide::Folder,
-        Kind::File | Kind::Symlink => icon_for_name(&entry.name),
-    }
-}
-
-/// Picks a file icon from the (ASCII, case-insensitive) extension. A name with
-/// no extension or an unknown one gets [`Lucide::File`].
-fn icon_for_name(name: &OsStr) -> Lucide {
-    let Some(extension) = Path::new(name).extension().and_then(OsStr::to_str) else {
-        return Lucide::File;
-    };
-    match extension.to_ascii_lowercase().as_str() {
-        "png" | "jpg" | "jpeg" | "gif" | "bmp" | "svg" | "webp" | "ico" => Lucide::Image,
-        "rs" | "py" | "js" | "ts" | "tsx" | "jsx" | "c" | "h" | "cpp" | "hpp" | "go" | "java"
-        | "json" | "toml" | "yaml" | "yml" | "sh" | "ps1" | "bat" => Lucide::FileCode,
-        "zip" | "rar" | "7z" | "tar" | "gz" | "xz" | "bz2" => Lucide::Package,
-        _ => Lucide::File,
     }
 }
