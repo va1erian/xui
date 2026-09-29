@@ -2,8 +2,9 @@
 
 //! [`Dialog`]: a portable, modal in-window dialog.
 //!
-//! A dialog is a full-window scrim with a centred card, raised above the rest
-//! of the window, so the widgets behind it cannot be reached while it is open.
+//! A dialog is a full-window translucent scrim with a centred card, raised
+//! above the rest of the window, so the widgets behind it stay visible but
+//! cannot be reached while it is open.
 //! It comes in three shapes: a message (one **OK** button), a confirm
 //! (**OK**/**Cancel**) and a prompt (a confirm with an [`Edit`]).
 //!
@@ -21,11 +22,9 @@ use self::layout::{Layout, place};
 use super::button::Button;
 use super::control::{Control, HasText};
 use super::edit::Edit;
-use crate::Color;
 use crate::app::Ui;
 use crate::backend::{NodeKind, NodeSpec, Result, TextStyle, WidgetId};
 use crate::geometry::Rect;
-use crate::theme::Theme;
 use crate::units::Dip;
 
 mod events;
@@ -142,7 +141,7 @@ impl<M: 'static> Dialog<M> {
             scrim.set_painter(Rc::new(move |canvas| {
                 let theme = theme.get();
                 let layout = layout.get();
-                canvas.clear(scrim_color(theme));
+                canvas.fill_rect_rgba(canvas.bounds(), theme.scrim);
                 if !layout.visible {
                     return;
                 }
@@ -346,13 +345,6 @@ impl<M: 'static> Dialog<M> {
         }
         self.shared.ui.invalidate(self.scrim.id());
     }
-}
-
-/// The scrim colour: the window background darkened. It is opaque because a
-/// painted child window does not blend with the widgets behind it on every
-/// backend, so a translucent fill would show uninitialised pixels.
-fn scrim_color(theme: Theme) -> Color {
-    theme.background.lerp(Color::rgb(0, 0, 0), 0.35)
 }
 
 #[cfg(test)]
