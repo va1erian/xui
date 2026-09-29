@@ -133,6 +133,26 @@ fn double_click_decodes() {
 }
 
 #[test]
+fn a_double_click_sequence_is_down_up_double_click_up() {
+    // `WM_LBUTTONDBLCLK` replaces the second `WM_LBUTTONDOWN`, so the system
+    // sends down, up, dblclk, up for a double-click. The canvas backend's
+    // `ClickTracker` synthesizes the same order.
+    let sequence = [
+        decode_input(WM_LBUTTONDOWN, 0, pack(4, 5), Modifiers::NONE),
+        decode_input(WM_LBUTTONUP, 0, pack(4, 5), Modifiers::NONE),
+        decode_input(WM_LBUTTONDBLCLK, 0, pack(5, 5), Modifiers::NONE),
+        decode_input(WM_LBUTTONUP, 0, pack(5, 5), Modifiers::NONE),
+    ];
+    assert!(matches!(sequence[0], Some(Message::MouseDown { .. })));
+    assert!(matches!(sequence[1], Some(Message::MouseUp { .. })));
+    assert!(matches!(
+        sequence[2],
+        Some(Message::MouseDoubleClick { .. })
+    ));
+    assert!(matches!(sequence[3], Some(Message::MouseUp { .. })));
+}
+
+#[test]
 fn wheel_carries_delta_and_direction() {
     let wparam = (0xffff_u16 as usize) << 16; // -1 rotation
     let message = decode_input(WM_MOUSEWHEEL, wparam, pack(11, 12), Modifiers::NONE).unwrap();

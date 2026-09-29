@@ -30,6 +30,15 @@ glow = "0.16"
 # cross-check needs no system graphics headers beyond what winit already needs.
 glutin = "0.32"
 
+[target.'cfg(windows)'.dependencies]
+# The only platform API the canvas backend needs: the user's double-click time
+# and distance, which `winit` does not expose. Both live in these two
+# namespaces; no other feature is pulled in.
+windows = { version = "0.62", default-features = false, features = [
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_UI_WindowsAndMessaging",
+] }
+
 [dev-dependencies]
 png = "0.17"
 

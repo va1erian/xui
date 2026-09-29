@@ -9,6 +9,7 @@
 //! [`window`], input translation in [`input`] (with the pure mappings in
 //! [`keymap`]), and frame presentation in [`present`].
 
+mod double_click;
 mod input;
 mod keymap;
 mod present;
@@ -27,6 +28,7 @@ use xui_core::message::Modifiers;
 
 use super::software::RealWindow;
 use super::{Shared, UserEvent};
+use double_click::ClickTracker;
 use window::dpi_from_scale;
 
 /// Drives one `winit` event loop for a [`super::WinitBackend`].
@@ -37,6 +39,9 @@ struct App<'a> {
     /// sends without one.
     cursor: (f64, f64),
     modifiers: Modifiers,
+    /// Recognizes the second press of a double-click, which `winit` never
+    /// reports itself.
+    double_click: ClickTracker,
     /// The primary window's deferred app builder and the raw id of the window
     /// that must exist before it runs; taken out the first time that window is
     /// created. A secondary window opened later is a separate path and is not
@@ -248,6 +253,7 @@ pub(crate) fn run(event_loop: EventLoop<UserEvent>, shared: Rc<Shared>) {
         windows: HashMap::new(),
         cursor: (0.0, 0.0),
         modifiers: Modifiers::NONE,
+        double_click: ClickTracker::system(),
         on_ready: None,
     };
     let _ = event_loop.run_app(&mut app);
@@ -266,6 +272,7 @@ pub(crate) fn run_with(
         windows: HashMap::new(),
         cursor: (0.0, 0.0),
         modifiers: Modifiers::NONE,
+        double_click: ClickTracker::system(),
         on_ready: Some((window.raw(), on_ready)),
     };
     let _ = event_loop.run_app(&mut app);
