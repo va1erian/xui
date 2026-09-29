@@ -165,6 +165,30 @@ mod tests {
     }
 
     #[test]
+    fn a_wheel_notch_scrolls_the_same_rows_whatever_its_unit() {
+        let (_backend, runtime, ui) = setup();
+        let wheel = |delta| Event::MouseWheel {
+            delta,
+            horizontal: false,
+            x: 4,
+            y: 4,
+            modifiers: Modifiers::NONE,
+        };
+        let one = TreeView::new(&ui, Rect::new(0, 0, 120, 88), &leaves(1000)).unwrap();
+        let notch = TreeView::new(&ui, Rect::new(0, 0, 120, 88), &leaves(1000)).unwrap();
+
+        runtime.deliver(one.id(), &wheel(-1));
+        runtime.deliver(notch.id(), &wheel(-120));
+
+        assert_eq!(one.state.borrow().offset, super::flatten::WHEEL_ROWS);
+        assert_eq!(
+            notch.state.borrow().offset,
+            one.state.borrow().offset,
+            "a 120-unit notch scrolls no further than a 1-unit one"
+        );
+    }
+
+    #[test]
     fn a_drag_scrolls_the_tree() {
         let (backend, runtime, ui) = setup();
         let tree = TreeView::new(&ui, Rect::new(0, 0, 120, 88), &leaves(100)).unwrap();
