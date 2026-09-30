@@ -99,6 +99,7 @@
 
 ### Fixes
 
+- `ColorPicker` now hit-tests in its own coordinates. Pointer events arrive relative to the node while `Ui::bounds` is relative to the parent, and the picker compared the two, so a picker not at the top-left of its container ignored every click and never showed hover. The same applied to the swatch grid inside `ColorPanel`.
 - `xui-code-editor` now paints text when the highlighter emits no tokens
   (`PlainText`, the default). Previously `paint` drew only token spans, so a
   plain-text editor showed an empty grid; a tokenless line is now drawn as one

@@ -89,6 +89,32 @@ fn clicking_a_swatch_selects_it_and_maps_the_colour() {
 }
 
 #[test]
+fn a_picker_away_from_the_origin_hit_tests_in_its_own_coordinates() {
+    let (_backend, core, ui) = setup();
+    let palette = colors();
+    // Bounds are parent-relative; pointer events are node-local.
+    let picker = ColorPicker::new(&ui, Rect::new(40, 30, 130, 60), &palette)
+        .unwrap()
+        .columns(3)
+        .on_select(|color| Some(color.r as u32));
+    let log = Rc::new(RefCell::new(Vec::new()));
+    let runtime = runtime(core, &log);
+
+    runtime.deliver(picker.id(), &click(10, 10));
+    runtime.deliver(WidgetId::NONE, &Event::Wake);
+    assert_eq!(picker.color(), Some(palette[0]));
+
+    runtime.deliver(picker.id(), &click(70, 10));
+    runtime.deliver(WidgetId::NONE, &Event::Wake);
+    assert_eq!(picker.color(), Some(palette[2]));
+
+    // Outside the grid's own extent (it is 30 px tall) nothing is picked.
+    runtime.deliver(picker.id(), &click(10, 45));
+    runtime.deliver(WidgetId::NONE, &Event::Wake);
+    assert_eq!(*log.borrow(), vec![10, 30]);
+}
+
+#[test]
 fn the_keyboard_moves_the_selection() {
     let (_backend, core, ui) = setup();
     let palette = colors();

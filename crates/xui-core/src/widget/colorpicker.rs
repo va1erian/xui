@@ -108,7 +108,7 @@ impl<M: 'static> ColorPicker<M> {
                 match event {
                     Event::MouseMove { x, y, .. } => {
                         hover.set(index_at(
-                            ui_for.bounds(id),
+                            local_bounds(&ui_for, id),
                             colors.len(),
                             columns.get(),
                             *x,
@@ -128,8 +128,13 @@ impl<M: 'static> ColorPicker<M> {
                         button: MouseButton::Left,
                         ..
                     } => {
-                        let index =
-                            index_at(ui_for.bounds(id), colors.len(), columns.get(), *x, *y)?;
+                        let index = index_at(
+                            local_bounds(&ui_for, id),
+                            colors.len(),
+                            columns.get(),
+                            *x,
+                            *y,
+                        )?;
                         ui_for.focus(id);
                         raise(&ui_for, id, &colors, &selected, &hover, &on_select, index)
                     }
@@ -244,7 +249,16 @@ fn moved(
     Some(next)
 }
 
-/// The swatch under `(x, y)`, if the point is inside the grid.
+/// The grid's extent in the node's own coordinates: pointer events arrive
+/// relative to the node, while `Ui::bounds` is relative to its parent, so only
+/// the size of the latter is meaningful here. Using its origin too made a
+/// picker that is not at its container's top-left ignore every click.
+fn local_bounds<M: 'static>(ui: &Ui<M>, id: crate::backend::WidgetId) -> Rect {
+    let bounds = ui.bounds(id);
+    Rect::new(0, 0, bounds.width(), bounds.height())
+}
+
+/// The swatch under `(x, y)` (node-local), if the point is inside the grid.
 fn index_at(bounds: Rect, count: usize, columns: usize, x: i32, y: i32) -> Option<usize> {
     if count == 0 || !bounds.contains(Point::new(x, y)) {
         return None;
