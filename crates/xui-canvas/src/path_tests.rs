@@ -59,3 +59,33 @@ fn a_stroked_path_follows_the_placement_and_the_join() {
     assert!(is_ink(&image, 25, 15), "on the vertical run");
     assert!(!is_ink(&image, 15, 15), "inside the corner, off the stroke");
 }
+
+#[test]
+fn a_path_gradient_blends_between_its_stops_in_path_space() {
+    use xui_core::backend::{GradientStop, PathGradient};
+    let square = [
+        PathSeg::MoveTo(0.0, 0.0),
+        PathSeg::LineTo(10.0, 0.0),
+        PathSeg::LineTo(10.0, 10.0),
+        PathSeg::LineTo(0.0, 10.0),
+        PathSeg::Close,
+    ];
+    let stops = [
+        GradientStop::new(0.0, Rgba::rgb(0, 0, 0)),
+        GradientStop::new(1.0, Rgba::rgb(255, 255, 255)),
+    ];
+    // Path space is scaled by 2 and moved to (5, 5): the gradient runs from
+    // y = 5 (black) to y = 25 (white).
+    let image = render(|canvas| {
+        canvas.fill_path_linear(
+            &square,
+            PathPlacement::new(2.0, 5.0, 5.0),
+            &PathGradient::new((0.0, 0.0), (0.0, 10.0), &stops),
+        );
+    });
+    let top = image.pixel(15, 7).unwrap()[0];
+    let bottom = image.pixel(15, 23).unwrap()[0];
+    assert!(top < 60, "near the start stop, got {top}");
+    assert!(bottom > 195, "near the end stop, got {bottom}");
+    assert_eq!(image.pixel(15, 2).unwrap()[0], 255, "outside stays white");
+}

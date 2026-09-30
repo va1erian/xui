@@ -7,8 +7,13 @@ description = "Global Village: a 90s-flavoured, multi-colour vector icon set for
 repository = "https://github.com/va1erian/xui"
 readme = "README.md"
 # The raster and .ico exports are for people, not for the crate: the drawn
-# shapes are compiled into `src/data`.
-exclude = ["assets/png", "assets/ico"]
+# shapes are compiled into `src/village` and `src/aero`.
+exclude = ["assets/*/png", "assets/*/ico"]
+
+[features]
+# Build the glossy Vista-era "Aero" artwork instead of the default Global
+# Village one. Only the chosen style's data is compiled in.
+aero = []
 
 [dependencies]
 xui-core = { path = "../xui-core" }

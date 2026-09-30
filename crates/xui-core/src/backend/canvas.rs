@@ -7,7 +7,7 @@
 //! Coordinates are device pixels unless a method says otherwise; the front
 //! layer converts its [`Dip`] design values once, at the boundary.
 
-use super::paint::{Corner, LinearGradient, RadialGradient, Rgba, Stroke};
+use super::paint::{Corner, LinearGradient, PathGradient, RadialGradient, Rgba, Stroke};
 use super::path::{PathPlacement, PathSeg, flatten};
 use super::text::TextLayout;
 use crate::color::Color;
@@ -258,6 +258,18 @@ pub trait Canvas {
     fn fill_path(&mut self, path: &[PathSeg], at: PathPlacement, color: Rgba) {
         for figure in flatten(path, at) {
             self.fill_polygon(&figure.points, Color::rgb(color.r, color.g, color.b));
+        }
+    }
+
+    /// Fills the closed figures of `path`, placed by `at`, with a linear
+    /// gradient whose end points are in path space.
+    ///
+    /// The default fills with the gradient's middle stop, so a backend without
+    /// gradient paths still draws the shape in a representative flat colour;
+    /// a backend with real path support overrides it.
+    fn fill_path_linear(&mut self, path: &[PathSeg], at: PathPlacement, gradient: &PathGradient) {
+        if let Some(stop) = gradient.stops.get(gradient.stops.len() / 2) {
+            self.fill_path(path, at, stop.color);
         }
     }
 
