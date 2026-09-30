@@ -262,3 +262,15 @@ fn a_repeat_draw_reuses_the_cached_upload() {
         "the cached draw must land the same pixels"
     );
 }
+
+#[test]
+fn surface_pixels_are_a_borrowed_view_of_the_same_bytes() {
+    let mut surface = Surface::new(4, 3);
+    surface.fill(Color::hex(0x12_34_56));
+
+    // The borrowed view is the same top-down RGBA data `to_image` clones, so a
+    // backend can present without the per-frame clone.
+    assert_eq!(surface.pixels().len(), 4 * 3 * 4);
+    assert_eq!(surface.pixels(), surface.to_image().pixels.as_slice());
+    assert_eq!(&surface.pixels()[0..4], &[0x12, 0x34, 0x56, 0xFF]);
+}

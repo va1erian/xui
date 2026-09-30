@@ -10,8 +10,8 @@ use xui_core::geometry::Rect;
 use xui_core::image::Image;
 
 use super::Shared;
-use super::geometry::{absolute_bounds, ancestor_clip, effectively_visible, intersect};
 use crate::Surface;
+use crate::geometry::{absolute_bounds, ancestor_clip, effectively_visible, intersect};
 use crate::gl::GlWidget;
 
 /// Where a window's GL content is attached.

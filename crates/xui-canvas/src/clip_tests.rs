@@ -122,6 +122,64 @@ fn centred_and_end_aligned_text_are_not_left_aligned() {
 }
 
 #[test]
+fn aligned_empty_text_paints_nothing() {
+    let background = Color::rgb(255, 255, 255);
+    let mut surface = Surface::new(40, 40);
+    surface.fill(background);
+
+    let mut end = TextStyle::new(Color::rgb(0, 0, 0), Dip(12.0));
+    end.align = TextAlign::End;
+    surface.with_canvas(Rect::new(0, 0, 40, 40), |canvas| {
+        canvas.draw_text("", Rect::new(0, 0, 40, 40), &end);
+    });
+
+    let bg = [background.r, background.g, background.b, 255];
+    assert!(
+        surface
+            .pixels()
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .all(|pixel| *pixel == bg),
+        "empty text is a no-op whatever the alignment"
+    );
+}
+
+#[test]
+fn each_line_of_a_multiline_run_is_end_aligned() {
+    const W: i32 = 200;
+    let background = Color::rgb(255, 255, 255);
+    let mut surface = Surface::new(W as u32, 80);
+    surface.fill(background);
+
+    let mut end = TextStyle::new(Color::rgb(0, 0, 0), Dip(12.0));
+    end.align = TextAlign::End;
+    surface.with_canvas(Rect::new(0, 0, W, 80), |canvas| {
+        canvas.draw_text("i\nWWWWWWWW\nmm", Rect::new(0, 0, W, 80), &end);
+    });
+
+    let image = surface.to_image();
+    let bg = [background.r, background.g, background.b];
+    // One band per line: 12px text at the default 1.25 line height is 15px.
+    let bands = [
+        Rect::new(0, 0, W, 15),
+        Rect::new(0, 15, W, 30),
+        Rect::new(0, 30, W, 45),
+    ];
+    for band in bands {
+        let (left, right) = ink_bounds(&image, band, bg).expect("ink on the line");
+        assert!(
+            right >= W - 6,
+            "the line's right edge sits at the rectangle's right: {band:?} -> {right}"
+        );
+        assert!(
+            left > 20,
+            "a short line is pushed right, not drawn from the left: {band:?} -> {left}"
+        );
+    }
+}
+
+#[test]
 fn clipped_text_does_not_bleed_outside_the_clip() {
     let mut surface = Surface::new(200, 40);
     surface.fill(Color::rgb(0, 0, 0));

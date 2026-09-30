@@ -14,6 +14,7 @@ use xui_core::{
 
 use crate::{OffscreenBackend, RgbaImage, Surface, measure_text, to_skia};
 
+mod fonts;
 mod paint;
 mod text;
 mod widgets;

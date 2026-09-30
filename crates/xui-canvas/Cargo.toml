@@ -7,20 +7,39 @@ description = "Cross-platform software-rendered backend for xui (tiny-skia)"
 repository = "https://github.com/va1erian/xui"
 readme = "README.md"
 
+[features]
+default = ["winit-backend"]
+# Everything that needs a windowing system: the `winit`/`softbuffer` window, the
+# optional `glutin`/`glow` GPU seam over `xui-gpu`, the `arboard` clipboard and
+# the `windows` double-click metrics. On by default, so existing users see no
+# change; turn it off (`default-features = false`) on a target without one (such
+# as LazyOS) to build the software painter core alone: `SkiaCanvas`, `Surface`,
+# the text shaper and `OffscreenBackend` over `xui-core`, `tiny-skia` and
+# `cosmic-text`.
+winit-backend = [
+    "dep:xui-gpu",
+    "dep:winit",
+    "dep:arboard",
+    "dep:softbuffer",
+    "dep:glow",
+    "dep:glutin",
+    "dep:windows",
+]
+
 [dependencies]
 xui-core = { path = "../xui-core" }
 # The shared OpenGL surface seam (context handle + frame/offscreen lifecycle).
-xui-gpu = { path = "../xui-gpu" }
+xui-gpu = { path = "../xui-gpu", optional = true }
 tiny-skia = "0.11"
 cosmic-text = "0.19"
-winit = "0.30"
+winit = { version = "0.30", optional = true }
 # The OS text clipboard for the winit backend. Text only: the default
 # `image-data` feature (and its per-platform image backends) is not needed, so
 # it is off, which keeps the dependency on `x11rb`/`clipboard-win` alone.
-arboard = { version = "3", default-features = false }
+arboard = { version = "3", default-features = false, optional = true }
 # Keep softbuffer off its default `kms`/libdrm backend so the Linux cross-check
 # does not need system graphics headers; X11 and Wayland are dlopen'd.
-softbuffer = { version = "0.4", default-features = false, features = [
+softbuffer = { version = "0.4", default-features = false, optional = true, features = [
     "x11",
     "x11-dlopen",
     "wayland",
@@ -28,17 +47,18 @@ softbuffer = { version = "0.4", default-features = false, features = [
 ] }
 # The safe OpenGL binding a `GlWidget` draws with. Re-exported as
 # `xui_canvas::glow` so an implementor names the same version this crate loads.
-glow = "0.16"
+glow = { version = "0.16", optional = true }
 # Cross-platform OpenGL context creation on the winit window. The default
 # feature set keeps EGL/GLX/X11/Wayland/WGL dlopen-based, so the Linux
 # cross-check needs no system graphics headers beyond what winit already needs.
-glutin = "0.32"
+glutin = { version = "0.32", optional = true }
 
 [target.'cfg(windows)'.dependencies]
 # The only platform API the canvas backend needs: the user's double-click time
 # and distance, which `winit` does not expose. Both live in these two
-# namespaces; no other feature is pulled in.
-windows = { version = "0.62", default-features = false, features = [
+# namespaces; no other feature is pulled in. Optional: the double-click code is
+# part of the windowed backend.
+windows = { version = "0.62", default-features = false, optional = true, features = [
     "Win32_UI_Input_KeyboardAndMouse",
     "Win32_UI_WindowsAndMessaging",
 ] }
@@ -52,3 +72,12 @@ png = "0.17"
 [[test]]
 name = "gl"
 harness = false
+required-features = ["winit-backend"]
+
+[[example]]
+name = "gl"
+required-features = ["winit-backend"]
+
+[[example]]
+name = "kitchen_sink"
+required-features = ["winit-backend"]

@@ -15,7 +15,7 @@ use tiny_skia::Pixmap;
 use xui_core::backend::{FontSpec, Rgba, TextHit, TextLayout, TextShaper};
 use xui_core::geometry::{Point, Rect};
 
-use crate::text::{GlyphClip, TextSystem, attrs_for, blend, line_height};
+use crate::text::{GlyphClip, TextSystem, attrs_for, blend, default_family, line_height};
 
 /// A `Send + Sync` cosmic-text shaper. Cloning shares the font system.
 #[derive(Clone)]
@@ -35,15 +35,31 @@ impl CosmicShaper {
     fn shape(&self, text: &str, spec: &FontSpec, max_width: f32, dpi: u32) -> Buffer {
         let size = spec.size.to_px(dpi).value().max(1) as f32;
         let mut system = self.system.lock().unwrap_or_else(PoisonError::into_inner);
+        // An empty database would panic in cosmic-text's shaper; return an
+        // empty buffer instead (a target with no font and no registered bytes).
+        if system.font_system.db().is_empty() {
+            return Buffer::new(
+                &mut system.font_system,
+                Metrics::new(size, line_height(size)),
+            );
+        }
         let mut buffer = Buffer::new(
             &mut system.font_system,
             Metrics::new(size, line_height(size)),
         );
         let wrap = max_width.is_finite().then_some(max_width.max(1.0));
         buffer.set_size(wrap, None);
+        // Fall back to the thread's default family (set with
+        // [`set_default_family`](crate::set_default_family)) when the spec names
+        // none.
+        let fallback = default_family();
         buffer.set_text(
             text,
-            &attrs_for(spec.family.as_deref(), spec.weight, spec.italic),
+            &attrs_for(
+                spec.family.as_deref().or(fallback.as_deref()),
+                spec.weight,
+                spec.italic,
+            ),
             Shaping::Advanced,
             None,
         );

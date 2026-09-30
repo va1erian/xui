@@ -19,6 +19,13 @@ winit, and headlessly in tests. `WinitBackend` (the umbrella crate's default
 `d2d` feature) is a Windows-only peer for apps that want native window chrome
 and Direct2D-accelerated painting.
 
+`WinitBackend`, the GL host and the OS clipboard live behind `xui-canvas`'s
+default `winit-backend` feature. With `default-features = false` the crate
+compiles over `xui-core`, `tiny-skia` and `cosmic-text` alone and exposes only
+the software painter core (`SkiaCanvas`, `Surface`, `measure_text`,
+`OffscreenBackend`) — the starting point for a custom backend on a target with
+no windowing system.
+
 ## `Win32Backend` — Direct2D on Windows
 
 `crates/xui-win32/src/backend/`. This backend paints the portable widgets
