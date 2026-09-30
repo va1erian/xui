@@ -144,9 +144,22 @@ pub(crate) fn linear_shader(
     end: Point,
     stops: &[GradientStop],
 ) -> Option<Shader<'static>> {
+    linear_shader_f(
+        (start.x as f32, start.y as f32),
+        (end.x as f32, end.y as f32),
+        stops,
+    )
+}
+
+/// A linear-gradient shader between sub-pixel device-space points.
+pub(crate) fn linear_shader_f(
+    start: (f32, f32),
+    end: (f32, f32),
+    stops: &[GradientStop],
+) -> Option<Shader<'static>> {
     tiny_skia::LinearGradient::new(
-        skia_point(start),
-        skia_point(end),
+        tiny_skia::Point::from_xy(start.0, start.1),
+        tiny_skia::Point::from_xy(end.0, end.1),
         skia_stops(stops),
         SpreadMode::Pad,
         Transform::identity(),

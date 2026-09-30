@@ -11,8 +11,8 @@
 use tiny_skia::{FilterQuality, Mask, Paint, PathBuilder, Pattern, Pixmap, SpreadMode, Transform};
 
 use xui_core::backend::{
-    Canvas, Corner, LinearGradient, PathPlacement, PathSeg, RadialGradient, Rgba, Stroke,
-    TextLayout, TextMetrics, TextStyle,
+    Canvas, Corner, LinearGradient, PathGradient, PathPlacement, PathSeg, RadialGradient, Rgba,
+    Stroke, TextLayout, TextMetrics, TextStyle,
 };
 use xui_core::color::Color;
 use xui_core::geometry::{Point, Rect};
@@ -20,7 +20,8 @@ use xui_core::image::Image;
 
 use crate::image_cache::ImageCache;
 use crate::paint::{
-    Clip, corners_path, intersect, linear_shader, radial_shader, rect_path, sk_rect, solid_shader,
+    Clip, corners_path, intersect, linear_shader, linear_shader_f, radial_shader, rect_path,
+    sk_rect, solid_shader,
 };
 use crate::{to_skia, to_skia_rgba};
 
@@ -200,6 +201,19 @@ impl Canvas for SkiaCanvas<'_> {
         if let Some(path) = self.placed_path(path, at) {
             self.ensure_mask();
             self.fill(&path, solid_shader(to_skia_rgba(color)));
+        }
+    }
+
+    fn fill_path_linear(&mut self, path: &[PathSeg], at: PathPlacement, gradient: &PathGradient) {
+        let (start, end) = (
+            self.device(at.apply(gradient.start.0, gradient.start.1)),
+            self.device(at.apply(gradient.end.0, gradient.end.1)),
+        );
+        if let Some(path) = self.placed_path(path, at)
+            && let Some(shader) = linear_shader_f(start, end, gradient.stops)
+        {
+            self.ensure_mask();
+            self.fill(&path, shader);
         }
     }
 

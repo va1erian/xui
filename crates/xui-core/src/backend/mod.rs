@@ -35,7 +35,8 @@ pub use ids::{WidgetId, WindowId};
 pub use native::NativeWindowHandle;
 pub use node::{ImplKind, NodeKind, NodeOptions, NodeSpec, ParentRef};
 pub use paint::{
-    Cap, Corner, Dash, GradientStop, Join, LinearGradient, RadialGradient, Rgba, Stroke,
+    Cap, Corner, Dash, GradientStop, Join, LinearGradient, PathGradient, RadialGradient, Rgba,
+    Stroke,
 };
 pub use path::{PathPlacement, PathSeg, Polyline, flatten};
 pub use spec::{Backdrop, Decorations, PlatformSpec};
