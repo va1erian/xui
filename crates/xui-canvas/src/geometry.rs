@@ -2,11 +2,14 @@
 
 //! Node geometry traversal shared by the windowed compositor and the offscreen
 //! backend: a node's window-absolute bounds and the clip its ancestors impose.
+//!
+//! It lives at the crate root, not under `backend`, so the offscreen backend
+//! (which compiles with the `winit-backend` feature off) can share it without
+//! pulling in the windowed modules. Each backend implements [`GeometryNode`]
+//! for its own node type.
 
 use xui_core::backend::{ParentRef, WidgetId};
 use xui_core::geometry::{Point, Rect};
-
-use super::Node;
 
 /// The placement facts the geometry traversal needs from a node, so the
 /// windowed and offscreen nodes share one walk.
@@ -21,28 +24,6 @@ pub(crate) trait GeometryNode {
     fn visible(&self) -> bool;
     /// Whether this node itself is enabled (ignoring its ancestors).
     fn enabled(&self) -> bool;
-}
-
-impl GeometryNode for Node {
-    fn parent(&self) -> ParentRef {
-        self.parent
-    }
-
-    fn bounds(&self) -> Rect {
-        self.bounds
-    }
-
-    fn clip(&self) -> Option<Rect> {
-        self.clip
-    }
-
-    fn visible(&self) -> bool {
-        self.visible
-    }
-
-    fn enabled(&self) -> bool {
-        self.enabled
-    }
 }
 
 /// The window-absolute bounds of `id`, walking its parent chain.

@@ -18,7 +18,6 @@ use xui_core::backend::{
 use xui_core::router::WidgetHost;
 use xui_core::{Image, Rect, Theme};
 
-use crate::gl::GlWidget;
 use crate::text_layout::CosmicShaper;
 use crate::{RgbaImage, Surface};
 
@@ -26,12 +25,13 @@ mod backend;
 #[cfg(test)]
 mod capture_tests;
 mod geometry;
+mod gl_fallback;
 #[cfg(test)]
 mod tests;
 
-use crate::backend::geometry::{
-    absolute_bounds, ancestor_clip, effectively_visible, hit_bounds, intersect,
-};
+use gl_fallback::GlContent;
+
+use crate::geometry::{absolute_bounds, ancestor_clip, effectively_visible, hit_bounds, intersect};
 use geometry::translate;
 
 /// The default dots-per-inch a surface is rendered at.
@@ -44,12 +44,10 @@ struct OffscreenWindow {
     dpi: u32,
     width: i32,
     height: i32,
-    /// Window-level GL content, painted through its software fallback (the
-    /// offscreen backend never has a GL context).
-    gl: Option<Rc<dyn GlWidget>>,
-    /// Per-node GL content, keyed by the node it fills, also painted through its
-    /// software fallback.
-    gl_nodes: HashMap<u64, Rc<dyn GlWidget>>,
+    /// Window- and node-level GL content, painted through its software fallback
+    /// (the offscreen backend never has a GL context). A no-op when the
+    /// `winit-backend` feature is off.
+    gl: GlContent,
     /// The last icon the app set with `Backend::set_window_icon`.
     icon: Option<Image>,
 }
@@ -66,14 +64,13 @@ struct Node {
     clip: Option<Rect>,
 }
 
-/// One node to draw in creation order: its painter (if any) and whether it also
-/// carries GL fallback content.
+/// One node to draw in creation order: its painter (if any) and its clip. The
+/// id keys any GL fallback content the node carries.
 struct Draw {
     id: WidgetId,
     bounds: Rect,
     clip: Option<Rect>,
     painter: Option<Painter>,
-    gl: bool,
 }
 
 /// Clears a window's in-progress render flag when a frame finishes, however the
@@ -219,8 +216,7 @@ impl OffscreenBackend {
                 dpi,
                 width: width as i32,
                 height: height as i32,
-                gl: None,
-                gl_nodes: HashMap::new(),
+                gl: GlContent::new(width as i32, height as i32),
                 icon: None,
             },
         );
@@ -243,25 +239,20 @@ impl OffscreenBackend {
         // the backend (for example `Ui::dpi`, which reads this same map) does not
         // find it borrowed. The window stays in the map, with a placeholder
         // surface, so painters still read its live DPI, theme and GL content.
-        let (dpi, theme, width, height, gl, gl_nodes, surface) = {
+        let (dpi, theme, surface) = {
             let mut windows = self.windows.borrow_mut();
             let entry = windows.get_mut(&window.raw())?;
             let surface = std::mem::replace(&mut entry.surface, Surface::new(1, 1));
-            let gl_nodes: Vec<(u64, Rc<dyn GlWidget>)> = entry
-                .gl_nodes
-                .iter()
-                .map(|(raw, widget)| (*raw, Rc::clone(widget)))
-                .collect();
-            (
-                entry.dpi,
-                entry.theme,
-                entry.width,
-                entry.height,
-                entry.gl.clone(),
-                gl_nodes,
-                surface,
-            )
+            (entry.dpi, entry.theme, surface)
         };
+        // Snapshot the GL content before the painters run, so a widget's
+        // fallback paint can re-enter the backend without the window map
+        // staying borrowed.
+        let gl = self
+            .windows
+            .borrow()
+            .get(&window.raw())
+            .map(|entry| entry.gl.snapshot());
         // The guard puts the real surface back on every exit, including a panic
         // in a painter, so a later frame never keeps the 1x1 placeholder.
         let mut restore = SurfaceRestore {
@@ -275,9 +266,8 @@ impl OffscreenBackend {
         // backend; the offscreen backend has no GPU, so it paints the widget's
         // software fallback: window-level content as the base layer, node-level
         // content at its node's bounds.
-        if let Some(widget) = gl {
-            let bounds = Rect::new(0, 0, width, height);
-            surface.with_canvas_at(bounds, dpi, |canvas| widget.paint(canvas, bounds, &theme));
+        if let Some(gl) = &gl {
+            gl.paint_window(surface, dpi, &theme);
         }
         let nodes = self.nodes.borrow();
         let paints: Vec<Draw> = nodes
@@ -285,8 +275,8 @@ impl OffscreenBackend {
             .filter(|(id, node)| node.window == window && effectively_visible(&nodes, *id))
             .filter_map(|(id, node)| {
                 let painter = node.painter.clone();
-                let gl = gl_nodes.iter().any(|(raw, _)| *raw == id.raw());
-                if painter.is_none() && !gl {
+                let has_gl = gl.as_ref().is_some_and(|gl| gl.has_node(*id));
+                if painter.is_none() && !has_gl {
                     return None;
                 }
                 let bounds = absolute_bounds(&nodes, *id)?;
@@ -301,7 +291,6 @@ impl OffscreenBackend {
                     bounds,
                     clip,
                     painter,
-                    gl,
                 })
             })
             .collect();
@@ -315,15 +304,8 @@ impl OffscreenBackend {
                     painter(canvas);
                 });
             }
-            if draw.gl
-                && let Some((_, widget)) = gl_nodes.iter().find(|(raw, _)| *raw == draw.id.raw())
-            {
-                surface.with_canvas_at(draw.bounds, dpi, |canvas| {
-                    if let Some(clip) = draw.clip {
-                        canvas.push_clip(clip);
-                    }
-                    widget.paint(canvas, draw.bounds, &theme);
-                });
+            if let Some(gl) = &gl {
+                gl.paint_node(draw.id, surface, draw.bounds, draw.clip, dpi, &theme);
             }
         }
         let image = surface.to_image();
@@ -335,23 +317,30 @@ impl OffscreenBackend {
     /// GPU, so [`OffscreenBackend::render`] paints the widget's software
     /// fallback; this mirrors the windowed backend's seam and lets a headless
     /// test exercise the fallback.
-    pub fn set_gl_content<W: GlWidget + 'static>(&self, window: WindowId, widget: W) {
+    ///
+    /// The `winit-backend` feature (with it the [`GlWidget`] seam) is required.
+    #[cfg(feature = "winit-backend")]
+    pub fn set_gl_content<W: crate::gl::GlWidget + 'static>(&self, window: WindowId, widget: W) {
         if let Some(entry) = self.windows.borrow_mut().get_mut(&window.raw()) {
-            entry.gl = Some(Rc::new(widget));
+            entry.gl.set_window(widget);
         }
     }
 
     /// Removes `window`'s GL content.
+    #[cfg(feature = "winit-backend")]
     pub fn clear_gl_content(&self, window: WindowId) {
         if let Some(entry) = self.windows.borrow_mut().get_mut(&window.raw()) {
-            entry.gl = None;
+            entry.gl.clear_window();
         }
     }
 
     /// Installs `widget` as the GL content of the node `id`, painted through its
     /// software fallback at the node's bounds. Mirrors the windowed backend's
     /// per-node seam and lets a headless test exercise the fallback in a pane.
-    pub fn set_gl_content_on<W: GlWidget + 'static>(&self, id: WidgetId, widget: W) {
+    ///
+    /// The `winit-backend` feature (with it the [`GlWidget`] seam) is required.
+    #[cfg(feature = "winit-backend")]
+    pub fn set_gl_content_on<W: crate::gl::GlWidget + 'static>(&self, id: WidgetId, widget: W) {
         let window = self
             .nodes
             .borrow()
@@ -361,11 +350,12 @@ impl OffscreenBackend {
         if let Some(window) = window
             && let Some(entry) = self.windows.borrow_mut().get_mut(&window.raw())
         {
-            entry.gl_nodes.insert(id.raw(), Rc::new(widget));
+            entry.gl.set_node(id, widget);
         }
     }
 
     /// Removes the GL content of the node `id`.
+    #[cfg(feature = "winit-backend")]
     pub fn clear_gl_content_on(&self, id: WidgetId) {
         let window = self
             .nodes
@@ -376,7 +366,7 @@ impl OffscreenBackend {
         if let Some(window) = window
             && let Some(entry) = self.windows.borrow_mut().get_mut(&window.raw())
         {
-            entry.gl_nodes.remove(&id.raw());
+            entry.gl.clear_node(id);
         }
     }
 

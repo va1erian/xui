@@ -4,6 +4,18 @@
 
 ### Additions
 
+- **`xui-canvas` builds without a windowing system.** An on-by-default
+  `winit-backend` feature gates `winit`, `softbuffer`, `glutin`, `glow`,
+  `arboard`, the `windows` double-click metrics and `xui-gpu`; with
+  `default-features = false` the crate is the software painter core over
+  `xui-core`, `tiny-skia` and `cosmic-text` (`SkiaCanvas`, `Surface`,
+  `measure_text`, `OffscreenBackend`), with `tests/deps.rs` guarding the
+  dependency tree. It also gains in-memory fonts
+  (`set_default_font`/`add_font`/`set_default_family`, which skip
+  `load_system_fonts` and any file memory-mapping), per-line horizontal
+  alignment for natural-width runs, and `Surface::pixels` for a clone-free
+  present — everything a custom backend such as LazyOS needs.
+
 - **Global Village icon set (`xui-icons`).** An optional crate (also the
   `icons` feature of `xui`) with 36 multi-colour, 90s-styled vector icons in
   four categories: `Village` names an icon, `draw(canvas, icon, rect, &Palette)`

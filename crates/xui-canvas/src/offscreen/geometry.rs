@@ -2,13 +2,13 @@
 
 //! Event coordinate translation for the offscreen backend. The node geometry
 //! traversal it shares with the windowed compositor lives in
-//! [`crate::backend::geometry`].
+//! [`crate::geometry`].
 
 use xui_core::backend::{Event, ParentRef};
 use xui_core::geometry::Rect;
 
 use super::Node;
-use crate::backend::geometry::GeometryNode;
+use crate::geometry::GeometryNode;
 
 impl GeometryNode for Node {
     fn parent(&self) -> ParentRef {

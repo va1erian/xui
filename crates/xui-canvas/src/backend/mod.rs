@@ -13,7 +13,6 @@
 
 mod app;
 mod contract;
-pub(crate) mod geometry;
 mod gl;
 mod render;
 mod software;
@@ -37,6 +36,7 @@ use xui_core::backend::{
 use xui_core::router::WidgetHost;
 use xui_core::{Dip, Image, Rect, Theme};
 
+use crate::geometry::{self, GeometryNode};
 use crate::gl::{GlWidget, RendererState};
 use crate::text_layout::CosmicShaper;
 
@@ -86,6 +86,28 @@ pub(crate) struct Node {
     pub(crate) drag_region: bool,
     /// A clip on this node's descendants, in the node's own coordinate space.
     pub(crate) clip: Option<Rect>,
+}
+
+impl GeometryNode for Node {
+    fn parent(&self) -> ParentRef {
+        self.parent
+    }
+
+    fn bounds(&self) -> Rect {
+        self.bounds
+    }
+
+    fn clip(&self) -> Option<Rect> {
+        self.clip
+    }
+
+    fn visible(&self) -> bool {
+        self.visible
+    }
+
+    fn enabled(&self) -> bool {
+        self.enabled
+    }
 }
 
 /// The per-window state.

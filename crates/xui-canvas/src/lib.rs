@@ -4,36 +4,53 @@
 //!
 //! It rasterises the portable widgets with `tiny-skia` into an RGBA buffer, so
 //! the same widget code that runs on the Win32 backend draws here without any
-//! platform UI toolkit. A [`WinitBackend`] presents the surface in a real
-//! `winit` window through `softbuffer`; an [`OffscreenBackend`] renders the
-//! same widgets headlessly for tests and snapshots.
+//! platform UI toolkit. An [`OffscreenBackend`] renders the same widgets
+//! headlessly for tests and snapshots; the software painter core ([`Surface`],
+//! [`SkiaCanvas`] and the `cosmic-text` shaper) is all an app needs to drive its
+//! own presentation.
 //!
-//! A window can also host a GPU renderer: install a [`GlWidget`] with
+//! With the default `winit-backend` feature a [`WinitBackend`] presents the
+//! surface in a real `winit` window through `softbuffer`, and a window can host
+//! a GPU renderer: install a [`GlWidget`] with
 //! [`WinitBackend::set_gl_content`] and the backend renders `glow` OpenGL
 //! frames through a [`GlSurface`] into a texture, reads them back and
 //! composites them through the same software path as every CPU node, so GL
 //! content is one painter among many. Every module but `sys::gl` forbids
-//! `unsafe`; the GL context and loader's `unsafe` is isolated there.
+//! `unsafe`; the GL context and loader's `unsafe` is isolated there. Turn the
+//! feature off (`default-features = false`) on a target with no windowing
+//! system: the crate then builds over `xui-core`, `tiny-skia` and `cosmic-text`
+//! alone and exposes the software painter core. Fonts can be registered from
+//! memory with [`set_default_font`]/[`add_font`] instead of scanning the system
+//! font directories.
 
-mod backend;
 mod canvas;
-mod clipboard;
-mod gl;
+mod geometry;
 mod image_cache;
 mod offscreen;
 mod paint;
 pub mod snapshot;
-mod sys;
 mod text;
 mod text_layout;
 
+#[cfg(feature = "winit-backend")]
+mod backend;
+#[cfg(feature = "winit-backend")]
+mod clipboard;
+#[cfg(feature = "winit-backend")]
+mod gl;
+#[cfg(feature = "winit-backend")]
+mod sys;
+
+#[cfg(feature = "winit-backend")]
 pub use backend::WinitBackend;
 pub use canvas::SkiaCanvas;
+#[cfg(feature = "winit-backend")]
 pub use gl::{GlError, GlSurface, GlWidget};
 pub use offscreen::OffscreenBackend;
-pub use text::measure as measure_text;
+pub use text::{add_font, measure as measure_text, set_default_family, set_default_font};
 
 /// The OpenGL binding a [`GlWidget`] draws with.
+#[cfg(feature = "winit-backend")]
 pub use glow;
 
 use tiny_skia::Pixmap;
@@ -113,6 +130,16 @@ impl Surface {
             height: self.pixmap.height(),
             pixels: self.pixmap.data().to_vec(),
         }
+    }
+
+    /// The surface's top-down RGBA pixels (row-major, 4 bytes each), borrowed
+    /// so a caller that already owns a destination can present a frame without
+    /// [`to_image`](Surface::to_image)'s whole-pixmap clone.
+    ///
+    /// The slice is `width * height * 4` bytes, where the dimensions are the
+    /// ones the surface was created with (a surface is never resized).
+    pub fn pixels(&self) -> &[u8] {
+        self.pixmap.data()
     }
 }
 

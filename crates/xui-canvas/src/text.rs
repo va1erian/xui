@@ -7,10 +7,10 @@
 //! UI thread.
 
 use std::cell::RefCell;
+use std::sync::Arc;
 
 use cosmic_text::{
-    Align, Attrs, Buffer, Color, Family, FontSystem, Metrics, Shaping, Style, SwashCache, Weight,
-    Wrap,
+    Attrs, Buffer, Color, Family, FontSystem, Metrics, Shaping, Style, SwashCache, Weight, Wrap,
 };
 use tiny_skia::{Mask, Pixmap, PremultipliedColorU8};
 
@@ -27,6 +27,42 @@ pub(crate) struct GlyphClip<'a> {
 
 thread_local! {
     static TEXT: RefCell<TextSystem> = RefCell::new(TextSystem::new());
+    /// Font files registered with [`set_default_font`] / [`add_font`] on this
+    /// thread. Kept (never taken), so the thread-local shaper and a
+    /// [`CosmicShaper`](crate::text_layout::CosmicShaper) built on the same
+    /// thread load the same faces whichever is created first.
+    static PENDING_FONTS: RefCell<Vec<Arc<Vec<u8>>>> = const { RefCell::new(Vec::new()) };
+    /// The family every run uses when its [`TextStyle`] names none, set with
+    /// [`set_default_family`]; `None` leaves the shaper's default.
+    static FAMILY: RefCell<Option<String>> = const { RefCell::new(None) };
+}
+
+/// Registers the font file this thread's shaper loads from memory.
+///
+/// A shaper builds its font database when it is first used, so call this before
+/// the first [`measure`] or [`draw`] on the thread (a shaper that already
+/// exists does not pick up a later font). Hand over an `include_bytes!` slice
+/// with `to_vec`. Once any font is registered this way the system font
+/// directories are **not** scanned and no file is memory-mapped: only the
+/// registered fonts are loaded, with the first family serving as the generic
+/// sans/serif/monospace default. On a target with no font store and no
+/// file-backed `mmap` (LazyOS), bundled bytes are the only way to shape text.
+pub fn set_default_font(data: Vec<u8>) {
+    add_font(data);
+}
+
+/// Registers a further font file, with the same timing rule as
+/// [`set_default_font`]. Pair it with [`set_default_family`] to make an app use
+/// a face other than the first registered one.
+pub fn add_font(data: Vec<u8>) {
+    PENDING_FONTS.with(|fonts| fonts.borrow_mut().push(Arc::new(data)));
+}
+
+/// Makes every run on this thread whose [`TextStyle`] names no family use
+/// `family` (as the font file declares it, e.g. `"JetBrains Mono"`) instead of
+/// the shaper's default.
+pub fn set_default_family(family: &str) {
+    FAMILY.with(|slot| *slot.borrow_mut() = Some(family.to_owned()));
 }
 
 pub(crate) struct TextSystem {
@@ -37,10 +73,42 @@ pub(crate) struct TextSystem {
 impl TextSystem {
     pub(crate) fn new() -> TextSystem {
         TextSystem {
-            font_system: FontSystem::new(),
+            font_system: build_font_system(),
             cache: SwashCache::new(),
         }
     }
+}
+
+/// Builds the font database from this thread's registered bytes.
+///
+/// With no in-memory fonts this is [`FontSystem::new`], which scans the system
+/// font directories. With at least one it is built directly from the bytes:
+/// `fontdb` parses them in memory, so nothing is read from disk or memory-mapped,
+/// and the first loaded face is aliased as the generic sans, serif and monospace
+/// default so a run asking for one of them still resolves. Invalid bytes are
+/// skipped by `fontdb` (it logs and moves on), never a panic.
+fn build_font_system() -> FontSystem {
+    let fonts: Vec<Arc<Vec<u8>>> = PENDING_FONTS.with(|pending| pending.borrow().clone());
+    if fonts.is_empty() {
+        return FontSystem::new();
+    }
+    let mut db = cosmic_text::fontdb::Database::new();
+    for data in fonts {
+        db.load_font_source(cosmic_text::fontdb::Source::Binary(
+            data as Arc<dyn AsRef<[u8]> + Send + Sync>,
+        ));
+    }
+    let first_family = db
+        .faces()
+        .next()
+        .and_then(|face| face.families.first())
+        .map(|(name, _)| name.clone());
+    if let Some(name) = first_family {
+        db.set_sans_serif_family(&name);
+        db.set_serif_family(&name);
+        db.set_monospace_family(&name);
+    }
+    FontSystem::new_with_locale_and_db("en-US".to_owned(), db)
 }
 
 /// The line height for a font size, matching the widgets' design convention.
@@ -74,18 +142,21 @@ pub(crate) fn attrs_for<'a>(
     attrs
 }
 
-fn align_of(style: &TextStyle) -> Option<Align> {
-    match style.align {
-        TextAlign::Start => None,
-        TextAlign::Center => Some(Align::Center),
-        TextAlign::End => Some(Align::Right),
-    }
+/// The family set with [`set_default_family`], if any, cloned so a caller can
+/// borrow it for the duration of a shaping call.
+pub(crate) fn default_family() -> Option<String> {
+    FAMILY.with(|slot| slot.borrow().clone())
 }
 
-/// The shaping attributes for `style`: its family, weight and slant, so the
-/// measured glyph advances are the ones that get painted.
-fn attrs(style: &TextStyle) -> Attrs<'_> {
-    attrs_for(style.family.as_deref(), style.weight, style.italic)
+/// The shaping attributes for `style`: its family (or `fallback`, the thread's
+/// [`set_default_family`]), weight and slant, so the measured glyph advances
+/// are the ones that get painted.
+fn attrs<'a>(style: &'a TextStyle, fallback: Option<&'a str>) -> Attrs<'a> {
+    attrs_for(
+        style.family.as_deref().or(fallback),
+        style.weight,
+        style.italic,
+    )
 }
 
 /// Measures `text` for `style` at `dpi`, wrapping to `max_width` when the style
@@ -105,6 +176,13 @@ pub fn measure(text: &str, style: &TextStyle, dpi: u32, max_width: i32) -> TextM
     let mut width = 0.0f32;
     TEXT.with(|text_system| {
         let text_system = &mut *text_system.borrow_mut();
+        // Shaping through an empty database panics inside cosmic-text, so a
+        // target with no font and no registered bytes measures as one empty
+        // line instead of crashing.
+        if text_system.font_system.db().is_empty() {
+            height = line_height(size);
+            return;
+        }
         let mut buffer = Buffer::new(
             &mut text_system.font_system,
             Metrics::new(size, line_height(size)),
@@ -118,7 +196,16 @@ pub fn measure(text: &str, style: &TextStyle, dpi: u32, max_width: i32) -> TextM
         } else {
             Wrap::None
         });
-        buffer.set_text(text, &attrs(style), Shaping::Advanced, align_of(style));
+        let family = default_family();
+        buffer.set_text(
+            text,
+            &attrs(style, family.as_deref()),
+            Shaping::Advanced,
+            // Alignment is applied per line at draw time: cosmic-text also
+            // aligns a non-wrapped line against the buffer width, which would
+            // apply the offset twice.
+            None,
+        );
         buffer.shape_until_scroll(&mut text_system.font_system, false);
         for run in buffer.layout_runs() {
             width = width.max(run.line_w);
@@ -153,6 +240,11 @@ pub fn draw(
 
     TEXT.with(|text_system| {
         let text_system = &mut *text_system.borrow_mut();
+        // Shaping through an empty database panics inside cosmic-text; with no
+        // font there is nothing to paint.
+        if text_system.font_system.db().is_empty() {
+            return;
+        }
         let metrics = Metrics::new(size, line_height(size));
         let mut buffer = Buffer::new(&mut text_system.font_system, metrics);
         // Size to the target rect even without wrapping so alignment corrects
@@ -163,7 +255,16 @@ pub fn draw(
         } else {
             Wrap::None
         });
-        buffer.set_text(text, &attrs(style), Shaping::Advanced, align_of(style));
+        let family = default_family();
+        buffer.set_text(
+            text,
+            &attrs(style, family.as_deref()),
+            Shaping::Advanced,
+            // Alignment is applied per line at draw time (see below); letting
+            // cosmic-text align a non-wrapped line against the buffer width
+            // would apply the offset twice.
+            None,
+        );
         buffer.shape_until_scroll(&mut text_system.font_system, false);
 
         let total_height: f32 = buffer.layout_runs().map(|run| run.line_height).sum();
@@ -171,6 +272,14 @@ pub fn draw(
             TextVAlign::Top => 0,
             TextVAlign::Middle => ((rect_h as f32 - total_height) / 2.0).max(0.0) as i32,
         };
+        // Horizontal alignment relative to the target rectangle's width. The
+        // shaper only aligns wrapped paragraphs, so a natural-width run (the
+        // common case here) needs the offset applied at draw time. One entry
+        // per line: (line top, line width).
+        let lines: Vec<(f32, f32)> = buffer
+            .layout_runs()
+            .map(|run| (run.line_top, run.line_w))
+            .collect();
 
         buffer.draw(
             &mut text_system.font_system,
@@ -181,9 +290,21 @@ pub fn draw(
                 if alpha == 0 {
                     return;
                 }
+                let line_width = lines
+                    .iter()
+                    .rev()
+                    .find(|(top, _)| *top <= y as f32)
+                    .map_or(0.0, |(_, width)| *width);
+                let align_offset = match style.align {
+                    TextAlign::Start => 0.0,
+                    TextAlign::Center => (rect_w as f32 - line_width) / 2.0,
+                    TextAlign::End => rect_w as f32 - line_width,
+                }
+                .max(0.0)
+                .round() as i32;
                 blend(
                     pixmap,
-                    Point::new(rect_left + x, rect_top + top_offset + y),
+                    Point::new(rect_left + x + align_offset, rect_top + top_offset + y),
                     w,
                     h,
                     [color_r, color_g, color_b],

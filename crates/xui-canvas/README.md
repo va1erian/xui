@@ -30,6 +30,44 @@ The `unsafe` GL context creation, the `glow` loader and the offscreen readback
 live in `src/sys/gl/` and `xui-gpu`'s `sys/`; every other module forbids
 `unsafe`.
 
+## Features
+
+| Feature | Default | What it adds |
+|---|---|---|
+| `winit-backend` | yes | Everything that needs a windowing system: `WinitBackend` (`winit` + `softbuffer`), the optional `GlWidget`/`GlSurface` GPU seam (`glutin`/`glow` over `xui-gpu`), the `arboard` clipboard and the `windows` double-click metrics. |
+
+Turn it off to build the **software painter core alone**:
+
+```toml
+xui-canvas = { git = "https://github.com/va1erian/xui", rev = "…", default-features = false }
+```
+
+The crate then compiles over `xui-core`, `tiny-skia` and `cosmic-text` only and
+exposes [`SkiaCanvas`](src/canvas.rs), [`Surface`](src/lib.rs),
+[`measure_text`](src/text.rs) and [`OffscreenBackend`](src/offscreen/) — the
+model for a custom backend such as LazyOS's. Nothing from `winit`,
+`softbuffer`, `glutin`, `glow`, `arboard`, `windows` or `xui-gpu` enters that
+dependency tree; `tests/deps.rs` guards it.
+
+### Fonts from memory
+
+On a target with no system font store (and no file-backed `mmap`), register the
+bundled bytes before the shaper is first used on the thread:
+
+```rust
+xui_canvas::set_default_font(include_bytes!("../fonts/DroidSans.ttf").to_vec());
+xui_canvas::add_font(include_bytes!("../fonts/JetBrainsMono-Regular.ttf").to_vec());
+xui_canvas::set_default_family("Droid Sans"); // runs that name no family
+```
+
+Once any font is registered this way the shaper loads only those bytes:
+`load_system_fonts` is never called and no file is memory-mapped. Invalid bytes
+are skipped without panicking.
+
+`TextStyle`'s horizontal alignment is applied per line for natural-width
+(non-wrapped) runs, and [`Surface::pixels`](src/lib.rs) borrows the RGBA bytes
+so a backend can present a frame without `to_image`'s whole-surface clone.
+
 ## Constraints
 
 - **Composited, not a takeover.** GL content is rendered offscreen and composited
