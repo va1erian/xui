@@ -16,13 +16,18 @@
   alignment for natural-width runs, and `Surface::pixels` for a clone-free
   present — everything a custom backend such as LazyOS needs.
 
-- **Global Village icon set (`xui-icons`).** An optional crate (also the
-  `icons` feature of `xui`) with 36 multi-colour, 90s-styled vector icons in
-  four categories: `Village` names an icon, `draw(canvas, icon, rect, &Palette)`
-  draws it through `Canvas::fill_path`/`stroke_path`, so `xui-canvas` rasterises
-  it with `tiny-skia` and `xui-win32` with Direct2D. `Palette` retints the set.
-  The SVGs, PNG exports and `.ico` files are vendored under
-  `crates/xui-icons/assets/`; `generate.py` compiles them into Rust data.
+- **Icon set (`xui-icons`).** An optional crate (also the `icons` feature of
+  `xui`) with 36 multi-colour vector icons in four categories. `Icon` names an
+  icon and `draw(canvas, icon, rect, &Palette)` draws it through the `Canvas`
+  path calls, so `xui-canvas` rasterises it with `tiny-skia`. Two looks are
+  vendored and the one you build is the only one compiled in: flat 90s "Global
+  Village" (default, recolourable with `Palette`) and glossy Vista-style "Aero"
+  (`--features aero`). SVG, PNG and `.ico` exports live under
+  `crates/xui-icons/assets/<style>/`; `generate.py` compiles the SVGs to Rust.
+- **Gradient paths on `Canvas`.** `Canvas::fill_path_linear` fills a path with a
+  `PathGradient` (path-space end points, borrowed stops). `xui-canvas`
+  implements it with `tiny-skia`; other backends fall back to the gradient's
+  middle colour until they override it.
 - **Portable spatial file explorer.** New `xui-explorer` crate: one window per
   open folder, an `IconView` listing (folders first, then files, grouped and
   sorted case-insensitively), a `StatusBar` summary, a context menu, Delete /

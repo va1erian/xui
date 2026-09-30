@@ -4,10 +4,9 @@
 
 use xui_canvas::{RgbaImage, Surface};
 use xui_core::Rect;
-use xui_core::backend::Rgba;
-use xui_icons::{Palette, Tone, Village, draw};
+use xui_icons::{Icon, Palette, draw};
 
-fn render(icon: Village, side: i32, palette: &Palette) -> RgbaImage {
+fn render(icon: Icon, side: i32, palette: &Palette) -> RgbaImage {
     let bounds = Rect::new(0, 0, side, side);
     let mut surface = Surface::new(side as u32, side as u32);
     surface.with_canvas(bounds, |canvas| draw(canvas, icon, bounds, palette));
@@ -20,7 +19,7 @@ fn opaque(image: &RgbaImage) -> usize {
 
 #[test]
 fn every_icon_draws_at_common_sizes() {
-    for &icon in Village::ALL {
+    for &icon in Icon::ALL {
         for side in [16, 24, 32, 64] {
             let image = render(icon, side, &Palette::GLOBAL_VILLAGE);
             assert!(
@@ -34,17 +33,22 @@ fn every_icon_draws_at_common_sizes() {
 #[test]
 fn the_background_stays_transparent() {
     // No icon paints the very corner of its box: the alpha channel is real.
-    for &icon in Village::ALL {
+    for &icon in Icon::ALL {
         let image = render(icon, 64, &Palette::GLOBAL_VILLAGE);
         assert_eq!(image.pixel(0, 0).unwrap()[3], 0, "{icon:?}");
     }
 }
 
+// Aero uses fixed colours and gradients, so the tone palette does not reach it.
 #[test]
+#[cfg(not(feature = "aero"))]
 fn a_palette_retints_the_render() {
-    let teal = render(Village::Info, 64, &Palette::GLOBAL_VILLAGE);
+    use xui_core::backend::Rgba;
+    use xui_icons::Tone;
+
+    let teal = render(Icon::Info, 64, &Palette::GLOBAL_VILLAGE);
     let red = Palette::GLOBAL_VILLAGE.with(Tone::Teal, Rgba::rgb(0xFF, 0x00, 0x00));
-    assert_ne!(teal.pixels, render(Village::Info, 64, &red).pixels);
+    assert_ne!(teal.pixels, render(Icon::Info, 64, &red).pixels);
 }
 
 #[test]
@@ -54,7 +58,7 @@ fn an_empty_rect_draws_nothing() {
     surface.with_canvas(bounds, |canvas| {
         draw(
             canvas,
-            Village::Home,
+            Icon::Home,
             Rect::new(4, 4, 4, 4),
             &Palette::GLOBAL_VILLAGE,
         );

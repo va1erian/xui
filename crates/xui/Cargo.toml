@@ -17,6 +17,8 @@ canvas = ["dep:xui-canvas"]
 d2d = ["dep:xui-win32"]
 # The optional Global Village icon set (`xui::xui_icons`).
 icons = ["dep:xui-icons"]
+# The glossy Aero look of that icon set instead of the default Global Village one.
+icons-aero = ["icons", "xui-icons/aero"]
 
 [dependencies]
 xui-core = { path = "../xui-core" }

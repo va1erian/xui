@@ -189,6 +189,32 @@ impl LinearGradient {
     }
 }
 
+/// A linear gradient whose end points are in *path space*, the coordinates of
+/// the [`PathSeg`](super::PathSeg)s it fills, so it moves and scales with the
+/// [`PathPlacement`](super::PathPlacement) the path is drawn with.
+///
+/// It borrows its stops, so describing one costs no allocation.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct PathGradient<'a> {
+    /// Where the gradient starts (the position of stop `0.0`).
+    pub start: (f32, f32),
+    /// Where the gradient ends (the position of stop `1.0`).
+    pub end: (f32, f32),
+    /// The colours at their positions (at least two).
+    pub stops: &'a [GradientStop],
+}
+
+impl<'a> PathGradient<'a> {
+    /// A gradient from `start` to `end` over `stops`.
+    pub const fn new(
+        start: (f32, f32),
+        end: (f32, f32),
+        stops: &'a [GradientStop],
+    ) -> PathGradient<'a> {
+        PathGradient { start, end, stops }
+    }
+}
+
 /// A radial gradient centred at `center` with elliptical radii, defined by its
 /// [`GradientStop`]s (at least two).
 #[derive(Clone, Debug, PartialEq)]

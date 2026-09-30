@@ -19,6 +19,12 @@ impl SkiaCanvas<'_> {
         )
     }
 
+    /// Maps a point in the canvas's own coordinates to device space, keeping
+    /// sub-pixel precision.
+    pub(super) fn device(&self, (x, y): (f32, f32)) -> (f32, f32) {
+        (self.tx + x * self.scale, self.ty + y * self.scale)
+    }
+
     /// Builds `path` placed by `at` in device space, keeping sub-pixel
     /// coordinates so curves stay smooth.
     pub(super) fn placed_path(&self, path: &[PathSeg], at: PathPlacement) -> Option<Path> {
