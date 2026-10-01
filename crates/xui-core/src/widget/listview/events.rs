@@ -121,7 +121,7 @@ fn handle<M: 'static>(
                     }
                     ui.invalidate(id);
                     ui.invalidate(bar.id());
-                    selection_message(mappers, &state.borrow())
+                    selection_message(mappers, state)
                 }
                 _ => None,
             }
@@ -307,6 +307,18 @@ fn handle_key<M: 'static>(
             .and_then(|context| context(row, at));
     }
 
+    if key == Key::RETURN {
+        // The row is copied out first: `activate` is app code and may call
+        // back into this list (`set_items`, `select`), which must not find
+        // the state still borrowed.
+        let row = state.borrow().focused?;
+        return mappers
+            .activate
+            .borrow()
+            .as_ref()
+            .and_then(|activate| activate(row));
+    }
+
     let before = state.borrow().selected.clone();
     {
         let mut state = state.borrow_mut();
@@ -328,14 +340,6 @@ fn handle_key<M: 'static>(
                 let row = state.focused?;
                 state.toggle(row);
             }
-            Key::RETURN => {
-                let row = state.focused?;
-                return mappers
-                    .activate
-                    .borrow()
-                    .as_ref()
-                    .and_then(|activate| activate(row));
-            }
             _ => return None,
         }
         if let Some(row) = state.focused {
@@ -347,7 +351,7 @@ fn handle_key<M: 'static>(
     if state.borrow().selected == before {
         None
     } else {
-        selection_message(mappers, &state.borrow())
+        selection_message(mappers, state)
     }
 }
 
@@ -374,12 +378,19 @@ fn move_focus(state: &mut State, row: usize, shift: bool) {
 
 /// Maps the current selection to the app's message. `on_selection` sees the
 /// whole set; otherwise `on_select` sees the focused row.
-fn selection_message<M: 'static>(mappers: &Mappers<M>, state: &State) -> Option<M> {
-    let rows = state.selection();
+///
+/// The selection is copied out and the borrow released before the mapper runs:
+/// the mapper is app code and may call back into this list (a file dialog
+/// refreshes its rows from `on_select`), which must not find the state borrowed.
+fn selection_message<M: 'static>(mappers: &Mappers<M>, state: &RefCell<State>) -> Option<M> {
+    let (rows, primary) = {
+        let state = state.borrow();
+        (state.selection(), state.primary())
+    };
     if let Some(selection) = mappers.selection.borrow().as_ref() {
         return selection(&rows);
     }
-    match state.primary() {
+    match primary {
         Some(primary) => mappers
             .select
             .borrow()

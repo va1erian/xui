@@ -121,3 +121,61 @@ fn double_clicking_a_row_activates_it_and_empty_space_does_not() {
 
     assert_eq!(*log.borrow(), vec![11]);
 }
+
+/// A mapper is app code: a file dialog replaces the list's rows from
+/// `on_activate`/`on_select`. The list must not still hold its state borrowed.
+type Slot = Rc<RefCell<Option<Rc<ListView<u32>>>>>;
+
+fn replace_rows(slot: &Slot) {
+    if let Some(list) = slot.borrow().as_ref() {
+        list.set_items(&["a", "b", "c"]);
+    }
+}
+
+#[test]
+fn activate_may_replace_the_rows_it_was_raised_from() {
+    let (_backend, core, ui) = setup();
+    let slot: Slot = Rc::default();
+    let again = Rc::clone(&slot);
+    let list = Rc::new(
+        ListView::new(&ui, Rect::new(0, 0, 120, 88), &["one", "two"])
+            .unwrap()
+            .on_activate(move |_row| {
+                replace_rows(&again);
+                None
+            }),
+    );
+    *slot.borrow_mut() = Some(Rc::clone(&list));
+    let runtime = Runtime::primary(core, TestApp(log()));
+
+    runtime.deliver(list.id(), &key(Key::DOWN));
+    runtime.deliver(list.id(), &key(Key::RETURN));
+    runtime.deliver(WidgetId::NONE, &Event::Wake);
+
+    assert_eq!(list.len(), 3);
+    *slot.borrow_mut() = None;
+}
+
+#[test]
+fn select_may_replace_the_rows_it_was_raised_from() {
+    let (_backend, core, ui) = setup();
+    let slot: Slot = Rc::default();
+    let again = Rc::clone(&slot);
+    let list = Rc::new(
+        ListView::new(&ui, Rect::new(0, 0, 120, 88), &["one", "two"])
+            .unwrap()
+            .on_select(move |_row| {
+                replace_rows(&again);
+                None
+            }),
+    );
+    *slot.borrow_mut() = Some(Rc::clone(&list));
+    let runtime = Runtime::primary(core, TestApp(log()));
+
+    runtime.deliver(list.id(), &down(5, row_y(1)));
+    runtime.deliver(list.id(), &key(Key::DOWN));
+    runtime.deliver(WidgetId::NONE, &Event::Wake);
+
+    assert_eq!(list.len(), 3);
+    *slot.borrow_mut() = None;
+}
