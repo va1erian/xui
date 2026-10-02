@@ -4,6 +4,11 @@
 
 ### Additions
 
+- **`HtmlView` has a vertical scrollbar.** The view draws xui-core's shared
+  scrollbar along its right edge (same geometry, painter and theme tokens as
+  `ScrollView`/`ListView`): drag the thumb, click the track to page. Before,
+  the page scrolled only with the wheel and keys and showed no position. The
+  bar's strip is always reserved, so the page lays out narrower by its width.
 - **`xui-canvas` builds without a windowing system.** An on-by-default
   `winit-backend` feature gates `winit`, `softbuffer`, `glutin`, `glow`,
   `arboard`, the `windows` double-click metrics and `xui-gpu`; with

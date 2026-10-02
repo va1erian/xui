@@ -21,6 +21,7 @@ use std::time::{Duration, Instant};
 use xui_core::Color;
 use xui_core::backend::{Canvas, Rgba as PRgba};
 use xui_core::geometry::Rect as PxRect;
+use xui_core::theme::Theme;
 
 use crate::geom::{Point, Rect};
 use crate::list::Frame;
@@ -29,6 +30,7 @@ use crate::selection::{Selection, TextPos};
 use crate::text::TextSystem;
 use crate::worker::{Job, Output, RenderJob};
 
+mod bar;
 mod input;
 
 /// How many device-independent pixels one wheel notch scrolls.
@@ -64,6 +66,11 @@ pub struct HtmlWidget {
     scroll: Cell<f32>,
     /// The viewport height as of the last paint, for page-scroll clamping.
     viewport_height: Cell<f32>,
+    /// The scrollbar's track as of the last paint (node-local device pixels).
+    bar_track: Cell<PxRect>,
+    /// A thumb drag in progress: where it started (node-local y) and the bar
+    /// offset then (device pixels).
+    bar_drag: Cell<Option<(i32, i32)>>,
     /// The selected text, as carets into the frame's run table.
     selection: Cell<Option<Selection>>,
     /// A primary-button selection drag is in progress.
@@ -106,6 +113,8 @@ impl HtmlWidget {
             background: Cell::new(Color::rgb(255, 255, 255)),
             scroll: Cell::new(0.0),
             viewport_height: Cell::new(0.0),
+            bar_track: Cell::new(PxRect::default()),
+            bar_drag: Cell::new(None),
             selection: Cell::new(None),
             dragging: Cell::new(false),
             moved: Cell::new(false),
@@ -292,13 +301,19 @@ impl HtmlWidget {
 }
 
 impl HtmlWidget {
-    /// Paints the latest frame into `canvas`, submitting a render job first if
-    /// the page or the width changed.
-    pub(crate) fn paint(&self, canvas: &mut dyn Canvas) {
+    /// Paints the latest frame and the scrollbar into `canvas`, submitting a
+    /// render job first if the page or the width changed.
+    ///
+    /// The bar's strip is always reserved, so the layout width does not depend
+    /// on whether the page overflows (which would take a second layout, and a
+    /// flash of text under the bar, for every long page).
+    pub(crate) fn paint(&self, canvas: &mut dyn Canvas, theme: Theme) {
         let bounds = canvas.bounds();
         let scale = canvas.dpi() as f32 / 96.0;
         self.scale.set(scale);
-        let width = (bounds.width() as f32 / scale).max(1.0);
+        let track = bar::track(bounds, canvas.dpi());
+        self.bar_track.set(track);
+        let width = ((track.left - bounds.left) as f32 / scale).max(1.0);
         let height = (bounds.height() as f32 / scale).max(1.0);
         self.viewport_height.set(height);
 
@@ -324,5 +339,6 @@ impl HtmlWidget {
             }
             None => canvas.clear(self.background.get()),
         }
+        self.paint_bar(canvas, theme);
     }
 }
