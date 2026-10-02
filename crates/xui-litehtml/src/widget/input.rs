@@ -1,6 +1,6 @@
-//! Input handling for [`HtmlWidget`](super::HtmlWidget): wheel and keyboard
-//! scrolling, link clicks, selection drags and multi-clicks. Split out of
-//! `mod.rs` so each file stays small; behaviour is unchanged.
+//! Input handling for [`HtmlWidget`](super::HtmlWidget): wheel, keyboard and
+//! scrollbar scrolling, link clicks, selection drags and multi-clicks. Split out
+//! of `mod.rs` so each file stays small.
 
 use xui_core::backend::{Cursor, Event};
 use xui_core::message::{Key, MouseButton};
@@ -63,6 +63,34 @@ impl HtmlWidget {
                 ..
             } => {
                 self.scroll_by(-delta as f32 / 120.0 * WHEEL_LINE_DIP);
+                cx.invalidate();
+            }
+            Event::MouseDown {
+                x,
+                y,
+                button: MouseButton::Left,
+                ..
+            }
+            | Event::MouseDoubleClick {
+                x,
+                y,
+                button: MouseButton::Left,
+                ..
+            } if self.on_bar(x, y) => {
+                if self.press_bar(y) {
+                    cx.capture();
+                }
+                cx.invalidate();
+            }
+            Event::MouseMove { y, .. } if self.drag_bar(y) => cx.invalidate(),
+            Event::MouseMove { x, y, .. } if !self.dragging.get() && self.on_bar(x, y) => {
+                cx.cursor(Cursor::Default);
+            }
+            Event::MouseUp {
+                button: MouseButton::Left,
+                ..
+            } if self.release_bar() => {
+                cx.release_capture();
                 cx.invalidate();
             }
             Event::MouseDown {
@@ -191,6 +219,9 @@ impl HtmlWidget {
             }
             Event::CaptureChanged => {
                 self.dragging.set(false);
+                if self.release_bar() {
+                    cx.invalidate();
+                }
             }
             Event::KeyDown {
                 key,

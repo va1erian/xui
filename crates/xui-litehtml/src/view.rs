@@ -73,7 +73,8 @@ impl<M: Send + 'static> HtmlView<M> {
 
         {
             let widget = Rc::clone(&widget);
-            control.set_painter(Rc::new(move |canvas| widget.paint(canvas)));
+            let theme = ui.theme_handle();
+            control.set_painter(Rc::new(move |canvas| widget.paint(canvas, theme.get())));
         }
         {
             let widget = Rc::clone(&widget);
