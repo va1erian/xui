@@ -125,7 +125,9 @@ fn paint_tile(
         draw_line(canvas, text, rect, color, metrics.text_size);
     }
 
-    if focused && !(fancy && selected) {
+    // A decorated lone selection already marks the focused tile; with
+    // several selected tiles the ring still shows which one has focus.
+    if focused && !(fancy && selected && state.selected.len() == 1) {
         let ring = if selected {
             theme.text_on_accent
         } else {
