@@ -1,0 +1,19 @@
+[package]
+name = "netsurf-sys"
+version = "0.1.0"
+edition = "2024"
+# NetSurf itself is GPL-2.0-only (its libraries are MIT), so anything linking
+# this crate is distributed under the GPL version 2.
+license = "GPL-2.0-only"
+description = "The NetSurf browser core and its libraries, built without a frontend, behind the small nsx C interface"
+repository = "https://github.com/va1erian/xui"
+links = "netsurf"
+build = "build.rs"
+
+[dependencies]
+# NetSurf's message table can read gzip; built from source so a static musl
+# target needs nothing installed.
+libz-sys = { version = "1", default-features = false, features = ["libc", "static"] }
+
+[build-dependencies]
+cc = "1"

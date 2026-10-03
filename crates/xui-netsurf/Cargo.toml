@@ -1,0 +1,27 @@
+# A workspace of its own, outside the main xui workspace: it links the NetSurf
+# browser core, which is GPL-2.0-only C that the Windows (MSVC) CI cannot build
+# and that the MIT crates must not pull in.
+[workspace]
+members = [".", "netsurf-sys"]
+resolver = "3"
+
+[package]
+name = "xui-netsurf"
+version = "0.1.0"
+edition = "2024"
+license = "GPL-2.0-only"
+description = "An HTML view for xui that lays pages out and fetches them with the NetSurf browser core, painted through xui-core's portable canvas"
+repository = "https://github.com/va1erian/xui"
+
+[dependencies]
+netsurf-sys = { path = "netsurf-sys" }
+xui-core = { path = "../xui-core" }
+# The display list, painter and text system are shared with the litehtml view,
+# so the two engines paint through exactly the same code.
+xui-litehtml = { path = "../xui-litehtml" }
+log = "0.4"
+
+[dev-dependencies]
+xui-canvas = { path = "../xui-canvas" }
+env_logger = "0.11"
+png = "0.17"
