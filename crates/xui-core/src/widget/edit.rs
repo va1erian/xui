@@ -11,7 +11,7 @@
 //! selection, clipboard and undo; the widget then draws nothing and syncs its
 //! text from the control's change events. Otherwise
 //! ([`Painted`](ImplKind::Painted)) the widget paints the field and handles its
-//! own input through [`keys`].
+//! own input through [`keys`]. [`Edit::password`] masks it for a secret.
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
@@ -28,6 +28,7 @@ use crate::units::Dip;
 mod geometry;
 mod history;
 mod keys;
+mod mask;
 mod model;
 mod paint;
 mod word;
@@ -52,6 +53,8 @@ pub struct Edit<M: 'static> {
     cue: Rc<RefCell<String>>,
     /// The horizontal scroll offset in pixels, so the caret stays visible.
     scroll: Rc<Cell<i32>>,
+    /// Whether the text is masked, as a password field's is.
+    masked: Rc<Cell<bool>>,
     /// Whether the backend hosts a native control that edits itself.
     native: bool,
     /// Set while the widget itself sets the native text, so the resulting
@@ -93,6 +96,7 @@ impl<M: 'static> Edit<M> {
         let scroll = Rc::new(Cell::new(0));
         let focused = Rc::new(Cell::new(false));
         let setting = Rc::new(Cell::new(false));
+        let masked = Rc::new(Cell::new(false));
         let on_change: ChangeMapper<M> = Rc::new(RefCell::new(None));
 
         if !native {
@@ -100,6 +104,7 @@ impl<M: 'static> Edit<M> {
             let cue = Rc::clone(&cue);
             let scroll = Rc::clone(&scroll);
             let focused = Rc::clone(&focused);
+            let masked = Rc::clone(&masked);
             let theme = ui.theme_handle();
             let selected = control.selected_handle();
             control.set_painter(Rc::new(move |canvas| {
@@ -109,6 +114,7 @@ impl<M: 'static> Edit<M> {
                     scroll: scroll.as_ref(),
                     focused: focused.as_ref(),
                     selected: selected.as_ref(),
+                    masked: masked.as_ref(),
                 };
                 paint::paint(canvas, &theme.get(), &state);
             }));
@@ -119,6 +125,7 @@ impl<M: 'static> Edit<M> {
             let focused = Rc::clone(&focused);
             let scroll = Rc::clone(&scroll);
             let setting = Rc::clone(&setting);
+            let masked = Rc::clone(&masked);
             let on_change = Rc::clone(&on_change);
             let dragging = Rc::new(Cell::new(false));
             let ui = ui.clone();
@@ -131,13 +138,13 @@ impl<M: 'static> Edit<M> {
                 }
                 let dpi = ui.dpi();
                 let style = TextStyle::new(Color::rgb(0, 0, 0), TEXT_SIZE).middle();
-                // Maps a node-local x to the nearest caret position. The model
-                // is borrowed only for the measurement, never across a call
-                // that can deliver an event.
+                // Maps a node-local x to the nearest caret position in what is
+                // painted. The model is borrowed only for the measurement,
+                // never across a call that can deliver an event.
                 let char_at = |x: i32| -> usize {
                     let target = geometry::pointer_text_x(x, dpi, scroll.get());
                     let model = model.borrow();
-                    let value = model.text();
+                    let value = mask::display(model.text(), masked.get());
                     let total = value.chars().count();
                     let mut best = 0;
                     let mut best_distance = i32::MAX;
@@ -185,7 +192,12 @@ impl<M: 'static> Edit<M> {
                         ..
                     } if !native => {
                         let pos = char_at(*x);
-                        model.borrow_mut().select_word_at(pos);
+                        // A run would reveal where a masked field's spaces are.
+                        if masked.get() {
+                            model.borrow_mut().select_all();
+                        } else {
+                            model.borrow_mut().select_word_at(pos);
+                        }
                         dragging.set(false);
                         ui.release_capture();
                         redraw = true;
@@ -238,7 +250,7 @@ impl<M: 'static> Edit<M> {
                         let clipboard = UiClipboard(&ui);
                         let result = {
                             let mut model = model.borrow_mut();
-                            keys::apply(&mut model, *key, *modifiers, &clipboard)
+                            keys::apply(&mut model, *key, *modifiers, &clipboard, masked.get())
                         };
                         match result {
                             KeyResult::Ignored => return None,
@@ -270,6 +282,7 @@ impl<M: 'static> Edit<M> {
             model,
             cue,
             scroll,
+            masked,
             native,
             setting,
             on_change,
@@ -286,6 +299,31 @@ impl<M: 'static> Edit<M> {
             self.control.invalidate();
         }
         self
+    }
+
+    /// Masks the field for a secret such as a password (`true`), or shows its
+    /// text again (`false`). Chainable.
+    ///
+    /// It shows one bullet (U+2022) per character, caret and clicks measured
+    /// on the bullets; refuses copy and cut (paste and undo work); is one word
+    /// to Ctrl+arrows, Ctrl+Backspace/Delete and double-click; and reports its
+    /// `text` property as bullets. The cue still shows while it is empty, and
+    /// [`HasText::text`] and [`on_change`](Edit::on_change) still deliver the
+    /// real text. A native Win32 `EDIT` switches to its own password style,
+    /// which masks and refuses copy and cut the same way.
+    pub fn password(self, password: bool) -> Edit<M> {
+        self.masked.set(password);
+        if self.native {
+            self.control.ui().set_password(self.control.id(), password);
+        } else {
+            self.control.invalidate();
+        }
+        self
+    }
+
+    /// Whether the field masks its text (see [`Edit::password`]).
+    pub fn is_password(&self) -> bool {
+        self.masked.get()
     }
 
     /// Maps a change to the app's message: the closure returns `Some(msg)` to
@@ -339,9 +377,13 @@ impl<M: 'static> HasText for Edit<M> {
 
 impl<M: 'static> Properties for Edit<M> {
     fn properties(&self) -> Vec<Property> {
+        // A masked field never hands its secret to a form file or an
+        // automation client; it reports what it shows.
+        let text = self.text();
+        let value = mask::display(&text, self.is_password()).into_owned();
         vec![Property {
             name: "text",
-            value: Value::Text(self.text()),
+            value: Value::Text(value),
         }]
     }
 

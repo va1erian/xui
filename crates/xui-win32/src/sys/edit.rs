@@ -2,7 +2,7 @@
 //! `WM_GETTEXT`/`WM_SETTEXT` (handled generically by `sys::window`).
 
 use windows::Win32::Foundation::{LPARAM, WPARAM};
-use windows::Win32::UI::Controls::EM_SETCUEBANNER;
+use windows::Win32::UI::Controls::{EM_SETCUEBANNER, EM_SETPASSWORDCHAR};
 use windows::Win32::UI::WindowsAndMessaging::SendMessageW;
 
 use crate::hwnd::Hwnd;
@@ -33,4 +33,17 @@ pub(crate) fn set_cue(hwnd: Hwnd, text: &str, show_when_focused: bool) {
         usize::from(show_when_focused),
         wide.as_ptr() as isize,
     );
+}
+
+/// The mask a password edit shows per character: U+2022 BULLET, the glyph the
+/// portable `Edit` paints, so both backends look alike.
+const PASSWORD_CHAR: u16 = 0x2022;
+
+/// Masks the edit's text (`EM_SETPASSWORDCHAR` with a mask character, which
+/// adds `ES_PASSWORD`) or shows it again (a zero character removes the style).
+/// A masked `EDIT` refuses `WM_COPY` and `WM_CUT` itself, so the text cannot
+/// leave through the clipboard. The control redraws its visible text itself.
+pub(crate) fn set_password(hwnd: Hwnd, password: bool) {
+    let mask = if password { PASSWORD_CHAR } else { 0 };
+    send(hwnd, EM_SETPASSWORDCHAR, usize::from(mask), 0);
 }

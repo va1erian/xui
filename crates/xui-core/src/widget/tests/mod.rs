@@ -12,6 +12,7 @@ use crate::property::{Properties, Value};
 mod button;
 mod checkbox;
 mod edit;
+mod edit_password;
 mod label;
 mod misc;
 mod slider;
