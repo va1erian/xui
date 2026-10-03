@@ -40,7 +40,7 @@ fn carets_include_the_text_margin_and_the_scroll() {
     with_editor(|editor| {
         let start = editor.caret_rect(DocPos::new(0, 0), Affinity::Downstream);
         assert_eq!(start.left, 8, "the 8 dip margin at 96 dpi");
-        assert_eq!(start.top, 14, "the heading's space before");
+        assert_eq!(start.top, 22, "the heading's space before");
 
         let low = DocPos::new(4, 0);
         let before = editor.caret_rect(low, Affinity::Downstream);

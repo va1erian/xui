@@ -127,8 +127,18 @@ impl State {
         text_area
     }
 
+    /// The offset from view y to layout y: the scroll less the top margin.
+    pub fn shift(&self) -> i32 {
+        self.scroll.round() as i32 - pad_px(self.dpi)
+    }
+
+    /// The scrollable height: the flow and a margin above and below.
+    pub fn content_height(&self) -> f32 {
+        self.layout.height() + 2.0 * pad_px(self.dpi) as f32
+    }
+
     /// The largest scroll offset.
     pub fn max_scroll(&self) -> f32 {
-        (self.layout.height() - self.viewport).max(0.0)
+        (self.content_height() - self.viewport).max(0.0)
     }
 }

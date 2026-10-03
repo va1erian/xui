@@ -9,17 +9,32 @@ use xui_core::{Dip, Px};
 use super::events::Out;
 use super::state::State;
 use crate::edit::{Command, Handle, resize};
-use crate::model::{DocPos, ObjectId};
+use crate::model::{DocPos, DocRange, ObjectId};
 
 /// How far the pointer must travel, in design units, before a press on an
 /// image counts as a drag.
 const SLOP: Dip = Dip(4.0);
 
+/// What a selection drag extends by.
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum Unit {
+    /// Character by character from the press.
+    Char,
+    /// Whole words (or paragraphs) from a double (or triple) click, keeping
+    /// the one first selected in the selection.
+    Run {
+        /// The word or paragraph the click selected.
+        origin: DocRange,
+        /// Whether the unit is the paragraph rather than the word.
+        paragraph: bool,
+    },
+}
+
 /// A drag in progress.
 #[derive(Clone, Copy, Debug)]
 pub(crate) enum Drag {
     /// Extending the text selection.
-    Select,
+    Select(Unit),
     /// Resizing an image by one of its handles.
     Resize {
         id: ObjectId,
@@ -56,13 +71,43 @@ impl State {
         });
     }
 
+    /// Extends the selection to the pointer by `unit`. By word or paragraph
+    /// the one first selected stays selected, whichever way the drag goes.
+    fn extend_selection(&mut self, unit: Unit, to: Point) {
+        let pos = self.pos_at_view(to);
+        let Unit::Run { origin, paragraph } = unit else {
+            self.run(Command::SetCaret { pos, extend: true });
+            return;
+        };
+        self.run(if paragraph {
+            Command::SelectParagraph(pos)
+        } else {
+            Command::SelectWord(pos)
+        });
+        let Some(hit) = self.ed.doc.selection_range(&self.ed.selection) else {
+            return;
+        };
+        let (anchor, head) = if hit.start < origin.start {
+            (origin.end, hit.start)
+        } else {
+            (origin.start, hit.end.max(origin.end))
+        };
+        self.run(Command::SetCaret {
+            pos: anchor,
+            extend: false,
+        });
+        self.run(Command::SetCaret {
+            pos: head,
+            extend: true,
+        });
+    }
+
     /// Follows the pointer to the client point `to` during a drag.
     pub fn drag_to(&mut self, to: Point, free_aspect: bool) -> bool {
         self.pointer = to;
         match self.drag {
-            Some(Drag::Select) => {
-                let pos = self.pos_at_view(to);
-                self.run(Command::SetCaret { pos, extend: true });
+            Some(Drag::Select(unit)) => {
+                self.extend_selection(unit, to);
                 true
             }
             Some(Drag::Resize {
@@ -146,7 +191,7 @@ impl State {
     pub fn autoscroll(&mut self) -> bool {
         let active = matches!(
             self.drag,
-            Some(Drag::Select | Drag::Move { moving: true, .. })
+            Some(Drag::Select(_) | Drag::Move { moving: true, .. })
         );
         let (y, height) = (self.pointer.y, self.viewport as i32);
         if !active || (0..height).contains(&y) {

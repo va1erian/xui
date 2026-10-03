@@ -13,7 +13,7 @@ impl State {
     pub fn bar_scroll(&self) -> Scroll {
         Scroll {
             viewport: self.viewport.round() as i32,
-            content: self.layout.height().ceil() as i32,
+            content: self.content_height().ceil() as i32,
             offset: self.scroll.round() as i32,
         }
     }

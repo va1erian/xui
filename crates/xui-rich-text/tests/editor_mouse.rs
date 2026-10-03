@@ -54,17 +54,17 @@ fn double_click_selects_a_word_and_a_third_click_the_paragraph() {
 #[test]
 fn clicking_an_image_selects_it_and_a_handle_drag_resizes_it_in_one_step() {
     run(image_doc(), |stage, rig| {
-        // The inline image fills (8, 0) to (68, 40).
+        // The inline image fills (8, 8) to (68, 48).
         mouse(stage, "down", 30, 20);
         mouse(stage, "up", 30, 20);
         assert!(matches!(rig.editor.selection(), Selection::Object(_)));
 
         // South-east corner handle, dragged by (30, 20): the aspect is kept.
-        mouse(stage, "down", 68, 40);
-        mouse(stage, "move", 80, 50);
-        mouse(stage, "move", 98, 60);
+        mouse(stage, "down", 68, 48);
+        mouse(stage, "move", 80, 58);
+        mouse(stage, "move", 98, 68);
         assert_eq!(image_size(rig), (90.0, 60.0), "previewed while dragging");
-        mouse(stage, "up", 98, 60);
+        mouse(stage, "up", 98, 68);
         assert_eq!(image_size(rig), (90.0, 60.0));
         ctrl(stage, Key::Z);
         assert_eq!(image_size(rig), (60.0, 40.0), "one undo step");
@@ -76,12 +76,12 @@ fn escape_cancels_a_resize() {
     run(image_doc(), |stage, rig| {
         mouse(stage, "down", 30, 20);
         mouse(stage, "up", 30, 20);
-        mouse(stage, "down", 68, 40);
-        mouse(stage, "move", 98, 60);
+        mouse(stage, "down", 68, 48);
+        mouse(stage, "move", 98, 68);
         assert_eq!(image_size(rig), (90.0, 60.0));
         key(stage, Key::ESCAPE);
         assert_eq!(image_size(rig), (60.0, 40.0));
-        mouse(stage, "up", 98, 60);
+        mouse(stage, "up", 98, 68);
         assert_eq!(image_size(rig), (60.0, 40.0));
     });
 }
@@ -139,4 +139,96 @@ fn the_caret_selection_and_handles_follow_the_theme() {
         save(&format!("rich-text-image-{name}.png"), &image);
         assert!(pixels_of(&image, theme.accent) > 150, "outline and handles");
     }
+}
+
+#[test]
+fn the_handles_of_an_image_in_the_corner_stay_inside_the_view() {
+    let image = run_themed(Theme::light(), image_doc(), |stage, _| {
+        mouse(stage, "down", 30, 30);
+        mouse(stage, "up", 30, 30);
+    });
+    // Handles are 8 px squares centred on the image's corners at (8, 8).
+    // The stroke is antialiased, so look for blue-tinted pixels near the edge.
+    let blue = |x: u32, y: u32| {
+        image
+            .pixel(x, y)
+            .is_some_and(|p| p[2] > p[0].saturating_add(40))
+    };
+    let top_row = (4..12).filter(|&x| (3..=5).any(|y| blue(x, y))).count();
+    let left_column = (4..12).filter(|&y| (3..=5).any(|x| blue(x, y))).count();
+    assert!(top_row >= 6, "the top-left handle's top edge: {top_row}");
+    assert!(left_column >= 6, "and its left edge: {left_column}");
+}
+
+#[test]
+fn dragging_after_a_double_click_extends_by_whole_words() {
+    run(plain("alpha beta gamma delta"), |stage, rig| {
+        let at = |byte| {
+            let r = rig
+                .editor
+                .caret_rect(DocPos::new(0, byte), Default::default());
+            (r.left + 1, (r.top + r.bottom) / 2)
+        };
+        let (x, y) = at(8);
+        mouse(stage, "down", x, y);
+        mouse(stage, "up", x, y);
+        mouse(stage, "double", x, y);
+        let (x, y) = at(18);
+        mouse(stage, "move", x, y);
+        let range = rig.range();
+        assert_eq!(
+            (range.start.byte, range.end.byte),
+            (6, 22),
+            "to the end of delta"
+        );
+        let (x, y) = at(2);
+        mouse(stage, "move", x, y);
+        let range = rig.range();
+        assert_eq!(
+            (range.start.byte, range.end.byte),
+            (0, 10),
+            "beta stays selected"
+        );
+        mouse(stage, "up", x, y);
+    });
+}
+
+#[test]
+fn dragging_after_a_triple_click_extends_by_whole_paragraphs() {
+    let mut b = DocBuilder::new();
+    for text in ["one two", "three four", "five six"] {
+        b.paragraph(
+            ParaStyleId::DEFAULT,
+            &[Run::Text(text, CharStyleId::DEFAULT)],
+        );
+    }
+    run(b.finish(), |stage, rig| {
+        let at = |para, byte| {
+            let r = rig
+                .editor
+                .caret_rect(DocPos::new(para, byte), Default::default());
+            (r.left + 1, (r.top + r.bottom) / 2)
+        };
+        let (x, y) = at(1, 2);
+        mouse(stage, "down", x, y);
+        mouse(stage, "up", x, y);
+        mouse(stage, "double", x, y);
+        mouse(stage, "up", x, y);
+        mouse(stage, "down", x, y);
+        let (x, y) = at(2, 2);
+        mouse(stage, "move", x, y);
+        let range = rig.range();
+        assert_eq!(
+            (range.start, range.end),
+            (DocPos::new(1, 0), DocPos::new(2, 8))
+        );
+        let (x, y) = at(0, 1);
+        mouse(stage, "move", x, y);
+        let range = rig.range();
+        assert_eq!(
+            (range.start, range.end),
+            (DocPos::new(0, 0), DocPos::new(1, 10))
+        );
+        mouse(stage, "up", x, y);
+    });
 }

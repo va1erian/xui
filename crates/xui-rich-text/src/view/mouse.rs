@@ -8,7 +8,7 @@ use xui_core::backend::Cursor;
 use xui_core::geometry::Point;
 use xui_core::message::Modifiers;
 
-use super::drag::Drag;
+use super::drag::{Drag, Unit};
 use super::events::Out;
 use super::state::{Click, State};
 use crate::edit::{Command, Handles};
@@ -100,7 +100,8 @@ impl State {
             out.link = Some(url);
             return;
         }
-        let command = match self.count_click(point, double) {
+        let count = self.count_click(point, double);
+        let command = match count {
             1 => Command::SetCaret {
                 pos,
                 extend: mods.shift,
@@ -109,7 +110,15 @@ impl State {
             _ => Command::SelectParagraph(pos),
         };
         out.absorb(&self.run(command));
-        self.drag = Some(Drag::Select);
+        let origin = self.ed.doc.selection_range(&self.ed.selection);
+        let unit = match origin {
+            Some(origin) if count > 1 => Unit::Run {
+                origin,
+                paragraph: count > 2,
+            },
+            _ => Unit::Char,
+        };
+        self.drag = Some(Drag::Select(unit));
         out.capture = Some(true);
     }
 

@@ -24,13 +24,13 @@ pub(crate) fn paint(canvas: &mut dyn Canvas, state: &mut State, theme: &Theme) {
     let (track, pad) = (state.track, pad_px(dpi));
     canvas.fill_rect(bounds, theme.input_background);
 
-    let scroll = state.scroll;
     let layout = &state.layout;
-    let range = layout.visible(scroll, scroll + bounds.height() as f32);
+    let shift = state.shift();
+    let range = layout.visible(shift as f32, (shift + bounds.height()) as f32);
     let painter = Painter {
         theme,
         state,
-        shift: scroll.round() as i32,
+        shift,
         pad,
         scale: dpi as f32 / 96.0,
     };
@@ -39,7 +39,7 @@ pub(crate) fn paint(canvas: &mut dyn Canvas, state: &mut State, theme: &Theme) {
     for para in &layout.paragraphs()[range.clone()] {
         painter.paragraph(canvas, para);
     }
-    overlay::paint(canvas, state, theme, pad, scroll.round() as i32);
+    overlay::paint(canvas, state, theme, pad, shift);
     canvas.pop_clip();
 
     let thumb = if state.bar_drag.is_some() {
