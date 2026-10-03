@@ -98,6 +98,10 @@ impl TextLayout for HeadlessLayout {
         self.lines().len() as f32 * self.line_height
     }
 
+    fn baseline(&self) -> f32 {
+        self.line_height * 3.0 / 4.0
+    }
+
     fn hit_test_point(&self, x: f32, y: f32) -> TextHit {
         let lines = self.lines();
         let width = self.width();

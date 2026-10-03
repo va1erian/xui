@@ -93,6 +93,14 @@ pub trait TextLayout: Send + Sync {
     /// The height of all lines, in device pixels.
     fn height(&self) -> f32;
 
+    /// The distance from the top of the layout to the first line's baseline,
+    /// in device pixels. Pieces of different font sizes and inline images sit
+    /// on one baseline by aligning on this. The default is an approximation
+    /// (four fifths of the height); backends override it with real metrics.
+    fn baseline(&self) -> f32 {
+        self.height() * 0.8
+    }
+
     /// The caret position nearest `(x, y)`, using the shaper's own hit-testing
     /// so right-to-left and complex scripts are accurate.
     fn hit_test_point(&self, x: f32, y: f32) -> TextHit;

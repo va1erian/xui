@@ -40,3 +40,23 @@ fn text_scales_with_dpi() {
     });
     save("canvas-hidpi.png", &surface.to_image());
 }
+
+#[test]
+fn a_shaped_layout_has_a_baseline_inside_its_first_line() {
+    use xui_core::backend::FontSpec;
+
+    let backend = OffscreenBackend::new();
+    let shape = |size| {
+        backend
+            .text_shaper()
+            .layout("Hello", &FontSpec::new(Dip(size)), f32::INFINITY, 96)
+    };
+    let (small, big) = (shape(16.0), shape(32.0));
+    assert!(
+        small.baseline() > 0.0 && small.baseline() < small.height(),
+        "baseline {} inside height {}",
+        small.baseline(),
+        small.height()
+    );
+    assert!(big.baseline() > small.baseline(), "the baseline scales");
+}

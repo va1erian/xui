@@ -113,6 +113,14 @@ impl TextLayout for CosmicLayout {
         size(&buffer).1
     }
 
+    fn baseline(&self) -> f32 {
+        let buffer = self.buffer.lock().unwrap_or_else(PoisonError::into_inner);
+        buffer
+            .layout_runs()
+            .next()
+            .map_or_else(|| size(&buffer).1 * 0.8, |run| run.line_y - run.line_top)
+    }
+
     fn hit_test_point(&self, x: f32, y: f32) -> TextHit {
         let buffer = self.buffer.lock().unwrap_or_else(PoisonError::into_inner);
         let Some(cursor) = buffer.hit(x, y) else {
