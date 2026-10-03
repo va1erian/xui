@@ -177,3 +177,90 @@ fn a_command_far_from_the_view_lays_out_its_target() {
     );
     assert!(laid_out(&state) <= 300);
 }
+
+mod page_view {
+    use super::*;
+    use crate::model::{DocPos, Selection};
+    use crate::view::state::ViewMode;
+
+    const WIDE: Rect = Rect::new(0, 0, 1000, 600);
+
+    fn paged(paragraphs: usize, view: Rect) -> State {
+        let mut state = state_with(paragraphs);
+        state.bounds = view;
+        state.set_mode(ViewMode::Page);
+        state.prepare(view, 96);
+        while state
+            .layout
+            .update_idle(&state.ed.doc, state.shaper.as_ref(), 64)
+        {}
+        state
+    }
+
+    #[test]
+    fn a_wide_view_shows_full_size_sheets_centred_on_the_desk() {
+        let state = paged(3, WIDE);
+        let sheets = state.sheets.expect("sheets in page view");
+        let page = state.ed.doc.page();
+        assert_eq!(state.layout.dpi(), 96);
+        assert!((sheets.width - page.width.0).abs() < 0.01);
+        assert!((state.layout.width() - page.content_width().0).abs() < 0.01);
+        let text_width = state.track.left;
+        let left_desk = sheets.left;
+        let right_desk = text_width - (sheets.left + sheets.width.round() as i32);
+        assert!(
+            (left_desk - right_desk).abs() <= 1,
+            "{left_desk} vs {right_desk}"
+        );
+        assert_eq!(state.origin.x, sheets.left + page.left.0.round() as i32);
+        assert_eq!(state.layout.page_count(), 1);
+        assert!((state.content_height() - (sheets.top + sheets.pitch)).abs() < 0.01);
+    }
+
+    #[test]
+    fn a_narrow_view_shrinks_the_sheet_to_fit() {
+        let state = paged(3, VIEW);
+        let sheets = state.sheets.unwrap();
+        assert!(state.layout.dpi() < 96);
+        assert!(sheets.left >= 0);
+        assert!(sheets.left + sheets.width.round() as i32 <= state.track.left);
+    }
+
+    #[test]
+    fn a_long_document_fills_several_pages_and_reports_the_caret_page() {
+        let mut state = paged(200, WIDE);
+        let count = state.layout.page_count();
+        assert!(count > 2, "{count} pages");
+        assert_eq!(state.page_info(), (0, count));
+        let last = state.ed.doc.paragraph_count() - 1;
+        state.ed.selection = Selection::caret(DocPos::new(last, 0));
+        assert_eq!(state.page_info(), (count - 1, count));
+        let sheets = state.sheets.unwrap();
+        let tall = sheets.top + count as f32 * sheets.pitch;
+        assert!((state.content_height() - tall).abs() < 0.01);
+    }
+
+    #[test]
+    fn clicking_where_the_caret_is_drawn_finds_it_on_a_later_page() {
+        let mut state = paged(200, WIDE);
+        let pos = DocPos::new(150, 4);
+        state.ensure_para(pos.para);
+        let caret = state.layout.caret_rect(&state.ed.doc, pos);
+        state.ensure_visible(caret);
+        let view = state.caret_rect_view(pos, crate::model::Affinity::Downstream);
+        assert!(view.top >= 0 && view.bottom <= WIDE.height(), "{view:?}");
+        let back = state.pos_at_view(Point::new(view.left, (view.top + view.bottom) / 2));
+        assert_eq!(back, pos);
+    }
+
+    #[test]
+    fn back_to_draft_view_the_text_fills_the_view_again() {
+        let mut state = paged(3, WIDE);
+        state.set_mode(ViewMode::Draft);
+        state.prepare(WIDE, 96);
+        assert!(state.sheets.is_none());
+        assert_eq!(state.layout.dpi(), 96);
+        assert!(state.layout.width() > 900.0);
+        assert_eq!(state.page_info(), (0, 1));
+    }
+}

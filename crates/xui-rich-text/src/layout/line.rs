@@ -245,11 +245,19 @@ impl Breaker<'_, '_> {
         }
     }
 
+    /// A float's size shrunk, keeping its aspect, to the area's width and to
+    /// a page's height.
     fn clamp(&self, size: (f32, f32)) -> (f32, f32) {
-        if size.0 > self.p.area && size.0 > 0.0 {
+        let size = if size.0 > self.p.area && size.0 > 0.0 {
             (self.p.area, size.1 * self.p.area / size.0)
         } else {
             size
+        };
+        match self.ctx.pages() {
+            Some(pages) if size.1 > pages.content && size.1 > 0.0 => {
+                (size.0 * pages.content / size.1, pages.content)
+            }
+            _ => size,
         }
     }
 

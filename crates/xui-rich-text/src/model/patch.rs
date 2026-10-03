@@ -136,6 +136,8 @@ pub struct ParaStylePatch {
     pub list: Option<Option<ListItem>>,
     /// The structural role.
     pub kind: Option<BlockKind>,
+    /// Whether the paragraph starts a new page.
+    pub page_break_before: Option<bool>,
 }
 
 impl ParaStylePatch {
@@ -159,6 +161,14 @@ impl ParaStylePatch {
     pub fn kind(kind: BlockKind) -> ParaStylePatch {
         ParaStylePatch {
             kind: Some(kind),
+            ..ParaStylePatch::default()
+        }
+    }
+
+    /// A patch that sets whether the paragraph starts a new page.
+    pub fn page_break_before(on: bool) -> ParaStylePatch {
+        ParaStylePatch {
+            page_break_before: Some(on),
             ..ParaStylePatch::default()
         }
     }
@@ -197,6 +207,9 @@ impl ParaStylePatch {
         }
         if let Some(v) = self.kind {
             out.kind = v;
+        }
+        if let Some(v) = self.page_break_before {
+            out.page_break_before = v;
         }
         out
     }

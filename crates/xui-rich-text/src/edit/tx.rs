@@ -52,6 +52,8 @@ fn span(doc: &Document, op: &EditOp) -> (usize, usize) {
             (para, para)
         }
         EditOp::RestoreSpans(_) | EditOp::RestoreParaStyles(_) => (0, doc.paragraph_count()),
+        // The view relays out every paragraph when the page changes.
+        EditOp::SetPage(_) => (0, 0),
     }
 }
 

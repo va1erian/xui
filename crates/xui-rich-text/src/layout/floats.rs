@@ -4,6 +4,7 @@
 
 use xui_core::geometry::Rect;
 
+use super::pages::Pages;
 use crate::model::Side;
 
 /// A rectangle in `f32` pixels.
@@ -89,10 +90,12 @@ impl Interval {
     }
 }
 
-/// The exclusions active at the current flow position, in area pixels.
+/// The exclusions active at the current flow position, in area pixels, and
+/// the page gaps when the flow is paginated.
 #[derive(Clone, Debug, Default)]
 pub(crate) struct FloatCtx {
     excl: Vec<Excl>,
+    pages: Option<Pages>,
 }
 
 impl FloatCtx {
@@ -106,7 +109,34 @@ impl FloatCtx {
                     kind: e.kind,
                 })
                 .collect(),
+            pages: None,
         }
+    }
+
+    /// The same context on `pages`.
+    pub fn with_pages(mut self, pages: Option<Pages>) -> FloatCtx {
+        self.pages = pages;
+        self
+    }
+
+    /// The pages the flow is cut into.
+    pub fn pages(&self) -> Option<Pages> {
+        self.pages
+    }
+
+    /// The top of the next page when a span `y..y + h` would run into a page
+    /// gap (see [`Pages::gap`]).
+    pub fn page_push(&self, y: f32, h: f32) -> Option<f32> {
+        self.pages?.gap(y, h).map(|(_, next)| next)
+    }
+
+    /// The page gap a span `y..y + h` runs into, as a full-width exclusion.
+    fn gap_excl(&self, y: f32, h: f32) -> Option<Excl> {
+        let (top, bottom) = self.pages?.gap(y, h)?;
+        Some(Excl {
+            rect: FRect::new(f32::MIN, top, f32::MAX, bottom),
+            kind: ExclKind::Band,
+        })
     }
 
     /// The exclusions still active below `y`, relative to `y`.
@@ -121,10 +151,14 @@ impl FloatCtx {
             .collect()
     }
 
-    fn overlapping(&self, y: f32, h: f32) -> impl Iterator<Item = &Excl> {
+    /// The exclusions a line of height `h` at `y` overlaps, the page gap it
+    /// would cross included.
+    fn overlapping(&self, y: f32, h: f32) -> impl Iterator<Item = Excl> + '_ {
         self.excl
             .iter()
             .filter(move |e| e.rect.top < y + h.max(0.01) && e.rect.bottom > y)
+            .copied()
+            .chain(self.gap_excl(y, h.max(0.01)))
     }
 
     /// The free interval for a line of height `h` at `y` inside `[lo, hi]`.
@@ -173,6 +207,7 @@ impl FloatCtx {
                 .filter(|e| e.kind == kind || e.kind == ExclKind::Band)
                 .filter(|e| e.rect.top < top + h + margin && e.rect.bottom > top)
                 .map(|e| e.rect.bottom)
+                .chain(self.page_push(top, h + margin))
                 .fold(None, |acc: Option<f32>, b| {
                     Some(acc.map_or(b, |a| a.max(b)))
                 });
@@ -212,6 +247,7 @@ impl FloatCtx {
             .iter()
             .filter(|e| e.rect.top < top + h + 2.0 * margin && e.rect.bottom > top)
             .map(|e| e.rect.bottom)
+            .chain(self.page_push(top, h + 2.0 * margin))
             .min_by(f32::total_cmp)
         {
             top = bottom;

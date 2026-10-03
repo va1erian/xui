@@ -8,8 +8,8 @@ use xui_core::backend::TextWeight;
 use xui_core::{Color, Dip};
 
 use crate::model::{
-    Align, Baseline, BlockKind, CharStyle, LineSpacing, ListItem, ListKind, ParaStyle, Side,
-    TextColor, Wrap,
+    Align, Baseline, BlockKind, CharStyle, LineSpacing, ListItem, ListKind, PageSetup, ParaStyle,
+    Side, TextColor, Wrap,
 };
 
 type Rgb = [u8; 3];
@@ -153,6 +153,12 @@ pub(super) struct ParaDto {
     #[serde(default)]
     list: Option<ListDto>,
     block: BlockDto,
+    #[serde(default, skip_serializing_if = "is_false")]
+    page_break_before: bool,
+}
+
+fn is_false(value: &bool) -> bool {
+    !*value
 }
 
 impl From<&ParaStyle> for ParaDto {
@@ -185,6 +191,7 @@ impl From<&ParaStyle> for ParaDto {
                 BlockKind::Heading(level) => BlockDto::Heading { level },
                 BlockKind::Quote => BlockDto::Quote,
             },
+            page_break_before: s.page_break_before,
         }
     }
 }
@@ -219,6 +226,7 @@ impl From<ParaDto> for ParaStyle {
                 BlockDto::Heading { level } => BlockKind::Heading(level),
                 BlockDto::Quote => BlockKind::Quote,
             },
+            page_break_before: d.page_break_before,
         }
     }
 }
@@ -268,6 +276,38 @@ impl From<WrapDto> for Wrap {
             WrapDto::TopAndBottom { margin } => Wrap::TopAndBottom {
                 margin: Dip(margin),
             },
+        }
+    }
+}
+
+/// The page setup, in dip.
+#[derive(Serialize, Deserialize)]
+pub(super) struct PageDto {
+    width: f32,
+    height: f32,
+    margins: [f32; 4],
+}
+
+impl From<&PageSetup> for PageDto {
+    fn from(p: &PageSetup) -> PageDto {
+        PageDto {
+            width: p.width.0,
+            height: p.height.0,
+            margins: [p.left.0, p.top.0, p.right.0, p.bottom.0],
+        }
+    }
+}
+
+impl From<PageDto> for PageSetup {
+    fn from(d: PageDto) -> PageSetup {
+        let [left, top, right, bottom] = d.margins.map(Dip);
+        PageSetup {
+            width: Dip(d.width),
+            height: Dip(d.height),
+            left,
+            top,
+            right,
+            bottom,
         }
     }
 }

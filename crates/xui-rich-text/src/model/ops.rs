@@ -19,14 +19,14 @@ use super::paragraph::Span;
 use super::patch::{CharStylePatch, ParaStylePatch};
 use super::selection::DocRange;
 use super::style::{CharStyleId, ParaStyleId};
-use super::{DocPos, Document, InlineImage, ObjectId};
+use super::{DocPos, Document, InlineImage, ObjectId, PageSetup};
 
 pub use text::Slice;
 
 /// One edit of a [`Document`].
 ///
-/// The first eight variants are what editing commands create; the last four
-/// are the exact inverses `apply` hands back, which a [`History`](super::History)
+/// The first eight variants and `SetPage` are what editing commands create;
+/// `Remove` to `RestoreParaStyles` are the exact inverses `apply` hands back, which a [`History`](super::History)
 /// stores. They may also be applied directly.
 #[derive(Clone, Debug)]
 pub enum EditOp {
@@ -104,6 +104,8 @@ pub enum EditOp {
     RestoreSpans(Vec<(usize, Vec<Span>)>),
     /// Restores the paragraph styles of the listed paragraphs.
     RestoreParaStyles(Vec<(usize, ParaStyleId)>),
+    /// Replaces the page setup; its own inverse (with the old setup).
+    SetPage(PageSetup),
 }
 
 /// Why an edit could not be applied.
@@ -119,6 +121,8 @@ pub enum EditError {
     UnknownObject(ObjectId),
     /// The style id is not in the document's style table.
     UnknownStyle,
+    /// The page setup leaves no room for text or is not finite.
+    BadPage,
 }
 
 impl fmt::Display for EditError {
@@ -129,6 +133,7 @@ impl fmt::Display for EditError {
             EditError::BadParagraphs(r) => write!(f, "bad paragraphs {r:?}"),
             EditError::UnknownObject(id) => write!(f, "unknown object {id:?}"),
             EditError::UnknownStyle => f.write_str("unknown style"),
+            EditError::BadPage => f.write_str("bad page setup"),
         }
     }
 }
@@ -164,6 +169,10 @@ impl Document {
             }
             EditOp::RestoreSpans(entries) => self.op_restore_spans(entries),
             EditOp::RestoreParaStyles(entries) => self.op_restore_para_styles(entries),
+            EditOp::SetPage(page) => {
+                page.check().map_err(|_| EditError::BadPage)?;
+                Ok(EditOp::SetPage(std::mem::replace(&mut self.page, page)))
+            }
         }
     }
 

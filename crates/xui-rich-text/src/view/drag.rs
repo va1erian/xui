@@ -118,8 +118,11 @@ impl State {
                 ..
             }) => {
                 let delta = (to.x - origin.x, to.y - origin.y);
-                let max = Px(self.layout.width() as i32).to_dip(self.dpi);
-                let size = resize(handle, start, delta, self.dpi, !free_aspect, max);
+                // Sizes are in dip at the layout's DPI, which page view lowers
+                // to zoom out.
+                let dpi = self.layout.dpi();
+                let max = Px(self.layout.width() as i32).to_dip(dpi);
+                let size = resize(handle, start, delta, dpi, !free_aspect, max);
                 self.preview_size(id, size);
                 self.drag = Some(Drag::Resize {
                     id,

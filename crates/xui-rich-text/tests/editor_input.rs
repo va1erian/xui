@@ -203,3 +203,19 @@ fn a_ctrl_click_on_a_link_reports_it() {
         );
     });
 }
+
+#[test]
+fn ctrl_enter_inserts_a_page_break() {
+    run(plain("onetwo"), |stage, rig| {
+        key(stage, Key::HOME);
+        for _ in 0..3 {
+            key(stage, Key::RIGHT);
+        }
+        ctrl(stage, Key::RETURN);
+        assert_eq!(rig.text(), "one\ntwo");
+        let starts_page = rig
+            .editor
+            .with_document(|d| d.styles().para(d.paragraphs()[1].style()).page_break_before);
+        assert!(starts_page);
+    });
+}

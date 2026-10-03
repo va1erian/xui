@@ -28,6 +28,12 @@ impl Breaker<'_, '_> {
             Spacing::Multiple(_) => ascent + (height - natural),
             Spacing::Exactly(h) => (h - descent).max(0.0),
         };
+        // A line whose content was measured to fit can still cross a page
+        // edge (an empty line's strut, a line with no room at all): it starts
+        // the next page.
+        if let Some(next) = self.ctx.page_push(self.y, height) {
+            self.y = next;
+        }
         let (lo, hi) = self.bounds();
         let iv = self.ctx.interval(self.y, height, lo, hi);
         let last = j >= self.items.len() || mandatory;

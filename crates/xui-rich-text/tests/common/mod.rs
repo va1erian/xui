@@ -50,6 +50,7 @@ fn full_patch(style: &ParaStyle) -> ParaStylePatch {
         line_spacing: Some(style.line_spacing),
         list: Some(style.list),
         kind: Some(style.kind),
+        page_break_before: Some(style.page_break_before),
     }
 }
 

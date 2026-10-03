@@ -168,7 +168,8 @@ Pipeline per paragraph:
 7. **Flow** (`flow.rs`): the document flows into a sequence of `FlowArea`s
    (width, optional height). Continuous view is one area of unbounded height;
    page view (later) is one area per page, so pagination is a new area
-   provider, not a rewrite.
+   provider, not a rewrite. (Page view landed differently: the flow stays one
+   area and page gaps are full-width exclusions; see `page-view.md`.)
 
 Output: `ParaLayout { y, height, lines: Vec<Line> }`, `Line { y, baseline,
 height, pieces: Vec<PlacedPiece> }`, and placed floats. Each placed text piece

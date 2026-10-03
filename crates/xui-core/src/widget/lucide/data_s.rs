@@ -97,6 +97,10 @@ pub(crate) const SEARCH: &[PathSeg] = &[
     CubicTo(16.216, 4.774, 17.226, 5.784, 17.928, 7.0),
     CubicTo(18.63, 8.216, 19.0, 9.596, 19.0, 11.0), Close,
 ];
+pub(crate) const SEPARATOR_HORIZONTAL: &[PathSeg] = &[
+    MoveTo(16.0, 16.0), LineTo(12.0, 20.0), LineTo(8.0, 16.0), MoveTo(3.0, 12.0),
+    LineTo(21.0, 12.0), MoveTo(8.0, 8.0), LineTo(12.0, 4.0), LineTo(16.0, 8.0),
+];
 pub(crate) const SETTINGS: &[PathSeg] = &[
     MoveTo(9.671, 4.136), CubicTo(9.707, 3.752, 9.838, 3.383, 10.052, 3.062),
     CubicTo(10.265, 2.741, 10.555, 2.477, 10.895, 2.295),

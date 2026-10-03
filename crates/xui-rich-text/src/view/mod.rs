@@ -18,6 +18,7 @@ mod overlay;
 mod paint;
 mod scroll;
 mod shared;
+mod sheets;
 mod state;
 #[cfg(test)]
 mod tests;
@@ -37,6 +38,7 @@ use crate::edit::{Clipboard, Command};
 use crate::model::{Affinity, DocPos, Document, Selection, StyleSummary};
 use events::Out;
 use shared::Shared;
+pub use state::ViewMode;
 
 /// How often the timer ticks, in milliseconds; the caret blinks every
 /// [`timer::BLINK_TICKS`] ticks and drags and layout work run on each.
@@ -165,6 +167,31 @@ impl<M: 'static> RichTextEditor<M> {
         if let Some(message) = self.shared.deliver(out) {
             ui.emit(message);
         }
+    }
+
+    /// Shows the document in draft or page view.
+    pub fn view_mode(self, mode: ViewMode) -> RichTextEditor<M> {
+        self.set_view_mode(mode);
+        self
+    }
+
+    /// Switches between draft and page view, keeping the caret in view.
+    pub fn set_view_mode(&self, mode: ViewMode) {
+        self.shared.state.borrow_mut().set_mode(mode);
+        self.control.invalidate();
+    }
+
+    /// The current view.
+    pub fn current_view_mode(&self) -> ViewMode {
+        self.shared.state.borrow().mode
+    }
+
+    /// The page the caret is on (from 0) and the number of pages, as laid
+    /// out for the current view; `(0, 1)` in draft view.
+    pub fn page_info(&self) -> (usize, usize) {
+        let mut state = self.shared.state.borrow_mut();
+        state.ready();
+        state.page_info()
     }
 
     /// Scrolls to `offset` device pixels from the top; the next paint clamps

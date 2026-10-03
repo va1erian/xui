@@ -92,6 +92,7 @@ impl EditorState {
             Command::InsertText(text) => self.type_text(&text, now),
             Command::InsertParagraph => self.insert_paragraph(),
             Command::InsertLineBreak => self.type_text("\u{2028}", now),
+            Command::InsertPageBreak => self.insert_page_break(),
             Command::Backspace => self.backspace(false, now),
             Command::DeleteWordBack => self.backspace(true, now),
             Command::Delete => self.delete_forward(false, now),
@@ -114,6 +115,11 @@ impl EditorState {
                 self.set_para_style(crate::model::ParaStylePatch::kind(kind))
             }
             Command::ToggleList(kind) => self.toggle_list(kind),
+            Command::SetPageSetup(page) if page != *self.doc.page() => self.run(|cx| {
+                cx.apply(EditOp::SetPage(page))?;
+                Ok(None)
+            }),
+            Command::SetPageSetup(_) => Effect::NONE,
             Command::Indent => self.shift_indent(true),
             Command::Outdent => self.shift_indent(false),
             Command::InsertImage(image) => self.insert_image(image),

@@ -5,7 +5,7 @@
 
 use xui_core::geometry::{Point, Rect};
 
-use super::state::{State, pad_px};
+use super::state::State;
 use crate::model::{Affinity, DocPos};
 
 impl State {
@@ -17,12 +17,12 @@ impl State {
 
     /// A layout rectangle in view coordinates.
     pub fn to_view(&self, rect: Rect) -> Rect {
-        rect.offset(pad_px(self.dpi), -self.shift())
+        rect.offset(self.origin.x, -self.shift())
     }
 
     /// A view point in layout coordinates.
     pub fn to_layout(&self, point: Point) -> Point {
-        Point::new(point.x - pad_px(self.dpi), point.y + self.shift())
+        Point::new(point.x - self.origin.x, point.y + self.shift())
     }
 
     /// The caret box at `pos` in view coordinates.
@@ -39,7 +39,7 @@ impl State {
     /// Scrolls the least that brings `rect` (layout coordinates) into the
     /// viewport; a rectangle taller than the viewport shows its top.
     pub fn ensure_visible(&mut self, rect: Rect) {
-        let pad = pad_px(self.dpi) as f32;
+        let pad = self.origin.y as f32;
         let (top, bottom) = (rect.top as f32 + pad, rect.bottom as f32 + pad);
         if top < self.scroll || bottom - top > self.viewport {
             self.scroll = top;

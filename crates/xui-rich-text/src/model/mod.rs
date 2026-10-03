@@ -11,6 +11,7 @@ pub mod grapheme;
 pub mod history;
 pub mod object;
 pub mod ops;
+pub mod page;
 pub mod paragraph;
 pub mod patch;
 mod pieces;
@@ -22,6 +23,7 @@ pub use fragment::Fragment;
 pub use history::{COALESCE_GAP, EditContext, History, Transaction};
 pub use object::{InlineImage, OBJECT_CHAR, ObjectId, ObjectTable, Side, Wrap};
 pub use ops::{EditError, EditOp, Slice};
+pub use page::{PageSetup, mm};
 pub use paragraph::{Paragraph, Span};
 pub use patch::{CharStylePatch, ParaStylePatch};
 pub use selection::{DocRange, Selection};
@@ -66,6 +68,7 @@ pub struct Document {
     pub(crate) paragraphs: Vec<Paragraph>,
     pub(crate) styles: StyleTable,
     pub(crate) objects: ObjectTable,
+    pub(crate) page: PageSetup,
 }
 
 impl Document {
@@ -79,6 +82,7 @@ impl Document {
             )],
             styles: StyleTable::new(),
             objects: ObjectTable::new(),
+            page: PageSetup::default(),
         }
     }
 
@@ -108,6 +112,7 @@ impl Document {
             paragraphs,
             styles,
             objects,
+            page: PageSetup::default(),
         };
         doc.check()?;
         Ok(doc)
@@ -133,11 +138,25 @@ impl Document {
         &self.objects
     }
 
+    /// The page the document is laid out on in page view.
+    pub fn page(&self) -> &PageSetup {
+        &self.page
+    }
+
+    /// The same document on `page` (for building one; an editor changes the
+    /// page through [`EditOp::SetPage`], so it can be undone).
+    pub fn with_page(mut self, page: PageSetup) -> Result<Document, String> {
+        page.check()?;
+        self.page = page;
+        Ok(self)
+    }
+
     /// Checks every invariant, describing the first one broken.
     pub fn check(&self) -> Result<(), String> {
         if self.paragraphs.is_empty() {
             return Err("a document needs a paragraph".into());
         }
+        self.page.check()?;
         let mut anchored = std::collections::HashSet::new();
         for (i, para) in self.paragraphs.iter().enumerate() {
             para.check().map_err(|e| format!("paragraph {i}: {e}"))?;

@@ -10,7 +10,8 @@
 //! bounded `shape_cache`), `line` (greedy line breaking in the intervals the
 //! `floats` leave free) and `flow` (paragraphs stacked into a continuous
 //! area, with floats carried across paragraph boundaries and relayout limited
-//! to what changed). `hit` maps points to positions and back.
+//! to what changed). `pages` cuts the flow into pages when it is paginated.
+//! `hit` maps points to positions and back.
 
 mod floats;
 mod flow;
@@ -18,6 +19,7 @@ mod hit;
 mod items;
 mod line;
 mod nav;
+mod pages;
 mod partial;
 mod resolve;
 mod segment;
@@ -34,6 +36,7 @@ use crate::model::{CharStyleId, ObjectId};
 
 pub use floats::{Excl, ExclKind, FRect};
 pub use flow::Layout;
+pub use pages::Pages;
 
 /// What a [`PlacedItem`] draws.
 #[derive(Clone)]
@@ -140,6 +143,11 @@ pub struct ParaLayout {
     /// Exclusions still active at its bottom, relative to `y + height`.
     pub(crate) exit: Vec<Excl>,
     pub(crate) dirty: bool,
+    /// The top it was laid out at; it may since have been moved, which on
+    /// pages is only safe while it stays inside one page.
+    pub(crate) laid_y: f32,
+    /// Whether it starts a new page, so it cannot move without relayout.
+    pub(crate) page_break: bool,
     /// Laid out without knowing the floats entering it (the paragraphs before
     /// it were still estimates); checked when the flow reaches it in order.
     pub(crate) speculative: bool,
@@ -161,6 +169,8 @@ impl ParaLayout {
             rule: None,
             entering: Vec::new(),
             exit: Vec::new(),
+            laid_y: 0.0,
+            page_break: false,
             dirty: true,
             speculative: false,
             text: Arc::from(""),
@@ -171,5 +181,13 @@ impl ParaLayout {
     /// The bottom edge, in area pixels.
     pub fn bottom(&self) -> f32 {
         self.y + self.height
+    }
+
+    /// How far below its top the paragraph reaches, its floats included.
+    pub(crate) fn extent(&self) -> f32 {
+        self.floats
+            .iter()
+            .map(|f| f.rect.bottom)
+            .fold(self.height, f32::max)
     }
 }
