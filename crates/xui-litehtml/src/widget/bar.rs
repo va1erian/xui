@@ -59,9 +59,10 @@ impl HtmlWidget {
         } else {
             ThumbState::Normal
         };
+        let origin = canvas.bounds();
         scrollbar::paint_state(
             canvas,
-            self.bar_track.get(),
+            self.bar_track.get().offset(origin.left, origin.top),
             self.bar_scroll(),
             Orientation::Vertical,
             theme,
