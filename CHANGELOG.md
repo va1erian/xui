@@ -4,6 +4,17 @@
 
 ### Additions
 
+- **Editable rich text (`xui-rich-text`).** An optional, portable crate (also
+  the `rich-text` feature of `xui`) with styled runs, paragraph formatting,
+  headings, quotes, bullet and numbered lists, and inline or floating images.
+  It is built in testable layers: an invertible-edit document model with
+  history, a flow layout around floats, a UI-free `edit::EditorState` driven by
+  `Command`s (with image resize handles), and a `RichTextEditor` view. Documents
+  save as versioned JSON (`to_json`/`from_json`) and export to GFM Markdown
+  (`to_markdown`, `ImageExport`).
+- **`TextLayout::baseline`.** The distance from the top of a text layout to its
+  first line's baseline, so runs of different sizes can sit on one baseline.
+  The default is an approximation; backends may override it.
 - **`HtmlView` has a vertical scrollbar.** The view draws xui-core's shared
   scrollbar along its right edge (same geometry, painter and theme tokens as
   `ScrollView`/`ListView`): drag the thumb, click the track to page. Before,

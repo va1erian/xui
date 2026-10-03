@@ -14,6 +14,7 @@
 //!   with Direct2D/DirectWrite painting (GDI fallback), for apps that want
 //!   higher fidelity or performance on Windows specifically.
 //! - `icons` adds [`xui_icons`], the optional Global Village icon set.
+//! - `rich-text` adds [`xui_rich_text`], the editable rich-text widget.
 //!
 //! Both backends run the exact same widgets; an app written against
 //! `xui::prelude::*` and `xui_core::run_app` moves between them by swapping
@@ -27,6 +28,8 @@ pub use xui_canvas;
 
 #[cfg(feature = "icons")]
 pub use xui_icons;
+#[cfg(feature = "rich-text")]
+pub use xui_rich_text;
 
 #[cfg(all(feature = "d2d", windows))]
 pub use xui_win32;
