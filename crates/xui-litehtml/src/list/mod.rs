@@ -256,7 +256,9 @@ pub struct DisplayList {
     pub size: (f32, f32),
     /// The document's fonts, indexed by [`FontKey`].
     pub fonts: Vec<FontDesc>,
-    /// The document's decoded images, indexed by [`ImageKey`].
+    /// The document's decoded images, indexed by [`ImageKey`]. An empty
+    /// image (zero width or height) marks a released slot: the painter drops
+    /// what it decoded from it.
     pub images: Vec<Arc<Image>>,
 }
 

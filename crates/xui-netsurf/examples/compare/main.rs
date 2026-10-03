@@ -49,7 +49,15 @@ struct Compare {
     html: HtmlView<Msg>,
     netsurf: NetSurfView<Msg>,
     _captions: [Label<Msg>; 2],
-    ready: Rc<Cell<bool>>,
+    state: Rc<Cell<Panes>>,
+}
+
+/// Where the two panes are, as the screenshot waits for them.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Panes {
+    Loading,
+    Ready,
+    Failed,
 }
 
 impl App for Compare {
@@ -69,13 +77,18 @@ impl App for Compare {
             }
             Msg::Quit => ui.quit(),
         }
-        self.ready
-            .set(self.html.is_ready() && (self.netsurf.is_ready() || self.netsurf.has_failed()));
+        self.state.set(if self.netsurf.has_failed() {
+            Panes::Failed
+        } else if self.html.is_ready() && self.netsurf.is_ready() {
+            Panes::Ready
+        } else {
+            Panes::Loading
+        });
     }
 }
 
 /// Builds both panes over the window's client area.
-fn build(ui: &Ui<Msg>, html: String, url: &str, ready: Rc<Cell<bool>>) -> Result<Compare> {
+fn build(ui: &Ui<Msg>, html: String, url: &str, state: Rc<Cell<Panes>>) -> Result<Compare> {
     let client = ui.client_rect();
     let scale = ui.dpi() as f32 / 96.0;
     let caption = (CAPTION as f32 * scale) as i32;
@@ -107,27 +120,30 @@ fn build(ui: &Ui<Msg>, html: String, url: &str, ready: Rc<Cell<bool>>) -> Result
         html,
         netsurf,
         _captions: [label(left, "litehtml")?, label(right, "NetSurf")?],
-        ready,
+        state,
     })
 }
 
-/// Repaints and polls until both panes have a finished page.
-fn settle(stage: &Stage<'_, Msg>, ready: &Cell<bool>) {
+/// Repaints and polls until both panes have a finished page, or one fails or
+/// time runs out; the panes' state says which.
+fn settle(stage: &Stage<'_, Msg>, state: &Cell<Panes>) {
     let start = Instant::now();
     while start.elapsed() < SETTLE {
         // A paint is what starts litehtml's render and sends NetSurf its size.
         let _ = stage.ui().capture();
         stage.emit(Msg::Poll);
-        if ready.get() {
-            // One more round so the newest frames are on screen.
-            std::thread::sleep(Duration::from_millis(200));
-            stage.emit(Msg::Poll);
-            let _ = stage.ui().capture();
-            return;
+        match state.get() {
+            Panes::Loading => std::thread::sleep(Duration::from_millis(25)),
+            Panes::Ready => {
+                // One more round so the newest frames are on screen.
+                std::thread::sleep(Duration::from_millis(200));
+                stage.emit(Msg::Poll);
+                let _ = stage.ui().capture();
+                return;
+            }
+            Panes::Failed => return,
         }
-        std::thread::sleep(Duration::from_millis(25));
     }
-    eprintln!("compare: timed out waiting for both panes");
 }
 
 fn write_png(image: &Image, path: &Path) -> std::result::Result<(), Box<dyn std::error::Error>> {
@@ -151,7 +167,21 @@ fn page(path: Option<&str>) -> std::io::Result<(String, String)> {
     };
     let html = std::fs::read_to_string(&path)?;
     let abs = std::fs::canonicalize(&path)?;
-    Ok((html, format!("file://{}", abs.display())))
+    Ok((html, file_url(&abs)))
+}
+
+/// `path` as a `file:` URL, percent-encoding every byte that is not safe in
+/// a path (so a `#` or `?` in a file name stays part of the path).
+fn file_url(path: &Path) -> String {
+    let mut url = String::from("file://");
+    for &b in path.to_string_lossy().as_bytes() {
+        if b.is_ascii_alphanumeric() || b"/-._~".contains(&b) {
+            url.push(b as char);
+        } else {
+            url.push_str(&format!("%{b:02X}"));
+        }
+    }
+    url
 }
 
 fn main() {
@@ -178,19 +208,27 @@ fn main() {
         eprintln!("compare: {e}");
         std::process::exit(1);
     });
-    let ready = Rc::new(Cell::new(false));
+    let state = Rc::new(Cell::new(Panes::Loading));
 
     if let Some(out) = shot {
-        let flag = Rc::clone(&ready);
+        let watched = Rc::clone(&state);
         let image = render_with(
             Snapshot::new(Dip(width), Dip(height))
                 .dpi(dpi)
                 .title("compare"),
-            move |ui| build(ui, html, &url, ready),
-            move |stage| settle(stage, &flag),
+            move |ui| build(ui, html, &url, state),
+            {
+                let state = Rc::clone(&watched);
+                move |stage| settle(stage, &state)
+            },
         );
-        match image
-            .map_err(|e| e.to_string())
+        let outcome = match watched.get() {
+            Panes::Ready => Ok(()),
+            Panes::Failed => Err("NetSurf could not open the page".to_string()),
+            Panes::Loading => Err("timed out waiting for both panes".to_string()),
+        };
+        match outcome
+            .and(image.map_err(|e| e.to_string()))
             .and_then(|i| write_png(&i, Path::new(&out)).map_err(|e| e.to_string()))
         {
             Ok(()) => eprintln!("compare: wrote {out}"),
@@ -211,7 +249,7 @@ fn main() {
         backend,
         PlatformSpec::new("litehtml vs NetSurf").size(Dip(width), Dip(height)),
         move |ui| {
-            let app = build(ui, html, &url, ready).expect("create the panes");
+            let app = build(ui, html, &url, state).expect("create the panes");
             let close = autoclose.map(|ms| ui.set_timer(ms));
             ui.on_timer(move |id| (Some(id) == close).then_some(Msg::Quit));
             app

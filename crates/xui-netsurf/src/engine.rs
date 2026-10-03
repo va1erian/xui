@@ -273,13 +273,13 @@ fn draw(engine: &Engine, window: &Window) {
         return;
     }
     let state = &window.state;
-    state.dirty.set(false);
     let (vw, vh) = state.size.get();
     let (w, h) = (width.max(vw), height.max(vh));
     let list = {
         let Ok(mut registry) = state.registry.try_borrow_mut() else {
             return;
         };
+        state.dirty.set(false);
         let mut rec = Recorder::new(&engine.fonts, &mut registry);
         window.handle.redraw(&mut rec, (0, 0, w, h));
         rec.finish((w as f32, height as f32))
