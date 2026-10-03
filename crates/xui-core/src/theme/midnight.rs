@@ -26,7 +26,8 @@ impl Theme {
             text: Color::hex(0xE4_E8_F5),
             text_secondary: Color::hex(0x9A_A3_C2),
             text_disabled: Color::hex(0x5F_67_86),
-            text_on_accent: Color::hex(0xFF_FF_FF),
+            // Dark ink: the light green accent is too bright for white text.
+            text_on_accent: Color::hex(0x0B_1F_14),
             accent: Color::hex(0x4C_BF_82),
             warning: Color::hex(0xF2_C1_4E),
             danger: Color::hex(0xFF_8A_95),
@@ -83,7 +84,7 @@ mod tests {
                 "secondary text"
             );
         }
-        assert!(t.text_on_accent.contrast_ratio(t.accent) > 2.0);
+        assert!(t.text_on_accent.contrast_ratio(t.accent) >= 4.5);
     }
 
     /// Inputs, grooves and borders stand out from the cards they sit on.

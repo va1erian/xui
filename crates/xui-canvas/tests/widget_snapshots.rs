@@ -338,6 +338,13 @@ fn every_portable_widget_renders_light_dark_and_midnight() {
         run,
         PlatformSpec::new("xui widget gallery").size(Dip(1500.0), Dip(900.0)),
         move |ui| {
+            // The Midnight window with no widgets, so its gradient alone
+            // cannot pass for painted widgets below.
+            ui.set_theme(Theme::midnight());
+            let empty = backend_for_make
+                .render(ui.window())
+                .expect("an empty midnight render");
+            ui.set_theme(Theme::light());
             let alive = build(ui);
 
             let light = backend_for_make
@@ -359,6 +366,7 @@ fn every_portable_widget_renders_light_dark_and_midnight() {
             rendered.push(light);
             rendered.push(dark);
             rendered.push(midnight);
+            rendered.push(empty);
 
             Gallery { _alive: alive }
         },
@@ -369,6 +377,7 @@ fn every_portable_widget_renders_light_dark_and_midnight() {
     let light = &rendered[0];
     let dark = &rendered[1];
     let midnight = &rendered[2];
+    let empty = &rendered[3];
 
     // Many widgets drew something on each theme.
     assert!(
@@ -382,9 +391,9 @@ fn every_portable_widget_renders_light_dark_and_midnight() {
         ink(dark, Theme::dark().background)
     );
     assert!(
-        ink(midnight, Theme::midnight().background) > 2_000,
-        "the midnight gallery painted: {}",
-        ink(midnight, Theme::midnight().background)
+        differing(empty, midnight) > 2_000,
+        "the midnight widgets painted over the bare window: {}",
+        differing(empty, midnight)
     );
     // And the theme actually changed what was drawn.
     assert!(
