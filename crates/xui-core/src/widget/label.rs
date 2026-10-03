@@ -18,7 +18,7 @@ const TEXT_SIZE: Dip = Dip(12.0);
 /// The design size of a [`Label::title`].
 const TITLE_SIZE: Dip = Dip(20.0);
 /// The design size of a [`Label::caption`].
-const CAPTION_SIZE: Dip = Dip(11.0);
+const CAPTION_SIZE: Dip = Dip(12.0);
 
 /// How a label sets its text.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
