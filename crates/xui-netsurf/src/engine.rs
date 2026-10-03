@@ -179,6 +179,7 @@ fn run(shaper: Arc<dyn TextShaper>, rx: Receiver<Command>) {
     }));
     if let Err(e) = sys::init(engine) {
         log::error!("xui-netsurf: NetSurf did not start: {e}");
+        refuse_all(&rx, &e);
         return;
     }
     let mut windows: HashMap<u64, Window> = HashMap::new();
@@ -203,6 +204,20 @@ fn run(shaper: Arc<dyn TextShaper>, rx: Receiver<Command>) {
             }
             Err(RecvTimeoutError::Timeout) => {}
             Err(RecvTimeoutError::Disconnected) => break,
+        }
+    }
+}
+
+/// Answers every view that opens a page with `why`, for an engine that could
+/// not start, so no view waits on a frame that will never come.
+fn refuse_all(rx: &Receiver<Command>, why: &str) {
+    for cmd in rx.iter() {
+        if let Command::Open { out, wake, .. } = cmd
+            && out
+                .send(Output::Failed(format!("NetSurf did not start: {why}")))
+                .is_ok()
+        {
+            wake();
         }
     }
 }

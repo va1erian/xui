@@ -3,6 +3,7 @@
  * each forwarding to the host as plain values.
  */
 #include <stdbool.h>
+#include <stdint.h>
 #include <stdlib.h>
 
 #include <libwapcaplet/libwapcaplet.h>
@@ -181,6 +182,12 @@ static uint32_t next_generation;
 
 static void *b_create(int width, int height, enum gui_bitmap_flags flags)
 {
+	/* The sizes come from decoded image headers: refuse ones whose pixel
+	 * buffer cannot be sized. */
+	if (width <= 0 || height <= 0 ||
+	    (size_t)width > SIZE_MAX / 4 / (size_t)height) {
+		return NULL;
+	}
 	struct bitmap *b = calloc(1, sizeof(*b));
 	if (b == NULL) {
 		return NULL;
