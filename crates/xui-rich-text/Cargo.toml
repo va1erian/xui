@@ -1,0 +1,24 @@
+[package]
+name = "xui-rich-text"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "An editable rich-text widget for xui: styled runs, paragraphs, lists, inline and floating images"
+repository = "https://github.com/va1erian/xui"
+readme = "README.md"
+
+[dependencies]
+xui-core = { path = "../xui-core" }
+unicode-linebreak = "0.1"
+unicode-segmentation = "1"
+serde = { version = "1", features = ["derive"], optional = true }
+serde_json = { version = "1", optional = true }
+
+[features]
+default = ["serde"]
+# The native, lossless JSON save format (`format::json`).
+serde = ["dep:serde", "dep:serde_json"]
+
+[dev-dependencies]
+proptest = "1"
+xui-canvas = { path = "../xui-canvas" }

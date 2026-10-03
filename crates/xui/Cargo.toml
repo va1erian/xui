@@ -19,12 +19,15 @@ d2d = ["dep:xui-win32"]
 icons = ["dep:xui-icons"]
 # The glossy Aero look of that icon set instead of the default Global Village one.
 icons-aero = ["icons", "xui-icons/aero"]
+# The optional editable rich-text widget (`xui::xui_rich_text`).
+rich-text = ["dep:xui-rich-text"]
 
 [dependencies]
 xui-core = { path = "../xui-core" }
 xui-win32 = { path = "../xui-win32", optional = true }
 xui-canvas = { path = "../xui-canvas", optional = true }
 xui-icons = { path = "../xui-icons", optional = true }
+xui-rich-text = { path = "../xui-rich-text", optional = true }
 
 [[example]]
 name = "widgets"
