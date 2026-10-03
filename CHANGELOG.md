@@ -150,6 +150,16 @@
 
 ### Fixes
 
+- `xui-litehtml`'s `HtmlView` now paints its page at its own bounds on
+  `xui-canvas`. Every node there paints into one window surface, so a node's
+  `canvas.bounds()` is its place in the window, but the painter mapped the
+  document from (0, 0): a view away from the window's left edge drew its page
+  off to the left and clipped all of it, showing only its background, and one
+  at the left edge showed it shifted up. The page, the selection highlight and
+  the scrollbar are now placed at the canvas's origin (still (0, 0) on Win32),
+  and the scrollbar's track is kept in node-local pixels, the space pointer
+  events arrive in, so dragging its thumb works away from the origin too.
+
 - `ColorPicker` now hit-tests in its own coordinates. Pointer events arrive relative to the node while `Ui::bounds` is relative to the parent, and the picker compared the two, so a picker not at the top-left of its container ignored every click and never showed hover. The same applied to the swatch grid inside `ColorPanel`.
 - `xui-code-editor` now paints text when the highlighter emits no tokens
   (`PlainText`, the default). Previously `paint` drew only token spans, so a

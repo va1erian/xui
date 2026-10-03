@@ -32,6 +32,8 @@ use crate::worker::{Job, Output, RenderJob};
 
 mod bar;
 mod input;
+#[cfg(test)]
+mod tests;
 
 /// How many device-independent pixels one wheel notch scrolls.
 pub(super) const WHEEL_LINE_DIP: f32 = 60.0;
@@ -276,8 +278,10 @@ impl HtmlWidget {
     }
 
     /// Paints the selection highlight over the page: document DIPs scaled to
-    /// the canvas and shifted up by the scroll offset.
+    /// the canvas, shifted up by the scroll offset and placed at the canvas's
+    /// origin, exactly as [`Painter::paint`] places the page.
     fn paint_selection(&self, canvas: &mut dyn Canvas, scale: f32, scroll: f32) {
+        let origin = canvas.bounds();
         let Some(sel) = self.selection.get().filter(|s| !s.is_empty()) else {
             return;
         };
@@ -290,8 +294,8 @@ impl HtmlWidget {
             .borrow_mut()
             .selection_rects(&frame.list, &frame.runs, &sel);
         for r in &rects {
-            let px = |v: f32| (v * scale).round() as i32;
-            let py = |v: f32| ((v - scroll) * scale).round() as i32;
+            let px = |v: f32| origin.left + (v * scale).round() as i32;
+            let py = |v: f32| origin.top + ((v - scroll) * scale).round() as i32;
             canvas.fill_rect_rgba(
                 PxRect::new(px(r.left), py(r.top), px(r.right), py(r.bottom)),
                 SELECTION_FILL,
@@ -311,9 +315,12 @@ impl HtmlWidget {
         let bounds = canvas.bounds();
         let scale = canvas.dpi() as f32 / 96.0;
         self.scale.set(scale);
-        let track = bar::track(bounds, canvas.dpi());
+        // Input arrives in node-local pixels, so the track is kept node-local
+        // and only placed at the canvas's origin to be painted.
+        let local = PxRect::new(0, 0, bounds.width(), bounds.height());
+        let track = bar::track(local, canvas.dpi());
         self.bar_track.set(track);
-        let width = ((track.left - bounds.left) as f32 / scale).max(1.0);
+        let width = (track.left as f32 / scale).max(1.0);
         let height = (bounds.height() as f32 / scale).max(1.0);
         self.viewport_height.set(height);
 

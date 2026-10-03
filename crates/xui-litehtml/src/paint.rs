@@ -19,6 +19,8 @@ use crate::geom::{Point, Radius, Rect, Rgba};
 use crate::list::{Cmd, Dash, DisplayList, FontKey, ImageKey};
 use crate::text::{Font, LAYOUT_DPI, TextSystem};
 
+#[cfg(test)]
+mod tests;
 mod text_select;
 
 /// The most shaped text layouts kept between frames.
@@ -32,21 +34,27 @@ fn is_rounded(radii: &[Radius; 4]) -> bool {
     radii.iter().any(|r| r.x > 0.0 || r.y > 0.0)
 }
 
-/// Maps document coordinates (DIPs) to canvas pixels: a scroll offset and a
-/// scale.
+/// Maps document coordinates (DIPs) to canvas pixels: a scale, a scroll
+/// offset, and the canvas's origin.
+///
+/// The origin is `canvas.bounds()`'s top-left: (0, 0) where a backend hands
+/// each node a canvas of its own (Win32), the node's place in the window
+/// where every node paints into one window surface (`xui-canvas`). Adding it
+/// is right for both.
 #[derive(Clone, Copy)]
 struct Space {
     scale: f32,
     scroll: f32,
+    origin: PxPoint,
 }
 
 impl Space {
     fn x(self, v: f32) -> i32 {
-        (v * self.scale).round() as i32
+        self.origin.x + (v * self.scale).round() as i32
     }
 
     fn y(self, v: f32) -> i32 {
-        ((v - self.scroll) * self.scale).round() as i32
+        self.origin.y + ((v - self.scroll) * self.scale).round() as i32
     }
 
     fn point(self, p: Point) -> PxPoint {
@@ -105,7 +113,8 @@ impl Painter {
     }
 
     /// Replays `list` with its top-left scrolled to `scroll` device-independent
-    /// pixels above the viewport's top. `viewport` is in DIPs. Only what
+    /// pixels above the viewport's top, the viewport's top-left being the
+    /// top-left of `canvas.bounds()`. `viewport` is in DIPs. Only what
     /// intersects the viewport is drawn; a tall newsletter costs only what is
     /// on screen. `background` shows wherever the document paints nothing of
     /// its own.
@@ -118,12 +127,13 @@ impl Painter {
         background: Color,
     ) {
         let t = std::time::Instant::now();
+        let bounds = canvas.bounds();
         let space = Space {
             scale: canvas.dpi() as f32 / LAYOUT_DPI as f32,
             scroll,
+            origin: PxPoint::new(bounds.left, bounds.top),
         };
         canvas.clear(background);
-        let bounds = canvas.bounds();
         canvas.push_clip(bounds);
 
         // `viewport` translated into document space: the commands' own
