@@ -101,6 +101,11 @@ impl Surface {
         }
     }
 
+    /// The surface's size in pixels, `(width, height)`.
+    pub fn size(&self) -> (u32, u32) {
+        (self.pixmap.width(), self.pixmap.height())
+    }
+
     /// Fills the whole surface with `color`.
     pub fn fill(&mut self, color: Color) {
         self.pixmap.fill(to_skia(color));
@@ -115,6 +120,22 @@ impl Surface {
         draw: impl FnOnce(&mut SkiaCanvas) -> R,
     ) -> R {
         let mut canvas = SkiaCanvas::new(&mut self.pixmap, &mut self.images, bounds, dpi);
+        draw(&mut canvas)
+    }
+
+    /// Like [`Surface::with_canvas_at`], for a widget painted after its
+    /// ancestors in the same frame: the canvas reports
+    /// [`Canvas::composites_parents`](xui_core::Canvas::composites_parents),
+    /// so the widget draws on its container instead of filling its own
+    /// background.
+    pub fn with_canvas_over_parents<R>(
+        &mut self,
+        bounds: Rect,
+        dpi: u32,
+        draw: impl FnOnce(&mut SkiaCanvas) -> R,
+    ) -> R {
+        let mut canvas = SkiaCanvas::new(&mut self.pixmap, &mut self.images, bounds, dpi);
+        canvas.over_parents = true;
         draw(&mut canvas)
     }
 

@@ -21,6 +21,7 @@ use crate::layout::{Stack, StackSlot};
 use crate::message::{Key, MouseButton};
 use crate::property::{Properties, Property, Value};
 use crate::theme::Theme;
+use crate::theme::look::backdrop;
 use crate::units::{Dip, Px};
 
 /// The divider's thickness.
@@ -96,7 +97,9 @@ impl<M: 'static> Split<M> {
         });
         {
             let theme = ui.theme_handle();
-            control.set_painter(Rc::new(move |canvas| canvas.clear(theme.get().background)));
+            control.set_painter(Rc::new(move |canvas| {
+                backdrop(canvas, theme.get().background)
+            }));
         }
         {
             let theme = ui.theme_handle();
@@ -322,7 +325,7 @@ fn apply_position<M>(ui: &Ui<M>, s: &Shared<M>, px: i32, emit: bool) {
 /// Paints the divider: a filled band with a short grip.
 fn paint_divider(canvas: &mut dyn Canvas, theme: Theme) {
     let bounds = canvas.bounds();
-    canvas.clear(theme.background);
+    backdrop(canvas, theme.background);
     canvas.fill_rect(bounds, theme.border);
     let (cx, cy) = (
         bounds.left + bounds.width() / 2,

@@ -96,6 +96,22 @@ fn build(ui: &Ui<()>) -> Vec<Box<dyn Any>> {
     keep.push(Box::new(
         Button::new(ui, rect(16, 458, 380, 486), "A button").unwrap(),
     ));
+    // A page title, a section caption and the default action.
+    keep.push(Box::new(
+        Label::new(ui, rect(16, 660, 380, 696), "Page title")
+            .unwrap()
+            .title(),
+    ));
+    keep.push(Box::new(
+        Label::new(ui, rect(16, 704, 380, 722), "Section caption")
+            .unwrap()
+            .caption(),
+    ));
+    keep.push(Box::new(
+        Button::new(ui, rect(16, 732, 160, 764), "Apply")
+            .unwrap()
+            .primary(),
+    ));
     keep.push(Box::new(
         FlowText::new(ui, rect(16, 500, 760, 544))
             .unwrap()
@@ -310,7 +326,7 @@ fn differing(a: &RgbaImage, b: &RgbaImage) -> usize {
 }
 
 #[test]
-fn every_portable_widget_renders_light_and_dark() {
+fn every_portable_widget_renders_light_dark_and_midnight() {
     let backend = Rc::new(OffscreenBackend::new());
     let rendered: Rc<RefCell<Vec<RgbaImage>>> = Rc::new(RefCell::new(Vec::new()));
 
@@ -322,6 +338,13 @@ fn every_portable_widget_renders_light_and_dark() {
         run,
         PlatformSpec::new("xui widget gallery").size(Dip(1500.0), Dip(900.0)),
         move |ui| {
+            // The Midnight window with no widgets, so its gradient alone
+            // cannot pass for painted widgets below.
+            ui.set_theme(Theme::midnight());
+            let empty = backend_for_make
+                .render(ui.window())
+                .expect("an empty midnight render");
+            ui.set_theme(Theme::light());
             let alive = build(ui);
 
             let light = backend_for_make
@@ -333,9 +356,17 @@ fn every_portable_widget_renders_light_and_dark() {
             let dark = backend_for_make.render(ui.window()).expect("a dark render");
             save("widgets-dark.png", &dark);
 
+            ui.set_theme(Theme::midnight());
+            let midnight = backend_for_make
+                .render(ui.window())
+                .expect("a midnight render");
+            save("widgets-midnight.png", &midnight);
+
             let mut rendered = rendered_for_make.borrow_mut();
             rendered.push(light);
             rendered.push(dark);
+            rendered.push(midnight);
+            rendered.push(empty);
 
             Gallery { _alive: alive }
         },
@@ -345,6 +376,8 @@ fn every_portable_widget_renders_light_and_dark() {
     let rendered = rendered.borrow();
     let light = &rendered[0];
     let dark = &rendered[1];
+    let midnight = &rendered[2];
+    let empty = &rendered[3];
 
     // Many widgets drew something on each theme.
     assert!(
@@ -357,7 +390,17 @@ fn every_portable_widget_renders_light_and_dark() {
         "the dark gallery painted: {}",
         ink(dark, Theme::dark().background)
     );
+    assert!(
+        differing(empty, midnight) > 2_000,
+        "the midnight widgets painted over the bare window: {}",
+        differing(empty, midnight)
+    );
     // And the theme actually changed what was drawn.
+    assert!(
+        differing(dark, midnight) > 2_000,
+        "dark and midnight differ: {}",
+        differing(dark, midnight)
+    );
     assert!(
         differing(light, dark) > 2_000,
         "light and dark differ: {}",

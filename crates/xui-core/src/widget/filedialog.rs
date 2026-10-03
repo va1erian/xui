@@ -14,6 +14,7 @@
 //! a backend that declines (the default, the canvas and headless backends) gets
 //! the portable card instead, and the app's closures are identical either way.
 
+use crate::theme::look;
 use std::cell::{Cell, RefCell};
 use std::path::PathBuf;
 use std::rc::Rc;
@@ -111,7 +112,7 @@ impl<M: 'static> FileDialog<M> {
                 if !layout.visible {
                     return;
                 }
-                canvas.fill_rounded_rect(layout.card, RADIUS, theme.raised);
+                look::face(canvas, layout.card, RADIUS, theme.raised, &theme);
                 canvas.stroke_rounded_rect(layout.card, RADIUS, theme.border, 1.0);
                 let title = shared.title.borrow();
                 let style = TextStyle::new(theme.text, TITLE_SIZE).bold();

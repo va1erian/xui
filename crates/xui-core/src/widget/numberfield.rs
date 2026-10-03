@@ -7,6 +7,7 @@ use crate::color::Color;
 use crate::geometry::{Point, Rect};
 use crate::message::{Key, MouseButton};
 use crate::property::{Properties, Property, Value};
+use crate::theme::look;
 use crate::units::Dip;
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
@@ -123,7 +124,7 @@ impl<M: 'static> NumberField<M> {
                 let theme = theme.get();
                 let b = canvas.bounds();
                 let dpi = canvas.dpi();
-                canvas.clear(theme.input_background);
+                look::field(canvas, &theme);
                 let sl = b.right - STEP_W.to_px(dpi).value().max(1);
                 let mid = b.top + b.height() / 2;
                 let border = if s.focused.get() {
@@ -131,7 +132,7 @@ impl<M: 'static> NumberField<M> {
                 } else {
                     theme.input_border
                 };
-                canvas.stroke_rect(b, border, 1.0);
+                look::field_frame(canvas, b, border, &theme);
                 canvas.draw_line(Point::new(sl, b.top), Point::new(sl, b.bottom), border, 1.0);
                 canvas.draw_line(Point::new(sl, mid), Point::new(b.right, mid), border, 1.0);
                 let color = if s.enabled.get() {

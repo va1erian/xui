@@ -10,6 +10,7 @@ use super::state::{Metrics, State};
 use crate::backend::{Canvas, TextStyle};
 use crate::geometry::Rect;
 use crate::theme::Theme;
+use crate::theme::look::{self, backdrop};
 use crate::units::Dip;
 
 /// The inset of a default tile's content from its edge.
@@ -32,7 +33,7 @@ pub(crate) fn paint(
 ) {
     let bounds = canvas.bounds();
     let dpi = canvas.dpi();
-    canvas.clear(theme.background);
+    backdrop(canvas, theme.background);
 
     let metrics = Metrics::of(state.size, dpi);
     let len = state.len();
@@ -62,7 +63,7 @@ pub(crate) fn paint(
             let selected = state.selected == Some(index);
             let hovered = state.hover == Some(index);
             if selected {
-                canvas.fill_rounded_rect(rect, RADIUS, theme.selection);
+                look::face(canvas, rect, RADIUS, theme.selection, theme);
             } else if hovered {
                 canvas.fill_rounded_rect(rect, RADIUS, theme.hover);
             }

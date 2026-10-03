@@ -6,12 +6,14 @@ use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use super::control::{Control, HasText};
+use crate::Color;
 use crate::app::Ui;
 use crate::backend::{Event, NodeKind, NodeSpec, Result, TextStyle};
 use crate::geometry::Rect;
 use crate::icon::{IconRef, draw_icon};
 use crate::message::{Key, MouseButton};
 use crate::property::{Properties, Property, Value};
+use crate::theme::look::{self, backdrop, face};
 use crate::units::Dip;
 
 /// Maps a click to an optional app message.
@@ -46,6 +48,7 @@ pub struct Button<M: 'static> {
     text: Rc<RefCell<String>>,
     icon: Rc<Cell<Option<IconRef>>>,
     on_click: ClickMapper<M>,
+    primary: Rc<Cell<bool>>,
 }
 
 impl<M: 'static> Button<M> {
@@ -62,6 +65,7 @@ impl<M: 'static> Button<M> {
         let label = Rc::new(RefCell::new(text.to_string()));
         let icon = Rc::new(Cell::new(None));
         let on_click: ClickMapper<M> = Rc::new(RefCell::new(None));
+        let primary = Rc::new(Cell::new(false));
 
         {
             let state = Rc::clone(&state);
@@ -69,23 +73,41 @@ impl<M: 'static> Button<M> {
             let icon = Rc::clone(&icon);
             let theme = ui.theme_handle();
             let selected = control.selected_handle();
+            let primary = Rc::clone(&primary);
             control.set_painter(Rc::new(move |canvas| {
                 let theme = theme.get();
                 let state = state.get();
+                let primary = primary.get() && state != ButtonState::Disabled;
                 // Paint the node's background so the rounded face's corners do
                 // not show the uninitialised back buffer.
-                canvas.clear(theme.background);
-                let fill = match state {
-                    ButtonState::Normal | ButtonState::Disabled => theme.surface,
-                    ButtonState::Hover => theme.hover,
-                    ButtonState::Pressed => theme.pressed,
+                backdrop(canvas, theme.background);
+                let fill = match (primary, state) {
+                    (true, ButtonState::Hover) => {
+                        theme.accent.lerp(Color::rgb(255, 255, 255), 0.12)
+                    }
+                    (true, ButtonState::Pressed) => look::shaded(theme.accent, &theme),
+                    (true, _) => theme.accent,
+                    (false, ButtonState::Normal | ButtonState::Disabled) => theme.surface,
+                    (false, ButtonState::Hover) => theme.hover,
+                    (false, ButtonState::Pressed) => theme.pressed,
                 };
                 let bounds = canvas.bounds();
                 let dpi = canvas.dpi();
-                canvas.fill_rounded_rect(bounds, RADIUS, fill);
-                canvas.stroke_rounded_rect(bounds, RADIUS, theme.border, 1.0);
+                if primary {
+                    // The default action: an accent face with a halo, inset so
+                    // the halo stays inside the node.
+                    let inset = if look::decorated(&theme) { 2 } else { 0 };
+                    let face_rect = bounds.shrink(inset);
+                    look::halo(canvas, face_rect, RADIUS, &theme);
+                    face(canvas, face_rect, RADIUS, fill, &theme);
+                } else {
+                    face(canvas, bounds, RADIUS, fill, &theme);
+                    canvas.stroke_rounded_rect(bounds, RADIUS, theme.border, 1.0);
+                }
                 let color = if state == ButtonState::Disabled {
                     theme.text_disabled
+                } else if primary {
+                    theme.text_on_accent
                 } else {
                     theme.text
                 };
@@ -180,7 +202,16 @@ impl<M: 'static> Button<M> {
             text: label,
             icon,
             on_click,
+            primary,
         })
+    }
+
+    /// Marks the button as the default action: drawn in the accent (with a
+    /// halo on a decorated theme) so it stands out from the others.
+    pub fn primary(self) -> Button<M> {
+        self.primary.set(true);
+        self.control.invalidate();
+        self
     }
 
     /// Draws `icon` before the label (or centred when there is no label).

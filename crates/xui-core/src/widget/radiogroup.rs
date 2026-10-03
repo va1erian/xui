@@ -11,6 +11,7 @@ use crate::backend::{Event, NodeKind, NodeSpec, Result, TextStyle, WidgetId};
 use crate::geometry::{Point, Rect};
 use crate::message::{Key, MouseButton};
 use crate::property::{Properties, Property, Value};
+use crate::theme::look::{self, backdrop};
 use crate::units::Dip;
 
 /// Maps a newly selected index to an optional app message.
@@ -67,26 +68,41 @@ impl<M: 'static> RadioGroup<M> {
                 let bounds = canvas.bounds();
                 let dpi = canvas.dpi();
                 let enabled = enabled_paint.get();
-                canvas.clear(theme.background);
+                backdrop(canvas, theme.background);
 
                 let radius = RADIUS.to_px(dpi).value();
                 let gap = GAP.to_px(dpi).value();
                 let mid = bounds.top + bounds.height() / 2;
                 let center = Point::new(bounds.left + radius, mid);
-                canvas.stroke_ellipse(
-                    center,
-                    radius as f32,
-                    radius as f32,
-                    if enabled {
-                        theme.border
+                let on = selected.get() == index;
+                if look::decorated(&theme) && enabled {
+                    // A well when off; a glowing accent ring around a dot when on.
+                    let r = radius as f32;
+                    if on {
+                        look::glow(canvas, center, r, &theme);
+                        look::disc(canvas, center, r, theme.accent, &theme);
+                        let dot = (r * 0.4).max(2.0);
+                        canvas.fill_ellipse(center, dot, dot, theme.input_background);
                     } else {
-                        theme.text_disabled
-                    },
-                    1.0,
-                );
-                if selected.get() == index {
-                    let inner = (radius - 3).max(2) as f32;
-                    canvas.fill_ellipse(center, inner, inner, theme.accent);
+                        canvas.fill_ellipse(center, r, r, theme.input_background);
+                        canvas.stroke_ellipse(center, r, r, theme.input_border, 1.0);
+                    }
+                } else {
+                    canvas.stroke_ellipse(
+                        center,
+                        radius as f32,
+                        radius as f32,
+                        if enabled {
+                            theme.border
+                        } else {
+                            theme.text_disabled
+                        },
+                        1.0,
+                    );
+                    if on {
+                        let inner = (radius - 3).max(2) as f32;
+                        canvas.fill_ellipse(center, inner, inner, theme.accent);
+                    }
                 }
 
                 let text_rect = Rect::new(

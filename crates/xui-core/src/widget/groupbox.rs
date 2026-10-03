@@ -10,6 +10,7 @@ use crate::app::Ui;
 use crate::backend::{NodeKind, NodeSpec, Result, TextStyle};
 use crate::geometry::Rect;
 use crate::property::{Properties, Property, Value};
+use crate::theme::look::{self, backdrop};
 use crate::units::Dip;
 
 /// The design size of the title text.
@@ -19,6 +20,8 @@ const TEXT_SIZE: Dip = Dip(12.0);
 const INSET: Dip = Dip(8.0);
 /// The horizontal padding between the frame's left edge and the title.
 const PAD: Dip = Dip(8.0);
+/// The design size of the upper-case title a rounded theme draws.
+const CAPTION_SIZE: Dip = Dip(12.0);
 
 /// A titled frame that visually groups related widgets.
 ///
@@ -45,14 +48,35 @@ impl<M: 'static> GroupBox<M> {
                 let theme = theme.get();
                 let bounds = canvas.bounds();
                 let dpi = canvas.dpi();
-                canvas.clear(theme.background);
+                backdrop(canvas, theme.background);
 
                 let inset = INSET.to_px(dpi).value();
                 let pad = PAD.to_px(dpi).value();
+                let title = state.borrow();
+                if theme.corner_radius > 0 {
+                    // A rounded theme draws a section: the title as a label
+                    // above a card, instead of a frame the title interrupts.
+                    let label = Rect::new(
+                        bounds.left + 2,
+                        bounds.top,
+                        bounds.right,
+                        bounds.top + inset * 2,
+                    );
+                    let style = TextStyle::new(theme.text_secondary, CAPTION_SIZE)
+                        .bold()
+                        .middle();
+                    canvas.draw_text(&title.to_uppercase(), label, &style);
+                    let card =
+                        Rect::new(bounds.left, label.bottom + 2, bounds.right, bounds.bottom);
+                    look::card(canvas, card, &theme);
+                    if selected.get() {
+                        canvas.stroke_rect(bounds, theme.accent, 2.0);
+                    }
+                    return;
+                }
                 let frame = Rect::new(bounds.left, bounds.top + inset, bounds.right, bounds.bottom);
                 canvas.stroke_rect(frame, theme.border, 1.0);
 
-                let title = state.borrow();
                 let style = TextStyle::new(theme.text, TEXT_SIZE).middle();
                 let width = ui.measure_text(&title, &style, dpi).width.max(1);
                 let gap = Rect::new(

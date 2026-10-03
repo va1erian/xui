@@ -8,6 +8,7 @@
 //! selection x come from [`super::geometry`], the same arithmetic hit-testing
 //! is the inverse of, at the canvas's DPI.
 
+use crate::theme::look;
 use std::cell::{Cell, RefCell};
 
 use super::TEXT_SIZE;
@@ -36,13 +37,13 @@ pub(super) struct PaintState<'a> {
 /// Paints the field described by `state`.
 pub(super) fn paint(canvas: &mut dyn Canvas, theme: &Theme, state: &PaintState) {
     let bounds = canvas.bounds();
-    canvas.clear(theme.input_background);
+    look::field(canvas, theme);
     let border = if state.focused.get() {
         theme.border_focused
     } else {
         theme.input_border
     };
-    canvas.stroke_rect(bounds, border, 1.0);
+    look::field_frame(canvas, bounds, border, theme);
 
     let dpi = canvas.dpi();
     let pad = padding(dpi);

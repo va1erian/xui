@@ -12,12 +12,13 @@ use crate::color::Color;
 use crate::geometry::{Point, Rect};
 use crate::icon::draw_icon;
 use crate::theme::Theme;
+use crate::theme::look::{self, backdrop};
 
 /// Draws `state` into `canvas`. Only the visible tiles are touched, so a large
 /// model costs the same as a small one.
 pub(crate) fn paint(canvas: &mut dyn Canvas, state: &State, theme: &Theme, outline: bool) {
     let bounds = canvas.bounds();
-    canvas.clear(theme.background);
+    backdrop(canvas, theme.background);
     if bounds.is_empty() {
         if outline {
             canvas.stroke_rect(bounds, theme.accent, 2.0);
@@ -83,11 +84,16 @@ fn paint_tile(
     } else {
         None
     };
-    if let Some(fill) = fill {
-        canvas.fill_rect(text_rect, fill);
+    // A decorated theme highlights the whole tile like a selected row.
+    let fancy = look::decorated(theme);
+    match fill {
+        Some(_) if fancy && selected => look::selected_row(canvas, tile, theme),
+        Some(fill) if fancy => look::row(canvas, tile, fill, theme),
+        Some(fill) => canvas.fill_rect(text_rect, fill),
+        None => {}
     }
 
-    let (primary, secondary, icon_color) = colors(state, theme, selected);
+    let (primary, secondary, icon_color) = colors(state, theme, selected && !fancy);
     canvas.push_clip(tile);
     if !state.model.paint_icon(index, canvas, icon_rect, theme, dpi)
         && let Some(icon) = state.model.icon(index)
@@ -96,10 +102,19 @@ fn paint_tile(
     }
     canvas.pop_clip();
 
+    // A tile with a single line of text centres it beside the icon.
+    let single =
+        (1..metrics.lines).all(|line| state.model.line(index, line).is_none_or(str::is_empty));
+    let lift = if single {
+        (text_rect.height() - metrics.line_height).max(0) / 2
+    } else {
+        0
+    };
     for line in 0..metrics.lines {
         let Some(rect) = metrics.line_rect(text_rect, line) else {
             break;
         };
+        let rect = rect.offset(0, lift);
         let Some(text) = state.model.line(index, line) else {
             continue;
         };
@@ -110,7 +125,9 @@ fn paint_tile(
         draw_line(canvas, text, rect, color, metrics.text_size);
     }
 
-    if focused {
+    // A decorated lone selection already marks the focused tile; with
+    // several selected tiles the ring still shows which one has focus.
+    if focused && !(fancy && selected && state.selected.len() == 1) {
         let ring = if selected {
             theme.text_on_accent
         } else {

@@ -9,6 +9,7 @@ use crate::app::Ui;
 use crate::backend::{NodeKind, NodeSpec, Result, WidgetId};
 use crate::geometry::Rect;
 use crate::property::{Properties, Property, Value};
+use crate::theme::look;
 
 /// A container node that owns child widgets.
 ///
@@ -21,8 +22,19 @@ pub struct Panel<M: 'static> {
 }
 
 impl<M: 'static> Panel<M> {
-    /// Creates a panel at `bounds`.
+    /// Creates a panel at `bounds`, drawn as a card: a section of its own.
     pub fn new(ui: &Ui<M>, bounds: Rect) -> Result<Panel<M>> {
+        Panel::build(ui, bounds, true)
+    }
+
+    /// Creates a panel at `bounds` that draws nothing of its own: a
+    /// container (a page, a group to show or hide) whose widgets sit on the
+    /// window behind it.
+    pub fn plain(ui: &Ui<M>, bounds: Rect) -> Result<Panel<M>> {
+        Panel::build(ui, bounds, false)
+    }
+
+    fn build(ui: &Ui<M>, bounds: Rect, card: bool) -> Result<Panel<M>> {
         let control = Control::new(ui, &NodeSpec::new(NodeKind::Container, bounds))?;
         let scoped = ui.with_parent(control.id());
 
@@ -31,8 +43,11 @@ impl<M: 'static> Panel<M> {
         control.set_painter(Rc::new(move |canvas| {
             let theme = theme.get();
             let bounds = canvas.bounds();
-            canvas.clear(theme.surface);
-            canvas.stroke_rect(bounds, theme.border, 1.0);
+            if card {
+                look::card(canvas, bounds, &theme);
+            } else {
+                look::backdrop(canvas, theme.background);
+            }
             if selected.get() {
                 canvas.stroke_rect(bounds, theme.accent, 2.0);
             }

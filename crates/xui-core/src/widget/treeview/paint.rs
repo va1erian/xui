@@ -9,6 +9,7 @@ use crate::Color;
 use crate::backend::{Canvas, TextStyle};
 use crate::geometry::{Point, Rect};
 use crate::theme::Theme;
+use crate::theme::look::{self, backdrop};
 use crate::widget::scrollbar;
 
 /// The per-paint flags the app controls.
@@ -26,7 +27,7 @@ pub(crate) struct Options {
 pub(crate) fn paint(canvas: &mut dyn Canvas, state: &State, theme: &Theme, options: Options) {
     let bounds = canvas.bounds();
     let dpi = canvas.dpi();
-    canvas.clear(theme.background);
+    backdrop(canvas, theme.background);
 
     let row_height = flatten::ROW.to_px(dpi).value().max(1);
     // Reserve the bar's width so a row's label does not run under it.
@@ -60,12 +61,14 @@ pub(crate) fn paint(canvas: &mut dyn Canvas, state: &State, theme: &Theme, optio
         } else {
             None
         };
-        if let Some(fill) = fill {
-            canvas.fill_rect(rect, fill);
+        if is_current {
+            look::selected_row(canvas, rect, theme);
+        } else if options.hover == Some(node.id) {
+            look::row(canvas, rect, theme.hover, theme);
         }
         let color = match (options.enabled, is_current) {
             (false, _) => theme.text_disabled,
-            (true, true) => theme.text_on_accent,
+            (true, true) => look::selected_row_text(theme),
             (true, false) => theme.text,
         };
 

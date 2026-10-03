@@ -261,7 +261,11 @@ impl OffscreenBackend {
             surface: Some(surface),
         };
         let surface = restore.surface.as_mut().expect("a taken surface");
-        surface.fill(theme.background);
+        let (width, height) = surface.size();
+        let window_rect = Rect::new(0, 0, width as i32, height as i32);
+        surface.with_canvas_at(window_rect, dpi, |canvas| {
+            xui_core::theme::look::paint_background(canvas, window_rect, window_rect, &theme);
+        });
         // GL content is one painter among many, exactly as in the windowed
         // backend; the offscreen backend has no GPU, so it paints the widget's
         // software fallback: window-level content as the base layer, node-level
@@ -297,7 +301,7 @@ impl OffscreenBackend {
         drop(nodes);
         for draw in paints {
             if let Some(painter) = draw.painter {
-                surface.with_canvas_at(draw.bounds, dpi, |canvas| {
+                surface.with_canvas_over_parents(draw.bounds, dpi, |canvas| {
                     if let Some(clip) = draw.clip {
                         canvas.push_clip(clip);
                     }

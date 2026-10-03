@@ -11,6 +11,7 @@ use crate::app::Ui;
 use crate::backend::{NodeKind, NodeSpec, Result, TextStyle, WidgetId};
 use crate::geometry::{Point, Rect};
 use crate::property::{Properties, Property, Value};
+use crate::theme::look::backdrop;
 use crate::units::Dip;
 
 /// The design size of a part's text.
@@ -53,7 +54,7 @@ impl<M: 'static> StatusBar<M> {
             let bounds = canvas.bounds();
             let dpi = canvas.dpi();
             let enabled = enabled_for_paint.get();
-            canvas.clear(theme.background);
+            backdrop(canvas, theme.background);
             canvas.draw_line(
                 Point::new(bounds.left, bounds.top),
                 Point::new(bounds.right, bounds.top),

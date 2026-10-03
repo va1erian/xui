@@ -26,6 +26,7 @@ use crate::message::MouseButton;
 use crate::theme::Theme;
 pub use crate::widget::Orientation;
 
+use crate::theme::look::{self, backdrop};
 pub use geometry::{
     Scroll, THICKNESS, ThumbState, TrackHit, hit, offset_from_drag, paged_offset, thumb,
     thumb_color,
@@ -167,7 +168,7 @@ pub(crate) fn paint(
     theme: Theme,
 ) {
     let track = canvas.bounds();
-    canvas.clear(theme.background);
+    backdrop(canvas, theme.background);
     paint_state(
         canvas,
         track,
@@ -189,7 +190,11 @@ pub fn paint_state(
     theme: Theme,
     state: ThumbState,
 ) {
-    canvas.fill_rect(track, theme.scrollbar_track);
+    // Over a composited decorated background the track stays transparent:
+    // a flat fill would not match the gradient behind it.
+    if !(look::decorated(&theme) && canvas.composites_parents()) {
+        canvas.fill_rect(track, theme.scrollbar_track);
+    }
     if let Some(thumb) = thumb(track, scroll, orientation, canvas.dpi()) {
         let radius = thumb.width().min(thumb.height()) as f32 / 2.0;
         canvas.fill_rounded_rect(thumb, radius, thumb_color(theme, state));

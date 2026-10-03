@@ -9,6 +9,7 @@ use crate::geometry::{Point, Rect};
 use crate::icon::draw_icon;
 use crate::message::{Key, MouseButton};
 use crate::theme::Theme;
+use crate::theme::look;
 use crate::widget::popup;
 
 use super::{ARROW, ICON, ICON_GAP, PADDING, ROW, Shared, TEXT_SIZE};
@@ -90,10 +91,10 @@ pub(super) fn paint_field<M: 'static>(
     let b = canvas.bounds();
     let dpi = canvas.dpi();
     let (pad, arrow) = (PADDING.to_px(dpi).value(), ARROW.to_px(dpi).value());
-    canvas.clear(theme.input_background);
+    look::field(canvas, &theme);
     let color = pick(s.enabled.get(), theme.text, theme.text_disabled);
     let border = pick(s.open.get(), theme.border_focused, theme.input_border);
-    canvas.stroke_rect(b, border, 1.0);
+    look::field_frame(canvas, b, border, &theme);
     let i = b.shrink(pad);
     let text = Rect::new(i.left, i.top, (i.right - arrow).max(i.left), i.bottom);
     if let Some(item) = s.items.get(s.selected.get()) {

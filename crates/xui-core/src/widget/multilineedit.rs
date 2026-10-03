@@ -7,6 +7,7 @@
 //! draws one to capture a property, and a normal app maps each change to its
 //! `Msg` through [`MultilineEdit::on_change`].
 
+use crate::theme::look;
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
@@ -100,13 +101,13 @@ impl<M: 'static> MultilineEdit<M> {
                 let theme = theme.get();
                 let bounds = canvas.bounds();
                 let dpi = canvas.dpi();
-                canvas.clear(theme.input_background);
+                look::field(canvas, &theme);
                 let border = if focused.get() {
                     theme.border_focused
                 } else {
                     theme.input_border
                 };
-                canvas.stroke_rect(bounds, border, 1.0);
+                look::field_frame(canvas, bounds, border, &theme);
 
                 let pad = PADDING.to_px(dpi).value();
                 let line_height = LINE.to_px(dpi).value().max(1);

@@ -10,6 +10,7 @@ use crate::app::Ui;
 use crate::backend::{NodeKind, NodeSpec, Result};
 use crate::geometry::Rect;
 use crate::property::{Properties, Property, Value};
+use crate::theme::look::{self, backdrop};
 
 /// The corner radius of the bar.
 const RADIUS: f32 = 6.0;
@@ -43,8 +44,15 @@ impl<M: 'static> ProgressBar<M> {
             control.set_painter(Rc::new(move |canvas| {
                 let theme = theme.get();
                 let bounds = canvas.bounds();
-                canvas.clear(theme.background);
-                canvas.fill_rounded_rect(bounds, RADIUS, theme.scrollbar_track);
+                backdrop(canvas, theme.background);
+                // A decorated theme's groove must read on its gradient
+                // background, which the scroll bar's blending track does not.
+                let groove = if look::decorated(&theme) {
+                    theme.track
+                } else {
+                    theme.scrollbar_track
+                };
+                canvas.fill_rounded_rect(bounds, RADIUS, groove);
 
                 let max = max.get().max(1);
                 let filled =
@@ -52,7 +60,7 @@ impl<M: 'static> ProgressBar<M> {
                 if filled > 0 {
                     let fill =
                         Rect::new(bounds.left, bounds.top, bounds.left + filled, bounds.bottom);
-                    canvas.fill_rounded_rect(fill, RADIUS, theme.accent);
+                    look::face(canvas, fill, RADIUS, theme.accent, &theme);
                 }
                 if selected.get() {
                     canvas.stroke_rect(bounds, theme.accent, 2.0);

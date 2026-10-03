@@ -11,6 +11,7 @@ use crate::backend::{Cursor, Event, NodeKind, NodeSpec, Result, TextStyle};
 use crate::geometry::{Point, Rect};
 use crate::message::MouseButton;
 use crate::property::{Properties, Property, Value};
+use crate::theme::look::backdrop;
 use crate::units::Dip;
 
 /// Maps a click to an optional app message.
@@ -62,7 +63,7 @@ impl<M: 'static> Hyperlink<M> {
                 let dpi = canvas.dpi();
                 // Paint the opaque node's background first, or the back buffer
                 // shows through around the glyphs.
-                canvas.clear(theme.background);
+                backdrop(canvas, theme.background);
                 let color = if enabled.get() {
                     theme.accent
                 } else {

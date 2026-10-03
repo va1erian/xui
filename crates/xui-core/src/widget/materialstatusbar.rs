@@ -6,6 +6,7 @@
 //! the same part model, restyled with a surface fill, inset dividers and an
 //! accent-coloured leading status.
 
+use crate::theme::look;
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
@@ -56,7 +57,7 @@ impl<M: 'static> MaterialStatusBar<M> {
                 let theme = theme.get();
                 let bounds = canvas.bounds();
                 let dpi = canvas.dpi();
-                canvas.clear(theme.surface);
+                look::band(canvas, &theme);
                 canvas.draw_line(
                     Point::new(bounds.left, bounds.top),
                     Point::new(bounds.right, bounds.top),

@@ -19,6 +19,7 @@ use crate::app::Ui;
 use crate::backend::{Canvas, Event, NodeKind, NodeSpec, Result};
 use crate::geometry::{Point, Rect};
 use crate::message::{Key, MouseButton};
+use crate::theme::look::{self, backdrop};
 use crate::units::Dip;
 
 /// Maps a chosen colour to an optional app message.
@@ -60,7 +61,7 @@ impl<M: 'static> ColorPicker<M> {
             control.set_painter(Rc::new(move |canvas| {
                 let theme = theme.get();
                 let bounds = canvas.bounds();
-                canvas.clear(theme.background);
+                backdrop(canvas, theme.background);
                 let count = colors.len();
                 for index in 0..count {
                     let cell = cell_rect(bounds, columns.get(), count, index);
@@ -69,7 +70,20 @@ impl<M: 'static> ColorPicker<M> {
                     if swatch.is_empty() {
                         continue;
                     }
-                    canvas.fill_rounded_rect(swatch, RADIUS, colors[index]);
+                    let is_selected = selected.get() == Some(index);
+                    if look::decorated(&theme) {
+                        paint_glossy(
+                            canvas,
+                            &theme,
+                            swatch,
+                            colors[index],
+                            is_selected,
+                            hover.get() == Some(index),
+                        );
+                        continue;
+                    }
+                    let radius = RADIUS;
+                    canvas.fill_rounded_rect(swatch, radius, colors[index]);
                     let ring = if selected.get() == Some(index) {
                         theme.accent
                     } else if hover.get() == Some(index) {
@@ -82,7 +96,7 @@ impl<M: 'static> ColorPicker<M> {
                     } else {
                         1.0
                     };
-                    canvas.stroke_rounded_rect(swatch, RADIUS, ring, width);
+                    canvas.stroke_rounded_rect(swatch, radius, ring, width);
                     if selected.get() == Some(index) {
                         draw_check(canvas, swatch, ink_on(colors[index]));
                     }
@@ -287,6 +301,43 @@ fn cell_rect(bounds: Rect, columns: usize, count: usize, index: usize) -> Rect {
 }
 
 /// Draws a check mark inside a swatch.
+/// A decorated theme's swatch: a glossy disc (or rounded square where the
+/// cell is not square), ringed apart from it in the accent with a glow when
+/// selected, and in the focus colour when hovered.
+fn paint_glossy(
+    canvas: &mut dyn Canvas,
+    theme: &crate::theme::Theme,
+    cell: Rect,
+    color: Color,
+    selected: bool,
+    hovered: bool,
+) {
+    // Room for the ring outside the swatch.
+    let swatch = cell.shrink(3);
+    if swatch.is_empty() {
+        return;
+    }
+    let square = (swatch.width() - swatch.height()).abs() <= 4;
+    let radius = if square {
+        swatch.width().min(swatch.height()) as f32 / 2.0
+    } else {
+        RADIUS
+    };
+    let ring = cell;
+    let ring_radius = radius + 3.0;
+    if selected {
+        let center = Point::new(cell.left + cell.width() / 2, cell.top + cell.height() / 2);
+        look::glow(canvas, center, ring_radius, theme);
+    }
+    look::face(canvas, swatch, radius, color, theme);
+    if selected {
+        canvas.stroke_rounded_rect(ring, ring_radius, theme.accent, 2.0);
+        draw_check(canvas, swatch, ink_on(color));
+    } else if hovered {
+        canvas.stroke_rounded_rect(ring, ring_radius, theme.border_focused, 1.0);
+    }
+}
+
 fn draw_check(canvas: &mut dyn Canvas, swatch: Rect, ink: Color) {
     // Draw the tick in a centred square of the swatch's shorter side, so a wide
     // swatch shows the check's usual shape instead of a stretched one.

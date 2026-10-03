@@ -12,6 +12,7 @@
 
 use crate::backend::Canvas;
 use crate::color::Color;
+use crate::geometry::Rect;
 use crate::theme::Theme;
 
 /// How much of the text colour is mixed into the border, so a transient
@@ -25,6 +26,15 @@ const BORDER_MIX: f32 = 0.25;
 pub(crate) fn paint(canvas: &mut dyn Canvas, theme: Theme, face: Color) {
     let bounds = canvas.bounds();
     canvas.clear(face);
+    if theme.bevel.a > 0 {
+        let top = Rect::new(
+            bounds.left + 1,
+            bounds.top + 1,
+            bounds.right - 1,
+            bounds.top + 2,
+        );
+        canvas.fill_rect_rgba(top, theme.bevel);
+    }
     canvas.stroke_rect(bounds, border(theme), 1.0);
 }
 
@@ -40,7 +50,6 @@ mod tests {
     use super::*;
     use crate::backend::headless::{DrawOp, HeadlessBackend};
     use crate::backend::{Backend, NodeKind, NodeSpec, ParentRef, PlatformSpec};
-    use crate::geometry::Rect;
 
     /// Renders one node whose painter is [`paint`] and returns its draw ops.
     fn ops(theme: Theme) -> Vec<DrawOp> {

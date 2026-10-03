@@ -40,6 +40,8 @@ pub struct SkiaCanvas<'a> {
     clips: Vec<Clip>,
     mask: Option<Mask>,
     saved: Vec<(f32, f32, f32)>,
+    /// Painted over its ancestors' pixels ([`Canvas::composites_parents`]).
+    pub(crate) over_parents: bool,
 }
 
 impl<'a> SkiaCanvas<'a> {
@@ -60,6 +62,7 @@ impl<'a> SkiaCanvas<'a> {
             clips: Vec::new(),
             mask: None,
             saved: Vec::new(),
+            over_parents: false,
         }
     }
 }
@@ -71,6 +74,10 @@ impl Canvas for SkiaCanvas<'_> {
 
     fn bounds(&self) -> Rect {
         self.bounds
+    }
+
+    fn composites_parents(&self) -> bool {
+        self.over_parents
     }
 
     fn clear(&mut self, color: Color) {

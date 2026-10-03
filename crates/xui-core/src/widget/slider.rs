@@ -11,6 +11,7 @@ use crate::backend::{Event, NodeKind, NodeSpec, Result};
 use crate::geometry::{Point, Rect};
 use crate::message::{Key, MouseButton};
 use crate::property::{Properties, Property, Value};
+use crate::theme::look::{self, backdrop};
 use crate::units::Dip;
 
 /// A shared, replaceable value-to-message mapper.
@@ -59,7 +60,7 @@ impl<M: 'static> Slider<M> {
                 let theme = theme.get();
                 let bounds = canvas.bounds();
                 let dpi = canvas.dpi();
-                canvas.clear(theme.background);
+                backdrop(canvas, theme.background);
 
                 let track = TRACK.to_px(dpi).value().max(1);
                 let thumb = THUMB.to_px(dpi).value().max(1);
@@ -74,8 +75,14 @@ impl<M: 'static> Slider<M> {
                 let full = Rect::new(left, mid - track / 2, right, mid - track / 2 + track);
                 canvas.fill_rounded_rect(full, track as f32 / 2.0, theme.track);
                 let filled = Rect::new(left, mid - track / 2, x, mid - track / 2 + track);
-                canvas.fill_rounded_rect(filled, track as f32 / 2.0, theme.accent);
-                canvas.fill_ellipse(Point::new(x, mid), thumb as f32, thumb as f32, theme.accent);
+                look::face(canvas, filled, track as f32 / 2.0, theme.accent, &theme);
+                let knob = Point::new(x, mid);
+                look::glow(canvas, knob, thumb as f32, &theme);
+                canvas.fill_ellipse(knob, thumb as f32, thumb as f32, theme.accent);
+                if look::decorated(&theme) {
+                    let core = (thumb as f32 * 0.45).max(2.0);
+                    canvas.fill_ellipse(knob, core, core, theme.text_on_accent);
+                }
 
                 if selected.get() {
                     canvas.stroke_rect(bounds, theme.accent, 2.0);
