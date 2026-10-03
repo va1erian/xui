@@ -89,6 +89,25 @@ pub struct Theme {
     /// an opaque dimmed [`Theme::background`] so it blends with whatever is
     /// behind it on a compositing backend.
     pub scrim: Rgba,
+    /// The window background's bottom colour: the background is a vertical
+    /// gradient from [`Theme::background`] at the top to this at the bottom
+    /// (equal to it for a flat theme).
+    pub background_end: Color,
+    /// The bottom of a card's (panel, group box, dialog) vertical gradient,
+    /// from [`Theme::surface`] at the top (equal to it for a flat theme).
+    pub surface_end: Color,
+    /// A 1px highlight along the top edge of cards and raised controls, so
+    /// they read as bevelled (transparent for a flat theme).
+    pub bevel: Rgba,
+    /// How far (0-255) a control's face darkens from its top to its bottom
+    /// edge: buttons, check boxes, selected rows (0 for a flat theme).
+    pub shade: u8,
+    /// Corner radius of cards and group boxes in pixels (0: square, framed
+    /// like a plain panel).
+    pub corner_radius: u8,
+    /// Opacity (0-255) of the accent glow around checked and selected
+    /// indicators (0: none).
+    pub glow: u8,
 }
 
 impl Theme {
@@ -119,6 +138,12 @@ impl Theme {
             scrollbar_track: Color::hex(0xF3_F3_F3),
             track: Color::hex(0xB4_B4_B4),
             scrim: Rgba::with_alpha(0x00, 0x00, 0x00, 0x66),
+            background_end: Color::hex(0xF3_F3_F3),
+            surface_end: Color::hex(0xF9_F9_F9),
+            bevel: Rgba::with_alpha(0, 0, 0, 0),
+            shade: 0,
+            corner_radius: 0,
+            glow: 0,
         }
     }
 
@@ -149,6 +174,12 @@ impl Theme {
             scrollbar_track: Color::hex(0x20_20_20),
             track: Color::hex(0x3F_3F_3F),
             scrim: Rgba::with_alpha(0x00, 0x00, 0x00, 0x8C),
+            background_end: Color::hex(0x20_20_20),
+            surface_end: Color::hex(0x2B_2B_2B),
+            bevel: Rgba::with_alpha(0, 0, 0, 0),
+            shade: 0,
+            corner_radius: 0,
+            glow: 0,
         }
     }
 }
@@ -163,6 +194,18 @@ impl Default for Theme {
 #[cfg(test)]
 mod tests {
     use super::Theme;
+
+    /// The original palettes stay flat: every decoration token is off, so
+    /// apps that never asked for gradients paint exactly as before.
+    #[test]
+    fn light_and_dark_are_flat() {
+        for theme in [Theme::light(), Theme::dark()] {
+            assert_eq!(theme.background_end, theme.background);
+            assert_eq!(theme.surface_end, theme.surface);
+            assert_eq!(theme.bevel.a, 0);
+            assert_eq!((theme.shade, theme.corner_radius, theme.glow), (0, 0, 0));
+        }
+    }
 
     #[test]
     fn light_and_dark_differ_in_kind() {

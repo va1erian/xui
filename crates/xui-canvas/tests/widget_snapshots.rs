@@ -310,7 +310,7 @@ fn differing(a: &RgbaImage, b: &RgbaImage) -> usize {
 }
 
 #[test]
-fn every_portable_widget_renders_light_and_dark() {
+fn every_portable_widget_renders_light_dark_and_midnight() {
     let backend = Rc::new(OffscreenBackend::new());
     let rendered: Rc<RefCell<Vec<RgbaImage>>> = Rc::new(RefCell::new(Vec::new()));
 
@@ -333,9 +333,16 @@ fn every_portable_widget_renders_light_and_dark() {
             let dark = backend_for_make.render(ui.window()).expect("a dark render");
             save("widgets-dark.png", &dark);
 
+            ui.set_theme(Theme::midnight());
+            let midnight = backend_for_make
+                .render(ui.window())
+                .expect("a midnight render");
+            save("widgets-midnight.png", &midnight);
+
             let mut rendered = rendered_for_make.borrow_mut();
             rendered.push(light);
             rendered.push(dark);
+            rendered.push(midnight);
 
             Gallery { _alive: alive }
         },
@@ -345,6 +352,7 @@ fn every_portable_widget_renders_light_and_dark() {
     let rendered = rendered.borrow();
     let light = &rendered[0];
     let dark = &rendered[1];
+    let midnight = &rendered[2];
 
     // Many widgets drew something on each theme.
     assert!(
@@ -357,7 +365,17 @@ fn every_portable_widget_renders_light_and_dark() {
         "the dark gallery painted: {}",
         ink(dark, Theme::dark().background)
     );
+    assert!(
+        ink(midnight, Theme::midnight().background) > 2_000,
+        "the midnight gallery painted: {}",
+        ink(midnight, Theme::midnight().background)
+    );
     // And the theme actually changed what was drawn.
+    assert!(
+        differing(dark, midnight) > 2_000,
+        "dark and midnight differ: {}",
+        differing(dark, midnight)
+    );
     assert!(
         differing(light, dark) > 2_000,
         "light and dark differ: {}",

@@ -12,12 +12,13 @@ use crate::color::Color;
 use crate::geometry::{Point, Rect};
 use crate::icon::draw_icon;
 use crate::theme::Theme;
+use crate::theme::look::backdrop;
 
 /// Draws `state` into `canvas`. Only the visible tiles are touched, so a large
 /// model costs the same as a small one.
 pub(crate) fn paint(canvas: &mut dyn Canvas, state: &State, theme: &Theme, outline: bool) {
     let bounds = canvas.bounds();
-    canvas.clear(theme.background);
+    backdrop(canvas, theme.background);
     if bounds.is_empty() {
         if outline {
             canvas.stroke_rect(bounds, theme.accent, 2.0);

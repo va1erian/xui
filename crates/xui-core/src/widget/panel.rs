@@ -9,6 +9,7 @@ use crate::app::Ui;
 use crate::backend::{NodeKind, NodeSpec, Result, WidgetId};
 use crate::geometry::Rect;
 use crate::property::{Properties, Property, Value};
+use crate::theme::look;
 
 /// A container node that owns child widgets.
 ///
@@ -31,8 +32,7 @@ impl<M: 'static> Panel<M> {
         control.set_painter(Rc::new(move |canvas| {
             let theme = theme.get();
             let bounds = canvas.bounds();
-            canvas.clear(theme.surface);
-            canvas.stroke_rect(bounds, theme.border, 1.0);
+            look::card(canvas, bounds, &theme);
             if selected.get() {
                 canvas.stroke_rect(bounds, theme.accent, 2.0);
             }

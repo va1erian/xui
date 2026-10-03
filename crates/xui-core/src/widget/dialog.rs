@@ -14,6 +14,7 @@
 //! widget, the mapper returns the app's `Msg` and `App::update` is never
 //! re-entered.
 
+use crate::theme::look;
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
@@ -145,7 +146,7 @@ impl<M: 'static> Dialog<M> {
                 if !layout.visible {
                     return;
                 }
-                canvas.fill_rounded_rect(layout.card, RADIUS, theme.raised);
+                look::face(canvas, layout.card, RADIUS, theme.raised, &theme);
                 canvas.stroke_rounded_rect(layout.card, RADIUS, theme.border, 1.0);
                 let title = shared.title.borrow();
                 let style = TextStyle::new(theme.text, TITLE_SIZE).bold();

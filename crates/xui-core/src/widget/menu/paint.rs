@@ -10,6 +10,7 @@ use crate::backend::{Canvas, TextStyle};
 use crate::geometry::{Point, Rect};
 use crate::icon::draw_icon;
 use crate::theme::Theme;
+use crate::theme::look;
 use crate::widget::popup;
 
 use super::View;
@@ -25,7 +26,7 @@ pub(super) fn bar(
     selected: bool,
 ) {
     let bounds = canvas.bounds();
-    canvas.clear(theme.surface);
+    look::band(canvas, &theme);
     let dpi = canvas.dpi();
     let origin = Point::new(bounds.left, bounds.top);
     let pad = layout::BAR_PAD.to_px(dpi).value();

@@ -12,6 +12,7 @@ use crate::units::Dip;
 
 use super::layout::{self, ICON_GAP, PADDING, SEPARATOR_WIDTH};
 use super::strip::State;
+use crate::theme::look::backdrop;
 
 /// The corner radius of an item's highlight.
 const RADIUS: f32 = 4.0;
@@ -25,7 +26,7 @@ const SEPARATOR_INSET: Dip = Dip(10.0);
 pub(super) fn paint(canvas: &mut dyn Canvas, state: &State, selected: &Cell<bool>, theme: Theme) {
     let bounds = canvas.bounds();
     let dpi = canvas.dpi();
-    canvas.clear(theme.background);
+    backdrop(canvas, theme.background);
 
     let color = if state.enabled.get() {
         theme.text

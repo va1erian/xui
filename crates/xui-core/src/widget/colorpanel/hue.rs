@@ -19,6 +19,7 @@ use crate::color::Color;
 use crate::geometry::{Point, Rect};
 use crate::message::{Key, MouseButton};
 use crate::theme::Themed;
+use crate::theme::look::backdrop;
 use crate::units::Dip;
 
 /// Maps a hue to an optional app message.
@@ -101,7 +102,7 @@ impl<M: 'static> HueSlider<M> {
             control.set_painter(Rc::new(move |canvas| {
                 let theme = theme.get();
                 let bounds = canvas.bounds();
-                canvas.clear(theme.background);
+                backdrop(canvas, theme.background);
                 if bounds.is_empty() {
                     return;
                 }

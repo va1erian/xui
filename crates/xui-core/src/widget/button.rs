@@ -12,6 +12,7 @@ use crate::geometry::Rect;
 use crate::icon::{IconRef, draw_icon};
 use crate::message::{Key, MouseButton};
 use crate::property::{Properties, Property, Value};
+use crate::theme::look::{backdrop, face};
 use crate::units::Dip;
 
 /// Maps a click to an optional app message.
@@ -74,7 +75,7 @@ impl<M: 'static> Button<M> {
                 let state = state.get();
                 // Paint the node's background so the rounded face's corners do
                 // not show the uninitialised back buffer.
-                canvas.clear(theme.background);
+                backdrop(canvas, theme.background);
                 let fill = match state {
                     ButtonState::Normal | ButtonState::Disabled => theme.surface,
                     ButtonState::Hover => theme.hover,
@@ -82,7 +83,7 @@ impl<M: 'static> Button<M> {
                 };
                 let bounds = canvas.bounds();
                 let dpi = canvas.dpi();
-                canvas.fill_rounded_rect(bounds, RADIUS, fill);
+                face(canvas, bounds, RADIUS, fill, &theme);
                 canvas.stroke_rounded_rect(bounds, RADIUS, theme.border, 1.0);
                 let color = if state == ButtonState::Disabled {
                     theme.text_disabled

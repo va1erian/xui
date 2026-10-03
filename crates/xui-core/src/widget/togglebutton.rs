@@ -13,6 +13,7 @@ use crate::geometry::Rect;
 use crate::icon::{IconRef, draw_icon};
 use crate::message::{Key, MouseButton};
 use crate::property::{Properties, Property, Value};
+use crate::theme::look::{backdrop, face};
 use crate::units::Dip;
 
 /// Maps a new checked state to an optional app message.
@@ -79,9 +80,9 @@ impl<M: 'static> ToggleButton<M> {
                 let checked = checked.get();
                 let bg = pick(hover.get(), theme.hover, theme.surface);
                 let fill = pick(pressed.get(), theme.pressed, bg);
-                canvas.clear(theme.background);
+                backdrop(canvas, theme.background);
                 let fill = if checked { theme.accent } else { fill };
-                canvas.fill_rounded_rect(bounds, RADIUS, fill);
+                face(canvas, bounds, RADIUS, fill, &theme);
                 let border = pick(hover.get(), theme.border_focused, theme.border);
                 canvas.stroke_rounded_rect(bounds, RADIUS, border, 1.0);
                 let base = pick(checked, theme.text_on_accent, theme.text);

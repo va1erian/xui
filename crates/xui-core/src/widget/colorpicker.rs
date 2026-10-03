@@ -19,6 +19,7 @@ use crate::app::Ui;
 use crate::backend::{Canvas, Event, NodeKind, NodeSpec, Result};
 use crate::geometry::{Point, Rect};
 use crate::message::{Key, MouseButton};
+use crate::theme::look::{self, backdrop};
 use crate::units::Dip;
 
 /// Maps a chosen colour to an optional app message.
@@ -60,7 +61,7 @@ impl<M: 'static> ColorPicker<M> {
             control.set_painter(Rc::new(move |canvas| {
                 let theme = theme.get();
                 let bounds = canvas.bounds();
-                canvas.clear(theme.background);
+                backdrop(canvas, theme.background);
                 let count = colors.len();
                 for index in 0..count {
                     let cell = cell_rect(bounds, columns.get(), count, index);
@@ -69,7 +70,23 @@ impl<M: 'static> ColorPicker<M> {
                     if swatch.is_empty() {
                         continue;
                     }
-                    canvas.fill_rounded_rect(swatch, RADIUS, colors[index]);
+                    let fancy = look::decorated(&theme);
+                    // Circles where the cells are square; pills would read as
+                    // buttons, so other cells keep the rounded square.
+                    let square = (swatch.width() - swatch.height()).abs() <= 4;
+                    let radius = if fancy && square {
+                        swatch.width().min(swatch.height()) as f32 / 2.0
+                    } else {
+                        RADIUS
+                    };
+                    if fancy && selected.get() == Some(index) {
+                        let center = Point::new(
+                            swatch.left + swatch.width() / 2,
+                            swatch.top + swatch.height() / 2,
+                        );
+                        look::glow(canvas, center, radius + 2.0, &theme);
+                    }
+                    canvas.fill_rounded_rect(swatch, radius, colors[index]);
                     let ring = if selected.get() == Some(index) {
                         theme.accent
                     } else if hover.get() == Some(index) {
@@ -82,7 +99,7 @@ impl<M: 'static> ColorPicker<M> {
                     } else {
                         1.0
                     };
-                    canvas.stroke_rounded_rect(swatch, RADIUS, ring, width);
+                    canvas.stroke_rounded_rect(swatch, radius, ring, width);
                     if selected.get() == Some(index) {
                         draw_check(canvas, swatch, ink_on(colors[index]));
                     }
