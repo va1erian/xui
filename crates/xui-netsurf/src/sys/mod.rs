@@ -4,6 +4,8 @@
 //! Pointers handed to C:
 //! - the host context is the `&'static Engine` (it is leaked, so it outlives
 //!   NetSurf);
+//! - fetches and images are named by value (an id, the source bytes for one
+//!   call), never by a pointer kept on the Rust side;
 //! - each window's handle is its `Box<WinState>`, which the engine keeps until
 //!   after `nsx_window_destroy` (and the C side stops reporting to a window
 //!   once destroy starts);
@@ -18,8 +20,14 @@ use crate::engine::{Engine, MouseAction, WinState};
 use crate::record::Recorder;
 
 mod convert;
+mod fetch;
 mod host;
+mod image;
 mod sink;
+
+pub(crate) use fetch::{deliver, register_fetcher};
+use fetch::{host_fetch_abort, host_fetch_start};
+use image::{host_image_decode, host_image_size};
 
 use host::{
     host_resource, host_text_position, host_text_split, host_text_width, host_win_event,
@@ -57,6 +65,10 @@ pub(crate) fn init(engine: &'static Engine) -> Result<(), String> {
             win_size: host_win_size,
             win_pointer: host_win_pointer,
             resource: host_resource,
+            fetch_start: host_fetch_start,
+            fetch_abort: host_fetch_abort,
+            image_size: host_image_size,
+            image_decode: host_image_decode,
         })
     });
     // SAFETY: the table and the message bytes are 'static; this is the

@@ -73,6 +73,33 @@ pub const NSX_MOUSE_CLICK: c_int = 2;
 /// The primary button came up after a drag.
 pub const NSX_MOUSE_RELEASE: c_int = 3;
 
+/// A GET request.
+pub const NSX_METHOD_GET: c_int = 0;
+/// A HEAD request.
+pub const NSX_METHOD_HEAD: c_int = 1;
+/// A POST request.
+pub const NSX_METHOD_POST: c_int = 2;
+
+/// An http(s) request NetSurf wants made (`nsx_request` in `nsx.h`); what it
+/// points at lives only for the `fetch_start` call.
+#[repr(C)]
+pub struct nsx_request {
+    /// Names the fetch in the `nsx_fetch_*` calls that answer it.
+    pub id: u64,
+    /// The URL, NUL terminated.
+    pub url: *const c_char,
+    /// One of the `NSX_METHOD_*` values.
+    pub method: c_int,
+    /// `header_count` NUL-terminated `"Name: value"` strings.
+    pub headers: *const *const c_char,
+    /// The number of `headers`.
+    pub header_count: usize,
+    /// The request body, or null.
+    pub body: *const u8,
+    /// The length of `body`.
+    pub body_len: usize,
+}
+
 /// What the host provides for the engine's life (`nsx_host` in `nsx.h`).
 #[repr(C)]
 pub struct nsx_host {
@@ -117,6 +144,24 @@ pub struct nsx_host {
         path: *const c_char,
         data: *mut *const u8,
         len: *mut usize,
+    ) -> c_int,
+    pub fetch_start: unsafe extern "C" fn(ctx: *mut c_void, request: *const nsx_request),
+    pub fetch_abort: unsafe extern "C" fn(ctx: *mut c_void, id: u64),
+    pub image_size: unsafe extern "C" fn(
+        ctx: *mut c_void,
+        data: *const u8,
+        len: usize,
+        width: *mut c_int,
+        height: *mut c_int,
+    ) -> c_int,
+    pub image_decode: unsafe extern "C" fn(
+        ctx: *mut c_void,
+        data: *const u8,
+        len: usize,
+        pixels: *mut u8,
+        width: c_int,
+        height: c_int,
+        opaque: *mut c_int,
     ) -> c_int,
 }
 
@@ -202,6 +247,18 @@ unsafe extern "C" {
     ) -> c_int;
     pub fn nsx_window_mouse(gw: *mut gui_window, action: c_int, x: c_int, y: c_int);
     pub fn nsx_window_key(gw: *mut gui_window, key: u32) -> c_int;
+    pub fn nsx_fetch_register() -> c_int;
+    pub fn nsx_fetch_status(id: u64, code: c_int);
+    pub fn nsx_fetch_header(
+        id: u64,
+        name: *const c_char,
+        name_len: usize,
+        value: *const c_char,
+        value_len: usize,
+    );
+    pub fn nsx_fetch_data(id: u64, data: *const u8, len: usize);
+    pub fn nsx_fetch_finish(id: u64);
+    pub fn nsx_fetch_fail(id: u64, message: *const c_char);
 }
 
 /// NetSurf's user-agent stylesheet, quirks-mode and internal stylesheets and

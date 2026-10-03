@@ -57,6 +57,28 @@ enum nsx_window_event {
 	NSX_EVENT_NEW_CONTENT = 6,
 };
 
+/* Request methods for nsx_request. */
+enum nsx_method {
+	NSX_METHOD_GET = 0,
+	NSX_METHOD_HEAD = 1,
+	NSX_METHOD_POST = 2,
+};
+
+/* An http: or https: request NetSurf wants made. Everything it points at
+ * lives only for the fetch_start call. */
+typedef struct nsx_request {
+	/* Names the fetch in the nsx_fetch_* calls that answer it. */
+	uint64_t id;
+	const char *url;
+	int method;
+	/* `header_count` "Name: value" strings, NUL terminated. */
+	const char *const *headers;
+	size_t header_count;
+	/* The request body (POST), or NULL. */
+	const uint8_t *body;
+	size_t body_len;
+} nsx_request;
+
 /* What the host provides for the engine's whole life. `ctx` is passed back. */
 typedef struct nsx_host {
 	void *ctx;
@@ -80,6 +102,21 @@ typedef struct nsx_host {
 	 * must live as long as the engine, or 0. */
 	int (*resource)(void *ctx, const char *path, const uint8_t **data,
 			size_t *len);
+	/* Starts an http(s) request once nsx_fetch_register was called. The
+	 * host answers later, on this thread, through the nsx_fetch_* calls,
+	 * and never follows redirects itself. */
+	void (*fetch_start)(void *ctx, const nsx_request *request);
+	/* NetSurf no longer wants fetch `id`: the host stops answering it. */
+	void (*fetch_abort)(void *ctx, uint64_t id);
+	/* PNG and JPEG images. image_size reads the size from the header: 1
+	 * and the size, or 0 for data the host cannot or will not decode. */
+	int (*image_size)(void *ctx, const uint8_t *data, size_t len,
+			int *width, int *height);
+	/* Decodes into `pixels` (width * height * 4 bytes, rows of RGBA with
+	 * straight alpha); 1 on success, setting *opaque when every pixel's
+	 * alpha is 255. */
+	int (*image_decode)(void *ctx, const uint8_t *data, size_t len,
+			uint8_t *pixels, int width, int height, int *opaque);
 } nsx_host;
 
 /* Where one redraw's drawing goes. Coordinates are CSS pixels. */
@@ -140,5 +177,18 @@ int nsx_window_redraw(struct gui_window *gw, int x0, int y0, int x1, int y1,
 void nsx_window_mouse(struct gui_window *gw, int action, int x, int y);
 /* A typed character (UCS-4) or NetSurf key code; 1 if it was used. */
 int nsx_window_key(struct gui_window *gw, uint32_t key);
+
+/* Hands http: and https: URLs to the host's fetch_start from now on; 0 on
+ * success. */
+int nsx_fetch_register(void);
+/* The host's answer to request `id`, on the nsx_init thread: the status
+ * first, then the headers, the body in pieces, and finish or fail last. An
+ * id NetSurf has aborted or that has ended is ignored. */
+void nsx_fetch_status(uint64_t id, int code);
+void nsx_fetch_header(uint64_t id, const char *name, size_t name_len,
+		const char *value, size_t value_len);
+void nsx_fetch_data(uint64_t id, const uint8_t *data, size_t len);
+void nsx_fetch_finish(uint64_t id);
+void nsx_fetch_fail(uint64_t id, const char *message);
 
 #endif

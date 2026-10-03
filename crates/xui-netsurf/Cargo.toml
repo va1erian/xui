@@ -20,8 +20,14 @@ xui-core = { path = "../xui-core" }
 # so the two engines paint through exactly the same code.
 xui-litehtml = { path = "../xui-litehtml" }
 log = "0.4"
+# PNG and JPEG decoding for NetSurf's image handlers (MIT/Apache-2.0, pure
+# Rust, so nothing more to cross-compile).
+png = "0.17"
+zune-jpeg = "0.5"
 
 [dev-dependencies]
 xui-canvas = { path = "../xui-canvas" }
 env_logger = "0.11"
-png = "0.17"
+# Encodes the JPEG and GIF fixtures of the fetch tests (already built for
+# xui-litehtml, with the same features).
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif"] }

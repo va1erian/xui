@@ -11,7 +11,7 @@ use crate::fonts::FontReq;
 
 /// # Safety
 /// `ctx` is the `&'static Engine` given to `init`.
-unsafe fn engine<'a>(ctx: *mut c_void) -> &'a Engine {
+pub(super) unsafe fn engine<'a>(ctx: *mut c_void) -> &'a Engine {
     // SAFETY: the context is the leaked engine, valid forever.
     unsafe { &*(ctx as *const Engine) }
 }
