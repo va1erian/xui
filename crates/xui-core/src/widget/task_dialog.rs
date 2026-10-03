@@ -9,6 +9,7 @@
 //! after the action. Build one with [`TaskDialog::new`], add commands with
 //! [`TaskDialog::command`], then [`TaskDialog::open`] it.
 
+use crate::theme::look;
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
@@ -117,7 +118,7 @@ impl<M: 'static> TaskDialog<M> {
                 if !layout.visible {
                     return;
                 }
-                canvas.fill_rounded_rect(layout.card, RADIUS, theme.raised);
+                look::face(canvas, layout.card, RADIUS, theme.raised, &theme);
                 canvas.stroke_rounded_rect(layout.card, RADIUS, theme.border, 1.0);
                 // A message taller than the card is clipped to it, so it never
                 // spills over the command row or outside the client.

@@ -11,6 +11,7 @@ use crate::backend::{Event, NodeKind, NodeSpec, Result, TextStyle};
 use crate::geometry::{Point, Rect};
 use crate::message::{Key, MouseButton};
 use crate::property::{Properties, Property, Value};
+use crate::theme::look::{self, backdrop};
 use crate::units::Dip;
 
 /// Maps a new checked state to an optional app message.
@@ -63,25 +64,42 @@ impl<M: 'static> CheckBox<M> {
                 let bounds = canvas.bounds();
                 let dpi = canvas.dpi();
                 let enabled = enabled.get();
-                canvas.clear(theme.background);
+                backdrop(canvas, theme.background);
 
                 let box_size = BOX.to_px(dpi).value();
                 let gap = GAP.to_px(dpi).value();
                 let top = bounds.top + (bounds.height() - box_size) / 2;
                 let square = Rect::new(bounds.left, top, bounds.left + box_size, top + box_size);
-                canvas.fill_rect(square, theme.input_background);
-                canvas.stroke_rect(
-                    square,
-                    if enabled {
-                        theme.input_border
+                let fancy = look::decorated(&theme) && enabled;
+                if fancy {
+                    // A filled, glowing box when checked; an inset well when not.
+                    let center = Point::new(square.left + box_size / 2, square.top + box_size / 2);
+                    if checked.get() {
+                        look::glow(canvas, center, box_size as f32 / 2.0, &theme);
+                        look::face(canvas, square, 3.0, theme.accent, &theme);
                     } else {
-                        theme.text_disabled
-                    },
-                    1.0,
-                );
+                        canvas.fill_rounded_rect(square, 3.0, theme.input_background);
+                        canvas.stroke_rounded_rect(square, 3.0, theme.input_border, 1.0);
+                    }
+                } else {
+                    canvas.fill_rect(square, theme.input_background);
+                }
+                if !fancy {
+                    canvas.stroke_rect(
+                        square,
+                        if enabled {
+                            theme.input_border
+                        } else {
+                            theme.text_disabled
+                        },
+                        1.0,
+                    );
+                }
                 if checked.get() {
                     // A check mark drawn as two strokes.
-                    let color = if enabled {
+                    let color = if fancy {
+                        theme.text_on_accent
+                    } else if enabled {
                         theme.accent
                     } else {
                         theme.text_disabled

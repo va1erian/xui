@@ -180,6 +180,16 @@ pub trait Canvas {
     /// The drawable area, at the origin.
     fn bounds(&self) -> Rect;
 
+    /// Whether the widget's container has already painted the pixels under
+    /// this canvas for the current frame. A compositing backend repaints a
+    /// widget's ancestors before the widget, so the widget can leave its
+    /// background alone and let a card or gradient show through. A backend
+    /// that repaints a widget on its own (into a buffer kept between paints)
+    /// answers `false`, and the widget fills its background first.
+    fn composites_parents(&self) -> bool {
+        false
+    }
+
     /// Fills the surface with `color`.
     fn clear(&mut self, color: Color);
 

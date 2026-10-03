@@ -2,6 +2,7 @@
 
 //! [`TopBar`](super::TopBar)'s painter.
 
+use crate::theme::look;
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
@@ -31,7 +32,7 @@ pub(super) fn paint(
 ) {
     let bounds = canvas.bounds();
     let dpi = canvas.dpi();
-    canvas.clear(theme.surface);
+    look::band(canvas, &theme);
     canvas.draw_line(
         Point::new(bounds.left, bounds.bottom - 1),
         Point::new(bounds.right, bounds.bottom - 1),

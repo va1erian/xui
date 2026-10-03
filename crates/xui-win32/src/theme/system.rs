@@ -94,6 +94,13 @@ fn from_high_contrast(colors: HighContrastColors) -> Theme {
         // scrim uses translucent black at the dark variant's 55%, which keeps
         // the (high-contrast) content legible through it.
         scrim: Rgba::with_alpha(0x00, 0x00, 0x00, 0x8C),
+        // High contrast stays flat: no gradient, bevel, rounding or glow.
+        background_end: colors.window,
+        surface_end: colors.btn_face,
+        bevel: Rgba::with_alpha(0, 0, 0, 0),
+        shade: 0,
+        corner_radius: 0,
+        glow: 0,
     }
 }
 

@@ -48,6 +48,7 @@ pub use field::ColorField;
 pub use hue::HueSlider;
 pub use model::{BASIC_COLORS, Hsv};
 
+use crate::theme::look::backdrop;
 use model::{Hsv as HsvModel, format_hex};
 use state::{Shared, end_drags, set_hue, sync};
 use text::Field;
@@ -77,7 +78,7 @@ impl<M: 'static> ColorPanel<M> {
         {
             let theme = ui.theme_handle();
             control.set_painter(Rc::new(move |canvas: &mut dyn Canvas| {
-                canvas.clear(theme.get().background);
+                backdrop(canvas, theme.get().background);
             }));
         }
         let scoped = ui.with_parent(control.id());

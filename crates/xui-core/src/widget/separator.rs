@@ -9,6 +9,7 @@ use crate::app::Ui;
 use crate::backend::{NodeKind, NodeSpec, Result, WidgetId};
 use crate::geometry::{Point, Rect};
 use crate::property::{Properties, Property, Value};
+use crate::theme::look::backdrop;
 
 /// The thickness of the divider line, in device pixels.
 const LINE_WIDTH: f32 = 1.0;
@@ -61,7 +62,7 @@ impl<M: 'static> Separator<M> {
         control.set_painter(Rc::new(move |canvas| {
             let theme = theme.get();
             let bounds = canvas.bounds();
-            canvas.clear(theme.background);
+            backdrop(canvas, theme.background);
             let (from, to) = match orientation {
                 Orientation::Horizontal => {
                     let y = bounds.top + bounds.height() / 2;

@@ -51,7 +51,10 @@ pub(super) fn composite(shared: &Shared, window: WindowId, surface: &mut Surface
         };
         (state.theme, state.dpi, state.size)
     };
-    surface.fill(theme.background);
+    let window_rect = Rect::new(0, 0, size.0 as i32, size.1 as i32);
+    surface.with_canvas_at(window_rect, dpi, |canvas| {
+        xui_core::theme::look::paint_background(canvas, window_rect, window_rect, &theme);
+    });
     draw_gl(
         shared,
         window,
@@ -95,7 +98,9 @@ pub(super) fn composite(shared: &Shared, window: WindowId, surface: &mut Surface
     };
     for draw in draws {
         if let Some(painter) = &draw.painter {
-            surface.with_canvas_at(draw.bounds, dpi, |canvas| {
+            // Nodes paint in creation order, so a widget's container is already
+            // on the surface when the widget paints over it.
+            surface.with_canvas_over_parents(draw.bounds, dpi, |canvas| {
                 if let Some(clip) = draw.clip {
                     canvas.push_clip(clip);
                 }

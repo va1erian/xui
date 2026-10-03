@@ -77,6 +77,28 @@ impl Themed for Swatch {
 window's theme changes; bundled portable widgets generally read the live theme
 in their painter instead.
 
+## Decoration and Midnight
+
+Besides colours, a theme carries decoration tokens: `background_end` and
+`surface_end` (the bottoms of the window and card gradients), `bevel` (a 1px
+top highlight), `shade` (how far a control face darkens toward its bottom),
+`corner_radius` (cards and group boxes) and `glow` (the accent glow around a
+checked or selected indicator). `Theme::light()` and `Theme::dark()` leave them
+all off, so they paint flat exactly as before; `Theme::midnight()` is a navy
+dark theme that turns them on.
+
+`xui_core::theme::look` paints them, so a custom widget looks like the bundled
+ones: `paint_background` (the window gradient), `backdrop`, `card`, `band`,
+`face`, `field`, `row`/`selected_row` and `glow`.
+
+A widget starts its painter with `look::backdrop(canvas, theme.background)`
+instead of `canvas.clear(...)`. A compositing backend (`xui-canvas`, and an
+embedder that paints nodes in creation order) reports
+`Canvas::composites_parents()`: the widget's container is already on the
+surface, so the backdrop does nothing and the widget sits on its card or the
+window gradient. The Win32 backend repaints a widget alone into its own
+buffer, so there the backdrop fills with the colour given.
+
 ## Follow the system (Windows)
 
 The Win32 backend adds a `SystemTheme` extension trait over `Theme`:

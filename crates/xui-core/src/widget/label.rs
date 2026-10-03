@@ -10,6 +10,7 @@ use crate::app::Ui;
 use crate::backend::{NodeKind, NodeSpec, Result, TextStyle};
 use crate::geometry::Rect;
 use crate::property::{Properties, Property, Value};
+use crate::theme::look::backdrop;
 use crate::units::Dip;
 
 /// The design size of the label text.
@@ -40,7 +41,7 @@ impl<M: 'static> Label<M> {
             let bounds = canvas.bounds();
             // The node is an opaque child window: paint its background first,
             // or the back buffer shows through around the text.
-            canvas.clear(theme.background);
+            backdrop(canvas, theme.background);
             let style = TextStyle::new(theme.text, TEXT_SIZE);
             canvas.draw_text(&text_for_paint.borrow(), bounds, &style);
             if selected.get() {

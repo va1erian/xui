@@ -11,6 +11,7 @@ use crate::app::Ui;
 use crate::backend::{Canvas, TextStyle};
 use crate::geometry::{Point, Rect};
 use crate::theme::Theme;
+use crate::theme::look::backdrop;
 use crate::units::Dip;
 
 /// The default em size of a run without an explicit size.
@@ -80,7 +81,7 @@ pub(super) fn paint<M: 'static>(
         inner.size.set(size);
         relayout(ui, inner);
     }
-    canvas.clear(theme.background);
+    backdrop(canvas, theme.background);
     let layout = inner.layout.borrow();
     let Some(layout) = layout.as_ref() else {
         return;

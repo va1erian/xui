@@ -11,6 +11,7 @@ use crate::color::Color;
 use crate::geometry::{Point, Rect};
 use crate::icon::draw_icon;
 use crate::theme::Theme;
+use crate::theme::look::{self, backdrop};
 use crate::widget::scrollbar;
 
 /// Draws `text` truncated with an end-ellipsis when it is wider than `rect`,
@@ -31,7 +32,7 @@ fn draw_cell_text(canvas: &mut dyn Canvas, text: &str, cell: Rect, rect: Rect, s
 pub(crate) fn paint(canvas: &mut dyn Canvas, state: &State, theme: &Theme, outline: bool) {
     let bounds = canvas.bounds();
     let dpi = canvas.dpi();
-    canvas.clear(theme.background);
+    backdrop(canvas, theme.background);
 
     let row_px = ROW.to_px(dpi).value().max(1);
     let header_h = header_px(state.has_header(), dpi);
@@ -184,13 +185,13 @@ fn paint_row(
 ) {
     let selected = state.selected.contains(&row);
     if selected {
-        canvas.fill_rect(rect, theme.accent);
+        look::selected_row(canvas, rect, theme);
     } else if state.hover == Some(row) {
-        canvas.fill_rect(rect, theme.hover);
+        look::row(canvas, rect, theme.hover, theme);
     }
     let color = match (state.enabled, selected) {
         (false, _) => theme.text_disabled,
-        (true, true) => theme.text_on_accent,
+        (true, true) => look::selected_row_text(theme),
         (true, false) => theme.text,
     };
     let pad = PADDING.to_px(dpi).value();

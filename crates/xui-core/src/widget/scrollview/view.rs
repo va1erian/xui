@@ -8,6 +8,7 @@ use crate::app::Ui;
 use crate::backend::{Canvas, Event};
 use crate::message::Key;
 use crate::theme::Theme;
+use crate::theme::look::{self, backdrop};
 use crate::units::Px;
 
 /// Sets `value` as the offset (clamped), moves the rows and raises the event.
@@ -32,11 +33,10 @@ pub(super) fn set_offset<M>(ui: &Ui<M>, s: &Shared<M>, value: i32) {
 /// background.
 pub(super) fn paint_viewport(canvas: &mut dyn Canvas, theme: Theme) {
     let bounds = canvas.bounds();
-    canvas.clear(theme.background);
+    backdrop(canvas, theme.background);
     canvas.push_clip(bounds);
-    canvas.fill_rect(bounds, theme.surface);
+    look::card(canvas, bounds, &theme);
     canvas.pop_clip();
-    canvas.stroke_rect(bounds, theme.border, 1.0);
 }
 
 /// Handles the view's wheel, keyboard scroll and resize.

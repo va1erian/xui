@@ -22,6 +22,7 @@ use crate::layout::Dock;
 use crate::message::MouseButton;
 use crate::property::{Properties, Property, Value};
 use crate::theme::Theme;
+use crate::theme::look::{self, backdrop};
 use crate::units::Dip;
 
 /// The strip's height.
@@ -79,7 +80,9 @@ impl<M: 'static> Tabs<M> {
         });
         {
             let theme = ui.theme_handle();
-            control.set_painter(Rc::new(move |canvas| canvas.clear(theme.get().background)));
+            control.set_painter(Rc::new(move |canvas| {
+                backdrop(canvas, theme.get().background)
+            }));
         }
         {
             let shared = Rc::clone(&shared);
@@ -308,7 +311,7 @@ fn tab_at<M>(s: &Shared<M>, x: i32) -> Option<usize> {
 /// Paints the strip: each tab's background, title and the selected underline.
 fn paint_strip<M>(s: &Shared<M>, canvas: &mut dyn Canvas, theme: Theme) {
     let bounds = canvas.bounds();
-    canvas.clear(theme.surface);
+    look::band(canvas, &theme);
     // Tab rectangles are in the strip's own coordinates; a painter draws in the
     // canvas's surface coordinates, whose origin is the strip's top-left.
     let (ox, oy) = (bounds.left, bounds.top);
@@ -320,7 +323,7 @@ fn paint_strip<M>(s: &Shared<M>, canvas: &mut dyn Canvas, theme: Theme) {
         let rect = local.offset(ox, oy);
         let selected = index == s.selected.get();
         if selected {
-            canvas.fill_rect(rect, theme.raised);
+            look::face(canvas, rect, 0.0, theme.raised, &theme);
         } else if s.hover.get() == Some(index) {
             canvas.fill_rect(rect, theme.hover);
         }
