@@ -78,7 +78,7 @@ error page.
 | `netsurf-sys/csrc/nsx_fetch.c`, `nsx_post.c` | The `http(s):` fetcher over the host's `Fetcher`, form bodies |
 | `netsurf-sys/csrc/nsx_image.c` | PNG and JPEG content handlers, decoded by the host |
 | `src/fetch.rs` | The public `Fetcher` API and the fetches in flight |
-| `src/image.rs` | PNG (`png`) and JPEG (`zune-jpeg`) decoding, capped at 64 megapixels |
+| `src/image.rs` | PNG (`png`) and JPEG (`zune-jpeg`) decoding, capped at 16 megapixels |
 | `src/engine.rs` | The one engine thread (NetSurf's core is global) |
 | `src/fonts.rs` | Text measuring for NetSurf's layout, over xui's shaper |
 | `src/record.rs` | Plotter calls into an `xui-litehtml` display list |

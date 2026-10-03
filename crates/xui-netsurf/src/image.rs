@@ -14,9 +14,10 @@ use zune_jpeg::zune_core::bytestream::ZCursor;
 use zune_jpeg::zune_core::colorspace::ColorSpace;
 use zune_jpeg::zune_core::options::DecoderOptions;
 
-/// The most pixels one image may have: 64 megapixels, a 256 MiB bitmap.
+/// The most pixels one image may have: 16 megapixels, a 64 MiB bitmap (LazyOS guests
+/// have 1 GiB by default).
 /// Anything larger is a decompression bomb, not a web page image.
-pub(crate) const MAX_PIXELS: u64 = 64 * 1024 * 1024;
+pub(crate) const MAX_PIXELS: u64 = 16 * 1024 * 1024;
 
 const PNG_SIGNATURE: &[u8] = &[0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A];
 
