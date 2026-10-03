@@ -25,7 +25,7 @@ const MAX_CACHED: usize = 8192;
 /// A font as NetSurf asks for it.
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct FontReq {
-    /// The family to ask the shaper for (a CSS name or a generic one).
+    /// The family to ask the shaper for; empty for its default family.
     pub(crate) family: String,
     /// The em size in CSS pixels.
     pub(crate) size: f32,
@@ -36,20 +36,10 @@ pub(crate) struct FontReq {
 }
 
 impl FontReq {
-    /// The family to use: the first one the CSS named, else the generic one
-    /// (`generic` is NetSurf's 0 sans-serif, 1 serif, 2 monospace, ...).
+    /// The family to use for the first family the CSS named and NetSurf's
+    /// generic one (see `families`).
     pub(crate) fn family_for(named: Option<&str>, generic: i32) -> String {
-        match named {
-            Some(name) if !name.is_empty() => name.to_string(),
-            _ => match generic {
-                1 => "serif",
-                2 => "monospace",
-                3 => "cursive",
-                4 => "fantasy",
-                _ => "sans-serif",
-            }
-            .to_string(),
-        }
+        crate::families::resolve(named, generic)
     }
 
     fn key(&self) -> (String, u32, u16, bool) {
@@ -62,10 +52,15 @@ impl FontReq {
     }
 
     fn spec(&self) -> FontSpec {
-        FontSpec::new(Dip(self.size.max(1.0)))
+        let spec = FontSpec::new(Dip(self.size.max(1.0)))
             .weight(self.weight)
-            .italic(self.italic)
-            .family(self.family.as_str())
+            .italic(self.italic);
+        // Empty means the shaper's default family, as in `xui-litehtml`.
+        if self.family.is_empty() {
+            spec
+        } else {
+            spec.family(self.family.as_str())
+        }
     }
 }
 

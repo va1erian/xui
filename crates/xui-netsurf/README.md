@@ -81,6 +81,7 @@ error page.
 | `src/image.rs` | PNG (`png`) and JPEG (`zune-jpeg`) decoding, capped at 16 megapixels |
 | `src/engine.rs` | The one engine thread (NetSurf's core is global) |
 | `src/fonts.rs` | Text measuring for NetSurf's layout, over xui's shaper |
+| `src/families.rs` | CSS font families sorted into the host's sans, serif and mono families (`set_font_families`) |
 | `src/record.rs` | Plotter calls into an `xui-litehtml` display list |
 | `src/sys/` | The only `unsafe`: calls into C and the C callbacks |
 | `tests/fetch.rs` | A fake server: redirects, images, a 404, failures, cookies, a form POST |

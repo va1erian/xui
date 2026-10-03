@@ -30,6 +30,7 @@
 #![warn(missing_docs)]
 
 mod engine;
+mod families;
 mod fetch;
 mod fonts;
 mod image;
@@ -38,5 +39,6 @@ mod sys;
 mod view;
 mod widget;
 
+pub use crate::families::{FontFamilies, set_font_families};
 pub use crate::fetch::{FetchMethod, FetchRequest, FetchResponder, Fetcher, set_fetcher};
 pub use crate::view::{NetSurfView, NetSurfViewEvent};
