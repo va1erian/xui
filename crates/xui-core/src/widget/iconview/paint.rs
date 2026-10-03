@@ -87,7 +87,7 @@ fn paint_tile(
     // A decorated theme highlights the whole tile like a selected row.
     let fancy = look::decorated(theme);
     match fill {
-        Some(_) if fancy && selected && state.has_focus => look::selected_row(canvas, tile, theme),
+        Some(_) if fancy && selected => look::selected_row(canvas, tile, theme),
         Some(fill) if fancy => look::row(canvas, tile, fill, theme),
         Some(fill) => canvas.fill_rect(text_rect, fill),
         None => {}
