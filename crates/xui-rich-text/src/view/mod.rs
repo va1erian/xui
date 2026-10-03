@@ -4,6 +4,7 @@
 //! [`Document`] through the portable canvas.
 
 mod paint;
+mod scroll;
 mod state;
 
 use std::cell::RefCell;
@@ -12,6 +13,7 @@ use std::rc::Rc;
 use xui_core::app::Ui;
 use xui_core::backend::{Event, NodeKind, NodeSpec, Result};
 use xui_core::geometry::Rect;
+use xui_core::message::MouseButton;
 use xui_core::theme::{Theme, Themed};
 use xui_core::widget::Control;
 
@@ -31,7 +33,7 @@ impl<M: 'static> RichTextEditor<M> {
     /// Creates an empty editor at `bounds` (device pixels).
     pub fn new(ui: &Ui<M>, bounds: Rect) -> Result<RichTextEditor<M>> {
         let control = Control::new(ui, &NodeSpec::new(NodeKind::Custom, bounds))?;
-        let state = Rc::new(RefCell::new(State::new(ui.text_shaper())));
+        let state = Rc::new(RefCell::new(State::new(ui.text_shaper(), bounds, ui.dpi())));
         {
             let state = Rc::clone(&state);
             let theme = ui.theme_handle();
@@ -44,16 +46,53 @@ impl<M: 'static> RichTextEditor<M> {
             let ui = ui.clone();
             let id = control.id();
             control.on_events(move |event| {
-                if let Event::MouseWheel {
-                    delta,
-                    horizontal: false,
-                    ..
-                } = *event
-                {
-                    let mut state = state.borrow_mut();
-                    let step = f32::from(delta) / 120.0 * WHEEL_DIP * ui.dpi() as f32 / 96.0;
-                    state.scroll = (state.scroll - step).clamp(0.0, state.max_scroll());
-                    drop(state);
+                let mut state = state.borrow_mut();
+                if let Event::Resize { width, height } = *event {
+                    state.bounds = Rect::new(0, 0, width, height);
+                }
+                if event.is_input() {
+                    // The first input can arrive before the first paint.
+                    let (bounds, dpi) = (state.bounds, ui.dpi());
+                    state.prepare(bounds, dpi);
+                }
+                let mut capture = None;
+                let handled = match *event {
+                    Event::MouseWheel {
+                        delta,
+                        horizontal: false,
+                        ..
+                    } => {
+                        let step = f32::from(delta) / 120.0 * WHEEL_DIP * state.dpi as f32 / 96.0;
+                        state.scroll_by(-step);
+                        true
+                    }
+                    Event::MouseDown {
+                        x,
+                        y,
+                        button: MouseButton::Left,
+                        ..
+                    } if state.on_bar(x, y) => {
+                        capture = state.press_bar(y).then_some(true);
+                        true
+                    }
+                    Event::MouseMove { y, .. } => state.drag_bar(y),
+                    Event::MouseUp {
+                        button: MouseButton::Left,
+                        ..
+                    }
+                    | Event::CaptureChanged => {
+                        capture = state.release_bar().then_some(false);
+                        capture.is_some()
+                    }
+                    _ => false,
+                };
+                drop(state);
+                match capture {
+                    Some(true) => ui.set_capture(id),
+                    Some(false) => ui.release_capture(),
+                    None => {}
+                }
+                if handled {
                     ui.invalidate(id);
                 }
                 None

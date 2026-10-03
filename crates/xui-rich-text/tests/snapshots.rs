@@ -168,3 +168,30 @@ fn a_high_dpi_render_is_larger_and_still_paints_text() {
     let bg = image.pixel(600, 1500).unwrap();
     assert!(count(&image, (16, 1200), (20, 80), |p| p[0].abs_diff(bg[0]) > 120) > 800);
 }
+
+#[test]
+fn clicking_the_scrollbar_track_pages_the_document() {
+    use xui_canvas::snapshot::render_with;
+
+    let at_top = render_sized(Theme::light(), 96, 300.0, |_| {});
+    let paged = render_with(
+        Snapshot::new(Dip(WIDTH), Dip(300.0)).theme(Theme::light()),
+        |ui| {
+            let editor = RichTextEditor::new(ui, Rect::new(0, 0, WIDTH as i32, 300))?
+                .document(sample_document());
+            Ok(Host { _editor: editor })
+        },
+        |stage| {
+            // The first paint lays the document out; the second sees the bar.
+            stage.hover(10, 10);
+            stage.click(634, 290);
+        },
+    )
+    .expect("render");
+    assert_ne!(
+        at_top.pixels(),
+        paged.pixels(),
+        "the click scrolled the page"
+    );
+    save("rich-text-paged.png", &paged);
+}

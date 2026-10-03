@@ -5,38 +5,19 @@
 
 use xui_core::backend::{Canvas, Rgba};
 use xui_core::geometry::{Point, Rect};
-use xui_core::widget::scrollbar::{self, Orientation, Scroll, THICKNESS, ThumbState};
-use xui_core::{Color, Dip, Theme};
+use xui_core::widget::scrollbar::{self, Orientation, ThumbState};
+use xui_core::{Color, Theme};
 
-use super::state::State;
+use super::state::{State, pad_px};
 use crate::layout::{FRect, Line, ParaLayout, PlacedItem, PlacedKind};
 use crate::model::{CharStyle, DocPos, TextColor};
-
-/// The margin between the view's edge and the text, on each side.
-const PAD: Dip = Dip(8.0);
-
-/// The text margin in device pixels at `dpi`.
-pub(crate) fn pad_px(dpi: u32) -> i32 {
-    PAD.to_px(dpi).value()
-}
-
-/// The width of the scrollbar column, in device pixels.
-pub(crate) fn bar_width(dpi: u32) -> i32 {
-    THICKNESS.to_px(dpi).value()
-}
 
 /// Paints the document, its selection and the scrollbar.
 pub(crate) fn paint(canvas: &mut dyn Canvas, state: &mut State, theme: &Theme) {
     let bounds = canvas.bounds();
     let dpi = canvas.dpi();
-    let bar = bar_width(dpi).min(bounds.width());
-    let text_area = Rect::new(bounds.left, bounds.top, bounds.right - bar, bounds.bottom);
-    let pad = pad_px(dpi);
-    state.sync(
-        (text_area.width() - 2 * pad).max(0) as f32,
-        bounds.height() as f32,
-        dpi,
-    );
+    let text_area = state.prepare(bounds, dpi);
+    let (track, pad) = (state.track, pad_px(dpi));
     canvas.fill_rect(bounds, theme.input_background);
 
     let scroll = state.scroll;
@@ -56,19 +37,18 @@ pub(crate) fn paint(canvas: &mut dyn Canvas, state: &mut State, theme: &Theme) {
     }
     canvas.pop_clip();
 
-    let track = Rect::new(bounds.right - bar, bounds.top, bounds.right, bounds.bottom);
-    let content = Scroll {
-        viewport: bounds.height(),
-        content: layout.height().ceil() as i32,
-        offset: scroll.round() as i32,
+    let thumb = if state.bar_drag.is_some() {
+        ThumbState::Pressed
+    } else {
+        ThumbState::Normal
     };
     scrollbar::paint_state(
         canvas,
         track,
-        content,
+        state.bar_scroll(),
         Orientation::Vertical,
         *theme,
-        ThumbState::Normal,
+        thumb,
     );
 }
 
