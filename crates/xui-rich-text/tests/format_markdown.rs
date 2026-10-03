@@ -114,6 +114,24 @@ fn overlapping_emphasis_nests_instead_of_crossing() {
 }
 
 #[test]
+fn markers_touching_asterisks_use_tags_when_a_word_follows() {
+    let mut d = doc("abcde");
+    style(&mut d, (0, 0, 0, 3), CharStylePatch::bold(true));
+    style(&mut d, (0, 1, 0, 4), CharStylePatch::italic(true));
+    assert_eq!(md(&d), "**a*bc***<em>d</em>e\n");
+
+    let mut d = doc("abc");
+    style(&mut d, (0, 0, 0, 2), CharStylePatch::italic(true));
+    style(&mut d, (0, 2, 0, 3), CharStylePatch::bold(true));
+    assert_eq!(md(&d), "*ab*__c__\n");
+
+    let mut d = doc("abcd");
+    style(&mut d, (0, 0, 0, 2), CharStylePatch::italic(true));
+    style(&mut d, (0, 2, 0, 3), CharStylePatch::bold(true));
+    assert_eq!(md(&d), "*ab*<strong>c</strong>d\n");
+}
+
+#[test]
 fn markers_stay_off_whitespace() {
     let mut d = doc("a  bold  b");
     style(&mut d, (0, 1, 0, 9), CharStylePatch::bold(true));

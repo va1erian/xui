@@ -96,6 +96,15 @@ reverts invalid input, firing `on_commit` only for a valid commit.
 | `Slider<M>` | `Slider::new(ui, rect, min, max)` | `on_change(f64)`, `on_commit(f64)`; `set_range` |
 | `ComboBox<M>` | `ComboBox::new(ui, rect, &[items])` | `on_select(usize)`; `item_icon(index, impl Into<IconRef>)` / `set_item_icon(index, Option<IconRef>)` add a leading 16 DIP icon to an item, in the list and in the closed box while selected (`icon(index)` reads it back) |
 
+### Rich text (optional)
+
+`xui-rich-text` provides `RichTextEditor`, an editable rich-text widget with
+character and paragraph formatting, lists and images that text flows around. It
+is a custom-painted node like `xui-code-editor`'s editor, so it runs on every
+backend and follows the theme. It is opt-in: depend on the crate directly or
+enable the `xui` crate's `rich-text` feature. Documents save as JSON and export
+to Markdown. See its [README](../crates/xui-rich-text/README.md).
+
 ### Collections
 
 `ListView<M>` is a virtualized list. Build it from words or from a model:

@@ -13,6 +13,8 @@ use crate::model::{Document, OBJECT_CHAR, Paragraph};
 const DELIMITERS: [&str; 3] = ["**", "*", "~~"];
 /// The same, for a marker that would otherwise touch a `*`.
 const UNDERSCORES: [&str; 3] = ["__", "_", "~~"];
+/// Opening and closing tags, for such a marker when its run ends in a word.
+const HTML: [(&str, &str); 3] = [("<strong>", "</strong>"), ("<em>", "</em>"), ("~~", "~~")];
 
 /// A bold weight, as far as Markdown is concerned.
 const BOLD_WEIGHT: u16 = 600;
@@ -222,16 +224,21 @@ fn emit_emphasis(units: &[Unit<'_>], out: &mut String) {
             .collect();
         fresh.sort_by_key(|&m| std::cmp::Reverse(run_end[i][m]));
         // A marker right after `*` would fuse with it into a run the parser
-        // cannot split, so it switches to the underscore form.
+        // cannot split. The underscore form works unless the run ends inside
+        // a word (`_x_y` does not close), where an HTML tag does.
         let after_star = out.ends_with('*');
         for m in fresh {
-            let delimiter = if after_star {
-                UNDERSCORES[m]
-            } else {
-                DELIMITERS[m]
+            let ends_in_word = units
+                .get(run_end[i][m])
+                .and_then(|u| u.text.chars().next())
+                .is_some_and(char::is_alphanumeric);
+            let (opener, closer) = match (after_star, ends_in_word) {
+                (false, _) => (DELIMITERS[m], DELIMITERS[m]),
+                (true, false) => (UNDERSCORES[m], UNDERSCORES[m]),
+                (true, true) => HTML[m],
             };
-            out.push_str(delimiter);
-            open.push((m, delimiter));
+            out.push_str(opener);
+            open.push((m, closer));
         }
         out.push_str(&unit.text);
     }

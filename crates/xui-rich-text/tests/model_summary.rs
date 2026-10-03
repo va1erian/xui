@@ -61,6 +61,27 @@ fn paragraph_attributes_follow_the_paragraphs_touched() {
 }
 
 #[test]
+fn a_range_ending_at_the_start_of_a_paragraph_excludes_that_paragraph() {
+    let mut doc = Document::from_plain_text("abc\ndef");
+    bold(&mut doc, range(1, 0, 1, 3));
+    apply(
+        &mut doc,
+        EditOp::SetParaStyle {
+            paras: 1..2,
+            patch: ParaStylePatch::kind(BlockKind::Quote),
+        },
+    );
+    let sel = Selection::text(DocPos::new(0, 0), DocPos::new(1, 0));
+    let summary = doc.style_summary(&sel);
+    assert_eq!(summary.bold, Tri::Uniform(false));
+    assert_eq!(summary.kind, Tri::Uniform(BlockKind::Body));
+    let through = Selection::text(DocPos::new(0, 0), DocPos::new(1, 1));
+    let summary = doc.style_summary(&through);
+    assert_eq!(summary.bold, Tri::Mixed);
+    assert_eq!(summary.kind, Tri::Mixed);
+}
+
+#[test]
 fn size_and_family_vary_independently() {
     let mut doc = Document::from_plain_text("abcd");
     apply(

@@ -35,6 +35,7 @@ snapshots and tests. Dark mode is first-class on every backend.
 | `xui-gpu` | The shared OpenGL seam behind both backends' GL widgets: the opaque `GlContext` handle, the `GlSurface` frame/offscreen lifecycle and the offscreen readback. Keeps `glow` out of `xui-core`. |
 | `xui` | The umbrella crate most applications depend on. Selects a backend by feature (`canvas` by default, `d2d` for the Windows Direct2D backend) and re-exports the portable front layer. |
 | `xui-code-editor` | A code-editor widget: rope buffer, monospace view, find/replace, pluggable syntax highlighting. |
+| `xui-rich-text` | An opt-in editable rich-text widget for a basic word processor: styled runs, paragraph formatting, lists, inline and floating images that text wraps around, undo, JSON save and Markdown export. Portable: lays out through the backend `TextShaper`. Enable with `xui`'s `rich-text` feature. |
 | `xui-icons` | An optional, multi-colour vector icon set (36 icons) in two compile-time styles, flat "Global Village" and glossy "Aero" (`--features aero`), drawn through the portable `Canvas` path API, so the software backend rasterises it with `tiny-skia`. Depends on `xui-core` only. |
 | `xui-explorer` | A portable spatial file explorer: one window per folder, with all OS specifics behind `Platform`/`Launcher` traits and a std-backed desktop shell. |
 | `xui-litehtml` | An HTML view built on `litehtml` and Direct2D. A portable custom-painted node that runs on every backend. |
