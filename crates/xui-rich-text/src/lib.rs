@@ -17,6 +17,7 @@
 //!
 //! See `docs/plans/rich-text-editor.md` for the design.
 
+pub mod edit;
 pub mod format;
 pub mod layout;
 pub mod model;
