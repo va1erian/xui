@@ -8,9 +8,10 @@ use xui_core::geometry::{Point, Rect};
 use xui_core::widget::scrollbar::{self, Orientation, ThumbState};
 use xui_core::{Color, Theme};
 
+use super::overlay;
 use super::state::{State, pad_px};
 use crate::layout::{FRect, Line, ParaLayout, PlacedItem, PlacedKind};
-use crate::model::{CharStyle, DocPos, TextColor};
+use crate::model::{CharStyle, DocPos, Selection, TextColor};
 
 /// The contrast (WCAG ratio) automatic text must keep against a highlight.
 const MIN_CONTRAST: f32 = 4.5;
@@ -38,6 +39,7 @@ pub(crate) fn paint(canvas: &mut dyn Canvas, state: &mut State, theme: &Theme) {
     for para in &layout.paragraphs()[range.clone()] {
         painter.paragraph(canvas, para);
     }
+    overlay::paint(canvas, state, theme, pad, scroll.round() as i32);
     canvas.pop_clip();
 
     let thumb = if state.bar_drag.is_some() {
@@ -104,18 +106,25 @@ impl Painter<'_> {
 
     /// Paints the selection of the visible paragraphs behind the text.
     fn selection(&self, canvas: &mut dyn Canvas, visible: std::ops::Range<usize>) {
-        let (Some((a, b)), Some(last)) = (self.state.selection, visible.end.checked_sub(1)) else {
+        let (Selection::Text { anchor: a, head: b }, Some(last)) =
+            (self.state.ed.selection, visible.end.checked_sub(1))
+        else {
             return;
         };
         let (a, b) = if a <= b { (a, b) } else { (b, a) };
-        let doc = &self.state.doc;
+        let doc = &self.state.ed.doc;
         let from = a.max(DocPos::new(visible.start, 0));
         let to = b.min(DocPos::new(last, doc.paragraphs()[last].text().len()));
         if from >= to {
             return;
         }
         for rect in self.state.layout.selection_rects(doc, from, to) {
-            canvas.fill_rect(self.rect(rect), self.theme.selection);
+            let color = if self.state.focused {
+                self.theme.selection
+            } else {
+                self.theme.selection_unfocused
+            };
+            canvas.fill_rect(self.rect(rect), color);
         }
     }
 
@@ -137,11 +146,11 @@ impl Painter<'_> {
                 marker.x.round() as i32 + self.pad,
                 (para.y + marker.y).round() as i32 - self.shift,
             );
-            let style = self.state.doc.styles().char(marker.style);
+            let style = self.state.ed.doc.styles().char(marker.style);
             canvas.draw_layout(marker.layout.as_ref(), origin, self.color(style));
         }
         for float in &para.floats {
-            if let Some(object) = self.state.doc.objects().get(float.id) {
+            if let Some(object) = self.state.ed.doc.objects().get(float.id) {
                 canvas.draw_image(&object.image, self.frect(&float.rect, para.y));
             }
         }
@@ -157,7 +166,7 @@ impl Painter<'_> {
     }
 
     fn item(&self, canvas: &mut dyn Canvas, para_y: f32, line: &Line, item: &PlacedItem) {
-        let style = self.state.doc.styles().char(item.style);
+        let style = self.state.ed.doc.styles().char(item.style);
         let top = para_y + line.y;
         let baseline = para_y + line.baseline + item.dy;
         let (left, right) = (item.x.round() as i32, (item.x + item.width).round() as i32);
@@ -180,7 +189,7 @@ impl Painter<'_> {
                 canvas.draw_layout(layout.as_ref(), origin, color);
             }
             PlacedKind::Object { id, height } => {
-                if let Some(object) = self.state.doc.objects().get(*id) {
+                if let Some(object) = self.state.ed.doc.objects().get(*id) {
                     let bottom = para_y + line.baseline;
                     let rect = Rect::new(
                         left,

@@ -30,12 +30,12 @@ impl State {
 
     /// The caret box at `pos` in view coordinates.
     pub fn caret_rect_view(&self, pos: DocPos, affinity: Affinity) -> Rect {
-        self.to_view(self.layout.caret_rect_with(&self.doc, pos, affinity))
+        self.to_view(self.layout.caret_rect_with(&self.ed.doc, pos, affinity))
     }
 
     /// The position nearest the view point `point`.
     pub fn pos_at_view(&self, point: Point) -> DocPos {
-        self.layout.pos_at(&self.doc, self.to_layout(point))
+        self.layout.pos_at(&self.ed.doc, self.to_layout(point))
     }
 
     /// Scrolls the least that brings `rect` (layout coordinates) into the

@@ -6,7 +6,7 @@
 use unicode_segmentation::GraphemeCursor;
 use xui_core::geometry::{Point, Rect};
 
-use super::{Layout, Line, ParaLayout, PlacedItem, PlacedKind};
+use super::{FRect, Layout, Line, ParaLayout, PlacedItem, PlacedKind};
 use crate::model::{Affinity, DocPos, Document, ObjectId};
 
 /// How much wider than the text a selected paragraph break is drawn, as a
@@ -247,6 +247,24 @@ impl Layout {
             }
         }
         out
+    }
+
+    /// Where image `id`, anchored in paragraph `para`, is drawn (layout
+    /// pixels): a float's rectangle or the box of an inline image.
+    pub fn object_rect(&self, para: usize, id: ObjectId) -> Option<Rect> {
+        let layout = self.paras.get(para)?;
+        if let Some(float) = layout.floats.iter().find(|f| f.id == id) {
+            return Some(float.rect.shifted(layout.y).to_rect());
+        }
+        layout.lines.iter().find_map(|line| {
+            line.items.iter().find_map(|item| match item.kind {
+                PlacedKind::Object { id: found, height } if found == id => {
+                    let bottom = layout.y + line.baseline;
+                    Some(FRect::new(item.x, bottom - height, item.x + item.width, bottom).to_rect())
+                }
+                _ => None,
+            })
+        })
     }
 
     /// The image under `point`: a float's image or an inline image.

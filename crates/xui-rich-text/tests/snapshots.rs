@@ -8,6 +8,7 @@ use xui_core::{Dip, Rect, Theme};
 mod common;
 
 use common::sample_document;
+use xui_rich_text::edit::Command;
 use xui_rich_text::{DocPos, RichTextEditor};
 
 struct Host {
@@ -129,13 +130,13 @@ fn floats_paint_where_the_text_leaves_room() {
 fn a_selection_paints_behind_the_text() {
     let plain = render(Theme::light(), 96, |_| {});
     let selected = render(Theme::light(), 96, |editor| {
-        editor.set_selection(Some((DocPos::new(3, 0), DocPos::new(3, 60))));
+        select(editor, DocPos::new(3, 0), DocPos::new(3, 60));
     });
     save("rich-text-selection.png", &selected);
-    let theme = Theme::light().selection;
-    let is_selection = |p: [u8; 4]| p[..3] == [theme.r, theme.g, theme.b];
-    assert_eq!(count(&plain, (0, 640), (0, 760), is_selection), 0);
-    assert!(count(&selected, (0, 640), (0, 760), is_selection) > 500);
+    let (on, off) = (Theme::light().selection, Theme::light().selection_unfocused);
+    let is_selection = |p: [u8; 4]| p[..3] == [on.r, on.g, on.b] || p[..3] == [off.r, off.g, off.b];
+    let baseline = count(&plain, (0, 640), (0, 760), is_selection);
+    assert!(count(&selected, (0, 640), (0, 760), is_selection) > baseline + 500);
 }
 
 #[test]
@@ -218,4 +219,17 @@ fn automatic_text_on_a_highlight_stays_readable_in_dark_mode() {
     });
     assert!(dark > 30, "dark glyphs on the highlight: {dark}");
     assert_eq!(white, 0, "no white text on the highlight");
+}
+
+/// Selects `anchor` to `head` through commands, with the editor focused.
+fn select(editor: &RichTextEditor<()>, anchor: DocPos, head: DocPos) {
+    editor.focus();
+    editor.exec(Command::SetCaret {
+        pos: anchor,
+        extend: false,
+    });
+    editor.exec(Command::SetCaret {
+        pos: head,
+        extend: true,
+    });
 }
