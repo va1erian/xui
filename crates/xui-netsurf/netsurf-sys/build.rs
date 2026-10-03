@@ -4,7 +4,8 @@
 //!
 //! The file lists in `sources/` are what NetSurf's own Makefiles compile for a
 //! frontend-less build with curl, JavaScript, PNG/JPEG/WebP, SVG, utf8proc,
-//! libnslog and libnspsl turned off (`scripts/regen.sh` records how they were
+//! libnslog and libnspsl turned off (the glue brings its own http(s) fetcher
+//! and PNG/JPEG handlers, which hand the work to the host) (`scripts/regen.sh` records how they were
 //! made). Files the libraries generate at build time with perl, gperf and
 //! small host tools are committed under `generated/`, so this script needs only
 //! a C compiler.
@@ -201,7 +202,14 @@ fn build_netsurf(
     for file in source_list(root, "netsurf") {
         build.file(locate(vendor, generated, "netsurf", &file));
     }
-    for glue in ["nsx_core.c", "nsx_window.c", "nsx_plot.c"] {
+    for glue in [
+        "nsx_core.c",
+        "nsx_window.c",
+        "nsx_plot.c",
+        "nsx_fetch.c",
+        "nsx_post.c",
+        "nsx_image.c",
+    ] {
         build.file(root.join("csrc").join(glue));
     }
     build.compile("netsurf");

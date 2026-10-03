@@ -7,7 +7,8 @@
 //!
 //! The thread runs NetSurf's timers (fetches, layout, image decoding are all
 //! driven by them), handles the commands that arrived, and after each round
-//! records a fresh display list for every window NetSurf invalidated.
+//! records a fresh display list for every window NetSurf invalidated. The
+//! host fetcher's answers arrive as commands too, so one wakes the thread.
 
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
@@ -18,6 +19,7 @@ use std::time::Duration;
 use xui_core::backend::TextShaper;
 use xui_litehtml::DisplayList;
 
+use crate::fetch::{self, FetchEvent, Fetches};
 use crate::fonts::Fonts;
 use crate::record::{Recorder, Registry};
 use crate::sys;
@@ -68,6 +70,11 @@ pub(crate) enum Command {
     Close {
         id: u64,
     },
+    /// The host fetcher's answer to fetch `id`.
+    Fetch {
+        id: u64,
+        event: FetchEvent,
+    },
 }
 
 /// A finished drawing of the page.
@@ -85,6 +92,7 @@ pub(crate) enum Output {
     Url(String),
     Loading(bool),
     Failed(String),
+    FetchFailed { url: String, message: String },
 }
 
 /// Per-window state the NetSurf callbacks update (through `&self`: they
@@ -93,6 +101,10 @@ pub(crate) struct WinState {
     size: Cell<(i32, i32)>,
     dirty: Cell<bool>,
     epoch: Cell<u64>,
+    /// Between NetSurf's start and stop of a load.
+    loading: Cell<bool>,
+    /// The URL NetSurf last reported, without its fragment.
+    url: RefCell<String>,
     registry: RefCell<Registry>,
     out: Sender<Output>,
     wake: Wake,
@@ -122,8 +134,12 @@ impl WinState {
                 }
                 self.dirty.set(true);
             }
-            sys::EVENT_START_THROBBER => self.send(Output::Loading(true)),
+            sys::EVENT_START_THROBBER => {
+                self.loading.set(true);
+                self.send(Output::Loading(true));
+            }
             sys::EVENT_STOP_THROBBER => {
+                self.loading.set(false);
                 self.dirty.set(true);
                 self.send(Output::Loading(false));
             }
@@ -137,13 +153,33 @@ impl WinState {
     }
 
     pub(crate) fn url(&self, url: &str) {
+        *self.url.borrow_mut() = defragment(url).to_string();
         self.send(Output::Url(url.to_string()));
     }
 }
 
-/// What the NetSurf host callbacks reach: the text measurer.
+/// What the NetSurf host callbacks reach: the text measurer and the
+/// fetches in flight.
 pub(crate) struct Engine {
     pub(crate) fonts: Fonts,
+    pub(crate) fetches: Fetches,
+    /// Whether NetSurf hands `http(s):` to the host fetcher yet.
+    fetcher_registered: Cell<bool>,
+}
+
+impl Engine {
+    /// Registers the host fetcher with NetSurf once the application has set
+    /// one.
+    fn register_fetcher(&self) {
+        if !self.fetcher_registered.get() && fetch::fetcher().is_some() {
+            let ok = sys::register_fetcher();
+            if !ok {
+                log::error!("xui-netsurf: could not register the http(s) fetcher");
+            }
+            // Registering twice would add a second fetcher for the schemes.
+            self.fetcher_registered.set(true);
+        }
+    }
 }
 
 /// The engine's command channel, starting the thread on first use with the
@@ -154,9 +190,10 @@ pub(crate) fn commands(shaper: impl FnOnce() -> Arc<dyn TextShaper>) -> Sender<C
         .get_or_init(|| {
             let (tx, rx) = mpsc::channel();
             let shaper = shaper();
+            let fetch_tx = tx.clone();
             let spawned = std::thread::Builder::new()
                 .name("netsurf-engine".to_string())
-                .spawn(move || run(shaper, rx));
+                .spawn(move || run(shaper, rx, fetch_tx));
             if let Err(e) = spawned {
                 log::error!("xui-netsurf: could not start the engine thread: {e}");
             }
@@ -172,10 +209,12 @@ struct Window {
     state: Box<WinState>,
 }
 
-fn run(shaper: Arc<dyn TextShaper>, rx: Receiver<Command>) {
+fn run(shaper: Arc<dyn TextShaper>, rx: Receiver<Command>, fetch_tx: Sender<Command>) {
     // NetSurf keeps the host pointer for the life of the process.
     let engine: &'static Engine = Box::leak(Box::new(Engine {
         fonts: Fonts::new(shaper),
+        fetches: Fetches::new(fetch_tx),
+        fetcher_registered: Cell::new(false),
     }));
     if let Err(e) = sys::init(engine) {
         log::error!("xui-netsurf: NetSurf did not start: {e}");
@@ -197,9 +236,9 @@ fn run(shaper: Arc<dyn TextShaper>, rx: Receiver<Command>) {
         };
         match rx.recv_timeout(wait) {
             Ok(cmd) => {
-                handle(&mut windows, cmd);
+                handle(engine, &mut windows, cmd);
                 while let Ok(cmd) = rx.try_recv() {
-                    handle(&mut windows, cmd);
+                    handle(engine, &mut windows, cmd);
                 }
             }
             Err(RecvTimeoutError::Timeout) => {}
@@ -222,7 +261,10 @@ fn refuse_all(rx: &Receiver<Command>, why: &str) {
     }
 }
 
-fn handle(windows: &mut HashMap<u64, Window>, cmd: Command) {
+fn handle(engine: &Engine, windows: &mut HashMap<u64, Window>, cmd: Command) {
+    if matches!(cmd, Command::Open { .. } | Command::Navigate { .. }) {
+        engine.register_fetcher();
+    }
     match cmd {
         Command::Open {
             id,
@@ -235,6 +277,8 @@ fn handle(windows: &mut HashMap<u64, Window>, cmd: Command) {
                 size: Cell::new(size),
                 dirty: Cell::new(false),
                 epoch: Cell::new(0),
+                loading: Cell::new(false),
+                url: RefCell::default(),
                 registry: RefCell::default(),
                 out,
                 wake,
@@ -276,7 +320,36 @@ fn handle(windows: &mut HashMap<u64, Window>, cmd: Command) {
                 w.handle.destroy();
             }
         }
+        Command::Fetch { id, event } => fetch_event(engine, windows, id, event),
     }
+}
+
+/// Passes a fetcher's answer to NetSurf. A failure of the page a window is
+/// loading is also reported to that window, before NetSurf replaces the page
+/// with its error page, so the application learns the reason.
+fn fetch_event(engine: &Engine, windows: &HashMap<u64, Window>, id: u64, event: FetchEvent) {
+    let Some(url) = engine.fetches.accept(id, &event) else {
+        return;
+    };
+    if let FetchEvent::Fail(message) = &event {
+        log::info!("xui-netsurf: fetching {url} failed: {message}");
+        let failed = defragment(&url);
+        let loading = windows
+            .values()
+            .filter(|w| w.state.loading.get() && *w.state.url.borrow() == failed);
+        for w in loading {
+            w.state.send(Output::FetchFailed {
+                url: url.clone(),
+                message: message.clone(),
+            });
+        }
+    }
+    sys::deliver(id, event);
+}
+
+/// `url` without its `#fragment`, which is never fetched.
+fn defragment(url: &str) -> &str {
+    url.split_once('#').map_or(url, |(base, _)| base)
 }
 
 /// Records the whole document into a display list and sends it.
