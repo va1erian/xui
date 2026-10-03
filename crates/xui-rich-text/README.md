@@ -3,8 +3,8 @@
 An editable rich-text widget for [xui](../../README.md): styled runs (bold,
 italic, underline, strike-through, colour, highlight, size, family, links,
 super/subscript), paragraph formatting (alignment, indents, spacing, headings,
-quotes, bullet and numbered lists) and images, inline or floating with text
-flowing around them.
+quotes, bullet and numbered lists), images, inline or floating with text
+flowing around them, and tables.
 
 It is **portable**: text is shaped only through `xui-core`'s `TextShaper` and
 painted only through the `Canvas`, so the same widget runs on the Win32 and the
@@ -81,16 +81,41 @@ default) is the continuous column.
   as full-width exclusions, so the line breaker moves content past them; see
   [`docs/plans/page-view.md`](../../docs/plans/page-view.md).
 
+## Tables
+
+A table is a run of paragraphs that carry a `CellMark` (the table's
+`TableId` and whether the paragraph starts a row, starts a cell or continues
+one), so positions, selections and undo work across cells unchanged. Each
+table's settings (`Table`: column widths as fractions, a header row, borders)
+live in the document's `TableTable`; `Document::table_spans()` derives the
+grid. A cell holds one or more paragraphs with any formatting; images in a
+cell are shown inline.
+
+* `Command::InsertTable { rows, columns }` inserts empty cells at the caret
+  (not inside another table); `InsertRow`, `InsertColumn`, `DeleteRows`,
+  `DeleteColumns` and `DeleteTable` act on the cells the selection covers;
+  `SetTable` changes the borders, header row or column widths.
+* Tab and Shift+Tab move between cells and select their text; Tab in the last
+  cell adds a row. Dragging a column edge resizes the columns as one undo step.
+* Deleting a selection across cells clears their text and leaves the grid;
+  edits never join paragraphs of different cells.
+* Each row is as tall as its tallest cell. In page view a row that would cross
+  a page moves to the next one, below a copy of the header row; a row taller
+  than a page is split between lines.
+* `RichTextEditor::table_cursor()` gives the caret's table, row and column for
+  toolbars.
+
 ## Saving and exporting
 
 * **Native JSON** (`serde` feature, on by default): `format::to_json(&doc)` and
   `format::from_json(&str)`. Versioned and lossless; images are embedded as
-  base64 PNG, and the page setup and page breaks are kept (files without them
-  load on A4). Loading validates every invariant and returns a typed
+  base64 PNG, and the page setup, page breaks and tables are kept (files
+  without them load on A4). Loading validates every invariant and returns a typed
   `FormatError` instead of panicking on a bad file.
 * **Markdown** (always available): `format::to_markdown(&doc, &ImageExport)`
   writes lossy GitHub Flavored Markdown (headings, quotes, bold, italic,
-  strike-through, links, nested lists, line breaks, images). Pick
+  strike-through, links, nested lists, line breaks, images, and tables as pipe
+  tables whose first row is the header). Pick
   `ImageExport::DataUri` for a self-contained file, or
   `ImageExport::Callback` to choose each image's target yourself (for example
   write `doc_images/1.png` beside the `.md`). The crate does no file I/O.
@@ -101,6 +126,8 @@ default) is the continuous column.
 * No IME composition.
 * No bidirectional or vertical text.
 * No HTML, RTF or DOCX import or export; no Markdown import.
+* No merged cells, nested tables, cell shading or per-cell borders; a table's
+  borders are on or off.
 
 ## Snapshots
 

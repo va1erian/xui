@@ -13,6 +13,7 @@ use xui_rich_text::RichTextEditor;
 use xui_rich_text::model::{Align, ListKind, StyleSummary};
 
 use crate::commands;
+use crate::table::{TableAction, TableTools};
 use crate::ui::Tools;
 
 /// A character attribute the B / I / U / S buttons toggle.
@@ -57,6 +58,8 @@ pub enum Msg {
     List(ListKind),
     Indent,
     Outdent,
+    /// A table button was pressed.
+    Table(TableAction),
     /// A wrap was picked for the selected image (index into the list).
     Wrap(usize),
     /// A confirmation or message dialog was dismissed.
@@ -79,6 +82,7 @@ pub enum After {
 pub struct Wordpad {
     pub editor: Rc<RichTextEditor<Msg>>,
     pub tools: Tools,
+    pub table: TableTools,
     pub status: Rc<StatusBar<Msg>>,
     pub open_dialog: FileDialog<Msg>,
     pub save_dialog: FileDialog<Msg>,
@@ -149,6 +153,7 @@ impl App for Wordpad {
             Msg::Indent => commands::format(self, xui_rich_text::edit::Command::Indent),
             Msg::Outdent => commands::format(self, xui_rich_text::edit::Command::Outdent),
             Msg::Wrap(index) => commands::wrap(self, index),
+            Msg::Table(action) => commands::table(self, action),
             Msg::Dialog(action) => commands::dialog(self, ui, action),
             Msg::PickerClosed => commands::picker_closed(self),
             Msg::CloseRequested => commands::quit(self, ui),

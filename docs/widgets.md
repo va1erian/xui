@@ -99,9 +99,9 @@ reverts invalid input, firing `on_commit` only for a valid commit.
 ### Rich text (optional)
 
 `xui-rich-text` provides `RichTextEditor`, an editable rich-text widget with
-character and paragraph formatting, lists and images that text flows around. It
-is a custom-painted node like `xui-code-editor`'s editor, so it runs on every
-backend and follows the theme. It is opt-in: depend on the crate directly or
+character and paragraph formatting, lists, tables and images that text flows
+around. It is a custom-painted node like `xui-code-editor`'s editor, so it runs
+on every backend and follows the theme. It is opt-in: depend on the crate directly or
 enable the `xui` crate's `rich-text` feature. Documents save as JSON and export
 to Markdown. See its [README](../crates/xui-rich-text/README.md).
 

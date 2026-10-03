@@ -1,7 +1,7 @@
 #![forbid(unsafe_code)]
 
 //! Builds the wordpad's widget tree: a command toolbar, a formatting row, the
-//! editor and a status bar, laid out with `xui_core::arrange`.
+//! table row, the editor and a status bar, laid out with `xui_core::arrange`.
 
 use std::rc::Rc;
 
@@ -19,6 +19,7 @@ use xui_rich_text::model::{Align, BlockKind, ListKind, StyleSummary, Tri, Wrap};
 use xui_rich_text::{RichTextEditor, ViewMode};
 
 use crate::app::{Mark, Msg, Wordpad, shortcut};
+use crate::table::TableTools;
 
 /// The block kinds the picker offers, in order.
 pub const BLOCKS: [&str; 5] = ["Normal", "Heading 1", "Heading 2", "Heading 3", "Quote"];
@@ -261,6 +262,7 @@ pub fn build(ui: &Ui<Msg>) -> Result<Wordpad> {
     editor.set_view_mode(ViewMode::Page);
     let outdent = push(ui, t, (Lucide::IndentDecrease, "Outdent"), || Msg::Outdent)?;
 
+    let table = TableTools::new(ui)?;
     let status = Rc::new(StatusBar::auto(
         ui,
         &["New document", "Saved", "Page 1 of 1"],
@@ -326,6 +328,7 @@ pub fn build(ui: &Ui<Msg>) -> Result<Wordpad> {
                 .child(page_view.width(ICON_WIDTH))
                 .fixed(FORMAT_HEIGHT),
         )
+        .child(table.row().fixed(FORMAT_HEIGHT))
         .child(widget(EditorPane(Rc::clone(&editor))).fill(1))
         .child(&status);
     let mounted = ui.mount(root)?;
@@ -342,6 +345,7 @@ pub fn build(ui: &Ui<Msg>) -> Result<Wordpad> {
             wrap,
             _tips: tips,
         },
+        table,
         status,
         open_dialog,
         save_dialog,

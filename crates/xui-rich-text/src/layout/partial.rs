@@ -13,7 +13,8 @@ use xui_core::backend::TextShaper;
 use super::floats::FloatCtx;
 use super::flow::{Layout, list_numbers};
 use super::resolve::{para_metrics, scale_for};
-use crate::model::Document;
+use super::table::TableLayout;
+use crate::model::{Document, TableSpan};
 
 /// How many times a window is re-checked after layouts changed the heights
 /// above it.
@@ -36,6 +37,7 @@ impl Layout {
         self.fit(doc);
         // An edit to an earlier item can renumber a clean visible one.
         let numbers = list_numbers(doc);
+        let spans = doc.table_spans();
         let mut laid = 0;
         for _ in 0..ROUNDS {
             self.reposition(doc);
@@ -49,8 +51,17 @@ impl Layout {
             if todo.is_empty() || laid >= budget {
                 break;
             }
+            let mut done_to = 0;
             for index in todo.into_iter().take(budget - laid) {
+                if index < done_to {
+                    continue;
+                }
                 laid += 1;
+                if let Some(span) = spans.iter().find(|t| t.paras.contains(&index)) {
+                    self.lay_table_alone(doc, shaper, span, &numbers);
+                    done_to = span.paras.end;
+                    continue;
+                }
                 let (ctx, speculative) = match index.checked_sub(1).map(|i| &self.paras[i]) {
                     Some(prev) => (
                         FloatCtx::from_relative(&prev.exit, prev.bottom()),
@@ -91,11 +102,61 @@ impl Layout {
         self.first_pending().is_none()
     }
 
+    /// Lays out table `span` where the flow now puts it, before the tables
+    /// and paragraphs above it are final (so speculatively if they are not).
+    fn lay_table_alone(
+        &mut self,
+        doc: &Document,
+        shaper: &dyn TextShaper,
+        span: &TableSpan,
+        numbers: &[Option<usize>],
+    ) {
+        let start = span.paras.start;
+        let (y, ctx, speculative) = match start.checked_sub(1) {
+            Some(prev) => {
+                let (y, ctx) = self.after(prev);
+                let p = &self.paras[prev];
+                (y, ctx, p.dirty || p.speculative)
+            }
+            None => (0.0, FloatCtx::default().with_pages(self.pages), false),
+        };
+        self.lay_table(doc, shaper, span, y, &ctx, numbers);
+        for i in span.paras.clone() {
+            self.paras[i].speculative = speculative;
+        }
+        if let Some(next) = self.paras.get_mut(span.paras.end) {
+            next.speculative = true;
+        }
+    }
+
     /// Gives every paragraph its position (estimating the heights of those
-    /// not laid out) and the flow its height.
+    /// not laid out) and the flow its height. A laid-out table moves as a
+    /// whole; one that is not is stacked from its paragraphs' heights.
     pub(super) fn reposition(&mut self, doc: &Document) {
+        let spans = doc.table_spans();
+        self.tables
+            .retain(|t| spans.iter().any(|s| s.paras == t.paras && s.id == t.id));
+        let mut tables = spans.iter().peekable();
         let mut y = 0.0;
-        for index in 0..self.paras.len() {
+        let mut index = 0;
+        while index < self.paras.len() {
+            if let Some(span) = tables.next_if(|t| t.paras.start == index) {
+                for i in span.paras.clone() {
+                    let p = &self.paras[i];
+                    if p.dirty && p.lines.is_empty() && p.height <= 0.0 {
+                        let height = self.estimate(doc, i);
+                        self.paras[i].height = height;
+                    }
+                }
+                y = if self.table_of(index).is_some_and(|t| t.same_grid(span)) {
+                    self.move_table(span, y);
+                    self.table_of(index).map_or(y, TableLayout::bottom)
+                } else {
+                    self.place_estimated(span, y)
+                };
+                index = span.paras.end;
+                continue;
+            }
             let p = &self.paras[index];
             if p.dirty && p.lines.is_empty() && p.height <= 0.0 {
                 let height = self.estimate(doc, index);
@@ -103,6 +164,7 @@ impl Layout {
             }
             self.paras[index].y = y;
             y += self.paras[index].height;
+            index += 1;
         }
         let floats = match self.paras.last() {
             Some(last) if !last.dirty => {

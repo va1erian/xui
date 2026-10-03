@@ -1,7 +1,7 @@
 #![forbid(unsafe_code)]
 
-//! Mouse drags: extending a selection, resizing a selected image by a handle
-//! and moving an image to a drop point.
+//! Mouse drags: extending a selection, resizing a selected image by a handle,
+//! moving an image to a drop point and moving a table's column edge.
 
 use xui_core::geometry::Point;
 use xui_core::{Dip, Px};
@@ -51,6 +51,9 @@ pub(crate) enum Drag {
         moving: bool,
         drop: Option<DocPos>,
     },
+    /// Moving a table's column edge: the layout's table index, the edge's
+    /// index and where it is now (layout pixels).
+    Column { table: usize, edge: usize, x: f32 },
 }
 
 impl State {
@@ -151,6 +154,10 @@ impl State {
                 });
                 true
             }
+            Some(Drag::Column { table, edge, .. }) => {
+                self.drag_column(table, edge, to);
+                true
+            }
             None => false,
         }
     }
@@ -171,6 +178,7 @@ impl State {
                 drop: Some(to),
                 ..
             }) => out.absorb(&self.run(Command::MoveObject { id, to })),
+            Some(Drag::Column { table, edge, x }) => self.end_column_drag(table, edge, x, out),
             _ => {}
         }
         out.invalidate = true;
@@ -179,6 +187,7 @@ impl State {
     /// Abandons the drag without committing it (Escape, or losing the capture).
     pub fn cancel_drag(&mut self) -> bool {
         self.drop_caret = None;
+        self.column_guide = None;
         match self.drag.take() {
             Some(Drag::Resize { .. }) => {
                 self.cancel_preview();

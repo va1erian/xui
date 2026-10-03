@@ -112,6 +112,7 @@ impl EditorState {
             spans: vec![Span { len, style }],
             anchors: vec![id],
             style: ParaStyleId::DEFAULT,
+            cell: None,
         };
         let range = DocRange {
             start: from,
@@ -122,6 +123,7 @@ impl EditorState {
             let content = Slice {
                 paras: vec![piece],
                 objects: vec![(id, object)],
+                tables: Vec::new(),
             };
             cx.apply(EditOp::Reinsert { at: to, content })?;
             Ok(Some(Selection::Object(id)))

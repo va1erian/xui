@@ -6,9 +6,20 @@ use xui_core::message::{Key, Modifiers};
 
 use crate::edit::{Command, Motion};
 
+/// Where Tab goes: what the caret is in.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum TabTarget {
+    /// Plain text: Tab types a tab.
+    Text,
+    /// A list item: Tab indents, Shift+Tab outdents.
+    List,
+    /// A table cell: Tab and Shift+Tab move between cells.
+    Table,
+}
+
 /// The command for `key` pressed with `mods`, or `None` when the key does
-/// nothing in an editor. `in_list` makes Tab indent instead of typing a tab.
-pub(crate) fn command_for(key: Key, mods: Modifiers, in_list: bool) -> Option<Command> {
+/// nothing in an editor. `tab` says what Tab does.
+pub(crate) fn command_for(key: Key, mods: Modifiers, tab: TabTarget) -> Option<Command> {
     // AltGr arrives as Ctrl+Alt and types characters, not shortcuts.
     let ctrl = mods.ctrl && !mods.alt;
     let extend = mods.shift;
@@ -34,8 +45,10 @@ pub(crate) fn command_for(key: Key, mods: Modifiers, in_list: bool) -> Option<Co
         Key::RETURN if mods.shift => Some(Command::InsertLineBreak),
         Key::RETURN => Some(Command::InsertParagraph),
         Key::TAB if ctrl => None,
-        Key::TAB if in_list && mods.shift => Some(Command::Outdent),
-        Key::TAB if in_list => Some(Command::Indent),
+        Key::TAB if tab == TabTarget::Table && mods.shift => Some(Command::PrevCell),
+        Key::TAB if tab == TabTarget::Table => Some(Command::NextCell),
+        Key::TAB if tab == TabTarget::List && mods.shift => Some(Command::Outdent),
+        Key::TAB if tab == TabTarget::List => Some(Command::Indent),
         Key::TAB if mods.shift => None,
         Key::TAB => Some(Command::InsertText("\t".into())),
         Key::A if ctrl => Some(Command::SelectAll),
@@ -68,21 +81,21 @@ mod tests {
     #[test]
     fn arrows_move_and_shift_extends() {
         assert!(matches!(
-            command_for(Key::LEFT, SHIFT, false),
+            command_for(Key::LEFT, SHIFT, TabTarget::Text),
             Some(Command::Move {
                 motion: Motion::Left,
                 extend: true
             })
         ));
         assert!(matches!(
-            command_for(Key::RIGHT, CTRL, false),
+            command_for(Key::RIGHT, CTRL, TabTarget::Text),
             Some(Command::Move {
                 motion: Motion::WordRight,
                 extend: false
             })
         ));
         assert!(matches!(
-            command_for(Key::HOME, CTRL, false),
+            command_for(Key::HOME, CTRL, TabTarget::Text),
             Some(Command::Move {
                 motion: Motion::DocStart,
                 ..
@@ -93,24 +106,36 @@ mod tests {
     #[test]
     fn tab_indents_in_a_list_and_types_a_tab_elsewhere() {
         assert!(matches!(
-            command_for(Key::TAB, Modifiers::NONE, true),
+            command_for(Key::TAB, Modifiers::NONE, TabTarget::List),
             Some(Command::Indent)
         ));
         assert!(matches!(
-            command_for(Key::TAB, SHIFT, true),
+            command_for(Key::TAB, SHIFT, TabTarget::List),
             Some(Command::Outdent)
         ));
         assert!(matches!(
-            command_for(Key::TAB, Modifiers::NONE, false),
+            command_for(Key::TAB, Modifiers::NONE, TabTarget::Text),
             Some(Command::InsertText(t)) if t == "\t"
         ));
-        assert!(command_for(Key::TAB, SHIFT, false).is_none());
+        assert!(command_for(Key::TAB, SHIFT, TabTarget::Text).is_none());
+    }
+
+    #[test]
+    fn tab_moves_between_cells_in_a_table() {
+        assert!(matches!(
+            command_for(Key::TAB, Modifiers::NONE, TabTarget::Table),
+            Some(Command::NextCell)
+        ));
+        assert!(matches!(
+            command_for(Key::TAB, SHIFT, TabTarget::Table),
+            Some(Command::PrevCell)
+        ));
     }
 
     #[test]
     fn control_shortcuts() {
         assert!(matches!(
-            command_for(Key::Z, CTRL, false),
+            command_for(Key::Z, CTRL, TabTarget::Text),
             Some(Command::Undo)
         ));
         let redo = Modifiers {
@@ -119,14 +144,14 @@ mod tests {
             ..Modifiers::NONE
         };
         assert!(matches!(
-            command_for(Key::Z, redo, false),
+            command_for(Key::Z, redo, TabTarget::Text),
             Some(Command::Redo)
         ));
         assert!(matches!(
-            command_for(Key::B, CTRL, false),
+            command_for(Key::B, CTRL, TabTarget::Text),
             Some(Command::ToggleBold)
         ));
-        assert!(command_for(Key::B, Modifiers::NONE, false).is_none());
+        assert!(command_for(Key::B, Modifiers::NONE, TabTarget::Text).is_none());
     }
 
     #[test]
@@ -136,6 +161,6 @@ mod tests {
             alt: true,
             ..Modifiers::NONE
         };
-        assert!(command_for(Key::B, altgr, false).is_none());
+        assert!(command_for(Key::B, altgr, TabTarget::Text).is_none());
     }
 }

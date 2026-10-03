@@ -15,6 +15,12 @@
 //! `page` (in dip) and a paragraph style's `page_break_before` came with page
 //! view; files without them load with an A4 page and no breaks.
 //!
+//! Tables came later still, and are left out of a document without one:
+//! a top-level `"tables": [{"id": 0, "columns": [0.5, 0.5], "header": false,
+//! "border": true}]` and, on each paragraph in a table, `"cell": {"table": 0,
+//! "start": "row" | "cell" | "continue"}`. A reader that predates them sees
+//! the cells as plain paragraphs.
+//!
 //! Styles are written as the interned tables, so ids survive a round trip.
 //! Images are embedded as base64 PNG (a JPEG source comes back as PNG). The
 //! file types are serde "shadow" structs; the model derives nothing.
@@ -31,9 +37,9 @@ use super::FormatError;
 use super::base64;
 use crate::model::{
     CharStyle, CharStyleId, Document, InlineImage, ObjectId, ObjectTable, ParaStyle, ParaStyleId,
-    Paragraph, Span, StyleTable,
+    Paragraph, Span, StyleTable, TableId, TableTable,
 };
-use dto::{CharDto, PageDto, ParaDto, WrapDto};
+use dto::{CellDto, CharDto, PageDto, ParaDto, TableDto, WrapDto};
 
 /// The version `to_json` writes and `from_json` reads.
 const VERSION: u32 = 1;
@@ -52,6 +58,9 @@ struct FileDto {
     /// Absent in files written before page view: they get the default page.
     #[serde(default)]
     page: Option<PageDto>,
+    /// Absent in a document without tables.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    tables: Vec<TableDto>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -78,6 +87,8 @@ struct ParagraphDto {
     #[serde(default)]
     anchors: Vec<u32>,
     style: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    cell: Option<CellDto>,
 }
 
 /// Writes `doc` as JSON.
@@ -120,9 +131,18 @@ pub fn to_json(doc: &Document) -> String {
                 spans: p.spans().iter().map(|s| (s.len, s.style.0)).collect(),
                 anchors: p.anchors().iter().map(|id| id.0).collect(),
                 style: p.style().0,
+                cell: p.cell().map(CellDto::from),
             })
             .collect(),
         page: Some(PageDto::from(doc.page())),
+        tables: doc
+            .table_spans()
+            .iter()
+            .filter_map(|span| {
+                let table = doc.tables().get(span.id)?;
+                Some(TableDto::new(span.id.0, table))
+            })
+            .collect(),
     };
     serde_json::to_string(&file).expect("the shadow types always serialize")
 }
@@ -161,7 +181,19 @@ pub fn from_json(json: &str) -> Result<Document, FormatError> {
             )));
         }
     }
-    let doc = Document::from_parts(paragraphs, styles, objects).map_err(FormatError::Invalid)?;
+    let mut tables = TableTable::new();
+    for dto in file.tables {
+        let id = TableId(dto.id());
+        if id.0 == u32::MAX || tables.get(id).is_some() {
+            return Err(FormatError::Invalid(format!(
+                "bad or duplicate table {}",
+                id.0
+            )));
+        }
+        tables.insert_with_id(id, dto.into());
+    }
+    let doc = Document::from_parts_with_tables(paragraphs, styles, objects, tables)
+        .map_err(FormatError::Invalid)?;
     match file.page {
         Some(page) => doc
             .with_page(page.into())
@@ -240,5 +272,6 @@ fn build_paragraph(index: usize, dto: ParagraphDto) -> Result<Paragraph, FormatE
         })
         .collect();
     paragraph.anchors = dto.anchors.into_iter().map(ObjectId).collect();
+    paragraph.cell = dto.cell.map(Into::into);
     Ok(paragraph)
 }

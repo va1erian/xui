@@ -14,15 +14,18 @@ use super::items::ShapeCtx;
 use super::line::{Params, break_lines};
 use super::resolve::{para_metrics, quote_rule_x, scale_for};
 use super::shape_cache::ShapeCache;
+use super::table::TableLayout;
 use super::{Marker, Pages, ParaLayout};
-use crate::model::{BlockKind, Document, ListKind};
+use crate::model::{BlockKind, CellStart, Document, ListKind};
 
-/// The laid-out document: one [`ParaLayout`] per paragraph.
+/// The laid-out document: one [`ParaLayout`] per paragraph, and the grid of
+/// each table.
 pub struct Layout {
     pub(crate) paras: Vec<ParaLayout>,
+    pub(super) tables: Vec<TableLayout>,
     pub(super) width: f32,
     pub(super) dpi: u32,
-    cache: ShapeCache,
+    pub(super) cache: ShapeCache,
     pub(super) height: f32,
     pub(super) pages: Option<Pages>,
 }
@@ -39,6 +42,7 @@ impl Layout {
     pub fn new() -> Layout {
         Layout {
             paras: Vec::new(),
+            tables: Vec::new(),
             width: 0.0,
             dpi: 96,
             cache: ShapeCache::default(),
@@ -138,6 +142,9 @@ impl Layout {
         let end = (first + removed).min(self.paras.len());
         self.paras
             .splice(first..end, (0..inserted).map(|_| ParaLayout::dirty()));
+        if removed != inserted {
+            self.drop_tables_from(first);
+        }
     }
 
     /// The paragraphs, top to bottom.
@@ -150,10 +157,20 @@ impl Layout {
         self.height
     }
 
-    /// The paragraphs that intersect the vertical span `top..bottom`.
+    /// The paragraphs that intersect the vertical span `top..bottom`. A table
+    /// row is visible or not as a whole.
     pub fn visible(&self, top: f32, bottom: f32) -> Range<usize> {
-        let first = self.paras.partition_point(|p| p.bottom() <= top);
-        let last = self.paras.partition_point(|p| p.y < bottom);
+        // Cells sit side by side, so inside a table the paragraphs' tops are
+        // not in order; rows are, so the search is snapped out to whole rows.
+        let mut first = self.paras.partition_point(|p| p.bottom() <= top);
+        let mut last = self.paras.partition_point(|p| p.y < bottom);
+        if let Some(t) = self.table_of(first) {
+            first = t.rows[t.row_at(top)].cells[0].start.min(first);
+        }
+        if let Some(t) = last.checked_sub(1).and_then(|i| self.table_of(i)) {
+            let row = &t.rows[t.row_at(bottom)];
+            last = row.cells.last().map_or(last, |c| c.end.max(last));
+        }
         first..last.max(first)
     }
 
@@ -173,6 +190,7 @@ impl Layout {
         let count = doc.paragraphs().len();
         if self.paras.len() != count {
             self.paras.resize_with(count, ParaLayout::dirty);
+            self.tables.clear();
             self.mark_all_dirty();
         }
     }
@@ -194,16 +212,35 @@ impl Layout {
     ) -> usize {
         let count = self.paras.len();
         let pages = self.pages;
-        let (mut y, mut ctx) = match first.checked_sub(1).map(|i| &self.paras[i]) {
-            Some(prev) => (
-                prev.bottom(),
-                FloatCtx::from_relative(&prev.exit, prev.bottom()).with_pages(pages),
-            ),
+        let spans = doc.table_spans();
+        self.tables
+            .retain(|t| spans.iter().any(|s| s.paras == t.paras && s.id == t.id));
+        let first = spans
+            .iter()
+            .find(|t| t.paras.contains(&first))
+            .map_or(first, |t| t.paras.start);
+        let (mut y, mut ctx) = match first.checked_sub(1) {
+            Some(prev) => self.after(prev),
             None => (0.0, FloatCtx::default().with_pages(pages)),
         };
         let numbers = list_numbers(doc);
         let (mut index, mut laid) = (first, 0);
+        let mut tables = spans.iter().skip_while(|t| t.paras.end <= first).peekable();
         while index < count {
+            if let Some(span) = tables.next_if(|t| t.paras.start == index) {
+                if self.table_reusable(span, y, &numbers) {
+                    self.move_table(span, y);
+                } else if laid < budget {
+                    laid += 1;
+                    self.lay_table(doc, shaper, span, y, &ctx, &numbers);
+                } else {
+                    self.paras[index].speculative = true;
+                    break;
+                }
+                index = span.paras.end;
+                (y, ctx) = self.after(index - 1);
+                continue;
+            }
             let entering = ctx.relative(y);
             let reusable = !self.paras[index].dirty
                 && self.paras[index].entering == entering
@@ -222,9 +259,7 @@ impl Layout {
                 self.paras[index].speculative = true;
                 break;
             }
-            let p = &self.paras[index];
-            y = p.bottom();
-            ctx = FloatCtx::from_relative(&p.exit, y).with_pages(pages);
+            (y, ctx) = self.after(index);
             index += 1;
         }
         self.reposition(doc);
@@ -248,29 +283,43 @@ impl Layout {
             cache: &mut self.cache,
             dpi: self.dpi,
             width: self.width,
+            x: 0.0,
+            cell: false,
         };
         self.paras[index] = lay_out(doc, index, env, y, ctx, number);
     }
 }
 
 /// What laying out a paragraph needs besides the document.
-struct Env<'a> {
-    shaper: &'a dyn TextShaper,
-    cache: &'a mut ShapeCache,
+pub(super) struct Env<'a> {
+    pub(super) shaper: &'a dyn TextShaper,
+    pub(super) cache: &'a mut ShapeCache,
     pub(super) dpi: u32,
+    /// The width of the column the paragraph is set in.
     pub(super) width: f32,
+    /// The column's left edge in area pixels.
+    pub(super) x: f32,
+    /// Whether the column is a table cell: pictures stay inline there, and a
+    /// page break before the paragraph is ignored.
+    pub(super) cell: bool,
 }
 
 /// Each paragraph's list number: for a numbered item, its place (from 1) among
 /// the consecutive numbered items of its level, with deeper items in between
 /// skipped; `None` for anything else. One forward pass: a counter per level,
 /// cleared by a non-list paragraph, by a shallower item (for the levels below
-/// it) and by a bullet at the same level.
+/// it), by a bullet at the same level, and on entering or leaving a cell.
 pub(super) fn list_numbers(doc: &Document) -> Vec<Option<usize>> {
     let mut counters: Vec<Option<usize>> = Vec::new();
+    let mut in_table = false;
     doc.paragraphs()
         .iter()
         .map(|para| {
+            let starts_cell = para.cell().is_some_and(|c| c.start != CellStart::Continue);
+            if starts_cell || in_table != para.cell().is_some() {
+                counters.clear();
+            }
+            in_table = para.cell().is_some();
             let Some(item) = doc.styles().para(para.style()).list else {
                 counters.clear();
                 return None;
@@ -287,7 +336,7 @@ pub(super) fn list_numbers(doc: &Document) -> Vec<Option<usize>> {
 }
 
 /// Lays out paragraph `index` with its top at `y`, given the floats in `ctx`.
-fn lay_out(
+pub(super) fn lay_out(
     doc: &Document,
     index: usize,
     env: Env<'_>,
@@ -309,16 +358,18 @@ fn lay_out(
         scale,
         kind: style.kind,
         tick,
+        inline_only: env.cell,
     };
     let items = shape.build(para);
     let entering = ctx.relative(y);
+    let page_break = style.page_break_before && !env.cell;
     let start = match ctx.pages() {
-        Some(pages) if style.page_break_before && !pages.at_top(y) => pages.break_before(y),
+        Some(pages) if page_break && !pages.at_top(y) => pages.break_before(y),
         _ => y + metrics.before,
     };
     let params = Params {
-        area: env.width,
-        left: metrics.left,
+        area: env.x + env.width,
+        left: env.x + metrics.left,
         right: metrics.right,
         first: metrics.first,
         align: style.align,
@@ -341,7 +392,7 @@ fn lay_out(
             unreachable!("a marker is shaped text")
         };
         Marker {
-            x: (metrics.left - metrics.marker_gap - shaped.width).max(0.0),
+            x: env.x + (metrics.left - metrics.marker_gap - shaped.width).max(0.0),
             y: first_baseline - layout.baseline(),
             layout,
             style: first_style,
@@ -350,7 +401,7 @@ fn lay_out(
     let rule = (style.kind == BlockKind::Quote).then(|| {
         let top = broken.lines.first().map_or(0.0, |l| l.y);
         let bottom = broken.lines.last().map_or(top, |l| l.y + l.height);
-        (quote_rule_x(metrics.left, scale), top, bottom)
+        (env.x + quote_rule_x(metrics.left, scale), top, bottom)
     });
     let bottom = broken.end + metrics.after;
     ParaLayout {
@@ -370,7 +421,7 @@ fn lay_out(
         entering,
         exit: ctx.relative(bottom),
         laid_y: y,
-        page_break: style.page_break_before,
+        page_break,
         dirty: false,
         speculative: false,
         text: Arc::from(para.text()),

@@ -10,6 +10,7 @@
 
 mod merge;
 mod style;
+mod table;
 pub(crate) mod text;
 
 use std::fmt;
@@ -19,14 +20,16 @@ use super::paragraph::Span;
 use super::patch::{CharStylePatch, ParaStylePatch};
 use super::selection::DocRange;
 use super::style::{CharStyleId, ParaStyleId};
+use super::table::{CellMark, Table, TableId};
 use super::{DocPos, Document, InlineImage, ObjectId, PageSetup};
 
 pub use text::Slice;
 
 /// One edit of a [`Document`].
 ///
-/// The first eight variants and `SetPage` are what editing commands create;
-/// `Remove` to `RestoreParaStyles` are the exact inverses `apply` hands back, which a [`History`](super::History)
+/// The first eight variants, `SetPage` and the table ops from `InsertParas`
+/// on are what editing commands create; `Remove` to `RestoreParaStyles` are
+/// the exact inverses `apply` hands back, which a [`History`](super::History)
 /// stores. They may also be applied directly.
 #[derive(Clone, Debug)]
 pub enum EditOp {
@@ -106,6 +109,33 @@ pub enum EditOp {
     RestoreParaStyles(Vec<(usize, ParaStyleId)>),
     /// Replaces the page setup; its own inverse (with the old setup).
     SetPage(PageSetup),
+    /// Inserts whole paragraphs before paragraph `at` (which may be the
+    /// paragraph count), with the objects they anchor and the tables they
+    /// make up. The inverse of `RemoveParas`.
+    InsertParas {
+        /// The index the first new paragraph gets.
+        at: usize,
+        /// The paragraphs, objects and tables.
+        content: Slice,
+    },
+    /// Removes whole paragraphs (not all of them); a table left with none is
+    /// removed too.
+    RemoveParas {
+        /// The paragraph indices.
+        paras: Range<usize>,
+    },
+    /// Replaces a table's settings; its own inverse (with the old ones).
+    SetTable {
+        /// The table.
+        id: TableId,
+        /// Its new settings.
+        table: Table,
+    },
+    /// Sets the cell marks of the listed paragraphs; its own inverse.
+    SetCells(Vec<(usize, Option<CellMark>)>),
+    /// Applies the ops in order as one edit; the inverse undoes them in
+    /// reverse. Deleting across cells hands one back.
+    Batch(Vec<EditOp>),
 }
 
 /// Why an edit could not be applied.
@@ -123,6 +153,8 @@ pub enum EditError {
     UnknownStyle,
     /// The page setup leaves no room for text or is not finite.
     BadPage,
+    /// The table is not in the document, or its settings are not valid.
+    BadTable,
 }
 
 impl fmt::Display for EditError {
@@ -134,6 +166,7 @@ impl fmt::Display for EditError {
             EditError::UnknownObject(id) => write!(f, "unknown object {id:?}"),
             EditError::UnknownStyle => f.write_str("unknown style"),
             EditError::BadPage => f.write_str("bad page setup"),
+            EditError::BadTable => f.write_str("bad table"),
         }
     }
 }
@@ -149,8 +182,7 @@ impl Document {
             EditOp::InsertText { at, text, style } => self.op_insert_text(at, &text, style),
             EditOp::Delete { range } => {
                 self.check_range(range)?;
-                let keep = self.typing_style(range.start);
-                Ok(self.remove(range, keep))
+                self.op_delete(range)
             }
             EditOp::SplitParagraph { at } => self.op_split(at),
             EditOp::MergeParagraph { para } => self.op_merge(para),
@@ -173,6 +205,11 @@ impl Document {
                 page.check().map_err(|_| EditError::BadPage)?;
                 Ok(EditOp::SetPage(std::mem::replace(&mut self.page, page)))
             }
+            EditOp::InsertParas { at, content } => self.op_insert_paras(at, content),
+            EditOp::RemoveParas { paras } => self.op_remove_paras(paras),
+            EditOp::SetTable { id, table } => self.op_set_table(id, table),
+            EditOp::SetCells(entries) => self.op_set_cells(entries),
+            EditOp::Batch(ops) => self.op_batch(ops),
         }
     }
 

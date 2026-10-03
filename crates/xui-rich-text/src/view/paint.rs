@@ -70,6 +70,7 @@ fn paint_local(canvas: &mut dyn Canvas, state: &mut State, theme: &Theme, bounds
     for para in &layout.paragraphs()[range.clone()] {
         painter.paragraph(canvas, para);
     }
+    painter.tables(canvas, shift as f32, (shift + bounds.height()) as f32);
     overlay::paint(canvas, state, ink, pad, shift);
     canvas.pop_clip();
 
@@ -88,18 +89,18 @@ fn paint_local(canvas: &mut dyn Canvas, state: &mut State, theme: &Theme, bounds
     );
 }
 
-struct Painter<'a> {
-    theme: &'a Theme,
-    state: &'a State,
+pub(super) struct Painter<'a> {
+    pub(super) theme: &'a Theme,
+    pub(super) state: &'a State,
     /// The scroll offset in whole pixels.
-    shift: i32,
+    pub(super) shift: i32,
     /// The left margin in whole pixels.
-    pad: i32,
-    scale: f32,
+    pub(super) pad: i32,
+    pub(super) scale: f32,
 }
 
 impl Painter<'_> {
-    fn rect(&self, r: Rect) -> Rect {
+    pub(super) fn rect(&self, r: Rect) -> Rect {
         r.offset(self.pad, -self.shift)
     }
 
@@ -159,7 +160,7 @@ impl Painter<'_> {
         }
     }
 
-    fn paragraph(&self, canvas: &mut dyn Canvas, para: &ParaLayout) {
+    pub(super) fn paragraph(&self, canvas: &mut dyn Canvas, para: &ParaLayout) {
         let height = self.state.viewport as i32;
         if let Some((x, top, bottom)) = para.rule {
             let w = (2.0 * self.scale).round().max(1.0) as i32;

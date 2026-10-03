@@ -161,16 +161,32 @@ impl ParaLayout {
 }
 
 impl Layout {
-    fn para_at(&self, y: f32) -> Option<usize> {
+    /// The paragraph nearest `(x, y)`: by `y`, and inside a table by the row
+    /// at `y`, the column at `x` and the paragraph of that cell at `y`.
+    fn para_at(&self, x: f32, y: f32) -> Option<usize> {
         let last = self.paras.len().checked_sub(1)?;
-        let at = self.paras.partition_point(|p| p.bottom() <= y);
-        Some(at.min(last))
+        // Inside a table the tops are only in order row by row, so the search
+        // may land anywhere in the row holding `y`, or just past the table.
+        let at = self.paras.partition_point(|p| p.bottom() <= y).min(last);
+        let table = self.table_of(at).or_else(|| {
+            let before = self.table_of(at.checked_sub(1)?)?;
+            (y < before.bottom()).then_some(before)
+        });
+        let Some(t) = table else {
+            return Some(at);
+        };
+        let cell = t.rows[t.row_at(y)].cells[t.col_at(x)].clone();
+        let in_cell = &self.paras[cell.clone()];
+        let offset = in_cell
+            .partition_point(|p| p.bottom() <= y)
+            .min(cell.len() - 1);
+        Some(cell.start + offset)
     }
 
     /// The position nearest `point` (area pixels). Needs a laid-out document.
     pub fn pos_at(&self, doc: &Document, point: Point) -> DocPos {
         let (x, y) = (point.x as f32, point.y as f32);
-        let Some(index) = self.para_at(y) else {
+        let Some(index) = self.para_at(x, y) else {
             return DocPos::default();
         };
         let para = &self.paras[index];
@@ -281,7 +297,7 @@ impl Layout {
                 }
             }
         }
-        let para = &self.paras[self.para_at(y)?];
+        let para = &self.paras[self.para_at(x, y)?];
         let line = &para.lines[para.line_at(y)?];
         line.items.iter().find_map(|item| match item.kind {
             PlacedKind::Object { id, height }

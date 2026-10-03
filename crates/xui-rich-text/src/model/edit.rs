@@ -8,15 +8,21 @@ use super::ops::text::{end_after, sanitize};
 use super::ops::{EditError, EditOp};
 use super::paragraph::Paragraph;
 use super::selection::{DocRange, Selection};
+use super::table::CellStart;
 use super::{DocPos, Document, ObjectId};
 
-/// The text of `paragraphs` without object anchors, joined by `\n`.
+/// The text of `paragraphs` without object anchors, joined by `\n`, with a
+/// tab instead before each table cell that does not start a row.
 pub(crate) fn plain_text(paragraphs: &[Paragraph]) -> String {
-    let lines: Vec<String> = paragraphs
-        .iter()
-        .map(|p| p.text.replace(OBJECT_CHAR, ""))
-        .collect();
-    lines.join("\n")
+    let mut out = String::new();
+    for (i, p) in paragraphs.iter().enumerate() {
+        if i > 0 {
+            let cell = p.cell.is_some_and(|c| c.start == CellStart::Cell);
+            out.push(if cell { '\t' } else { '\n' });
+        }
+        out.extend(p.text.chars().filter(|&c| c != OBJECT_CHAR));
+    }
+    out
 }
 
 impl Document {

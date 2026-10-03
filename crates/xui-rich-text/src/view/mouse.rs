@@ -79,6 +79,11 @@ impl State {
             out.capture = Some(true);
             return;
         }
+        if let Some((table, edge)) = self.column_edge_at(point) {
+            self.begin_column_drag(table, edge);
+            out.capture = Some(true);
+            return;
+        }
         let at = self.to_layout(point);
         if let Some(id) = self.layout.object_at(at) {
             if self.ed.selection != Selection::Object(id) {
@@ -151,6 +156,9 @@ impl State {
         }
         if let Some(handle) = self.handle_at(point) {
             return handle.cursor();
+        }
+        if self.column_edge_at(point).is_some() {
+            return Cursor::SizeHorizontal;
         }
         let at = self.to_layout(point);
         if self.layout.object_at(at).is_some() {

@@ -8,10 +8,12 @@
 //! changed, keeps the caret in view and tells the app through the mappers it
 //! was built with.
 
+mod columns;
 mod coords;
 mod drag;
 mod events;
 mod exec;
+mod grid;
 mod keys;
 mod mouse;
 mod overlay;
@@ -34,7 +36,7 @@ use xui_core::theme::{Theme, Themed};
 use xui_core::widget::Control;
 use xui_core::widget::Placeable;
 
-use crate::edit::{Clipboard, Command};
+use crate::edit::{Clipboard, Command, TableCursor};
 use crate::model::{Affinity, DocPos, Document, Selection, StyleSummary};
 use events::Out;
 use shared::Shared;
@@ -148,6 +150,12 @@ impl<M: 'static> RichTextEditor<M> {
     /// The current selection.
     pub fn selection(&self) -> Selection {
         self.shared.state.borrow().ed.selection
+    }
+
+    /// Where the caret is in a table (its row, column and the table's
+    /// settings), or `None` outside one: for enabling table commands.
+    pub fn table_cursor(&self) -> Option<TableCursor> {
+        self.shared.state.borrow().ed.table_cursor()
     }
 
     /// Takes the keyboard focus.

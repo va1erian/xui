@@ -86,6 +86,9 @@ pub(crate) struct State {
     /// The caret shown at the drop point while dragging an image (layout
     /// pixels).
     pub drop_caret: Option<Rect>,
+    /// The guide shown at a table column edge while it is dragged (layout
+    /// pixels).
+    pub column_guide: Option<Rect>,
     /// Timer ticks so far (the blink phase counts them).
     pub ticks: u32,
     /// Draft or page view.
@@ -124,6 +127,7 @@ impl State {
             cursor: Cursor::Text,
             image: None,
             drop_caret: None,
+            column_guide: None,
             ticks: 0,
             mode: ViewMode::Draft,
             origin: Point::new(pad_px(dpi), pad_px(dpi)),
@@ -139,6 +143,7 @@ impl State {
         self.drag = None;
         self.image = None;
         self.drop_caret = None;
+        self.column_guide = None;
     }
 
     /// Lays the document out for a view of `bounds` at `dpi`, places the bar

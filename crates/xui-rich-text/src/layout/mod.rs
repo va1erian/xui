@@ -24,6 +24,7 @@ mod partial;
 mod resolve;
 mod segment;
 mod shape_cache;
+mod table;
 #[cfg(test)]
 mod tests;
 
@@ -37,6 +38,7 @@ use crate::model::{CharStyleId, ObjectId};
 pub use floats::{Excl, ExclKind, FRect};
 pub use flow::Layout;
 pub use pages::Pages;
+pub use table::{CELL_PADDING, RowLayout, TableLayout};
 
 /// What a [`PlacedItem`] draws.
 #[derive(Clone)]

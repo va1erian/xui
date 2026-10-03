@@ -9,6 +9,8 @@ mod app;
 mod commands;
 #[path = "../examples/wordpad/files.rs"]
 mod files;
+#[path = "../examples/wordpad/table.rs"]
+mod table;
 #[path = "../examples/wordpad/ui.rs"]
 mod ui;
 
@@ -94,11 +96,47 @@ fn fill(app: &Wordpad) {
         extend: false,
     });
     e.exec(Command::InsertImage(picture()));
+    add_table(app);
+    e.set_scroll(0.0);
+}
+
+/// A table with a header row before the quotation, the caret in its last
+/// cell so the table row is enabled.
+fn add_table(app: &Wordpad) {
+    let e = &app.editor;
     e.exec(Command::SetCaret {
-        pos: DocPos::new(1, BODY.find("bold").unwrap() + 5),
+        pos: DocPos::new(6, 0),
         extend: false,
     });
-    e.set_scroll(0.0);
+    e.exec(Command::InsertTable {
+        rows: 3,
+        columns: 3,
+    });
+    let cells = [
+        "Feature",
+        "Shortcut",
+        "Notes",
+        "Bold",
+        "Ctrl+B",
+        "Toggles",
+        "Next cell",
+        "Tab",
+        "Adds a row at the end",
+    ];
+    for (i, text) in cells.iter().enumerate() {
+        if i > 0 {
+            e.exec(Command::NextCell);
+        }
+        e.exec(Command::InsertText((*text).into()));
+    }
+    let cursor = e.table_cursor().expect("in the table");
+    let mut table = cursor.table;
+    table.header = true;
+    e.exec(Command::SetTable {
+        id: cursor.id,
+        table: table.with_widths(&[1.0, 1.0, 2.0]),
+    });
+    app.table.sync(e.table_cursor().as_ref());
 }
 
 fn render(theme: Theme) -> Image {
