@@ -12,8 +12,7 @@ use xui_core::backend::{Result, WidgetId};
 use xui_core::geometry::{Rect, Size};
 use xui_core::layout::Insets;
 use xui_core::widget::{
-    Button, ComboBox, Dialog, FileDialog, Label, Lucide, Placeable, StatusBar, ToggleButton,
-    Toolbar,
+    Button, ComboBox, Dialog, FileDialog, Lucide, Placeable, StatusBar, ToggleButton, Toolbar,
 };
 use xui_rich_text::RichTextEditor;
 use xui_rich_text::model::{Align, BlockKind, ListKind, StyleSummary, Tri, Wrap};
@@ -43,23 +42,16 @@ impl Placeable<Msg> for ToolbarPane {
     }
 }
 
-/// A stand-in node the layout places; the editor follows it.
-struct EditorSlot {
-    node: Label<Msg>,
-    editor: Rc<RichTextEditor<Msg>>,
-}
+/// The shared editor as a layout entry.
+struct EditorPane(Rc<RichTextEditor<Msg>>);
 
-impl Placeable<Msg> for EditorSlot {
+impl Placeable<Msg> for EditorPane {
     fn id(&self) -> WidgetId {
-        self.node.id()
+        self.0.id()
     }
 
     fn natural_size(&self, _ui: &Ui<Msg>, _dpi: u32) -> Size {
         Size::new(0, 0)
-    }
-
-    fn placed(&self, _ui: &Ui<Msg>, rect: Rect) {
-        self.editor.set_bounds(rect);
     }
 }
 
@@ -141,8 +133,6 @@ fn picker(ui: &Ui<Msg>, items: &[&str], msg: fn(usize) -> Msg) -> Result<Rc<Comb
 
 /// Builds the app's widgets and mounts the layout.
 pub fn build(ui: &Ui<Msg>) -> Result<Wordpad> {
-    // Created first so the editor, made after it, paints on top.
-    let node = Label::auto(ui, "")?;
     let editor = Rc::new(
         RichTextEditor::new(ui, Rect::default())?
             .on_change(|_| Some(Msg::Edited))
@@ -232,10 +222,6 @@ pub fn build(ui: &Ui<Msg>) -> Result<Wordpad> {
     ui.on_key(shortcut);
 
     let gap = Dip(4.0);
-    let slot = EditorSlot {
-        node,
-        editor: Rc::clone(&editor),
-    };
     let root = column()
         .child(widget(ToolbarPane(commands)).height(TOOLBAR_HEIGHT))
         .child(
@@ -264,7 +250,7 @@ pub fn build(ui: &Ui<Msg>) -> Result<Wordpad> {
                 .child(spacer())
                 .fixed(FORMAT_HEIGHT),
         )
-        .child(widget(slot).fill(1))
+        .child(widget(EditorPane(Rc::clone(&editor))).fill(1))
         .child(&status);
     let mounted = ui.mount(root)?;
     editor.focus();

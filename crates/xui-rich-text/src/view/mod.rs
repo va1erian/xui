@@ -26,10 +26,12 @@ mod timer;
 use std::rc::Rc;
 
 use xui_core::app::Ui;
+use xui_core::backend::WidgetId;
 use xui_core::backend::{NodeKind, NodeSpec, Result};
-use xui_core::geometry::{Point, Rect};
+use xui_core::geometry::{Point, Rect, Size};
 use xui_core::theme::{Theme, Themed};
 use xui_core::widget::Control;
+use xui_core::widget::Placeable;
 
 use crate::edit::{Clipboard, Command};
 use crate::model::{Affinity, DocPos, Document, Selection, StyleSummary};
@@ -201,6 +203,23 @@ impl<M: 'static> RichTextEditor<M> {
     /// Moves and resizes the editor (device pixels).
     pub fn set_bounds(&self, bounds: Rect) {
         self.control.set_bounds(bounds);
+    }
+
+    /// The editor's node.
+    pub fn id(&self) -> WidgetId {
+        self.control.id()
+    }
+}
+
+/// The editor fills whatever slot a layout gives it; it has no natural size of
+/// its own.
+impl<M: 'static> Placeable<M> for RichTextEditor<M> {
+    fn id(&self) -> WidgetId {
+        self.control.id()
+    }
+
+    fn natural_size(&self, _ui: &Ui<M>, _dpi: u32) -> Size {
+        Size::new(0, 0)
     }
 }
 

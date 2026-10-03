@@ -232,3 +232,33 @@ fn dragging_after_a_triple_click_extends_by_whole_paragraphs() {
         mouse(stage, "up", x, y);
     });
 }
+
+#[test]
+fn an_editor_away_from_the_window_origin_paints_and_clicks_in_its_own_place() {
+    let rect = xui_core::Rect::new(30, 60, 400, 300);
+    let image = run_at(
+        Theme::light(),
+        rect,
+        plain("hello world"),
+        move |stage, rig| {
+            // `caret_rect` is node-local; injected input is in window pixels.
+            let at = rig.editor.caret_rect(DocPos::new(0, 3), Default::default());
+            let (x, y) = (rect.left + at.left, rect.top + (at.top + at.bottom) / 2);
+            mouse(stage, "down", x, y);
+            mouse(stage, "up", x, y);
+            assert_eq!(rig.editor.selection(), Selection::caret(DocPos::new(0, 3)));
+        },
+    );
+    let dark = |x0: u32, y0: u32, x1: u32, y1: u32| {
+        (y0..y1)
+            .flat_map(|y| (x0..x1).map(move |x| (x, y)))
+            .filter(|&(x, y)| image.pixel(x, y).is_some_and(|p| p[0] < 100))
+            .count()
+    };
+    assert_eq!(dark(0, 0, 400, 60), 0, "nothing paints above the editor");
+    assert_eq!(dark(0, 0, 30, 300), 0, "nothing paints left of the editor");
+    assert!(
+        dark(30, 60, 200, 100) > 20,
+        "the text paints inside the editor"
+    );
+}

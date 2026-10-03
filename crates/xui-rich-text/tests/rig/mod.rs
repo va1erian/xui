@@ -92,14 +92,25 @@ pub fn run_themed(
     doc: Document,
     body: impl FnOnce(&Stage<'_, Msg>, &Rig) + 'static,
 ) -> Image {
+    run_at(theme, xui_core::Rect::new(0, 0, 400, 240), doc, body)
+}
+
+/// Like [`run_themed`], with the editor at `rect` in a window that just holds
+/// it, so tests can place it away from the window's origin.
+pub fn run_at(
+    theme: Theme,
+    rect: xui_core::Rect,
+    doc: Document,
+    body: impl FnOnce(&Stage<'_, Msg>, &Rig) + 'static,
+) -> Image {
     let _watchdog = Watchdog::start();
     let slot: Rc<RefCell<Option<Rig>>> = Rc::new(RefCell::new(None));
     let build_slot = Rc::clone(&slot);
     render_with(
-        Snapshot::new(Dip(400.0), Dip(240.0)).theme(theme),
+        Snapshot::new(Dip(rect.right as f32), Dip(rect.bottom as f32)).theme(theme),
         move |ui| {
             let log = Rc::new(RefCell::new(Vec::new()));
-            let editor = RichTextEditor::new(ui, xui_core::Rect::new(0, 0, 400, 240))?
+            let editor = RichTextEditor::new(ui, rect)?
                 .with_clipboard(Box::new(MemoryClipboard::default()))
                 .on_change(|doc| Some(Msg::Changed(doc.to_plain_text())))
                 .on_selection(|summary| {

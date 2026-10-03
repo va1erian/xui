@@ -17,8 +17,23 @@ use crate::model::{CharStyle, DocPos, Selection, TextColor};
 const MIN_CONTRAST: f32 = 4.5;
 
 /// Paints the document, its selection and the scrollbar.
+///
+/// The software compositor reports [`Canvas::bounds`] as the node's window
+/// rectangle with no translation applied, while pointer events arrive
+/// node-local; so the origin moves to the node's corner and everything below
+/// works in node-local coordinates. On a canvas whose bounds already sit at the
+/// origin this is a no-op.
 pub(crate) fn paint(canvas: &mut dyn Canvas, state: &mut State, theme: &Theme) {
-    let bounds = canvas.bounds();
+    let origin = canvas.bounds();
+    let bounds = Rect::from_size(origin.size());
+    canvas.save();
+    canvas.set_translation(origin.left as f32, origin.top as f32);
+    paint_local(canvas, state, theme, bounds);
+    canvas.restore();
+}
+
+/// Paints into `bounds`, the node's area at the canvas origin.
+fn paint_local(canvas: &mut dyn Canvas, state: &mut State, theme: &Theme, bounds: Rect) {
     let dpi = canvas.dpi();
     let text_area = state.prepare(bounds, dpi);
     let (track, pad) = (state.track, pad_px(dpi));
@@ -129,7 +144,7 @@ impl Painter<'_> {
     }
 
     fn paragraph(&self, canvas: &mut dyn Canvas, para: &ParaLayout) {
-        let height = canvas.bounds().height();
+        let height = self.state.viewport as i32;
         if let Some((x, top, bottom)) = para.rule {
             let w = (2.0 * self.scale).round().max(1.0) as i32;
             let x = x.round() as i32;
