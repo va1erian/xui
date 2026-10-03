@@ -5,6 +5,7 @@
 //! changed.
 
 use std::ops::Range;
+use std::sync::Arc;
 
 use xui_core::backend::TextShaper;
 
@@ -273,5 +274,6 @@ fn lay_out(
         entering,
         exit: ctx.relative(bottom),
         dirty: false,
+        text: Arc::from(para.text()),
     }
 }

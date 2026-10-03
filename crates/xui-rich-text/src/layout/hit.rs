@@ -84,7 +84,7 @@ fn x_in_item(item: &PlacedItem, text: &str, byte: usize) -> f32 {
 
 impl Line {
     /// The x of `byte` on the line.
-    fn caret_x(&self, text: &str, byte: usize) -> f32 {
+    pub(super) fn caret_x(&self, text: &str, byte: usize) -> f32 {
         for item in &self.items {
             if byte < item.range.end {
                 return x_in_item(item, text, byte);
@@ -106,7 +106,53 @@ impl Line {
     }
 }
 
+impl Line {
+    /// The byte nearest `x`; right of the text it is [`Line::end_byte`].
+    pub(super) fn byte_at_x(&self, text: &str, x: f32, last: bool) -> usize {
+        self.items
+            .iter()
+            .find(|item| x < item.x + item.width)
+            .map_or_else(
+                || self.end_byte(last),
+                |item| {
+                    if x < item.x {
+                        item.range.start
+                    } else {
+                        byte_in_item(item, text, x - item.x)
+                    }
+                },
+            )
+    }
+
+    /// The byte where the line's text ends: before a forced break, and on a
+    /// wrapped line before its hanging spaces too.
+    pub(super) fn visible_end(&self, last: bool) -> usize {
+        let hanging = |kind: &PlacedKind| {
+            matches!(kind, PlacedKind::Break) || (!last && matches!(kind, PlacedKind::Space { .. }))
+        };
+        self.items
+            .iter()
+            .rposition(|i| !hanging(&i.kind))
+            .map_or(self.range.start, |at| self.items[at].range.end)
+    }
+}
+
 impl ParaLayout {
+    /// The index of the line holding `byte`; at a soft wrap `Downstream` picks
+    /// the later line and `Upstream` the earlier.
+    pub(super) fn line_of(&self, byte: usize, affinity: Affinity) -> usize {
+        let last = self.lines.len().saturating_sub(1);
+        let mut li = self
+            .lines
+            .iter()
+            .position(|l| byte < l.range.end)
+            .unwrap_or(last);
+        if affinity == Affinity::Upstream && li > 0 && self.lines[li].range.start == byte {
+            li -= 1;
+        }
+        li
+    }
+
     fn line_at(&self, y: f32) -> Option<usize> {
         let last = self.lines.len().checked_sub(1)?;
         let at = self.lines.partition_point(|l| self.y + l.y + l.height <= y);
@@ -133,21 +179,7 @@ impl Layout {
             return DocPos::new(index, 0);
         };
         let line = &para.lines[li];
-        let byte = line
-            .items
-            .iter()
-            .find(|item| x < item.x + item.width)
-            .map_or_else(
-                || line.end_byte(li + 1 == para.lines.len()),
-                |item| {
-                    if x < item.x {
-                        item.range.start
-                    } else {
-                        byte_in_item(item, text, x - item.x)
-                    }
-                },
-            );
-        DocPos::new(index, byte)
+        DocPos::new(index, line.byte_at_x(text, x, li + 1 == para.lines.len()))
     }
 
     /// The caret box at `pos` (a one-pixel-wide rectangle as tall as the line),
@@ -165,18 +197,10 @@ impl Layout {
         let para = &self.paras[index];
         let text = doc.paragraphs()[index].text();
         let byte = pos.byte.min(text.len());
-        let Some(last) = para.lines.len().checked_sub(1) else {
+        if para.lines.is_empty() {
             return Rect::default();
-        };
-        let mut li = para
-            .lines
-            .iter()
-            .position(|l| byte < l.range.end)
-            .unwrap_or(last);
-        if affinity == Affinity::Upstream && li > 0 && para.lines[li].range.start == byte {
-            li -= 1;
         }
-        let line = &para.lines[li];
+        let line = &para.lines[para.line_of(byte, affinity)];
         let x = line.caret_x(text, byte).round() as i32;
         let top = (para.y + line.y).round() as i32;
         Rect::new(

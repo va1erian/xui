@@ -5,18 +5,19 @@
 //!
 //! Everything here is in device pixels at the layout's DPI; the model's `Dip`
 //! sizes are converted once, when a paragraph is laid out. The pipeline per
-//! paragraph is: [`segment`] (UAX #14 break opportunities and style
+//! paragraph is: `segment` (UAX #14 break opportunities and style
 //! boundaries become pieces), `items` (each piece is shaped, through the
-//! bounded [`shape_cache`]), `line` (greedy line breaking in the intervals the
-//! [`floats`] leave free) and `flow` (paragraphs stacked into a continuous
+//! bounded `shape_cache`), `line` (greedy line breaking in the intervals the
+//! `floats` leave free) and `flow` (paragraphs stacked into a continuous
 //! area, with floats carried across paragraph boundaries and relayout limited
-//! to what changed). [`hit`] maps points to positions and back.
+//! to what changed). `hit` maps points to positions and back.
 
 mod floats;
 mod flow;
 mod hit;
 mod items;
 mod line;
+mod nav;
 mod resolve;
 mod segment;
 mod shape_cache;
@@ -138,6 +139,8 @@ pub struct ParaLayout {
     /// Exclusions still active at its bottom, relative to `y + height`.
     pub(crate) exit: Vec<Excl>,
     pub(crate) dirty: bool,
+    /// The paragraph text this layout was made from.
+    pub(crate) text: Arc<str>,
 }
 
 impl ParaLayout {
@@ -152,6 +155,7 @@ impl ParaLayout {
             entering: Vec::new(),
             exit: Vec::new(),
             dirty: true,
+            text: Arc::from(""),
         }
     }
 

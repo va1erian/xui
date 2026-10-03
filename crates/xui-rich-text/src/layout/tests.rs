@@ -5,10 +5,12 @@
 //! geometry can be asserted exactly. A default-style character is 7 px wide
 //! and a line is 18 px tall at 96 dpi.
 
+mod blocks;
 mod floats;
 mod flow;
 mod hit;
 mod lines;
+mod nav;
 
 use std::any::Any;
 

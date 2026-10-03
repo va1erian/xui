@@ -3,6 +3,7 @@
 //! The widget: [`RichTextEditor`], one custom node that paints a laid-out
 //! [`Document`] through the portable canvas.
 
+mod coords;
 mod paint;
 mod scroll;
 mod state;
@@ -12,12 +13,12 @@ use std::rc::Rc;
 
 use xui_core::app::Ui;
 use xui_core::backend::{Event, NodeKind, NodeSpec, Result};
-use xui_core::geometry::Rect;
+use xui_core::geometry::{Point, Rect};
 use xui_core::message::MouseButton;
 use xui_core::theme::{Theme, Themed};
 use xui_core::widget::Control;
 
-use crate::model::{DocPos, Document};
+use crate::model::{Affinity, DocPos, Document};
 use state::State;
 
 /// How far one wheel notch scrolls, in design units.
@@ -123,6 +124,31 @@ impl<M: 'static> RichTextEditor<M> {
     /// it to the content.
     pub fn set_scroll(&self, offset: f32) {
         self.state.borrow_mut().scroll = offset.max(0.0);
+        self.control.invalidate();
+    }
+
+    /// The caret box at `pos` in the node's client pixels, with the text
+    /// margin and scroll applied (so it can be drawn or handed to an IME).
+    pub fn caret_rect(&self, pos: DocPos, affinity: Affinity) -> Rect {
+        let mut state = self.state.borrow_mut();
+        state.ready();
+        state.caret_rect_view(pos, affinity)
+    }
+
+    /// The position nearest the client pixel `point`.
+    pub fn pos_at(&self, point: Point) -> DocPos {
+        let mut state = self.state.borrow_mut();
+        state.ready();
+        state.pos_at_view(point)
+    }
+
+    /// Scrolls the least that brings the caret at `pos` into view.
+    pub fn ensure_caret_visible(&self, pos: DocPos) {
+        let mut state = self.state.borrow_mut();
+        state.ready();
+        let caret = state.layout.caret_rect(&state.doc, pos);
+        state.ensure_visible(caret);
+        drop(state);
         self.control.invalidate();
     }
 

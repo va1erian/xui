@@ -14,7 +14,7 @@
 //! * [`layout`]: the flow engine that breaks paragraphs into lines around
 //!   floating images.
 //! * [`view`]: the [`RichTextEditor`] widget that paints a laid-out document.
-//! * [`format`]: the JSON save format and Markdown export.
+//! * [`format`](mod@format): the JSON save format and Markdown export.
 //!
 //! See `docs/plans/rich-text-editor.md` for the design.
 
