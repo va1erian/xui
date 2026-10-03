@@ -149,6 +149,14 @@ pub enum Cmd {
         /// The outline pen.
         stroke: Stroke,
     },
+    /// A filled polygon (at least three points); engines that draw borders
+    /// as trapezoids use it.
+    Polygon {
+        /// The corners, in order.
+        points: Vec<Point>,
+        /// The fill colour.
+        fill: Rgba,
+    },
     /// A text run. `width` and `height` are the run's box, for culling.
     Text {
         /// The run's top-left corner.
@@ -225,6 +233,15 @@ impl Cmd {
                 height,
                 ..
             } => Rect::from_min_size(origin.x, origin.y, *width, *height).expand(2.0),
+            Cmd::Polygon { points, .. } => {
+                let first = points.first().copied().unwrap_or_default();
+                points
+                    .iter()
+                    .fold(Rect::new(first.x, first.y, first.x, first.y), |r, p| {
+                        r.union(Rect::new(p.x, p.y, p.x, p.y))
+                    })
+                    .expand(1.0)
+            }
             Cmd::PushClip { .. } | Cmd::PopClip => return None,
         })
     }
@@ -239,7 +256,9 @@ pub struct DisplayList {
     pub size: (f32, f32),
     /// The document's fonts, indexed by [`FontKey`].
     pub fonts: Vec<FontDesc>,
-    /// The document's decoded images, indexed by [`ImageKey`].
+    /// The document's decoded images, indexed by [`ImageKey`]. An empty
+    /// image (zero width or height) marks a released slot: the painter drops
+    /// what it decoded from it.
     pub images: Vec<Arc<Image>>,
 }
 
