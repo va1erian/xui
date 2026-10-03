@@ -21,7 +21,7 @@ const INSET: Dip = Dip(8.0);
 /// The horizontal padding between the frame's left edge and the title.
 const PAD: Dip = Dip(8.0);
 /// The design size of the upper-case title a rounded theme draws.
-const CAPTION_SIZE: Dip = Dip(11.0);
+const CAPTION_SIZE: Dip = Dip(12.0);
 
 /// A titled frame that visually groups related widgets.
 ///

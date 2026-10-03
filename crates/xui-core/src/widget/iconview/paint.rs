@@ -102,10 +102,19 @@ fn paint_tile(
     }
     canvas.pop_clip();
 
+    // A tile with a single line of text centres it beside the icon.
+    let single =
+        (1..metrics.lines).all(|line| state.model.line(index, line).is_none_or(str::is_empty));
+    let lift = if single {
+        (text_rect.height() - metrics.line_height).max(0) / 2
+    } else {
+        0
+    };
     for line in 0..metrics.lines {
         let Some(rect) = metrics.line_rect(text_rect, line) else {
             break;
         };
+        let rect = rect.offset(0, lift);
         let Some(text) = state.model.line(index, line) else {
             continue;
         };
