@@ -62,6 +62,8 @@ pub struct EditorState {
     pub pending: Option<CharStylePatch>,
     /// The x that Up and Down keep while moving through short lines.
     pub sticky_x: Option<f32>,
+    /// An image shown at a trial size by `preview_object_size`.
+    pub(super) preview: Option<(crate::model::ObjectId, (xui_core::Dip, xui_core::Dip))>,
 }
 
 impl EditorState {
@@ -73,6 +75,7 @@ impl EditorState {
             selection: Selection::default(),
             pending: None,
             sticky_x: None,
+            preview: None,
         }
     }
 
@@ -118,6 +121,9 @@ impl EditorState {
                 cx.apply(EditOp::SetObject { id, object })?;
                 Ok(None)
             }),
+            Command::ResizeObject { id, size } => self.resize_object(id, size),
+            Command::MoveObject { id, to } => self.move_object(id, to),
+            Command::SetWrap { id, wrap } => self.set_wrap(id, wrap),
             Command::SelectObject(id) => self.select_object(id),
             Command::Undo => self.undo(true),
             Command::Redo => self.undo(false),

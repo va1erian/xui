@@ -2,8 +2,10 @@
 
 //! The commands toolbars, menus and key bindings share.
 
+use xui_core::Dip;
+
 use crate::model::{
-    Align, BlockKind, CharStylePatch, DocPos, InlineImage, ListKind, ObjectId, ParaStylePatch,
+    Align, BlockKind, CharStylePatch, DocPos, InlineImage, ListKind, ObjectId, ParaStylePatch, Wrap,
 };
 
 /// A caret movement.
@@ -104,6 +106,28 @@ pub enum Command {
         id: ObjectId,
         /// Its new value.
         object: InlineImage,
+    },
+    /// Commits an image resize (send once when the drag ends; use
+    /// `EditorState::preview_object_size` for the frames in between).
+    ResizeObject {
+        /// The image.
+        id: ObjectId,
+        /// Its new displayed width and height.
+        size: (Dip, Dip),
+    },
+    /// Moves an image's anchor to a position (a drag-move), selecting it.
+    MoveObject {
+        /// The image.
+        id: ObjectId,
+        /// The drop position, in the document before the move.
+        to: DocPos,
+    },
+    /// Changes how text flows around an image.
+    SetWrap {
+        /// The image.
+        id: ObjectId,
+        /// The new wrap.
+        wrap: Wrap,
     },
     /// Selects an image.
     SelectObject(ObjectId),
