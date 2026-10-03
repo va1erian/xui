@@ -13,6 +13,7 @@
 //! * [`model`]: the document, its styles and objects, and invertible edits.
 //! * [`layout`]: the flow engine that breaks paragraphs into lines around
 //!   floating images.
+//! * [`view`]: the [`RichTextEditor`] widget that paints a laid-out document.
 //! * [`format`]: the JSON save format and Markdown export.
 //!
 //! See `docs/plans/rich-text-editor.md` for the design.
@@ -20,5 +21,8 @@
 pub mod format;
 pub mod layout;
 pub mod model;
+pub mod view;
 
+pub use layout::Layout;
 pub use model::{DocPos, Document};
+pub use view::RichTextEditor;
