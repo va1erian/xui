@@ -244,7 +244,8 @@ editor.insert_image(image, ImageOptions::new(Dip(240.0), Dip(160.0)).wrap(Wrap::
   (spans cover text, every `U+FFFC` has an object) and returns a typed error
   rather than panicking on hand-edited files.
 - **Markdown export** (`format/markdown.rs`, always on, no dependency): a
-  lossy CommonMark writer for sharing basic documents.
+  lossy GitHub Flavored Markdown (GFM) writer for sharing basic documents.
+  Everything but strikethrough is plain CommonMark.
 
   | Model | Markdown |
   |---|---|
