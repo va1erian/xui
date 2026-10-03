@@ -23,12 +23,14 @@ pub(crate) fn encode(bytes: &[u8]) -> String {
     out
 }
 
+#[cfg(feature = "serde")]
 fn sextet(c: u8) -> Option<u32> {
     ALPHABET.iter().position(|&a| a == c).map(|i| i as u32)
 }
 
 /// Decodes padded base64; `None` for any character outside the alphabet,
 /// misplaced padding or a length that is not a multiple of four.
+#[cfg(feature = "serde")]
 pub(crate) fn decode(text: &str) -> Option<Vec<u8>> {
     let bytes = text.as_bytes();
     if !bytes.len().is_multiple_of(4) {
@@ -53,7 +55,7 @@ pub(crate) fn decode(text: &str) -> Option<Vec<u8>> {
     Some(out)
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "serde"))]
 mod tests {
     use super::*;
 
