@@ -350,3 +350,10 @@ fn quit_requested_is_recorded() {
     backend.quit(0);
     assert!(backend.quit_requested());
 }
+
+#[test]
+fn a_headless_layout_baseline_is_three_quarters_of_a_line() {
+    let backend = HeadlessBackend::new();
+    let layout = backend.layout_text("hi", &FontSpec::new(dip(16.0)), f32::INFINITY, 96);
+    assert_eq!(layout.baseline(), layout.height() * 3.0 / 4.0);
+}

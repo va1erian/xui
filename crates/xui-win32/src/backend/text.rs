@@ -218,6 +218,13 @@ impl TextLayout for Win32Layout {
         self.inner.as_ref().map_or(0.0, |layout| layout.height())
     }
 
+    fn baseline(&self) -> f32 {
+        self.inner
+            .as_ref()
+            .and_then(|layout| layout.lines().first().map(|line| line.baseline))
+            .unwrap_or_else(|| self.height() * 0.8)
+    }
+
     fn hit_test_point(&self, x: f32, y: f32) -> TextHit {
         let Some(layout) = &self.inner else {
             return TextHit {
@@ -372,5 +379,19 @@ mod tests {
         let boxes = layout.selection_rects(6, 11);
         assert!(!boxes.is_empty(), "the selected word has a box");
         assert!(boxes[0].width() > 0);
+    }
+
+    #[test]
+    fn a_shaped_layout_has_a_baseline_inside_its_first_line() {
+        crate::init();
+        let shaper = Win32TextShaper::new();
+        let layout = shaper.layout(
+            "hello",
+            &PortableFontSpec::new(dip(14.0)),
+            f32::INFINITY,
+            96,
+        );
+        let baseline = layout.baseline();
+        assert!(baseline > 0.0 && baseline < layout.height());
     }
 }
