@@ -1,4 +1,5 @@
 //! The JSON save format: round trips and rejection of invalid files.
+#![cfg(feature = "serde")]
 
 #[path = "model_common.rs"]
 mod common;

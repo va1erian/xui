@@ -11,6 +11,8 @@ use crate::model::{Document, OBJECT_CHAR, Paragraph};
 /// The markers of the three emphasis kinds, in the order of [`Unit::marks`]:
 /// bold, italic, strike-through.
 const DELIMITERS: [&str; 3] = ["**", "*", "~~"];
+/// The same, for a marker that would otherwise touch a `*`.
+const UNDERSCORES: [&str; 3] = ["__", "_", "~~"];
 
 /// A bold weight, as far as Markdown is concerned.
 const BOLD_WEIGHT: u16 = 600;
@@ -145,13 +147,13 @@ pub(super) fn units<'a>(
                         .unwrap_or_default();
                     (text, false)
                 }
+                '\u{2028}' | '\n' if flat => {
+                    line.skip();
+                    (" ".to_owned(), true)
+                }
                 '\u{2028}' | '\n' => {
                     line.reset();
-                    if flat {
-                        (" ".to_owned(), true)
-                    } else {
-                        ("\\\n".to_owned(), true)
-                    }
+                    ("\\\n".to_owned(), true)
                 }
                 c => (line.escape(c), c.is_whitespace()),
             };
@@ -207,26 +209,34 @@ fn emit_emphasis(units: &[Unit<'_>], out: &mut String) {
             (true, end) => end,
         });
     }
-    let mut open: Vec<usize> = Vec::new();
+    let mut open: Vec<(usize, &str)> = Vec::new();
     for (i, unit) in units.iter().enumerate() {
-        if let Some(level) = open.iter().position(|&m| !unit.marks[m]) {
+        if let Some(level) = open.iter().position(|&(m, _)| !unit.marks[m]) {
             while open.len() > level {
-                let m = open.pop().expect("level is within the stack");
-                out.push_str(DELIMITERS[m]);
+                let (_, delimiter) = open.pop().expect("level is within the stack");
+                out.push_str(delimiter);
             }
         }
         let mut fresh: Vec<usize> = (0..3)
-            .filter(|&m| unit.marks[m] && !open.contains(&m))
+            .filter(|&m| unit.marks[m] && !open.iter().any(|&(o, _)| o == m))
             .collect();
         fresh.sort_by_key(|&m| std::cmp::Reverse(run_end[i][m]));
+        // A marker right after `*` would fuse with it into a run the parser
+        // cannot split, so it switches to the underscore form.
+        let after_star = out.ends_with('*');
         for m in fresh {
-            out.push_str(DELIMITERS[m]);
-            open.push(m);
+            let delimiter = if after_star {
+                UNDERSCORES[m]
+            } else {
+                DELIMITERS[m]
+            };
+            out.push_str(delimiter);
+            open.push((m, delimiter));
         }
         out.push_str(&unit.text);
     }
-    while let Some(m) = open.pop() {
-        out.push_str(DELIMITERS[m]);
+    while let Some((_, delimiter)) = open.pop() {
+        out.push_str(delimiter);
     }
 }
 
