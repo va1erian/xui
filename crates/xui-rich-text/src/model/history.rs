@@ -100,6 +100,18 @@ impl Transaction<'_> {
         Ok(())
     }
 
+    /// Inserts `fragment` at `at` as part of the transaction and returns the
+    /// position after it (see [`Document::insert_fragment`]).
+    pub fn insert_fragment(
+        &mut self,
+        at: DocPos,
+        fragment: &super::Fragment,
+    ) -> Result<DocPos, EditError> {
+        let (inverse, end) = self.doc.insert_fragment(at, fragment)?;
+        self.inverses.push(inverse);
+        Ok(end)
+    }
+
     /// Replaces the selection with `text` (see [`Document::insert_text`]) and
     /// returns the caret after it.
     pub fn insert_text(&mut self, sel: &Selection, text: &str) -> Result<DocPos, EditError> {
