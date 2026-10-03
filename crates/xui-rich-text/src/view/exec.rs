@@ -40,6 +40,8 @@ impl State {
     /// Runs `command` as one undoable step and refreshes the view.
     pub fn run(&mut self, command: Command) -> Effect {
         self.ready();
+        let at = self.selection_para();
+        self.ensure_para(at);
         let now = self.epoch.elapsed();
         let nav = Nav {
             layout: &self.layout,
@@ -100,6 +102,8 @@ impl State {
 
     /// Recomputes where the selected image is drawn.
     pub fn sync_image(&mut self) {
+        let at = self.selection_para();
+        self.ensure_para(at);
         self.image = match self.ed.selection {
             Selection::Object(id) => self
                 .ed
@@ -111,8 +115,18 @@ impl State {
         };
     }
 
+    /// The paragraph holding the caret, or the selected image's anchor.
+    fn selection_para(&self) -> usize {
+        match self.ed.selection {
+            Selection::Text { head, .. } => head.para,
+            Selection::Object(id) => self.ed.doc.object_pos(id).map_or(0, |at| at.para),
+        }
+    }
+
     /// Scrolls the least that shows the caret, or the selected image.
     pub fn ensure_selection_visible(&mut self) {
+        let at = self.selection_para();
+        self.ensure_para(at);
         let rect: Option<Rect> = match self.ed.selection {
             Selection::Text { head, .. } => Some(self.layout.caret_rect(&self.ed.doc, head)),
             Selection::Object(_) => self.image.map(|(_, rect)| rect),

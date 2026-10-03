@@ -26,7 +26,8 @@ impl State {
     }
 
     /// The caret box at `pos` in view coordinates.
-    pub fn caret_rect_view(&self, pos: DocPos, affinity: Affinity) -> Rect {
+    pub fn caret_rect_view(&mut self, pos: DocPos, affinity: Affinity) -> Rect {
+        self.ensure_para(pos.para);
         self.to_view(self.layout.caret_rect_with(&self.ed.doc, pos, affinity))
     }
 

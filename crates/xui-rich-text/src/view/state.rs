@@ -14,6 +14,11 @@ use crate::edit::{Clipboard, EditorState};
 use crate::layout::Layout;
 use crate::model::{Document, ObjectId};
 
+/// Documents of at most this many paragraphs are always laid out whole.
+const EAGER_PARAGRAPHS: usize = 100;
+/// The most paragraphs laid out at once around the view.
+const WINDOW_BUDGET: usize = 128;
+
 /// The margin between the view's edge and the text, on each side.
 const PAD: Dip = Dip(8.0);
 
@@ -68,6 +73,8 @@ pub(crate) struct State {
     /// The caret shown at the drop point while dragging an image (layout
     /// pixels).
     pub drop_caret: Option<Rect>,
+    /// Timer ticks so far (the blink phase counts them).
+    pub ticks: u32,
 }
 
 impl State {
@@ -97,6 +104,7 @@ impl State {
             cursor: Cursor::Text,
             image: None,
             drop_caret: None,
+            ticks: 0,
         }
     }
 
@@ -121,10 +129,39 @@ impl State {
         self.track = Rect::new(bounds.right - bar, bounds.top, bounds.right, bounds.bottom);
         let width = (text_area.width() - 2 * pad_px(dpi)).max(0) as f32;
         self.layout.set_metrics(width, dpi);
-        self.layout.update(&self.ed.doc, self.shaper.as_ref());
         self.viewport = bounds.height() as f32;
+        self.layout_window();
         self.scroll = self.scroll.clamp(0.0, self.max_scroll());
         text_area
+    }
+
+    /// Brings the layout up to date: all of it for a short document, else the
+    /// paragraphs around the view (the timer finishes the rest).
+    fn layout_window(&mut self) {
+        let (doc, shaper) = (&self.ed.doc, self.shaper.as_ref());
+        if doc.paragraph_count() <= EAGER_PARAGRAPHS {
+            self.layout.update(doc, shaper);
+        } else {
+            let top = self.shift() as f32;
+            let reach = self.viewport;
+            let (from, to) = (top - reach, top + 2.0 * reach);
+            self.layout
+                .update_around(doc, shaper, from, to, WINDOW_BUDGET);
+        }
+    }
+
+    /// Makes sure paragraph `para` and its neighbourhood are laid out (a
+    /// caret or an image far from the view needs real lines).
+    pub fn ensure_para(&mut self, para: usize) {
+        let Some(p) = self.layout.paragraphs().get(para) else {
+            return;
+        };
+        if p.dirty {
+            let (top, bottom) = (p.y - self.viewport, p.bottom() + self.viewport);
+            let (doc, shaper) = (&self.ed.doc, self.shaper.as_ref());
+            self.layout
+                .update_around(doc, shaper, top, bottom, WINDOW_BUDGET);
+        }
     }
 
     /// The offset from view y to layout y: the scroll less the top margin.

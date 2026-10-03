@@ -19,6 +19,9 @@ mod paint;
 mod scroll;
 mod shared;
 mod state;
+#[cfg(test)]
+mod tests;
+mod timer;
 
 use std::rc::Rc;
 
@@ -33,11 +36,9 @@ use crate::model::{Affinity, DocPos, Document, Selection, StyleSummary};
 use events::Out;
 use shared::Shared;
 
-/// How often the caret timer ticks, in milliseconds; the caret blinks every
-/// [`BLINK_TICKS`] ticks and an image drag autoscrolls on each.
+/// How often the timer ticks, in milliseconds; the caret blinks every
+/// [`timer::BLINK_TICKS`] ticks and drags and layout work run on each.
 const TICK_MS: u32 = 50;
-/// Timer ticks per caret blink phase.
-const BLINK_TICKS: u32 = 10;
 
 /// A rich-text editor on a custom xui node.
 ///
@@ -78,18 +79,11 @@ impl<M: 'static> RichTextEditor<M> {
         }
         {
             let shared = Rc::clone(&shared);
-            let ticks = std::cell::Cell::new(0u32);
             // `None` when the backend has no timers (the offscreen one): the
-            // caret then stays solid and drags do not autoscroll.
+            // caret then stays solid, drags do not autoscroll and a large
+            // document is only laid out around the view.
             let _ = control.set_timer(TICK_MS, move || {
-                ticks.set(ticks.get().wrapping_add(1));
-                let mut state = shared.state.borrow_mut();
-                let mut repaint = state.autoscroll();
-                if state.focused && ticks.get().is_multiple_of(BLINK_TICKS) {
-                    state.caret_on = !state.caret_on;
-                    repaint = true;
-                }
-                drop(state);
+                let repaint = shared.state.borrow_mut().tick();
                 if repaint {
                     shared.ui.invalidate(shared.id);
                 }
@@ -197,6 +191,7 @@ impl<M: 'static> RichTextEditor<M> {
     pub fn ensure_caret_visible(&self, pos: DocPos) {
         let mut state = self.shared.state.borrow_mut();
         state.ready();
+        state.ensure_para(pos.para);
         let caret = state.layout.caret_rect(&state.ed.doc, pos);
         state.ensure_visible(caret);
         drop(state);

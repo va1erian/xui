@@ -18,6 +18,7 @@ mod hit;
 mod items;
 mod line;
 mod nav;
+mod partial;
 mod resolve;
 mod segment;
 mod shape_cache;
@@ -139,6 +140,9 @@ pub struct ParaLayout {
     /// Exclusions still active at its bottom, relative to `y + height`.
     pub(crate) exit: Vec<Excl>,
     pub(crate) dirty: bool,
+    /// Laid out without knowing the floats entering it (the paragraphs before
+    /// it were still estimates); checked when the flow reaches it in order.
+    pub(crate) speculative: bool,
     /// The paragraph text this layout was made from.
     pub(crate) text: Arc<str>,
 }
@@ -155,6 +159,7 @@ impl ParaLayout {
             entering: Vec::new(),
             exit: Vec::new(),
             dirty: true,
+            speculative: false,
             text: Arc::from(""),
         }
     }

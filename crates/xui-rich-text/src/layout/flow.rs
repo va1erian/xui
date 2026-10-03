@@ -20,10 +20,10 @@ use crate::model::{BlockKind, Document, ListKind};
 /// The laid-out document: one [`ParaLayout`] per paragraph.
 pub struct Layout {
     pub(crate) paras: Vec<ParaLayout>,
-    width: f32,
-    dpi: u32,
+    pub(super) width: f32,
+    pub(super) dpi: u32,
     cache: ShapeCache,
-    height: f32,
+    pub(super) height: f32,
 }
 
 impl Default for Layout {
@@ -55,6 +55,11 @@ impl Layout {
         self.width = width;
         self.dpi = dpi;
         self.mark_all_dirty();
+        for p in &mut self.paras {
+            // The old heights fit the old width: estimate again.
+            p.height = 0.0;
+            p.lines.clear();
+        }
         true
     }
 
@@ -115,12 +120,37 @@ impl Layout {
     /// it are the same relative to its top, so an edit usually relays out one
     /// paragraph. Returns the first paragraph that was laid out again.
     pub fn update(&mut self, doc: &Document, shaper: &dyn TextShaper) -> Option<usize> {
+        self.fit(doc);
+        let first = self.first_pending()?;
+        self.run_from(doc, shaper, first, usize::MAX);
+        Some(first)
+    }
+
+    /// Makes the paragraph list match the document's length.
+    pub(super) fn fit(&mut self, doc: &Document) {
         let count = doc.paragraphs().len();
         if self.paras.len() != count {
             self.paras.resize_with(count, ParaLayout::dirty);
             self.mark_all_dirty();
         }
-        let first = self.paras.iter().position(|p| p.dirty)?;
+    }
+
+    /// The first paragraph that is dirty or still unverified.
+    pub(super) fn first_pending(&self) -> Option<usize> {
+        self.paras.iter().position(|p| p.dirty || p.speculative)
+    }
+
+    /// Walks the flow in order from `first` (everything before it is laid out
+    /// and verified), reusing paragraphs that still fit and laying out at most
+    /// `budget` others. Returns the index it stopped at.
+    pub(super) fn run_from(
+        &mut self,
+        doc: &Document,
+        shaper: &dyn TextShaper,
+        first: usize,
+        budget: usize,
+    ) -> usize {
+        let count = self.paras.len();
         let (mut y, mut ctx) = match first.checked_sub(1).map(|i| &self.paras[i]) {
             Some(prev) => (
                 prev.bottom(),
@@ -128,34 +158,47 @@ impl Layout {
             ),
             None => (0.0, FloatCtx::default()),
         };
-        for index in first..count {
+        let (mut index, mut laid) = (first, 0);
+        while index < count {
             let entering = ctx.relative(y);
             let reusable = !self.paras[index].dirty && self.paras[index].entering == entering;
             if reusable {
                 self.paras[index].y = y;
+                self.paras[index].speculative = false;
+            } else if laid < budget {
+                laid += 1;
+                self.lay_one(doc, shaper, index, y, &mut ctx);
             } else {
-                let number = list_number(doc, index);
-                self.paras[index] = lay_out(
-                    doc,
-                    index,
-                    Env {
-                        shaper,
-                        cache: &mut self.cache,
-                        dpi: self.dpi,
-                        width: self.width,
-                    },
-                    y,
-                    &mut ctx,
-                    number,
-                );
+                break;
             }
             let p = &self.paras[index];
             y = p.bottom();
             ctx = FloatCtx::from_relative(&p.exit, y);
+            index += 1;
         }
-        self.height = y.max(ctx.bottom());
+        self.reposition(doc);
         self.cache.trim();
-        Some(first)
+        index
+    }
+
+    /// Lays out paragraph `index` with its top at `y` given the floats in
+    /// `ctx`.
+    pub(super) fn lay_one(
+        &mut self,
+        doc: &Document,
+        shaper: &dyn TextShaper,
+        index: usize,
+        y: f32,
+        ctx: &mut FloatCtx,
+    ) {
+        let number = list_number(doc, index);
+        let env = Env {
+            shaper,
+            cache: &mut self.cache,
+            dpi: self.dpi,
+            width: self.width,
+        };
+        self.paras[index] = lay_out(doc, index, env, y, ctx, number);
     }
 }
 
@@ -163,8 +206,8 @@ impl Layout {
 struct Env<'a> {
     shaper: &'a dyn TextShaper,
     cache: &'a mut ShapeCache,
-    dpi: u32,
-    width: f32,
+    pub(super) dpi: u32,
+    pub(super) width: f32,
 }
 
 /// The number of the numbered item `index` among the consecutive items of its
@@ -274,6 +317,7 @@ fn lay_out(
         entering,
         exit: ctx.relative(bottom),
         dirty: false,
+        speculative: false,
         text: Arc::from(para.text()),
     }
 }

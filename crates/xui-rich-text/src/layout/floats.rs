@@ -121,11 +121,6 @@ impl FloatCtx {
             .collect()
     }
 
-    /// The lowest bottom edge of any exclusion.
-    pub fn bottom(&self) -> f32 {
-        self.excl.iter().map(|e| e.rect.bottom).fold(0.0, f32::max)
-    }
-
     fn overlapping(&self, y: f32, h: f32) -> impl Iterator<Item = &Excl> {
         self.excl
             .iter()
