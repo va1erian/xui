@@ -1,32 +1,35 @@
-#![forbid(unsafe_code)]
-
-//! Building documents by hand, and a sample that exercises the layout: used by
-//! the snapshot example and the tests until the editing API can style text.
+//! Shared by the unit tests, the integration tests and the snapshot example:
+//! a document builder over the public edit API, and a sample document that
+//! exercises the layout.
+#![allow(dead_code)]
 
 use std::sync::Arc;
 
 use xui_core::backend::TextWeight;
 use xui_core::{Color, Dip, Image};
-
-use crate::model::{
-    Align, Baseline, BlockKind, CharStyle, CharStyleId, Document, InlineImage, ListItem, ListKind,
-    OBJECT_CHAR, ObjectId, ObjectTable, ParaStyle, ParaStyleId, Paragraph, Side, Span, StyleTable,
-    TextColor, Wrap,
+use xui_rich_text::Document;
+use xui_rich_text::model::{
+    Align, Baseline, BlockKind, CharStyle, CharStyleId, DocPos, EditOp, InlineImage, ListItem,
+    ListKind, ObjectId, ParaStyle, ParaStyleId, ParaStylePatch, Side, TextColor, Wrap,
 };
+
+/// An object queued in a [`DocBuilder`], not yet anchored.
+#[derive(Clone, Copy, Debug)]
+pub struct Obj(usize);
 
 /// One run of a paragraph under construction.
 pub enum Run<'a> {
     /// Text in a character style.
     Text(&'a str, CharStyleId),
-    /// An anchored object.
-    Object(ObjectId),
+    /// A queued object, anchored here.
+    Object(Obj),
 }
 
-/// Assembles a [`Document`] from runs.
+/// Assembles a [`Document`] paragraph by paragraph with `Document::apply`.
 pub struct DocBuilder {
-    paragraphs: Vec<Paragraph>,
-    styles: StyleTable,
-    objects: ObjectTable,
+    doc: Document,
+    fresh: bool,
+    queued: Vec<(InlineImage, Option<ObjectId>)>,
 }
 
 impl Default for DocBuilder {
@@ -35,91 +38,103 @@ impl Default for DocBuilder {
     }
 }
 
+/// A patch that sets every attribute of `style`.
+fn full_patch(style: &ParaStyle) -> ParaStylePatch {
+    ParaStylePatch {
+        align: Some(style.align),
+        indent_left: Some(style.indent_left),
+        indent_right: Some(style.indent_right),
+        indent_first: Some(style.indent_first),
+        space_before: Some(style.space_before),
+        space_after: Some(style.space_after),
+        line_spacing: Some(style.line_spacing),
+        list: Some(style.list),
+        kind: Some(style.kind),
+    }
+}
+
 impl DocBuilder {
-    /// An empty builder with the default styles.
+    /// A builder holding one empty paragraph, which the first
+    /// [`paragraph`](DocBuilder::paragraph) fills.
     pub fn new() -> DocBuilder {
         DocBuilder {
-            paragraphs: Vec::new(),
-            styles: StyleTable::new(),
-            objects: ObjectTable::new(),
+            doc: Document::new(),
+            fresh: true,
+            queued: Vec::new(),
         }
     }
 
     /// Interns a character style.
     pub fn char_style(&mut self, style: CharStyle) -> CharStyleId {
-        self.styles.intern_char(style)
+        self.doc.styles_mut().intern_char(style)
     }
 
     /// Interns a paragraph style.
     pub fn para_style(&mut self, style: ParaStyle) -> ParaStyleId {
-        self.styles.intern_para(style)
+        self.doc.styles_mut().intern_para(style)
     }
 
-    /// Adds an object.
-    pub fn object(&mut self, image: InlineImage) -> ObjectId {
-        self.objects.insert(image)
+    /// Queues an object to anchor with [`Run::Object`].
+    pub fn object(&mut self, image: InlineImage) -> Obj {
+        self.queued.push((image, None));
+        Obj(self.queued.len() - 1)
     }
 
-    /// Appends a paragraph of `runs`.
+    /// The id of a queued object, once a paragraph has anchored it.
+    pub fn id_of(&self, obj: Obj) -> ObjectId {
+        self.queued[obj.0].1.expect("the object is anchored")
+    }
+
+    /// Appends a paragraph of `runs` in the paragraph style `style`.
     pub fn paragraph(&mut self, style: ParaStyleId, runs: &[Run<'_>]) -> &mut DocBuilder {
-        let mut text = String::new();
-        let mut spans: Vec<Span> = Vec::new();
-        let mut anchors = Vec::new();
-        let push = |piece: &str, style: CharStyleId, spans: &mut Vec<Span>| {
-            if piece.is_empty() {
-                return;
-            }
-            match spans.last_mut() {
-                Some(last) if last.style == style => last.len += piece.len(),
-                _ => spans.push(Span {
-                    len: piece.len(),
-                    style,
-                }),
-            }
+        let index = if self.fresh {
+            0
+        } else {
+            let last = self.doc.paragraph_count() - 1;
+            let at = DocPos::new(last, self.doc.paragraphs()[last].text().len());
+            self.doc
+                .apply(EditOp::SplitParagraph { at })
+                .expect("split");
+            last + 1
         };
-        let mut last_style = CharStyleId::DEFAULT;
+        self.fresh = false;
+        let patch = full_patch(&self.doc.styles().para(style).clone());
+        self.doc
+            .apply(EditOp::SetParaStyle {
+                paras: index..index + 1,
+                patch,
+            })
+            .expect("paragraph style");
         for run in runs {
+            let at = DocPos::new(index, self.doc.paragraphs()[index].text().len());
             match *run {
-                Run::Text(piece, style) => {
-                    text.push_str(piece);
-                    push(piece, style, &mut spans);
-                    last_style = style;
+                Run::Text("", _) => {}
+                Run::Text(text, style) => {
+                    let text = text.to_owned();
+                    let style = Some(style);
+                    self.doc
+                        .apply(EditOp::InsertText { at, text, style })
+                        .expect("text");
                 }
-                Run::Object(id) => {
-                    text.push(OBJECT_CHAR);
-                    push("\u{FFFC}", last_style, &mut spans);
-                    anchors.push(id);
+                Run::Object(obj) => {
+                    let object = self.queued[obj.0].0.clone();
+                    self.doc
+                        .apply(EditOp::InsertObject { at, object })
+                        .expect("object");
+                    let id = self.doc.paragraphs()[index]
+                        .objects()
+                        .find(|&(byte, _)| byte == at.byte)
+                        .map(|(_, id)| id);
+                    self.queued[obj.0].1 = id;
                 }
             }
         }
-        if spans.is_empty() {
-            spans.push(Span {
-                len: 0,
-                style: last_style,
-            });
-        }
-        self.paragraphs.push(Paragraph {
-            text,
-            spans,
-            anchors,
-            style,
-        });
         self
     }
 
     /// The finished document.
     pub fn finish(self) -> Document {
-        let paragraphs = if self.paragraphs.is_empty() {
-            vec![Paragraph::new(
-                "",
-                ParaStyleId::DEFAULT,
-                CharStyleId::DEFAULT,
-            )]
-        } else {
-            self.paragraphs
-        };
-        Document::from_parts(paragraphs, self.styles, self.objects)
-            .expect("the builder keeps every invariant")
+        self.doc
     }
 }
 
@@ -186,7 +201,6 @@ pub fn sample_document() -> Document {
     });
     let marked = b.char_style(CharStyle {
         highlight: Some(Color::rgb(255, 224, 80)),
-        color: TextColor::Fixed(Color::rgb(30, 30, 30)),
         ..base.clone()
     });
     let strike = b.char_style(CharStyle {

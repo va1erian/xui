@@ -18,8 +18,6 @@ mod hit;
 mod items;
 mod line;
 mod resolve;
-#[doc(hidden)]
-pub mod sample;
 mod segment;
 mod shape_cache;
 #[cfg(test)]

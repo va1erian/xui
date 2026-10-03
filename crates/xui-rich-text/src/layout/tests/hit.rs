@@ -8,10 +8,10 @@ use xui_core::geometry::Point;
 use xui_core::{Color, Dip};
 
 use super::*;
-use crate::layout::sample::gradient_image;
 use crate::model::{
     Affinity, Align, DocPos, InlineImage, ListItem, ListKind, ParaStyleId, Side, Wrap,
 };
+use gradient_image;
 
 fn centre(r: xui_core::geometry::Rect) -> Point {
     Point::new((r.left + r.right) / 2, (r.top + r.bottom) / 2)
@@ -115,6 +115,7 @@ fn images_are_found_by_point() {
             Run::Object(inline),
         ],
     );
+    let (float, inline) = (b.id_of(float), b.id_of(inline));
     let doc = b.finish();
     let layout = lay(&doc, 300.0);
     assert_eq!(layout.object_at(Point::new(10, 10)), Some(float));

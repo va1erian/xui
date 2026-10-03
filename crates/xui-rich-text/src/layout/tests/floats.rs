@@ -6,20 +6,15 @@ use xui_core::{Color, Dip};
 
 use super::*;
 use crate::layout::PlacedKind;
-use crate::model::{InlineImage, ObjectId, ParaStyleId, Side, Wrap};
+use crate::model::{InlineImage, ParaStyleId, Side, Wrap};
 
 const EPS: f32 = 0.01;
 const TEXT: &str = "aaaa bbbb cccc dddd eeee ffff gggg hhhh iiii jjjj kkkk llll mmmm nnnn oooo pppp qqqq rrrr ssss tttt \
     aaaa bbbb cccc dddd eeee ffff gggg hhhh iiii jjjj kkkk llll mmmm nnnn oooo pppp qqqq rrrr ssss tttt";
 
-fn picture(b: &mut DocBuilder, w: f32, h: f32, wrap: Wrap) -> ObjectId {
+fn picture(b: &mut DocBuilder, w: f32, h: f32, wrap: Wrap) -> Obj {
     b.object(InlineImage {
-        image: crate::layout::sample::gradient_image(
-            8,
-            8,
-            Color::rgb(0, 0, 0),
-            Color::rgb(9, 9, 9),
-        ),
+        image: gradient_image(8, 8, Color::rgb(0, 0, 0), Color::rgb(9, 9, 9)),
         size: (Dip(w), Dip(h)),
         wrap,
         alt: String::new(),

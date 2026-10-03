@@ -8,7 +8,7 @@ use xui_core::{Color, Dip};
 
 use super::*;
 use crate::layout::PlacedKind;
-use crate::model::{InlineImage, ParaStyleId, Paragraph, Side, Wrap};
+use crate::model::{DocPos, DocRange, EditOp, InlineImage, ParaStyleId, Side, Wrap};
 
 const WORDS: &str = "aaaa bbbb cccc dddd eeee ffff gggg hhhh iiii jjjj";
 
@@ -21,7 +21,19 @@ fn first_word(layout: &Layout, index: usize) -> usize {
 }
 
 fn set_text(doc: &mut Document, index: usize, text: &str) {
-    doc.paragraphs[index] = Paragraph::new(text, ParaStyleId::DEFAULT, CharStyleId::DEFAULT);
+    let end = DocPos::new(index, doc.paragraphs()[index].text().len());
+    let range = DocRange::new(DocPos::new(index, 0), end);
+    doc.apply(EditOp::Delete { range }).unwrap();
+    insert(doc, DocPos::new(index, 0), text);
+}
+
+fn insert(doc: &mut Document, at: DocPos, text: &str) {
+    let op = EditOp::InsertText {
+        at,
+        text: text.into(),
+        style: None,
+    };
+    doc.apply(op).unwrap();
 }
 
 fn tops(layout: &Layout) -> Vec<f32> {
@@ -80,12 +92,7 @@ fn a_taller_paragraph_moves_the_ones_below_without_relaying_them_out() {
 fn removing_a_float_relays_out_the_paragraphs_it_pushed_text_around() {
     let mut b = DocBuilder::new();
     let img = b.object(InlineImage {
-        image: crate::layout::sample::gradient_image(
-            8,
-            8,
-            Color::rgb(0, 0, 0),
-            Color::rgb(9, 9, 9),
-        ),
+        image: gradient_image(8, 8, Color::rgb(0, 0, 0), Color::rgb(9, 9, 9)),
         size: (Dip(60.0), Dip(200.0)),
         wrap: Wrap::square(Side::Left),
         alt: String::new(),
@@ -118,14 +125,9 @@ fn removing_a_float_relays_out_the_paragraphs_it_pushed_text_around() {
 fn splicing_in_a_paragraph_matches_a_fresh_layout() {
     let mut doc = plain(&[WORDS, "middle", WORDS]);
     let mut layout = lay(&doc, 140.0);
-    doc.paragraphs.insert(
-        1,
-        Paragraph::new(
-            "new paragraph here",
-            ParaStyleId::DEFAULT,
-            CharStyleId::DEFAULT,
-        ),
-    );
+    let end = DocPos::new(0, doc.paragraphs()[0].text().len());
+    doc.apply(EditOp::SplitParagraph { at: end }).unwrap();
+    insert(&mut doc, DocPos::new(1, 0), "new paragraph here");
     layout.splice(1, 0, 1);
     layout.update(&doc, &Mono);
     let fresh = lay(&doc, 140.0);

@@ -190,12 +190,7 @@ fn superscripts_are_smaller_and_raised() {
 fn an_inline_image_raises_its_line_and_sits_on_the_baseline() {
     let doc = with_style(ParaStyle::default(), |b| {
         let id = b.object(InlineImage {
-            image: crate::layout::sample::gradient_image(
-                20,
-                40,
-                Color::rgb(0, 0, 0),
-                Color::rgb(9, 9, 9),
-            ),
+            image: gradient_image(20, 40, Color::rgb(0, 0, 0), Color::rgb(9, 9, 9)),
             size: (Dip(20.0), Dip(40.0)),
             wrap: Wrap::Inline,
             alt: String::new(),

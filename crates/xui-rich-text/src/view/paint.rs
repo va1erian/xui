@@ -12,6 +12,9 @@ use super::state::{State, pad_px};
 use crate::layout::{FRect, Line, ParaLayout, PlacedItem, PlacedKind};
 use crate::model::{CharStyle, DocPos, TextColor};
 
+/// The contrast (WCAG ratio) automatic text must keep against a highlight.
+const MIN_CONTRAST: f32 = 4.5;
+
 /// Paints the document, its selection and the scrollbar.
 pub(crate) fn paint(canvas: &mut dyn Canvas, state: &mut State, theme: &Theme) {
     let bounds = canvas.bounds();
@@ -72,10 +75,30 @@ impl Painter<'_> {
     }
 
     fn color(&self, style: &CharStyle) -> Rgba {
-        match style.color {
-            TextColor::Fixed(c) => c.into(),
-            TextColor::Auto if style.link.is_some() => self.theme.accent.into(),
-            TextColor::Auto => self.theme.text.into(),
+        let auto = if style.link.is_some() {
+            self.theme.accent
+        } else {
+            self.theme.text
+        };
+        match (style.color, style.highlight) {
+            (TextColor::Fixed(c), _) => c.into(),
+            (TextColor::Auto, None) => auto.into(),
+            // Automatic text on a highlight must stay readable in either
+            // theme: keep the theme's colour when it contrasts enough with
+            // the highlight, else take it or its inverse, whichever contrasts
+            // more.
+            (TextColor::Auto, Some(back)) if auto.contrast_ratio(back) >= MIN_CONTRAST => {
+                auto.into()
+            }
+            (TextColor::Auto, Some(back)) => {
+                let text = self.theme.text;
+                let inverse = Color::rgb(255 - text.r, 255 - text.g, 255 - text.b);
+                if text.contrast_ratio(back) >= inverse.contrast_ratio(back) {
+                    text.into()
+                } else {
+                    inverse.into()
+                }
+            }
         }
     }
 

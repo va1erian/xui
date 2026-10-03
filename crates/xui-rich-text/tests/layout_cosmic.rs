@@ -4,7 +4,9 @@
 use xui_canvas::OffscreenBackend;
 use xui_core::backend::Backend;
 use xui_core::geometry::Point;
-use xui_rich_text::layout::sample::sample_document;
+mod common;
+
+use common::sample_document;
 use xui_rich_text::layout::{FRect, PlacedKind};
 use xui_rich_text::{DocPos, Layout};
 

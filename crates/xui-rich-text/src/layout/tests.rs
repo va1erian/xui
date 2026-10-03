@@ -16,8 +16,11 @@ use xui_core::backend::{FontSpec, TextHit, TextLayout, TextShaper};
 use xui_core::geometry::Rect;
 
 use super::Layout;
-use super::sample::{DocBuilder, Run};
+#[path = "../../tests/common/mod.rs"]
+mod common;
+
 use crate::model::{CharStyleId, Document, ParaStyle};
+use common::{DocBuilder, Obj, Run, gradient_image};
 
 /// A fixed-advance shaper that never wraps (the layout wraps).
 pub(super) struct Mono;

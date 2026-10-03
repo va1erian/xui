@@ -23,6 +23,9 @@ pub mod layout;
 pub mod model;
 pub mod view;
 
+#[cfg(test)]
+extern crate self as xui_rich_text;
+
 pub use layout::Layout;
 pub use model::{DocPos, Document};
 pub use view::RichTextEditor;

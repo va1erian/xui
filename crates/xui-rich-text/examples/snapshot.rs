@@ -9,7 +9,10 @@ use xui_canvas::snapshot::{Snapshot, try_render};
 use xui_core::app::{App, Ui};
 use xui_core::{Dip, Rect, Theme};
 use xui_rich_text::RichTextEditor;
-use xui_rich_text::layout::sample::sample_document;
+#[path = "../tests/common/mod.rs"]
+mod common;
+
+use common::sample_document;
 
 struct Host {
     _editor: RichTextEditor<()>,

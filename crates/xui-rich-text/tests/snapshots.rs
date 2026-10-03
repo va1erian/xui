@@ -5,7 +5,9 @@ use xui_canvas::snapshot::{Snapshot, try_render};
 use xui_core::app::{App, Ui};
 use xui_core::image::Image;
 use xui_core::{Dip, Rect, Theme};
-use xui_rich_text::layout::sample::sample_document;
+mod common;
+
+use common::sample_document;
 use xui_rich_text::{DocPos, RichTextEditor};
 
 struct Host {
@@ -194,4 +196,26 @@ fn clicking_the_scrollbar_track_pages_the_document() {
         "the click scrolled the page"
     );
     save("rich-text-paged.png", &paged);
+}
+
+#[test]
+fn automatic_text_on_a_highlight_stays_readable_in_dark_mode() {
+    let image = render(Theme::dark(), 96, |_| {});
+    let yellow = |p: [u8; 4]| p[0] > 240 && (200..240).contains(&p[1]) && p[2] < 110;
+    let (mut x0, mut x1, mut y0, mut y1) = (u32::MAX, 0, u32::MAX, 0);
+    for y in 0..image.height() {
+        for x in 0..image.width() {
+            if image.pixel(x, y).is_some_and(yellow) {
+                (x0, x1, y0, y1) = (x0.min(x), x1.max(x), y0.min(y), y1.max(y));
+            }
+        }
+    }
+    assert!(x1 > x0 && y1 > y0, "the highlight is painted");
+    let region = ((x0, x1 + 1), (y0, y1 + 1));
+    let dark = count(&image, region.0, region.1, |p| p[0] < 110 && p[1] < 110);
+    let white = count(&image, region.0, region.1, |p| {
+        p[0] > 230 && p[1] > 230 && p[2] > 230
+    });
+    assert!(dark > 30, "dark glyphs on the highlight: {dark}");
+    assert_eq!(white, 0, "no white text on the highlight");
 }
