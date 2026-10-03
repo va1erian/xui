@@ -138,6 +138,7 @@ impl Document {
         if self.paragraphs.is_empty() {
             return Err("a document needs a paragraph".into());
         }
+        let mut anchored = std::collections::HashSet::new();
         for (i, para) in self.paragraphs.iter().enumerate() {
             para.check().map_err(|e| format!("paragraph {i}: {e}"))?;
             if para.style.0 as usize >= self.styles.paras().len() {
@@ -151,6 +152,9 @@ impl Document {
             for &id in &para.anchors {
                 if self.objects.get(id).is_none() {
                     return Err(format!("paragraph {i}: unknown object {id:?}"));
+                }
+                if !anchored.insert(id) {
+                    return Err(format!("paragraph {i}: object {id:?} is anchored twice"));
                 }
             }
         }

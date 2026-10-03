@@ -34,8 +34,11 @@ fn build(ui: &Ui<Msg>) -> xui_core::Result<RichTextEditor<Msg>> {
 }
 ```
 
-The view currently paints, scrolls and lays out a document; the editing
-controller below is what the widget drives as input support lands.
+The widget paints, scrolls and lays out a document, and maps keyboard and
+mouse input (typing, selection, clipboard, image resize and move) to commands
+that the editing controller below runs. Toolbars and menus send the same
+commands through `RichTextEditor::exec`; `on_change`, `on_selection` and
+`on_link` report back to the app.
 
 ## Layers
 

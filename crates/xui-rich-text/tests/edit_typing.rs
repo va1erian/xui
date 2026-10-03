@@ -169,3 +169,18 @@ fn undo_and_redo_commands_report_the_whole_document() {
     assert!(ed.run(Command::Redo).doc_changed());
     assert!(ed.run(Command::Redo).is_none());
 }
+
+#[test]
+fn replacing_paragraphs_with_as_many_dirties_all_of_them() {
+    // The paragraph count is unchanged, so only the inserted span can say
+    // that paragraph 2 changed too.
+    let mut ed = Ed::new("abc\ndef\nghi\njkl");
+    ed.select((0, 1), (2, 1));
+    let effect = ed.run(Command::InsertText("x\ny\nz".into()));
+    assert_eq!(ed.text(), "ax\ny\nzhi\njkl");
+    let dirty = effect.dirty.expect("dirty");
+    assert!(
+        dirty.start == 0 && dirty.end >= 3,
+        "{dirty:?} misses paragraph 2"
+    );
+}

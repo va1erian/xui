@@ -44,6 +44,13 @@ struct Line {
 
 impl Line {
     fn escape(&mut self, c: char) -> String {
+        // Up to three leading blanks still let `#`, `-` or `1.` start a block,
+        // and four make an indented code block; a character reference keeps
+        // the blank and ends the line start.
+        if self.chars == 0 && matches!(c, ' ' | '\t') {
+            self.chars += 1;
+            return if c == ' ' { "&#32;" } else { "&#9;" }.to_owned();
+        }
         let escaped = ESCAPED.contains(c)
             || (self.chars == 0 && matches!(c, '#' | '+' | '-' | '='))
             || (self.digits > 0 && self.digits == self.chars && matches!(c, '.' | ')'));

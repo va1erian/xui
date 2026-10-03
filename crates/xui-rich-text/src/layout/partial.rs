@@ -55,8 +55,16 @@ impl Layout {
                 };
                 let y = self.paras[index].y;
                 let mut ctx = ctx;
+                let old_exit = std::mem::take(&mut self.paras[index].exit);
                 self.lay_one(doc, shaper, index, y, &mut ctx);
                 self.paras[index].speculative = speculative;
+                // The floats leaving it changed, so the next paragraph's cached
+                // layout may wrap around floats that are no longer there.
+                if self.paras[index].exit != old_exit
+                    && let Some(next) = self.paras.get_mut(index + 1)
+                {
+                    next.speculative = true;
+                }
             }
         }
         self.reposition(doc);

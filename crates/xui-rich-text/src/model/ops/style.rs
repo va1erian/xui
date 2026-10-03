@@ -86,6 +86,21 @@ impl Document {
         if let Some(&(index, _)) = entries.iter().find(|(i, _)| *i >= self.paragraphs.len()) {
             return Err(EditError::BadParagraphs(index..index + 1));
         }
+        // Inverse ops are public values, so a caller can build spans that do
+        // not fit the text or name styles of another document: check them all
+        // before changing anything.
+        for (index, spans) in &entries {
+            for span in spans {
+                self.check_char_style(span.style)?;
+            }
+            let para = &mut self.paragraphs[*index];
+            let old = std::mem::replace(&mut para.spans, spans.clone());
+            let fits = para.check().is_ok();
+            para.spans = old;
+            if !fits {
+                return Err(EditError::BadParagraphs(*index..*index + 1));
+            }
+        }
         let undo = entries
             .into_iter()
             .map(|(index, spans)| {
@@ -104,6 +119,12 @@ impl Document {
     ) -> Result<EditOp, EditError> {
         if let Some(&(index, _)) = entries.iter().find(|(i, _)| *i >= self.paragraphs.len()) {
             return Err(EditError::BadParagraphs(index..index + 1));
+        }
+        if entries
+            .iter()
+            .any(|(_, style)| style.0 as usize >= self.styles.paras().len())
+        {
+            return Err(EditError::UnknownStyle);
         }
         let undo = entries
             .into_iter()

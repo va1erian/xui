@@ -161,7 +161,9 @@ impl Layout {
         let (mut index, mut laid) = (first, 0);
         while index < count {
             let entering = ctx.relative(y);
-            let reusable = !self.paras[index].dirty && self.paras[index].entering == entering;
+            let reusable = !self.paras[index].dirty
+                && self.paras[index].entering == entering
+                && self.paras[index].number == list_number(doc, index);
             if reusable {
                 self.paras[index].y = y;
                 self.paras[index].speculative = false;
@@ -169,6 +171,9 @@ impl Layout {
                 laid += 1;
                 self.lay_one(doc, shaper, index, y, &mut ctx);
             } else {
+                // Not reusable and out of budget: a later slice must revisit
+                // it even if it is not dirty (its entering floats changed).
+                self.paras[index].speculative = true;
                 break;
             }
             let p = &self.paras[index];
@@ -319,5 +324,6 @@ fn lay_out(
         dirty: false,
         speculative: false,
         text: Arc::from(para.text()),
+        number,
     }
 }

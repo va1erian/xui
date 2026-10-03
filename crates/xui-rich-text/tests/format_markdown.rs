@@ -167,6 +167,11 @@ fn escaping() {
     assert_eq!(md(&doc("1. not a list")), "1\\. not a list\n");
     assert_eq!(md(&doc("12) not")), "12\\) not\n");
     assert_eq!(md(&doc("a - b 1. c")), "a - b 1. c\n");
+    // Leading blanks neither re-enable a block marker nor make a code block.
+    assert_eq!(md(&doc("  # x")), "&#32; # x\n");
+    assert_eq!(md(&doc("  - x")), "&#32; - x\n");
+    assert_eq!(md(&doc(" 1. x")), "&#32;1. x\n");
+    assert_eq!(md(&doc("    code?")), "&#32;   code?\n");
 }
 
 #[test]

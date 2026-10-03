@@ -145,6 +145,9 @@ pub struct ParaLayout {
     pub(crate) speculative: bool,
     /// The paragraph text this layout was made from.
     pub(crate) text: Arc<str>,
+    /// The list number its marker was laid out with; an edit elsewhere in the
+    /// list can change it without touching this paragraph.
+    pub(crate) number: Option<usize>,
 }
 
 impl ParaLayout {
@@ -161,6 +164,7 @@ impl ParaLayout {
             dirty: true,
             speculative: false,
             text: Arc::from(""),
+            number: None,
         }
     }
 

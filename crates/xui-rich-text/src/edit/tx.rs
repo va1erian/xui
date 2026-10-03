@@ -34,10 +34,13 @@ impl Dirty {
 /// The paragraphs `op` changes.
 fn span(doc: &Document, op: &EditOp) -> (usize, usize) {
     match op {
-        EditOp::InsertText { at, .. }
-        | EditOp::SplitParagraph { at }
-        | EditOp::InsertObject { at, .. }
-        | EditOp::Reinsert { at, .. } => (at.para, at.para + 1),
+        // Inserted text or content can span several paragraphs; all of them
+        // change even when an earlier delete keeps the paragraph count equal.
+        EditOp::InsertText { at, text, .. } => {
+            (at.para, at.para + text.matches('\n').count().max(1))
+        }
+        EditOp::Reinsert { at, content } => (at.para, at.para + content.paras.len().max(1)),
+        EditOp::SplitParagraph { at } | EditOp::InsertObject { at, .. } => (at.para, at.para + 1),
         EditOp::Delete { range } | EditOp::Remove { range, .. } => {
             (range.start.para, range.start.para)
         }
@@ -81,7 +84,8 @@ impl<'a, 'b> Cx<'a, 'b> {
         at: DocPos,
         fragment: &Fragment,
     ) -> Result<DocPos, EditError> {
-        self.dirty.note(at.para, at.para + 1);
+        let paras = fragment.paragraphs().len().max(1);
+        self.dirty.note(at.para, at.para + paras);
         self.tx.insert_fragment(at, fragment)
     }
 }

@@ -183,3 +183,23 @@ fn list_text_is_indented_by_level_and_the_marker_hangs_left_of_it() {
         assert!(m.x + m.layout.width() < text_x(i));
     }
 }
+
+#[test]
+fn changing_one_item_renumbers_the_clean_items_after_it() {
+    use crate::model::{EditOp, ParaStylePatch};
+    let (mut doc, mut layout) = list_doc(&[(ListKind::Numbered, 0); 10]);
+    assert_eq!(marker_chars(&layout, 9), 3, "10.");
+    let patch = ParaStylePatch::list(Some(ListItem {
+        kind: ListKind::Bullet,
+        level: 0,
+    }));
+    doc.apply(EditOp::SetParaStyle { paras: 0..1, patch })
+        .unwrap();
+    layout.mark_dirty(0);
+    layout.update(&doc, &Mono);
+    assert_eq!(
+        marker_chars(&layout, 9),
+        2,
+        "only paragraph 0 was dirty, yet the last item is now 9."
+    );
+}

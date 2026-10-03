@@ -113,3 +113,41 @@ fn a_new_width_estimates_again_and_finishes_the_same() {
     let full = lay(&doc, 250.0);
     assert!((layout.height() - full.height()).abs() < 0.01);
 }
+
+#[test]
+fn removing_a_float_in_the_window_revisits_the_clean_paragraphs_beside_it() {
+    use crate::model::{DocPos, DocRange, EditOp};
+    let mut doc = many(20);
+    let image = InlineImage {
+        image: gradient_image(8, 8, Color::rgb(0, 0, 0), Color::rgb(9, 9, 9)),
+        size: (Dip(60.0), Dip(400.0)),
+        wrap: Wrap::square(Side::Left),
+        alt: String::new(),
+    };
+    doc.apply(EditOp::InsertObject {
+        at: DocPos::new(0, 0),
+        object: image,
+    })
+    .unwrap();
+    let mut layout = lay(&doc, 300.0);
+
+    // Remove the float; only paragraph 0 is dirty and only it fits the budget.
+    let range = DocRange::new(DocPos::new(0, 0), DocPos::new(0, 3));
+    doc.apply(EditOp::Delete { range }).unwrap();
+    layout.mark_dirty(0);
+    layout.update_around(&doc, &Mono, 0.0, 1.0, 1);
+    assert!(
+        !layout.is_complete(),
+        "paragraph 1 still wraps around the removed float"
+    );
+    while layout.update_idle(&doc, &Mono, 4) {}
+
+    let full = lay(&doc, 300.0);
+    for i in 0..doc.paragraphs().len() {
+        assert_eq!(
+            line_texts(&doc, &layout, i),
+            line_texts(&doc, &full, i),
+            "paragraph {i}"
+        );
+    }
+}
