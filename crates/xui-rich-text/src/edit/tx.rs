@@ -41,8 +41,9 @@ fn span(doc: &Document, op: &EditOp) -> (usize, usize) {
         }
         EditOp::Reinsert { at, content } => (at.para, at.para + content.paras.len().max(1)),
         EditOp::SplitParagraph { at } | EditOp::InsertObject { at, .. } => (at.para, at.para + 1),
+        // A delete across cells clears each cell it covers.
         EditOp::Delete { range } | EditOp::Remove { range, .. } => {
-            (range.start.para, range.start.para)
+            (range.start.para, range.end.para)
         }
         EditOp::SetCharStyle { range, .. } => (range.start.para, range.end.para),
         EditOp::MergeParagraph { para } => (*para, *para),
@@ -54,6 +55,17 @@ fn span(doc: &Document, op: &EditOp) -> (usize, usize) {
         EditOp::RestoreSpans(_) | EditOp::RestoreParaStyles(_) => (0, doc.paragraph_count()),
         // The view relays out every paragraph when the page changes.
         EditOp::SetPage(_) => (0, 0),
+        EditOp::InsertParas { at, content } => (*at, at + content.paras.len()),
+        EditOp::RemoveParas { paras } => (paras.start, paras.start),
+        EditOp::SetTable { id, .. } => doc
+            .table_spans()
+            .into_iter()
+            .find(|t| t.id == *id)
+            .map_or((0, 0), |t| (t.paras.start, t.paras.end)),
+        EditOp::SetCells(entries) => entries
+            .iter()
+            .fold((usize::MAX, 0), |(lo, hi), (i, _)| (lo.min(*i), hi.max(*i))),
+        EditOp::Batch(_) => (0, doc.paragraph_count()),
     }
 }
 

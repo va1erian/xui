@@ -9,15 +9,18 @@ use super::ops::{EditError, EditOp, Slice};
 use super::paragraph::{Paragraph, Span};
 use super::selection::DocRange;
 use super::style::StyleTable;
+use super::table::{TableId, TableTable};
 use super::{DocPos, Document, ObjectId, ObjectTable};
 
-/// A mini-document: paragraphs with the styles and objects they use, in ids of
-/// the fragment's own tables, independent of the document it came from.
+/// A mini-document: paragraphs with the styles, objects and tables they use,
+/// in ids of the fragment's own tables, independent of the document it came
+/// from. Only whole tables travel; a piece of a table is plain paragraphs.
 #[derive(Clone, Debug)]
 pub struct Fragment {
     paragraphs: Vec<Paragraph>,
     styles: StyleTable,
     objects: ObjectTable,
+    tables: TableTable,
 }
 
 impl Fragment {
@@ -28,6 +31,7 @@ impl Fragment {
             paragraphs: doc.paragraphs,
             styles: doc.styles,
             objects: doc.objects,
+            tables: doc.tables,
         }
     }
 
@@ -58,13 +62,19 @@ impl Fragment {
 }
 
 impl Document {
-    /// Copies the content of `range` into a self-contained [`Fragment`].
+    /// Copies the content of `range` into a self-contained [`Fragment`]. The
+    /// tables wholly inside the range come with it when both its ends are
+    /// outside tables; otherwise every paragraph comes as a plain one.
     pub fn extract_fragment(&self, range: DocRange) -> Result<Fragment, EditError> {
         self.check_range(range)?;
         let slice = self.slice_range(range);
+        let keep_tables =
+            self.region(range.start.para).is_none() && self.region(range.end.para).is_none();
         let mut styles = StyleTable::new();
         let mut objects = ObjectTable::new();
+        let mut tables = TableTable::new();
         let mut ids: HashMap<ObjectId, ObjectId> = HashMap::new();
+        let mut table_ids: HashMap<TableId, TableId> = HashMap::new();
         for (id, object) in slice.objects {
             ids.insert(id, objects.insert(object));
         }
@@ -79,6 +89,13 @@ impl Document {
                 for id in &mut para.anchors {
                     *id = ids[id];
                 }
+                para.cell = para.cell.filter(|_| keep_tables).and_then(|mut cell| {
+                    let table = self.tables.get(cell.table)?.clone();
+                    cell.table = *table_ids
+                        .entry(cell.table)
+                        .or_insert_with(|| tables.insert(table));
+                    Some(cell)
+                });
                 para
             })
             .collect();
@@ -86,6 +103,7 @@ impl Document {
             paragraphs,
             styles,
             objects,
+            tables,
         })
     }
 
@@ -99,6 +117,9 @@ impl Document {
     ) -> Result<(EditOp, DocPos), EditError> {
         self.check_pos(at)?;
         let mut objects = Vec::new();
+        let mut tables = Vec::new();
+        let mut table_ids: HashMap<TableId, TableId> = HashMap::new();
+        let in_cell = self.region(at.para).is_some();
         let mut paras = Vec::with_capacity(fragment.paragraphs.len());
         for source in &fragment.paragraphs {
             let mut para = source.clone();
@@ -122,9 +143,27 @@ impl Document {
                     *id = new;
                 }
             }
+            // Tables do not nest, so inside a cell the copied tables are
+            // dropped and `reinsert` makes every paragraph part of the cell.
+            para.cell = para.cell.filter(|_| !in_cell).and_then(|mut cell| {
+                let table = fragment.tables.get(cell.table)?;
+                cell.table = *table_ids.entry(cell.table).or_insert_with(|| {
+                    let new = self.tables.insert(table.clone());
+                    tables.push((new, table.clone()));
+                    new
+                });
+                Some(cell)
+            });
             paras.push(para);
         }
-        let inverse = self.reinsert(at, Slice { paras, objects })?;
+        let inverse = self.reinsert(
+            at,
+            Slice {
+                paras,
+                objects,
+                tables,
+            },
+        )?;
         let end = match &inverse {
             EditOp::Remove { range, .. } => range.end,
             _ => at,

@@ -10,12 +10,14 @@
 //! | bullet / numbered list | `- ` / `1. `, indented by level |
 //! | line break (U+2028) | backslash, newline |
 //! | image | `![alt](target)` |
+//! | table | a pipe table, its first row as the header |
 //!
 //! Everything else (underline, colour, highlight, size, font, alignment,
 //! indents, spacing, wrap) is dropped. The crate does no file I/O: where an
 //! image goes is the caller's [`ImageExport`] choice.
 
 mod inline;
+mod table;
 
 use xui_core::Image;
 
@@ -62,7 +64,23 @@ pub fn to_markdown(doc: &Document, images: &ImageExport) -> String {
     let mut out = String::new();
     let mut levels: Vec<Level> = Vec::new();
     let mut previous: Option<Block> = None;
-    for para in doc.paragraphs() {
+    let spans = doc.table_spans();
+    let mut tables = spans.iter().peekable();
+    let mut skip_to = 0;
+    for (index, para) in doc.paragraphs().iter().enumerate() {
+        if index < skip_to {
+            continue;
+        }
+        if let Some(span) = tables.next_if(|t| t.paras.start == index) {
+            if previous.is_some() {
+                out.push('\n');
+            }
+            out.push_str(&table::table(doc, span, images));
+            levels.clear();
+            previous = Some(Block::Other);
+            skip_to = span.paras.end;
+            continue;
+        }
         let style = doc.styles().para(para.style());
         let heading = match style.kind {
             BlockKind::Heading(n) => Some(n.clamp(1, 6) as usize),

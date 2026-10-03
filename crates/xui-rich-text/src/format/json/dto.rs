@@ -8,8 +8,8 @@ use xui_core::backend::TextWeight;
 use xui_core::{Color, Dip};
 
 use crate::model::{
-    Align, Baseline, BlockKind, CharStyle, LineSpacing, ListItem, ListKind, PageSetup, ParaStyle,
-    Side, TextColor, Wrap,
+    Align, Baseline, BlockKind, CellMark, CellStart, CharStyle, LineSpacing, ListItem, ListKind,
+    PageSetup, ParaStyle, Side, Table, TableId, TextColor, Wrap,
 };
 
 type Rgb = [u8; 3];
@@ -308,6 +308,87 @@ impl From<PageDto> for PageSetup {
             top,
             right,
             bottom,
+        }
+    }
+}
+
+/// A table's settings.
+#[derive(Serialize, Deserialize)]
+pub(super) struct TableDto {
+    id: u32,
+    columns: Vec<f32>,
+    #[serde(default)]
+    header: bool,
+    #[serde(default = "yes")]
+    border: bool,
+}
+
+fn yes() -> bool {
+    true
+}
+
+impl TableDto {
+    pub(super) fn new(id: u32, t: &Table) -> TableDto {
+        TableDto {
+            id,
+            columns: t.columns.clone(),
+            header: t.header,
+            border: t.border,
+        }
+    }
+
+    pub(super) fn id(&self) -> u32 {
+        self.id
+    }
+}
+
+impl From<TableDto> for Table {
+    fn from(d: TableDto) -> Table {
+        Table {
+            columns: d.columns,
+            header: d.header,
+            border: d.border,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Copy)]
+#[serde(rename_all = "snake_case")]
+enum CellStartDto {
+    Row,
+    Cell,
+    Continue,
+}
+
+/// A paragraph's place in a table.
+#[derive(Serialize, Deserialize, Clone, Copy)]
+pub(super) struct CellDto {
+    table: u32,
+    start: CellStartDto,
+}
+
+impl From<CellMark> for CellDto {
+    fn from(c: CellMark) -> CellDto {
+        CellDto {
+            table: c.table.0,
+            start: match c.start {
+                CellStart::Row => CellStartDto::Row,
+                CellStart::Cell => CellStartDto::Cell,
+                CellStart::Continue => CellStartDto::Continue,
+            },
+        }
+    }
+}
+
+impl From<CellDto> for CellMark {
+    fn from(d: CellDto) -> CellMark {
+        CellMark {
+            table: TableId(d.table),
+            start: match d.start {
+                CellStartDto::Row => CellStart::Row,
+                CellStartDto::Cell => CellStart::Cell,
+                CellStartDto::Continue => CellStart::Continue,
+            },
         }
     }
 }

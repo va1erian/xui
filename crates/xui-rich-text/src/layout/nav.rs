@@ -63,15 +63,15 @@ impl Layout {
             if lines > 0 {
                 if l + 1 < self.paras[p].lines.len() {
                     l += 1;
-                } else if p + 1 < self.paras.len() && !self.paras[p + 1].lines.is_empty() {
-                    (p, l) = (p + 1, 0);
+                } else if let Some(next) = self.para_below(p, x) {
+                    (p, l) = (next, 0);
                 } else {
                     break;
                 }
             } else if l > 0 {
                 l -= 1;
-            } else if p > 0 && !self.paras[p - 1].lines.is_empty() {
-                (p, l) = (p - 1, self.paras[p - 1].lines.len() - 1);
+            } else if let Some(prev) = self.para_above(p, x) {
+                (p, l) = (prev, self.paras[prev].lines.len() - 1);
             } else {
                 break;
             }
@@ -85,6 +85,62 @@ impl Layout {
             DocPos::new(p, para.lines[l].byte_at_x(&para.text, x, last)),
             x,
         )
+    }
+
+    /// The paragraph a caret leaving the last line of `p` downwards enters,
+    /// aiming at `x`: the next one in its cell, the cell below, the paragraph
+    /// after the table, or the cell under `x` in a table's first row.
+    fn para_below(&self, p: usize, x: f32) -> Option<usize> {
+        let next = match self.table_of(p) {
+            Some(t) => {
+                let (row, col) = t.cell_of(p)?;
+                let cell = &t.rows[row].cells[col];
+                if p + 1 < cell.end {
+                    p + 1
+                } else if let Some(below) = t.rows.get(row + 1) {
+                    below.cells[col].start
+                } else {
+                    t.paras.end
+                }
+            }
+            None => match self.table_of(p + 1) {
+                Some(t) => t.rows[0].cells[t.col_at(x)].start,
+                None => p + 1,
+            },
+        };
+        self.paras
+            .get(next)
+            .filter(|n| !n.lines.is_empty())
+            .map(|_| next)
+    }
+
+    /// The paragraph a caret leaving the first line of `p` upwards enters,
+    /// aiming at `x` (the mirror of [`para_below`](Self::para_below)).
+    fn para_above(&self, p: usize, x: f32) -> Option<usize> {
+        let prev = match self.table_of(p) {
+            Some(t) => {
+                let (row, col) = t.cell_of(p)?;
+                let cell = &t.rows[row].cells[col];
+                if p > cell.start {
+                    p - 1
+                } else if row > 0 {
+                    t.rows[row - 1].cells[col].end - 1
+                } else {
+                    t.paras.start.checked_sub(1)?
+                }
+            }
+            None => {
+                let prev = p.checked_sub(1)?;
+                match self.table_of(prev) {
+                    Some(t) => t.rows.last()?.cells[t.col_at(x)].end - 1,
+                    None => prev,
+                }
+            }
+        };
+        self.paras
+            .get(prev)
+            .filter(|n| !n.lines.is_empty())
+            .map(|_| prev)
     }
 
     /// How many lines a Page Up or Page Down moves in a view

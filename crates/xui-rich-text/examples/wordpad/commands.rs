@@ -15,6 +15,7 @@ use xui_rich_text::model::{
 
 use crate::app::{After, Mark, Msg, Wordpad};
 use crate::files;
+use crate::table::TableAction;
 use crate::ui::{BLOCKS, SIZES, WRAPS};
 
 /// Refreshes the title bar and status bar.
@@ -63,6 +64,7 @@ pub fn selection(app: &mut Wordpad, summary: StyleSummary) {
         Selection::Text { .. } => None,
     };
     app.tools.sync_wrap(image);
+    app.table.sync(app.editor.table_cursor().as_ref());
 }
 
 /// Runs an editor command from the toolbar and returns focus to the text.
@@ -128,6 +130,14 @@ pub fn wrap(app: &mut Wordpad, index: usize) {
     };
     debug_assert!(index < WRAPS.len());
     format(app, Command::SetWrap { id, wrap });
+}
+
+/// Runs a table button's command.
+pub fn table(app: &mut Wordpad, action: TableAction) {
+    if let Some(command) = action.command(app.editor.table_cursor()) {
+        format(app, command);
+    }
+    app.table.sync(app.editor.table_cursor().as_ref());
 }
 
 /// New: confirm discarding unsaved changes first.

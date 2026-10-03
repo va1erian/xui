@@ -1,7 +1,8 @@
 #![forbid(unsafe_code)]
 
 //! What is drawn over the text: the caret, the drop caret of an image drag,
-//! and the outline and handles of the selected image.
+//! the guide of a table column drag, and the outline and handles of the
+//! selected image.
 
 use xui_core::Theme;
 use xui_core::backend::Canvas;
@@ -32,6 +33,9 @@ pub(crate) fn paint(canvas: &mut dyn Canvas, state: &State, theme: &Theme, pad: 
     }
     if let Some(drop) = state.drop_caret {
         caret(canvas, drop, theme.accent);
+    }
+    if let Some(guide) = state.column_guide {
+        caret(canvas, guide, theme.accent);
     }
     if let Some((_, rect)) = state.image {
         let rect = view(rect);

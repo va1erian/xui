@@ -16,7 +16,8 @@ impl Document {
     /// Whether `other` has the same content: the same text, character and
     /// paragraph styles (compared by value, so differently numbered but equal
     /// style tables match) and anchored objects (compared by pixels, size, wrap
-    /// and alt text, not by id).
+    /// and alt text, not by id) and tables (compared by their cells and
+    /// settings, not by id).
     pub fn content_eq(&self, other: &Document) -> bool {
         self.paragraphs.len() == other.paragraphs.len()
             && self
@@ -27,7 +28,11 @@ impl Document {
     }
 
     fn para_eq(&self, a: &super::Paragraph, other: &Document, b: &super::Paragraph) -> bool {
+        let table = |doc: &Document, p: &super::Paragraph| {
+            p.cell.map(|c| (c.start, doc.tables.get(c.table).cloned()))
+        };
         a.text == b.text
+            && table(self, a) == table(other, b)
             && self.styles.para(a.style) == other.styles.para(b.style)
             && a.spans.len() == b.spans.len()
             && a.spans.iter().zip(&b.spans).all(|(x, y)| {

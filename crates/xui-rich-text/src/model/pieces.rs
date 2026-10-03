@@ -91,11 +91,12 @@ impl Paragraph {
             spans: normalize(spans, self.typing_style(lo)),
             anchors: self.anchors[a..b].to_vec(),
             style: self.style,
+            cell: self.cell,
         }
     }
 
-    /// The pieces joined into one paragraph in `style`; if the result is empty
-    /// it keeps `fallback` as its typing style.
+    /// The pieces joined into one paragraph in `style`, in the first piece's
+    /// cell; if the result is empty it keeps `fallback` as its typing style.
     pub(crate) fn concat(
         parts: &[&Paragraph],
         fallback: CharStyleId,
@@ -113,6 +114,7 @@ impl Paragraph {
             spans,
             anchors,
             style,
+            cell: parts.first().and_then(|p| p.cell),
         }
     }
 }

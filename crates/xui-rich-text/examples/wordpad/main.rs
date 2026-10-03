@@ -2,7 +2,7 @@
 
 //! A small word processor on the portable canvas backend: block kinds, font
 //! sizes, bold/italic/underline/strike, alignment, lists, indentation, images
-//! with text wrap, undo/redo, JSON save/open and Markdown export.
+//! with text wrap, tables, undo/redo, JSON save/open and Markdown export.
 //!
 //! ```text
 //! cargo run -p xui-rich-text --example wordpad
@@ -14,6 +14,7 @@
 mod app;
 mod commands;
 mod files;
+mod table;
 mod ui;
 
 use std::rc::Rc;

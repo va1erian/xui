@@ -64,6 +64,8 @@ pub(crate) struct ShapeCtx<'a> {
     pub scale: f32,
     pub kind: BlockKind,
     pub tick: u64,
+    /// Lay floating pictures out inline (inside a table cell).
+    pub inline_only: bool,
 }
 
 impl ShapeCtx<'_> {
@@ -181,6 +183,17 @@ impl ShapeCtx<'_> {
         let size = (object.size.0.0 * self.scale, object.size.1.0 * self.scale);
         match object.wrap {
             Wrap::Inline => Item {
+                width: size.0,
+                ascent: size.1,
+                descent: 0.0,
+                dy: 0.0,
+                size: size.1,
+                kind: ItemKind::Object { id, height: size.1 },
+                range,
+                brk,
+                style,
+            },
+            _ if self.inline_only => Item {
                 width: size.0,
                 ascent: size.1,
                 descent: 0.0,

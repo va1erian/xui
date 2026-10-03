@@ -76,6 +76,14 @@ impl Selection {
         matches!(self, Selection::Text { anchor, head } if anchor == head)
     }
 
+    /// The fixed end of a text selection.
+    pub fn anchor(&self) -> Option<DocPos> {
+        match *self {
+            Selection::Text { anchor, .. } => Some(anchor),
+            Selection::Object(_) => None,
+        }
+    }
+
     /// The caret end of a text selection.
     pub fn head(&self) -> Option<DocPos> {
         match *self {

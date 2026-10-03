@@ -139,6 +139,12 @@ impl FloatCtx {
         })
     }
 
+    /// Where content that must clear every float starts when the flow is at
+    /// `y`: below the lowest exclusion still active there.
+    pub fn clear_below(&self, y: f32) -> f32 {
+        self.excl.iter().map(|e| e.rect.bottom).fold(y, f32::max)
+    }
+
     /// The exclusions still active below `y`, relative to `y`.
     pub fn relative(&self, y: f32) -> Vec<Excl> {
         self.excl

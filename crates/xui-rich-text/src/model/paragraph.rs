@@ -7,6 +7,7 @@ use std::ops::Range;
 
 use super::object::{OBJECT_CHAR, ObjectId};
 use super::style::{CharStyleId, ParaStyleId};
+use super::table::CellMark;
 
 /// A run of `len` bytes in one character style.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -31,6 +32,7 @@ pub struct Paragraph {
     pub(crate) spans: Vec<Span>,
     pub(crate) anchors: Vec<ObjectId>,
     pub(crate) style: ParaStyleId,
+    pub(crate) cell: Option<CellMark>,
 }
 
 impl Paragraph {
@@ -47,7 +49,14 @@ impl Paragraph {
             text,
             anchors: Vec::new(),
             style,
+            cell: None,
         }
+    }
+
+    /// The same paragraph inside a table cell (`None` for outside any table).
+    pub fn with_cell(mut self, cell: Option<CellMark>) -> Paragraph {
+        self.cell = cell;
+        self
     }
 
     /// The paragraph's text, with [`OBJECT_CHAR`] at each object's anchor.
@@ -68,6 +77,11 @@ impl Paragraph {
     /// The paragraph style.
     pub fn style(&self) -> ParaStyleId {
         self.style
+    }
+
+    /// The table cell the paragraph is in, if any.
+    pub fn cell(&self) -> Option<CellMark> {
+        self.cell
     }
 
     /// The byte range and style of each run, in order.

@@ -13,6 +13,7 @@ mod lines;
 mod nav;
 mod pages;
 mod partial;
+mod tables;
 
 use std::any::Any;
 

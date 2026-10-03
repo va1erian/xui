@@ -4,10 +4,10 @@ Every shape becomes a list of absolute move/line/cubic/close segments on the
 24x24 design grid (arcs and quadratics are converted to cubics), which the
 canvas draws natively.
 
-The generator writes `src/widget/lucide/data.rs` (the public `Lucide` enum, the
-`Lucide::ALL` list and the variant-to-path mapping) plus one `data_<letter>.rs`
-per first letter, so no generated file crosses the line limit. Adding an icon
-is dropping its SVG here and re-running the script.
+The generator writes `src/widget/lucide/data.rs` (the public `Lucide` enum and
+the `Lucide::ALL` list), `paths.rs` (the variant-to-path mapping) and one
+`data_<letter>.rs` per first letter, so no generated file crosses the line
+limit. Adding an icon is dropping its SVG here and re-running the script.
 
 Usage: pip install svgelements; python generate.py
 """
@@ -137,7 +137,7 @@ for letter, entries in sorted(buckets.items()):
         lines.append("];")
     write(os.path.join(OUT_DIR, f"data_{letter.lower()}.rs"), lines)
 
-# The top-level generated module: enum, ALL and the mapping.
+# The top-level generated module: the enum and ALL.
 lines = list(HEADER) + [
     "",
     "use crate::backend::PathSeg;",
@@ -174,6 +174,17 @@ lines += [
     "    ];",
     "}",
     "",
+    '#[path = "paths.rs"]',
+    "mod paths;",
+    "pub(crate) use paths::path;",
+]
+write(os.path.join(OUT_DIR, 'data.rs'), lines)
+
+# The variant-to-path mapping, in its own file so `data.rs` stays small.
+lines = list(HEADER) + [
+    "",
+    "use super::*;",
+    "",
     "/// The path segments that draw `icon` on the 24x24 Lucide grid.",
     "pub(crate) fn path(icon: Lucide) -> &'static [PathSeg] {",
     "    match icon {",
@@ -184,4 +195,4 @@ lines += [
     "    }",
     "}",
 ]
-write(os.path.join(OUT_DIR, 'data.rs'), lines)
+write(os.path.join(OUT_DIR, 'paths.rs'), lines)

@@ -131,6 +131,15 @@ impl EditorState {
             Command::MoveObject { id, to } => self.move_object(id, to),
             Command::SetWrap { id, wrap } => self.set_wrap(id, wrap),
             Command::SelectObject(id) => self.select_object(id),
+            Command::InsertTable { rows, columns } => self.insert_table(rows, columns),
+            Command::InsertRow { below } => self.insert_row(below),
+            Command::InsertColumn { right } => self.insert_column(right),
+            Command::DeleteRows => self.delete_rows(),
+            Command::DeleteColumns => self.delete_columns(),
+            Command::DeleteTable => self.delete_table(),
+            Command::SetTable { id, table } => self.set_table(id, table),
+            Command::NextCell => self.next_cell(true),
+            Command::PrevCell => self.next_cell(false),
             Command::Undo => self.undo(true),
             Command::Redo => self.undo(false),
             Command::Copy => self.copy(clipboard),
@@ -145,6 +154,12 @@ impl EditorState {
         self.selection_range()
             .and_then(|r| self.doc.paragraphs().get(r.start.para))
             .is_some_and(|p| self.doc.styles().para(p.style()).list.is_some())
+    }
+
+    /// Whether the caret is in a table, which is where Tab moves between
+    /// cells.
+    pub fn in_table(&self) -> bool {
+        self.doc.region(self.head().para).is_some()
     }
 
     /// Whether the selection lies inside the document on grapheme boundaries.

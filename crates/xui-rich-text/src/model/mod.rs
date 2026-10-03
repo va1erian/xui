@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 
-//! The document model: paragraphs of styled text with anchored images.
+//! The document model: paragraphs of styled text with anchored images and
+//! tables.
 //!
 //! Nothing here shapes text or touches a backend.
 
@@ -8,6 +9,7 @@ mod compare;
 mod edit;
 pub mod fragment;
 pub mod grapheme;
+mod grid;
 pub mod history;
 pub mod object;
 pub mod ops;
@@ -18,6 +20,7 @@ mod pieces;
 pub mod selection;
 pub mod style;
 pub mod summary;
+pub mod table;
 
 pub use fragment::Fragment;
 pub use history::{COALESCE_GAP, EditContext, History, Transaction};
@@ -32,6 +35,9 @@ pub use style::{
     ParaStyleId, StyleTable, TextColor,
 };
 pub use summary::{StyleSummary, Tri};
+pub use table::{
+    CellMark, CellStart, MAX_COLUMNS, MAX_ROWS, Table, TableId, TableSpan, TableTable,
+};
 
 /// Which way a caret leans at a position shared by two lines (a soft wrap):
 /// `Upstream` draws it at the end of the earlier line.
@@ -68,6 +74,7 @@ pub struct Document {
     pub(crate) paragraphs: Vec<Paragraph>,
     pub(crate) styles: StyleTable,
     pub(crate) objects: ObjectTable,
+    pub(crate) tables: TableTable,
     pub(crate) page: PageSetup,
 }
 
@@ -82,6 +89,7 @@ impl Document {
             )],
             styles: StyleTable::new(),
             objects: ObjectTable::new(),
+            tables: TableTable::new(),
             page: PageSetup::default(),
         }
     }
@@ -108,10 +116,21 @@ impl Document {
         styles: StyleTable,
         objects: ObjectTable,
     ) -> Result<Document, String> {
+        Document::from_parts_with_tables(paragraphs, styles, objects, TableTable::new())
+    }
+
+    /// Builds a document with tables from parts, checking every invariant.
+    pub fn from_parts_with_tables(
+        paragraphs: Vec<Paragraph>,
+        styles: StyleTable,
+        objects: ObjectTable,
+        tables: TableTable,
+    ) -> Result<Document, String> {
         let doc = Document {
             paragraphs,
             styles,
             objects,
+            tables,
             page: PageSetup::default(),
         };
         doc.check()?;
@@ -177,7 +196,7 @@ impl Document {
                 }
             }
         }
-        Ok(())
+        self.check_tables()
     }
 }
 

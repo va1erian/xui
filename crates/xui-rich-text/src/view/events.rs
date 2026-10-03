@@ -6,7 +6,7 @@ use xui_core::backend::{Cursor, Event};
 use xui_core::geometry::{Point, Rect};
 use xui_core::message::{Key, MouseButton};
 
-use super::keys::command_for;
+use super::keys::{TabTarget, command_for};
 use super::state::State;
 use crate::edit::{Command, Effect};
 
@@ -101,7 +101,14 @@ pub(crate) fn handle(state: &mut State, event: &Event) -> Option<Out> {
                 }
                 return Some(out);
             }
-            let command = command_for(key, modifiers, state.ed.in_list())?;
+            let tab = if state.ed.in_table() {
+                TabTarget::Table
+            } else if state.ed.in_list() {
+                TabTarget::List
+            } else {
+                TabTarget::Text
+            };
+            let command = command_for(key, modifiers, tab)?;
             if state.drag.is_some() {
                 return Some(out);
             }

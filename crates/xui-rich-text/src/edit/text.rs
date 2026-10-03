@@ -197,6 +197,11 @@ impl EditorState {
 
     fn merge_with_previous(&mut self, para: usize) -> Effect {
         let caret = DocPos::new(para - 1, self.doc.paragraphs()[para - 1].text().len());
+        if self.doc.region(para) != self.doc.region(para - 1) {
+            // A cell's edge, or the paragraph after a table: paragraphs of
+            // different cells never join, so the caret just steps back.
+            return self.set_selection(Selection::caret(caret));
+        }
         self.run(|cx| {
             cx.apply(EditOp::MergeParagraph { para: para - 1 })?;
             Ok(Some(Selection::caret(caret)))

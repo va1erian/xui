@@ -6,7 +6,7 @@ use xui_core::Dip;
 
 use crate::model::{
     Align, BlockKind, CharStylePatch, DocPos, InlineImage, ListKind, ObjectId, PageSetup,
-    ParaStylePatch, Wrap,
+    ParaStylePatch, Table, TableId, Wrap,
 };
 
 /// A caret movement.
@@ -137,6 +137,42 @@ pub enum Command {
     },
     /// Selects an image.
     SelectObject(ObjectId),
+    /// Inserts a table of empty cells over the selection (not inside a
+    /// table) and puts the caret in its first cell.
+    InsertTable {
+        /// How many rows, 1 to [`MAX_ROWS`](crate::model::MAX_ROWS).
+        rows: usize,
+        /// How many columns, 1 to [`MAX_COLUMNS`](crate::model::MAX_COLUMNS).
+        columns: usize,
+    },
+    /// Inserts a row above or below the caret's.
+    InsertRow {
+        /// Below rather than above.
+        below: bool,
+    },
+    /// Inserts a column left or right of the caret's.
+    InsertColumn {
+        /// Right rather than left.
+        right: bool,
+    },
+    /// Deletes the rows the selection covers in the caret's table.
+    DeleteRows,
+    /// Deletes the columns the selection covers in the caret's table.
+    DeleteColumns,
+    /// Deletes the caret's table.
+    DeleteTable,
+    /// Replaces a table's settings (column widths, header row, border); the
+    /// column count must stay the same.
+    SetTable {
+        /// The table, as [`TableCursor`](crate::edit::TableCursor) names it.
+        id: TableId,
+        /// Its new settings.
+        table: Table,
+    },
+    /// Tab in a table: selects the next cell, adding a row after the last.
+    NextCell,
+    /// Shift+Tab in a table: selects the previous cell.
+    PrevCell,
     /// Ctrl+Z.
     Undo,
     /// Ctrl+Y.
