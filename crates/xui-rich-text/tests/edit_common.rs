@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use xui_rich_text::DocPos;
 use xui_rich_text::edit::{Command, EditorState, Effect, LineNav, MemoryClipboard, Motion};
-use xui_rich_text::model::{Document, Selection};
+use xui_rich_text::model::{Document, ListItem, ListKind, Selection};
 
 /// Every paragraph is one line; x is the byte offset; a page is 3 lines.
 pub struct OneLinePerParagraph(pub Vec<String>);
@@ -104,4 +104,21 @@ impl Ed {
     pub fn caret(&self) -> DocPos {
         self.state.selection.head().expect("a text selection")
     }
+}
+
+/// Undoes the last step, expecting there to be one.
+pub fn undo(ed: &mut Ed) {
+    assert!(ed.run(Command::Undo).doc_changed());
+}
+
+/// The list membership of paragraph `para`.
+pub fn list_of(ed: &Ed, para: usize) -> Option<ListItem> {
+    let doc = &ed.state.doc;
+    doc.styles().para(doc.paragraphs()[para].style()).list
+}
+
+/// Puts the caret at the start of `para` and toggles a bullet list.
+pub fn bullet(ed: &mut Ed, para: usize) {
+    ed.caret_at(para, 0);
+    ed.run(Command::ToggleList(ListKind::Bullet));
 }
