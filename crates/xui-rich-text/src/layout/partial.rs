@@ -11,7 +11,7 @@
 use xui_core::backend::TextShaper;
 
 use super::floats::FloatCtx;
-use super::flow::Layout;
+use super::flow::{Layout, list_numbers};
 use super::resolve::{para_metrics, scale_for};
 use crate::model::Document;
 
@@ -34,12 +34,14 @@ impl Layout {
         budget: usize,
     ) {
         self.fit(doc);
+        // An edit to an earlier item can renumber a clean visible one.
+        let numbers = list_numbers(doc);
         let mut laid = 0;
         for _ in 0..ROUNDS {
             self.reposition(doc);
             let todo: Vec<usize> = self
                 .visible(top, bottom)
-                .filter(|&i| self.paras[i].dirty)
+                .filter(|&i| self.paras[i].dirty || self.paras[i].number != numbers[i])
                 .collect();
             if todo.is_empty() || laid >= budget {
                 break;
@@ -56,7 +58,7 @@ impl Layout {
                 let y = self.paras[index].y;
                 let mut ctx = ctx;
                 let old_exit = std::mem::take(&mut self.paras[index].exit);
-                self.lay_one(doc, shaper, index, y, &mut ctx);
+                self.lay_one(doc, shaper, index, y, &mut ctx, numbers[index]);
                 self.paras[index].speculative = speculative;
                 // The floats leaving it changed, so the next paragraph's cached
                 // layout may wrap around floats that are no longer there.

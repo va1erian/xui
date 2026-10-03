@@ -151,3 +151,46 @@ fn removing_a_float_in_the_window_revisits_the_clean_paragraphs_beside_it() {
         );
     }
 }
+
+#[test]
+fn a_visible_item_renumbered_by_an_edit_above_the_window_updates_at_once() {
+    use crate::model::{EditOp, ListItem, ListKind, ParaStyle, ParaStylePatch};
+    let mut b = DocBuilder::new();
+    let numbered = b.para_style(ParaStyle {
+        list: Some(ListItem {
+            kind: ListKind::Numbered,
+            level: 0,
+        }),
+        ..ParaStyle::default()
+    });
+    for _ in 0..10 {
+        b.paragraph(numbered, &[Run::Text("item", CharStyleId::DEFAULT)]);
+    }
+    let mut doc = b.finish();
+    let mut layout = lay(&doc, 300.0);
+    let marker_width = |layout: &Layout| {
+        layout.paragraphs()[9]
+            .marker
+            .as_ref()
+            .unwrap()
+            .layout
+            .width()
+    };
+    let ten = marker_width(&layout);
+
+    let patch = ParaStylePatch::list(Some(ListItem {
+        kind: ListKind::Bullet,
+        level: 0,
+    }));
+    doc.apply(EditOp::SetParaStyle { paras: 0..1, patch })
+        .unwrap();
+    layout.mark_dirty(0);
+    // The window holds only the last item; paragraph 0 is dirty but off-screen.
+    let last = &layout.paragraphs()[9];
+    let (top, bottom) = (last.y, last.bottom());
+    layout.update_around(&doc, &Mono, top, bottom, 1);
+    assert!(
+        marker_width(&layout) < ten,
+        "the last item shows 9. now, not 10."
+    );
+}

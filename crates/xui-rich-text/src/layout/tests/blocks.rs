@@ -203,3 +203,51 @@ fn changing_one_item_renumbers_the_clean_items_after_it() {
         "only paragraph 0 was dirty, yet the last item is now 9."
     );
 }
+
+/// The definition `list_numbers` computes in one pass (the previous
+/// per-paragraph implementation): scan back from each item, skip deeper items,
+/// count same-level numbered ones, stop at anything else.
+fn numbers_by_scanning_back(items: &[Option<(ListKind, u8)>]) -> Vec<Option<usize>> {
+    (0..items.len())
+        .map(|i| {
+            let (kind, level) = items[i]?;
+            if kind != ListKind::Numbered {
+                return None;
+            }
+            let mut number = 1;
+            for prev in items[..i].iter().rev() {
+                match *prev {
+                    Some((_, l)) if l > level => {}
+                    Some((ListKind::Numbered, l)) if l == level => number += 1,
+                    _ => break,
+                }
+            }
+            Some(number)
+        })
+        .collect()
+}
+
+proptest::proptest! {
+    #[test]
+    fn list_numbers_match_scanning_back(
+        raw in proptest::collection::vec(proptest::option::of((proptest::bool::ANY, 0u8..3)), 0..40)
+    ) {
+        use crate::model::{EditOp, ParaStylePatch};
+        let items: Vec<Option<(ListKind, u8)>> = raw
+            .iter()
+            .map(|o| o.map(|(numbered, level)| {
+                (if numbered { ListKind::Numbered } else { ListKind::Bullet }, level)
+            }))
+            .collect();
+        let text = vec!["x"; items.len().max(1)].join("\n");
+        let mut doc = Document::from_plain_text(&text);
+        for (i, item) in items.iter().enumerate() {
+            let list = item.map(|(kind, level)| ListItem { kind, level });
+            let patch = ParaStylePatch::list(list);
+            doc.apply(EditOp::SetParaStyle { paras: i..i + 1, patch }).unwrap();
+        }
+        let mut expected = numbers_by_scanning_back(&items);
+        expected.resize(doc.paragraphs().len(), None);
+        proptest::prop_assert_eq!(crate::layout::flow::list_numbers(&doc), expected);
+    }
+}

@@ -158,18 +158,19 @@ impl Layout {
             ),
             None => (0.0, FloatCtx::default()),
         };
+        let numbers = list_numbers(doc);
         let (mut index, mut laid) = (first, 0);
         while index < count {
             let entering = ctx.relative(y);
             let reusable = !self.paras[index].dirty
                 && self.paras[index].entering == entering
-                && self.paras[index].number == list_number(doc, index);
+                && self.paras[index].number == numbers[index];
             if reusable {
                 self.paras[index].y = y;
                 self.paras[index].speculative = false;
             } else if laid < budget {
                 laid += 1;
-                self.lay_one(doc, shaper, index, y, &mut ctx);
+                self.lay_one(doc, shaper, index, y, &mut ctx, numbers[index]);
             } else {
                 // Not reusable and out of budget: a later slice must revisit
                 // it even if it is not dirty (its entering floats changed).
@@ -187,7 +188,7 @@ impl Layout {
     }
 
     /// Lays out paragraph `index` with its top at `y` given the floats in
-    /// `ctx`.
+    /// `ctx`, numbering its marker `number` (from [`list_numbers`]).
     pub(super) fn lay_one(
         &mut self,
         doc: &Document,
@@ -195,8 +196,8 @@ impl Layout {
         index: usize,
         y: f32,
         ctx: &mut FloatCtx,
+        number: Option<usize>,
     ) {
-        let number = list_number(doc, index);
         let env = Env {
             shaper,
             cache: &mut self.cache,
@@ -215,24 +216,29 @@ struct Env<'a> {
     pub(super) width: f32,
 }
 
-/// The number of the numbered item `index` among the consecutive items of its
-/// level (1 for the first), or `None` when it is not numbered.
-fn list_number(doc: &Document, index: usize) -> Option<usize> {
-    let item = doc.styles().para(doc.paragraphs()[index].style()).list?;
-    if item.kind != ListKind::Numbered {
-        return None;
-    }
-    let mut number = 1;
-    for para in doc.paragraphs()[..index].iter().rev() {
-        match doc.styles().para(para.style()).list {
-            Some(prev) if prev.level > item.level => {}
-            Some(prev) if prev.level == item.level && prev.kind == ListKind::Numbered => {
-                number += 1;
-            }
-            _ => break,
-        }
-    }
-    Some(number)
+/// Each paragraph's list number: for a numbered item, its place (from 1) among
+/// the consecutive numbered items of its level, with deeper items in between
+/// skipped; `None` for anything else. One forward pass: a counter per level,
+/// cleared by a non-list paragraph, by a shallower item (for the levels below
+/// it) and by a bullet at the same level.
+pub(super) fn list_numbers(doc: &Document) -> Vec<Option<usize>> {
+    let mut counters: Vec<Option<usize>> = Vec::new();
+    doc.paragraphs()
+        .iter()
+        .map(|para| {
+            let Some(item) = doc.styles().para(para.style()).list else {
+                counters.clear();
+                return None;
+            };
+            let level = usize::from(item.level);
+            counters.truncate(level + 1);
+            counters.resize(level + 1, None);
+            let number =
+                (item.kind == ListKind::Numbered).then(|| counters[level].map_or(1, |n| n + 1));
+            counters[level] = number;
+            number
+        })
+        .collect()
 }
 
 /// Lays out paragraph `index` with its top at `y`, given the floats in `ctx`.
