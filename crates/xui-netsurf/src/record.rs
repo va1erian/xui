@@ -70,7 +70,8 @@ pub(crate) struct Registry {
     fonts: Vec<FontDesc>,
     font_keys: HashMap<(String, u32, u16, bool), FontKey>,
     images: Vec<Arc<Image>>,
-    image_keys: HashMap<(usize, u32), ImageKey>,
+    /// Per bitmap: the generation its slot holds, and the slot's key.
+    image_keys: HashMap<usize, (u32, ImageKey)>,
 }
 
 impl Registry {
@@ -92,10 +93,15 @@ impl Registry {
         })
     }
 
+    /// The key of `px`'s pixels. A bitmap holds one slot: a new generation
+    /// (an animation frame) takes a fresh key and empties the old slot, which
+    /// tells the painter to drop what it decoded from it.
     fn image(&mut self, px: &BitmapPixels<'_>) -> ImageKey {
-        let key = (px.id, px.generation);
-        if let Some(k) = self.image_keys.get(&key) {
-            return *k;
+        let old = self.image_keys.get(&px.id).copied();
+        if let Some((generation, k)) = old
+            && generation == px.generation
+        {
+            return k;
         }
         let row = px.width as usize * 4;
         let mut rgba = Vec::with_capacity(row * px.height as usize);
@@ -109,7 +115,14 @@ impl Registry {
             rgba,
         }));
         let k = (self.images.len() - 1) as ImageKey;
-        self.image_keys.insert(key, k);
+        self.image_keys.insert(px.id, (px.generation, k));
+        if let Some((_, stale)) = old {
+            self.images[stale as usize] = Arc::new(Image {
+                width: 0,
+                height: 0,
+                rgba: Vec::new(),
+            });
+        }
         k
     }
 }
@@ -307,5 +320,26 @@ mod tests {
             vec![-10.0, 10.0, 30.0]
         );
         assert_eq!(tile_starts(10.0, 20.0, 0.0, 45.0, false), vec![10.0]);
+    }
+
+    #[test]
+    fn a_new_bitmap_generation_replaces_its_slot() {
+        let rgba = [0u8; 16];
+        let px = |generation| BitmapPixels {
+            id: 7,
+            generation,
+            width: 2,
+            height: 2,
+            stride: 8,
+            rgba: &rgba,
+        };
+        let mut registry = Registry::default();
+        let first = registry.image(&px(1));
+        assert_eq!(registry.image(&px(1)), first);
+        let second = registry.image(&px(2));
+        assert_ne!(second, first);
+        // The old frame's pixels are released; only the live one is held.
+        assert_eq!(registry.images[first as usize].width, 0);
+        assert_eq!(registry.images[second as usize].rgba.len(), 16);
     }
 }

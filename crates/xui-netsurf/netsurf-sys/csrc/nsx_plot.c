@@ -175,6 +175,10 @@ void nsx_bitmap_init(void)
 	bitmap_set_format(&fmt);
 }
 
+/* Bitmap versions come from one counter, so a bitmap allocated where a freed
+ * one was never repeats that one's (address, generation) identity. */
+static uint32_t next_generation;
+
 static void *b_create(int width, int height, enum gui_bitmap_flags flags)
 {
 	struct bitmap *b = calloc(1, sizeof(*b));
@@ -189,6 +193,7 @@ static void *b_create(int width, int height, enum gui_bitmap_flags flags)
 	b->width = width;
 	b->height = height;
 	b->opaque = (flags & BITMAP_OPAQUE) != 0;
+	b->generation = ++next_generation;
 	return b;
 }
 
@@ -231,7 +236,7 @@ static int b_get_height(void *bitmap)
 
 static void b_modified(void *bitmap)
 {
-	((struct bitmap *)bitmap)->generation++;
+	((struct bitmap *)bitmap)->generation = ++next_generation;
 }
 
 static nserror b_render(struct bitmap *bitmap, struct hlcache_handle *content)

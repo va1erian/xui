@@ -63,6 +63,8 @@ fn main() {
     println!("cargo:rerun-if-changed=csrc");
     println!("cargo:rerun-if-changed=sources");
     println!("cargo:rerun-if-changed=generated");
+    // The pinned sources: a moved submodule must rebuild the archives.
+    println!("cargo:rerun-if-changed=vendor");
 }
 
 /// Copies libdom's HTML-parser binding headers to where its `make install`

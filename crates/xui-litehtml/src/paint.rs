@@ -122,6 +122,13 @@ impl Painter {
         background: Color,
     ) {
         let t = std::time::Instant::now();
+        // A list releases an image by emptying its slot (an animation frame
+        // that was replaced): drop what was decoded from it.
+        self.images.retain(|key, _| {
+            list.images
+                .get(*key as usize)
+                .is_some_and(|i| i.width > 0 && i.height > 0)
+        });
         let bounds = canvas.bounds();
         let space = Space {
             scale: canvas.dpi() as f32 / LAYOUT_DPI as f32,
