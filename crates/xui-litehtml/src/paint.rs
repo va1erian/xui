@@ -9,8 +9,8 @@ use std::collections::HashMap;
 use xui_core::Color;
 use xui_core::backend::{
     Canvas, Cap, Corner, Dash as PDash, GradientStop as PGradientStop,
-    LinearGradient as PLinearGradient, RadialGradient as PRadialGradient, Rgba as PRgba,
-    Stroke as PStroke, TextLayout,
+    LinearGradient as PLinearGradient, PathPlacement, PathSeg, RadialGradient as PRadialGradient,
+    Rgba as PRgba, Stroke as PStroke, TextLayout,
 };
 use xui_core::geometry::{Point as PxPoint, Rect as PxRect};
 use xui_core::image::Image as PImage;
@@ -19,6 +19,8 @@ use crate::geom::{Point, Radius, Rect, Rgba};
 use crate::list::{Cmd, Dash, DisplayList, FontKey, ImageKey};
 use crate::text::{Font, LAYOUT_DPI, TextSystem};
 
+#[cfg(test)]
+mod tests;
 mod text_select;
 
 /// The most shaped text layouts kept between frames.
@@ -32,21 +34,23 @@ fn is_rounded(radii: &[Radius; 4]) -> bool {
     radii.iter().any(|r| r.x > 0.0 || r.y > 0.0)
 }
 
-/// Maps document coordinates (DIPs) to canvas pixels: a scroll offset and a
-/// scale.
+/// Maps document coordinates (DIPs) to canvas pixels: a scroll offset, a
+/// scale, and the node's origin on the canvas (a node's canvas draws in window
+/// coordinates, and its bounds say where the node is).
 #[derive(Clone, Copy)]
 struct Space {
     scale: f32,
     scroll: f32,
+    origin: PxPoint,
 }
 
 impl Space {
     fn x(self, v: f32) -> i32 {
-        (v * self.scale).round() as i32
+        self.origin.x + (v * self.scale).round() as i32
     }
 
     fn y(self, v: f32) -> i32 {
-        ((v - self.scroll) * self.scale).round() as i32
+        self.origin.y + ((v - self.scroll) * self.scale).round() as i32
     }
 
     fn point(self, p: Point) -> PxPoint {
@@ -118,12 +122,13 @@ impl Painter {
         background: Color,
     ) {
         let t = std::time::Instant::now();
+        let bounds = canvas.bounds();
         let space = Space {
             scale: canvas.dpi() as f32 / LAYOUT_DPI as f32,
             scroll,
+            origin: PxPoint::new(bounds.left, bounds.top),
         };
         canvas.clear(background);
-        let bounds = canvas.bounds();
         canvas.push_clip(bounds);
 
         // `viewport` translated into document space: the commands' own
@@ -231,6 +236,26 @@ impl Painter {
                         &space.stroke(*stroke, Dash::Solid),
                     );
                 }
+            }
+            Cmd::Polygon { points, fill } => {
+                if fill.a == 0 || points.len() < 3 {
+                    return;
+                }
+                let mut path: Vec<PathSeg> = points
+                    .iter()
+                    .enumerate()
+                    .map(|(i, p)| {
+                        let q = space.point(*p);
+                        let (x, y) = (q.x as f32, q.y as f32);
+                        if i == 0 {
+                            PathSeg::MoveTo(x, y)
+                        } else {
+                            PathSeg::LineTo(x, y)
+                        }
+                    })
+                    .collect();
+                path.push(PathSeg::Close);
+                canvas.fill_path(&path, PathPlacement::new(1.0, 0.0, 0.0), to_rgba(*fill));
             }
             Cmd::Text {
                 origin,

@@ -289,9 +289,10 @@ impl HtmlWidget {
             .painter
             .borrow_mut()
             .selection_rects(&frame.list, &frame.runs, &sel);
+        let origin = canvas.bounds();
         for r in &rects {
-            let px = |v: f32| (v * scale).round() as i32;
-            let py = |v: f32| ((v - scroll) * scale).round() as i32;
+            let px = |v: f32| origin.left + (v * scale).round() as i32;
+            let py = |v: f32| origin.top + ((v - scroll) * scale).round() as i32;
             canvas.fill_rect_rgba(
                 PxRect::new(px(r.left), py(r.top), px(r.right), py(r.bottom)),
                 SELECTION_FILL,
@@ -312,7 +313,8 @@ impl HtmlWidget {
         let scale = canvas.dpi() as f32 / 96.0;
         self.scale.set(scale);
         let track = bar::track(bounds, canvas.dpi());
-        self.bar_track.set(track);
+        // Input arrives in node-local pixels; the canvas draws in window ones.
+        self.bar_track.set(track.offset(-bounds.left, -bounds.top));
         let width = ((track.left - bounds.left) as f32 / scale).max(1.0);
         let height = (bounds.height() as f32 / scale).max(1.0);
         self.viewport_height.set(height);
