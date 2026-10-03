@@ -144,6 +144,7 @@ static const char *nsx_filetype(const char *path)
 		{ "gif", "image/gif" }, { "bmp", "image/bmp" },
 		{ "ico", "image/x-icon" }, { "png", "image/png" },
 		{ "jpg", "image/jpeg" }, { "jpeg", "image/jpeg" },
+		{ "jpe", "image/jpeg" },
 		{ "svg", "image/svg+xml" },
 	};
 	const char *dot = strrchr(path, '.');
@@ -217,7 +218,10 @@ int nsx_init(const nsx_host *host, const uint8_t *messages, size_t len)
 	}
 	browser_set_dpi(96);
 	nsx_bitmap_init();
-	return netsurf_init(NULL) == NSERROR_OK ? 0 : -1;
+	if (netsurf_init(NULL) != NSERROR_OK) {
+		return -1;
+	}
+	return nsx_image_init() == NSERROR_OK ? 0 : -1;
 }
 
 void nsx_fini(void)

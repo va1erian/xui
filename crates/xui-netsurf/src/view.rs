@@ -28,6 +28,17 @@ pub enum NetSurfViewEvent {
     LoadingChanged(bool),
     /// A URL could not be opened.
     Failed(String),
+    /// The host [`Fetcher`](crate::Fetcher) failed the page the view was
+    /// loading; NetSurf shows its error page next. `message` is what the
+    /// fetcher gave to [`FetchResponder::fail`](crate::FetchResponder::fail).
+    /// (A failed style sheet or image is not reported: the page shows
+    /// without it.)
+    FetchFailed {
+        /// The URL that could not be fetched.
+        url: String,
+        /// Why.
+        message: String,
+    },
 }
 
 /// A web page rendered by NetSurf on its engine thread and drawn through the
@@ -43,8 +54,9 @@ pub struct NetSurfView<M: 'static> {
 
 impl<M: Send + 'static> NetSurfView<M> {
     /// Creates the view at `bounds` (device pixels) and starts loading `url`
-    /// (`file:`, `data:`, `about:` and `resource:` URLs; there is no network
-    /// fetcher yet).
+    /// (`file:`, `data:`, `about:` and `resource:` URLs, and `http:` and
+    /// `https:` once the application has called
+    /// [`set_fetcher`](crate::set_fetcher)).
     pub fn new(
         ui: &Ui<M>,
         bounds: Rect,

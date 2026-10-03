@@ -13,9 +13,12 @@
 //! [`Painter`](xui_litehtml::Painter) a litehtml page uses: the two engines
 //! differ only in layout.
 //!
-//! NetSurf follows links and handles forms itself; it fetches `file:`,
-//! `data:`, `about:` and `resource:` URLs and decodes GIF and BMP images (no
-//! network, PNG, JPEG or JavaScript in this prototype).
+//! NetSurf follows links, redirects and forms itself. It fetches `file:`,
+//! `data:`, `about:` and `resource:` URLs on its own, and `http:` and
+//! `https:` through the application's [`Fetcher`] (see [`set_fetcher`]), so
+//! the HTTP client and its TLS are the application's choice. NetSurf decodes
+//! GIF and BMP images; PNG and JPEG are decoded in Rust (`image.rs`). There
+//! is no JavaScript.
 //!
 //! # Licence
 //!
@@ -27,10 +30,13 @@
 #![warn(missing_docs)]
 
 mod engine;
+mod fetch;
 mod fonts;
+mod image;
 mod record;
 mod sys;
 mod view;
 mod widget;
 
+pub use crate::fetch::{FetchMethod, FetchRequest, FetchResponder, Fetcher, set_fetcher};
 pub use crate::view::{NetSurfView, NetSurfViewEvent};
