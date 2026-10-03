@@ -96,6 +96,22 @@ fn build(ui: &Ui<()>) -> Vec<Box<dyn Any>> {
     keep.push(Box::new(
         Button::new(ui, rect(16, 458, 380, 486), "A button").unwrap(),
     ));
+    // A page title, a section caption and the default action.
+    keep.push(Box::new(
+        Label::new(ui, rect(16, 660, 380, 696), "Page title")
+            .unwrap()
+            .title(),
+    ));
+    keep.push(Box::new(
+        Label::new(ui, rect(16, 704, 380, 722), "Section caption")
+            .unwrap()
+            .caption(),
+    ));
+    keep.push(Box::new(
+        Button::new(ui, rect(16, 732, 160, 764), "Apply")
+            .unwrap()
+            .primary(),
+    ));
     keep.push(Box::new(
         FlowText::new(ui, rect(16, 500, 760, 544))
             .unwrap()

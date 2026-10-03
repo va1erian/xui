@@ -20,6 +20,8 @@ const TEXT_SIZE: Dip = Dip(12.0);
 const INSET: Dip = Dip(8.0);
 /// The horizontal padding between the frame's left edge and the title.
 const PAD: Dip = Dip(8.0);
+/// The design size of the upper-case title a rounded theme draws.
+const CAPTION_SIZE: Dip = Dip(11.0);
 
 /// A titled frame that visually groups related widgets.
 ///
@@ -60,8 +62,10 @@ impl<M: 'static> GroupBox<M> {
                         bounds.right,
                         bounds.top + inset * 2,
                     );
-                    let style = TextStyle::new(theme.text_secondary, TEXT_SIZE).middle();
-                    canvas.draw_text(&title, label, &style);
+                    let style = TextStyle::new(theme.text_secondary, CAPTION_SIZE)
+                        .bold()
+                        .middle();
+                    canvas.draw_text(&title.to_uppercase(), label, &style);
                     let card =
                         Rect::new(bounds.left, label.bottom + 2, bounds.right, bounds.bottom);
                     look::card(canvas, card, &theme);

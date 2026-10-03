@@ -2,7 +2,7 @@
 
 //! [`Label`]: a painted, non-interactive text widget.
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use super::control::{Control, HasText};
@@ -15,11 +15,27 @@ use crate::units::Dip;
 
 /// The design size of the label text.
 const TEXT_SIZE: Dip = Dip(12.0);
+/// The design size of a [`Label::title`].
+const TITLE_SIZE: Dip = Dip(20.0);
+/// The design size of a [`Label::caption`].
+const CAPTION_SIZE: Dip = Dip(11.0);
+
+/// How a label sets its text.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Kind {
+    /// Body text.
+    Body,
+    /// A page title: large and bold.
+    Title,
+    /// A section caption: small, bold, upper case, in secondary text.
+    Caption,
+}
 
 /// A painted static text label.
 pub struct Label<M: 'static> {
     control: Control<M>,
     text: Rc<RefCell<String>>,
+    kind: Rc<Cell<Kind>>,
 }
 
 impl<M: 'static> Label<M> {
@@ -36,14 +52,30 @@ impl<M: 'static> Label<M> {
         let theme = ui.theme_handle();
         let selected = control.selected_handle();
         let text_for_paint = Rc::clone(&state);
+        let kind = Rc::new(Cell::new(Kind::Body));
+        let kind_for_paint = Rc::clone(&kind);
         control.set_painter(Rc::new(move |canvas| {
             let theme = theme.get();
             let bounds = canvas.bounds();
             // The node is an opaque child window: paint its background first,
             // or the back buffer shows through around the text.
             backdrop(canvas, theme.background);
-            let style = TextStyle::new(theme.text, TEXT_SIZE);
-            canvas.draw_text(&text_for_paint.borrow(), bounds, &style);
+            let text = text_for_paint.borrow();
+            match kind_for_paint.get() {
+                Kind::Body => {
+                    canvas.draw_text(&text, bounds, &TextStyle::new(theme.text, TEXT_SIZE));
+                }
+                Kind::Title => {
+                    let style = TextStyle::new(theme.text, TITLE_SIZE).bold().middle();
+                    canvas.draw_text(&text, bounds, &style);
+                }
+                Kind::Caption => {
+                    let style = TextStyle::new(theme.text_secondary, CAPTION_SIZE)
+                        .bold()
+                        .middle();
+                    canvas.draw_text(&text.to_uppercase(), bounds, &style);
+                }
+            }
             if selected.get() {
                 canvas.stroke_rect(bounds, theme.accent, 2.0);
             }
@@ -51,7 +83,23 @@ impl<M: 'static> Label<M> {
         Ok(Label {
             control,
             text: state,
+            kind,
         })
+    }
+
+    /// Sets the label as a page title: large, bold, vertically centred.
+    pub fn title(self) -> Label<M> {
+        self.kind.set(Kind::Title);
+        self.control.invalidate();
+        self
+    }
+
+    /// Sets the label as a section caption: small, bold, upper case and in
+    /// secondary text, the heading above a card of settings.
+    pub fn caption(self) -> Label<M> {
+        self.kind.set(Kind::Caption);
+        self.control.invalidate();
+        self
     }
 
     /// The label's node identity.

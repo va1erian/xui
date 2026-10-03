@@ -80,7 +80,7 @@ impl<M: 'static> RadioGroup<M> {
                     let r = radius as f32;
                     if on {
                         look::glow(canvas, center, r, &theme);
-                        canvas.fill_ellipse(center, r, r, theme.accent);
+                        look::disc(canvas, center, r, theme.accent, &theme);
                         let dot = (r * 0.4).max(2.0);
                         canvas.fill_ellipse(center, dot, dot, theme.input_background);
                     } else {

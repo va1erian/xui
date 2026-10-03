@@ -102,6 +102,9 @@ pub struct Theme {
     /// How far (0-255) a control's face darkens from its top to its bottom
     /// edge: buttons, check boxes, selected rows (0 for a flat theme).
     pub shade: u8,
+    /// How far (0-255) a control's face lightens toward white at its top
+    /// edge, the gloss that makes it stand out (0 for a flat theme).
+    pub gloss: u8,
     /// Corner radius of cards and group boxes in pixels (0: square, framed
     /// like a plain panel).
     pub corner_radius: u8,
@@ -142,6 +145,7 @@ impl Theme {
             surface_end: Color::hex(0xF9_F9_F9),
             bevel: Rgba::with_alpha(0, 0, 0, 0),
             shade: 0,
+            gloss: 0,
             corner_radius: 0,
             glow: 0,
         }
@@ -178,6 +182,7 @@ impl Theme {
             surface_end: Color::hex(0x2B_2B_2B),
             bevel: Rgba::with_alpha(0, 0, 0, 0),
             shade: 0,
+            gloss: 0,
             corner_radius: 0,
             glow: 0,
         }
@@ -203,7 +208,10 @@ mod tests {
             assert_eq!(theme.background_end, theme.background);
             assert_eq!(theme.surface_end, theme.surface);
             assert_eq!(theme.bevel.a, 0);
-            assert_eq!((theme.shade, theme.corner_radius, theme.glow), (0, 0, 0));
+            assert_eq!(
+                (theme.shade, theme.gloss, theme.corner_radius, theme.glow),
+                (0, 0, 0, 0)
+            );
         }
     }
 

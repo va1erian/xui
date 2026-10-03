@@ -43,8 +43,9 @@ impl Theme {
             scrollbar_track: Color::hex(0x23_2A_40),
             track: Color::hex(0x3E_48_70),
             scrim: Rgba::with_alpha(0x05, 0x08, 0x14, 0x99),
-            bevel: Rgba::with_alpha(0xFF, 0xFF, 0xFF, 0x14),
-            shade: 28,
+            bevel: Rgba::with_alpha(0xFF, 0xFF, 0xFF, 0x24),
+            shade: 34,
+            gloss: 30,
             corner_radius: 8,
             glow: 0x70,
         }

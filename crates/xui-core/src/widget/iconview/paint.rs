@@ -12,7 +12,7 @@ use crate::color::Color;
 use crate::geometry::{Point, Rect};
 use crate::icon::draw_icon;
 use crate::theme::Theme;
-use crate::theme::look::backdrop;
+use crate::theme::look::{self, backdrop};
 
 /// Draws `state` into `canvas`. Only the visible tiles are touched, so a large
 /// model costs the same as a small one.
@@ -84,11 +84,16 @@ fn paint_tile(
     } else {
         None
     };
-    if let Some(fill) = fill {
-        canvas.fill_rect(text_rect, fill);
+    // A decorated theme highlights the whole tile like a selected row.
+    let fancy = look::decorated(theme);
+    match fill {
+        Some(_) if fancy && selected && state.has_focus => look::selected_row(canvas, tile, theme),
+        Some(fill) if fancy => look::row(canvas, tile, fill, theme),
+        Some(fill) => canvas.fill_rect(text_rect, fill),
+        None => {}
     }
 
-    let (primary, secondary, icon_color) = colors(state, theme, selected);
+    let (primary, secondary, icon_color) = colors(state, theme, selected && !fancy);
     canvas.push_clip(tile);
     if !state.model.paint_icon(index, canvas, icon_rect, theme, dpi)
         && let Some(icon) = state.model.icon(index)
@@ -111,7 +116,7 @@ fn paint_tile(
         draw_line(canvas, text, rect, color, metrics.text_size);
     }
 
-    if focused {
+    if focused && !(fancy && selected) {
         let ring = if selected {
             theme.text_on_accent
         } else {

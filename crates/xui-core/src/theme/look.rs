@@ -126,11 +126,35 @@ const ROW_RADIUS: f32 = 4.0;
 /// Paints a control's face (button, check box, selected tab): `fill` at the
 /// top darkening by [`Theme::shade`] toward the bottom, with the bevel.
 pub fn face(canvas: &mut dyn Canvas, rect: Rect, radius: f32, fill: Color, theme: &Theme) {
-    if theme.shade == 0 && theme.bevel.a == 0 {
+    if theme.shade == 0 && theme.gloss == 0 && theme.bevel.a == 0 {
         canvas.fill_rounded_rect(rect, radius, fill);
         return;
     }
-    gradient_face(canvas, rect, radius, fill, shaded(fill, theme), theme.bevel);
+    gradient_face(
+        canvas,
+        rect,
+        radius,
+        glossed(fill, theme),
+        shaded(fill, theme),
+        theme.bevel,
+    );
+}
+
+/// `fill` lightened by [`Theme::gloss`]: the top colour of a control face.
+pub fn glossed(fill: Color, theme: &Theme) -> Color {
+    fill.lerp(Color::rgb(255, 255, 255), f32::from(theme.gloss) / 255.0)
+}
+
+/// A glossy disc (radio dot, round swatch) of `fill` centred on `center`:
+/// the [`face`] gradient clipped to a circle.
+pub fn disc(canvas: &mut dyn Canvas, center: Point, radius: f32, fill: Color, theme: &Theme) {
+    let r = radius.round() as i32;
+    let rect = Rect::new(center.x - r, center.y - r, center.x + r, center.y + r);
+    if !decorated(theme) {
+        canvas.fill_ellipse(center, radius, radius, fill);
+        return;
+    }
+    face(canvas, rect, radius, fill, theme);
 }
 
 /// Corner radius of a decorated input field.
@@ -184,6 +208,30 @@ pub fn glow(canvas: &mut dyn Canvas, center: Point, radius: f32, theme: &Theme) 
             radius + spread,
             Rgba::with_alpha(a.r, a.g, a.b, alpha),
             &crate::backend::Stroke::new(1.5),
+        );
+    }
+}
+
+/// A soft accent halo just outside `rect` (a primary button), [`Theme::glow`]
+/// strong (nothing at 0).
+pub fn halo(canvas: &mut dyn Canvas, rect: Rect, radius: f32, theme: &Theme) {
+    if theme.glow == 0 {
+        return;
+    }
+    let a = theme.accent;
+    for (grow, share) in [(1, 2u16), (2, 1)] {
+        let ring = Rect::new(
+            rect.left - grow,
+            rect.top - grow,
+            rect.right + grow,
+            rect.bottom + grow,
+        );
+        let alpha = (u16::from(theme.glow) * share / 4) as u8;
+        canvas.stroke_rounded_rect_corners(
+            ring,
+            [Corner::uniform(radius + grow as f32); 4],
+            Rgba::with_alpha(a.r, a.g, a.b, alpha),
+            &crate::backend::Stroke::new(1.0),
         );
     }
 }
