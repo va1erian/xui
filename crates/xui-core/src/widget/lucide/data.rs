@@ -71,6 +71,10 @@ pub(crate) use data_u::*;
 mod data_v;
 pub(crate) use data_v::*;
 
+#[path = "data_w.rs"]
+mod data_w;
+pub(crate) use data_w::*;
+
 #[path = "data_x.rs"]
 mod data_x;
 pub(crate) use data_x::*;
@@ -89,6 +93,8 @@ pub enum Lucide {
     AppWindow,
     /// The `arrow-down-a-z` outline.
     ArrowDownAZ,
+    /// The `bold` outline.
+    Bold,
     /// The `box` outline.
     Box,
     /// The `bug` outline.
@@ -133,6 +139,8 @@ pub enum Lucide {
     FileCode,
     /// The `file-plus` outline.
     FilePlus,
+    /// The `file-text` outline.
+    FileText,
     /// The `file` outline.
     File,
     /// The `folder-open` outline.
@@ -141,16 +149,32 @@ pub enum Lucide {
     Folder,
     /// The `group` outline.
     Group,
+    /// The `heading-1` outline.
+    Heading1,
+    /// The `heading-2` outline.
+    Heading2,
+    /// The `heading-3` outline.
+    Heading3,
     /// The `history` outline.
     History,
     /// The `home` outline.
     Home,
     /// The `image` outline.
     Image,
+    /// The `indent-decrease` outline.
+    IndentDecrease,
+    /// The `indent-increase` outline.
+    IndentIncrease,
     /// The `info` outline.
     Info,
+    /// The `italic` outline.
+    Italic,
     /// The `layout-grid` outline.
     LayoutGrid,
+    /// The `link` outline.
+    Link,
+    /// The `list-ordered` outline.
+    ListOrdered,
     /// The `list-tree` outline.
     ListTree,
     /// The `list` outline.
@@ -209,18 +233,32 @@ pub enum Lucide {
     Square,
     /// The `star` outline.
     Star,
+    /// The `strikethrough` outline.
+    Strikethrough,
     /// The `tag` outline.
     Tag,
     /// The `terminal` outline.
     Terminal,
+    /// The `text-align-center` outline.
+    TextAlignCenter,
+    /// The `text-align-end` outline.
+    TextAlignEnd,
+    /// The `text-align-justify` outline.
+    TextAlignJustify,
+    /// The `text-align-start` outline.
+    TextAlignStart,
     /// The `text-cursor-input` outline.
     TextCursorInput,
+    /// The `text-quote` outline.
+    TextQuote,
     /// The `trash-2` outline.
     Trash2,
     /// The `triangle-alert` outline.
     TriangleAlert,
     /// The `type` outline.
     Type,
+    /// The `underline` outline.
+    Underline,
     /// The `undo-2` outline.
     Undo2,
     /// The `unlock` outline.
@@ -231,6 +269,8 @@ pub enum Lucide {
     Users,
     /// The `volume-2` outline.
     Volume2,
+    /// The `wrap-text` outline.
+    WrapText,
     /// The `x` outline.
     X,
     /// The `zap` outline.
@@ -242,6 +282,7 @@ impl Lucide {
     pub const ALL: &'static [Lucide] = &[
         Lucide::AppWindow,
         Lucide::ArrowDownAZ,
+        Lucide::Bold,
         Lucide::Box,
         Lucide::Bug,
         Lucide::Check,
@@ -264,15 +305,24 @@ impl Lucide {
         Lucide::Eye,
         Lucide::FileCode,
         Lucide::FilePlus,
+        Lucide::FileText,
         Lucide::File,
         Lucide::FolderOpen,
         Lucide::Folder,
         Lucide::Group,
+        Lucide::Heading1,
+        Lucide::Heading2,
+        Lucide::Heading3,
         Lucide::History,
         Lucide::Home,
         Lucide::Image,
+        Lucide::IndentDecrease,
+        Lucide::IndentIncrease,
         Lucide::Info,
+        Lucide::Italic,
         Lucide::LayoutGrid,
+        Lucide::Link,
+        Lucide::ListOrdered,
         Lucide::ListTree,
         Lucide::List,
         Lucide::Lock,
@@ -302,17 +352,25 @@ impl Lucide {
         Lucide::SquareMousePointer,
         Lucide::Square,
         Lucide::Star,
+        Lucide::Strikethrough,
         Lucide::Tag,
         Lucide::Terminal,
+        Lucide::TextAlignCenter,
+        Lucide::TextAlignEnd,
+        Lucide::TextAlignJustify,
+        Lucide::TextAlignStart,
         Lucide::TextCursorInput,
+        Lucide::TextQuote,
         Lucide::Trash2,
         Lucide::TriangleAlert,
         Lucide::Type,
+        Lucide::Underline,
         Lucide::Undo2,
         Lucide::Unlock,
         Lucide::Upload,
         Lucide::Users,
         Lucide::Volume2,
+        Lucide::WrapText,
         Lucide::X,
         Lucide::Zap,
     ];
@@ -323,6 +381,7 @@ pub(crate) fn path(icon: Lucide) -> &'static [PathSeg] {
     match icon {
         Lucide::AppWindow => APP_WINDOW,
         Lucide::ArrowDownAZ => ARROW_DOWN_A_Z,
+        Lucide::Bold => BOLD,
         Lucide::Box => BOX,
         Lucide::Bug => BUG,
         Lucide::Check => CHECK,
@@ -345,15 +404,24 @@ pub(crate) fn path(icon: Lucide) -> &'static [PathSeg] {
         Lucide::Eye => EYE,
         Lucide::FileCode => FILE_CODE,
         Lucide::FilePlus => FILE_PLUS,
+        Lucide::FileText => FILE_TEXT,
         Lucide::File => FILE,
         Lucide::FolderOpen => FOLDER_OPEN,
         Lucide::Folder => FOLDER,
         Lucide::Group => GROUP,
+        Lucide::Heading1 => HEADING_1,
+        Lucide::Heading2 => HEADING_2,
+        Lucide::Heading3 => HEADING_3,
         Lucide::History => HISTORY,
         Lucide::Home => HOME,
         Lucide::Image => IMAGE,
+        Lucide::IndentDecrease => INDENT_DECREASE,
+        Lucide::IndentIncrease => INDENT_INCREASE,
         Lucide::Info => INFO,
+        Lucide::Italic => ITALIC,
         Lucide::LayoutGrid => LAYOUT_GRID,
+        Lucide::Link => LINK,
+        Lucide::ListOrdered => LIST_ORDERED,
         Lucide::ListTree => LIST_TREE,
         Lucide::List => LIST,
         Lucide::Lock => LOCK,
@@ -383,17 +451,25 @@ pub(crate) fn path(icon: Lucide) -> &'static [PathSeg] {
         Lucide::SquareMousePointer => SQUARE_MOUSE_POINTER,
         Lucide::Square => SQUARE,
         Lucide::Star => STAR,
+        Lucide::Strikethrough => STRIKETHROUGH,
         Lucide::Tag => TAG,
         Lucide::Terminal => TERMINAL,
+        Lucide::TextAlignCenter => TEXT_ALIGN_CENTER,
+        Lucide::TextAlignEnd => TEXT_ALIGN_END,
+        Lucide::TextAlignJustify => TEXT_ALIGN_JUSTIFY,
+        Lucide::TextAlignStart => TEXT_ALIGN_START,
         Lucide::TextCursorInput => TEXT_CURSOR_INPUT,
+        Lucide::TextQuote => TEXT_QUOTE,
         Lucide::Trash2 => TRASH_2,
         Lucide::TriangleAlert => TRIANGLE_ALERT,
         Lucide::Type => TYPE,
+        Lucide::Underline => UNDERLINE,
         Lucide::Undo2 => UNDO_2,
         Lucide::Unlock => UNLOCK,
         Lucide::Upload => UPLOAD,
         Lucide::Users => USERS,
         Lucide::Volume2 => VOLUME_2,
+        Lucide::WrapText => WRAP_TEXT,
         Lucide::X => X,
         Lucide::Zap => ZAP,
     }

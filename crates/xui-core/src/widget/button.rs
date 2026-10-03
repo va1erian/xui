@@ -254,7 +254,11 @@ impl<M: 'static> Button<M> {
 /// With no icon the label keeps the whole face; with an icon and a label the
 /// icon sits at the leading edge and the label is centred in what remains; with
 /// an icon and no label the icon is centred.
-fn layout_content(bounds: Rect, has_icon: bool, text_empty: bool) -> (Option<Rect>, Rect) {
+pub(super) fn layout_content(
+    bounds: Rect,
+    has_icon: bool,
+    text_empty: bool,
+) -> (Option<Rect>, Rect) {
     if !has_icon {
         return (None, bounds);
     }

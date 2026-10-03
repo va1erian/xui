@@ -6,6 +6,15 @@
 use crate::backend::PathSeg;
 use PathSeg::{Close, CubicTo, LineTo, MoveTo};
 
+pub(crate) const UNDERLINE: &[PathSeg] = &[
+    MoveTo(6.0, 4.0), LineTo(6.0, 10.0), CubicTo(6.0, 11.053, 6.277, 12.088, 6.804, 13.0),
+    CubicTo(7.33, 13.912, 8.088, 14.67, 9.0, 15.196),
+    CubicTo(9.912, 15.723, 10.947, 16.0, 12.0, 16.0),
+    CubicTo(13.053, 16.0, 14.088, 15.723, 15.0, 15.196),
+    CubicTo(15.912, 14.67, 16.67, 13.912, 17.196, 13.0),
+    CubicTo(17.723, 12.088, 18.0, 11.053, 18.0, 10.0), LineTo(18.0, 4.0), MoveTo(4.0, 20.0),
+    LineTo(20.0, 20.0),
+];
 pub(crate) const UNDO_2: &[PathSeg] = &[
     MoveTo(9.0, 14.0), LineTo(4.0, 9.0), LineTo(9.0, 4.0), MoveTo(4.0, 9.0), LineTo(14.5, 9.0),
     CubicTo(15.465, 9.0, 16.414, 9.254, 17.25, 9.737),

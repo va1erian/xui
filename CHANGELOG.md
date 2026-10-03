@@ -4,6 +4,16 @@
 
 ### Additions
 
+- **`ToggleButton` icons.** `ToggleButton::icon`, `set_icon` and `clear_icon`
+  mirror `Button`'s: any `IconRef` is drawn before the label, or centred in an
+  icon-only button, in the label's colour (on-accent while checked, dimmed
+  while disabled). Eighteen more Lucide outlines are vendored for a formatting
+  toolbar: `Bold`, `Italic`, `Underline`, `Strikethrough`, `TextAlignStart`,
+  `TextAlignCenter`, `TextAlignEnd`, `TextAlignJustify`, `ListOrdered`,
+  `IndentIncrease`, `IndentDecrease`, `Heading1`, `Heading2`, `Heading3`,
+  `TextQuote`, `Link`, `FileText` and `WrapText`. The `xui-rich-text` wordpad
+  example's formatting row now uses them, with tooltips on the icon-only
+  buttons and icons in the block-kind picker.
 - **Editable rich text (`xui-rich-text`).** An optional, portable crate (also
   the `rich-text` feature of `xui`) with styled runs, paragraph formatting,
   headings, quotes, bullet and numbered lists, and inline or floating images.

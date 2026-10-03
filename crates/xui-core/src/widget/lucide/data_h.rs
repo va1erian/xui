@@ -6,6 +6,28 @@
 use crate::backend::PathSeg;
 use PathSeg::{Close, CubicTo, LineTo, MoveTo};
 
+pub(crate) const HEADING_1: &[PathSeg] = &[
+    MoveTo(4.0, 12.0), LineTo(12.0, 12.0), MoveTo(4.0, 18.0), LineTo(4.0, 6.0),
+    MoveTo(12.0, 18.0), LineTo(12.0, 6.0), MoveTo(17.0, 12.0), LineTo(20.0, 10.0),
+    LineTo(20.0, 18.0),
+];
+pub(crate) const HEADING_2: &[PathSeg] = &[
+    MoveTo(4.0, 12.0), LineTo(12.0, 12.0), MoveTo(4.0, 18.0), LineTo(4.0, 6.0),
+    MoveTo(12.0, 18.0), LineTo(12.0, 6.0), MoveTo(21.0, 18.0), LineTo(17.0, 18.0),
+    CubicTo(17.0, 14.0, 21.0, 15.0, 21.0, 12.0), CubicTo(21.0, 10.5, 19.0, 9.5, 17.0, 11.0),
+];
+pub(crate) const HEADING_3: &[PathSeg] = &[
+    MoveTo(4.0, 12.0), LineTo(12.0, 12.0), MoveTo(4.0, 18.0), LineTo(4.0, 6.0),
+    MoveTo(12.0, 18.0), LineTo(12.0, 6.0), MoveTo(17.5, 10.5),
+    CubicTo(19.2, 9.5, 21.0, 10.5, 21.0, 12.0),
+    CubicTo(21.0, 12.351, 20.908, 12.696, 20.732, 13.0),
+    CubicTo(20.557, 13.304, 20.304, 13.557, 20.0, 13.732),
+    CubicTo(19.696, 13.908, 19.351, 14.0, 19.0, 14.0), MoveTo(17.0, 17.5),
+    CubicTo(19.0, 19.0, 21.0, 17.8, 21.0, 16.0),
+    CubicTo(21.0, 15.649, 20.908, 15.304, 20.732, 15.0),
+    CubicTo(20.557, 14.696, 20.304, 14.443, 20.0, 14.268),
+    CubicTo(19.696, 14.092, 19.351, 14.0, 19.0, 14.0),
+];
 pub(crate) const HISTORY: &[PathSeg] = &[
     MoveTo(3.0, 12.0), CubicTo(3.0, 13.58, 3.416, 15.132, 4.206, 16.5),
     CubicTo(4.996, 17.868, 6.132, 19.004, 7.5, 19.794),

@@ -34,6 +34,22 @@ pub(crate) const TERMINAL: &[PathSeg] = &[
     MoveTo(12.0, 19.0), LineTo(20.0, 19.0), MoveTo(4.0, 17.0), LineTo(10.0, 11.0),
     LineTo(4.0, 5.0),
 ];
+pub(crate) const TEXT_ALIGN_CENTER: &[PathSeg] = &[
+    MoveTo(21.0, 5.0), LineTo(3.0, 5.0), MoveTo(17.0, 12.0), LineTo(7.0, 12.0),
+    MoveTo(19.0, 19.0), LineTo(5.0, 19.0),
+];
+pub(crate) const TEXT_ALIGN_END: &[PathSeg] = &[
+    MoveTo(21.0, 5.0), LineTo(3.0, 5.0), MoveTo(21.0, 12.0), LineTo(9.0, 12.0),
+    MoveTo(21.0, 19.0), LineTo(7.0, 19.0),
+];
+pub(crate) const TEXT_ALIGN_JUSTIFY: &[PathSeg] = &[
+    MoveTo(3.0, 5.0), LineTo(21.0, 5.0), MoveTo(3.0, 12.0), LineTo(21.0, 12.0),
+    MoveTo(3.0, 19.0), LineTo(21.0, 19.0),
+];
+pub(crate) const TEXT_ALIGN_START: &[PathSeg] = &[
+    MoveTo(21.0, 5.0), LineTo(3.0, 5.0), MoveTo(15.0, 12.0), LineTo(3.0, 12.0),
+    MoveTo(17.0, 19.0), LineTo(3.0, 19.0),
+];
 pub(crate) const TEXT_CURSOR_INPUT: &[PathSeg] = &[
     MoveTo(12.0, 20.0), LineTo(11.0, 20.0), CubicTo(10.649, 20.0, 10.304, 19.908, 10.0, 19.732),
     CubicTo(9.696, 19.557, 9.443, 19.304, 9.268, 19.0),
@@ -59,6 +75,10 @@ pub(crate) const TEXT_CURSOR_INPUT: &[PathSeg] = &[
     CubicTo(9.443, 4.696, 9.696, 4.443, 10.0, 4.268),
     CubicTo(10.304, 4.092, 10.649, 4.0, 11.0, 4.0), LineTo(12.0, 4.0), MoveTo(9.0, 6.0),
     LineTo(9.0, 18.0),
+];
+pub(crate) const TEXT_QUOTE: &[PathSeg] = &[
+    MoveTo(17.0, 5.0), LineTo(3.0, 5.0), MoveTo(21.0, 12.0), LineTo(8.0, 12.0),
+    MoveTo(21.0, 19.0), LineTo(8.0, 19.0), MoveTo(3.0, 12.0), LineTo(3.0, 19.0),
 ];
 pub(crate) const TRASH_2: &[PathSeg] = &[
     MoveTo(10.0, 11.0), LineTo(10.0, 17.0), MoveTo(14.0, 11.0), LineTo(14.0, 17.0),

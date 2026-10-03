@@ -5,10 +5,12 @@
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
+use super::button::layout_content;
 use super::control::{Control, HasText};
 use crate::app::Ui;
 use crate::backend::{Event, NodeKind, NodeSpec, Result, TextStyle};
 use crate::geometry::Rect;
+use crate::icon::{IconRef, draw_icon};
 use crate::message::{Key, MouseButton};
 use crate::property::{Properties, Property, Value};
 use crate::units::Dip;
@@ -27,9 +29,13 @@ fn pick<T>(cond: bool, yes: T, no: T) -> T {
 
 /// A push button that stays pressed: a click or Space/Return latches its
 /// checked state. [`ToggleButton::set_checked`] changes it without an event.
+///
+/// Like [`Button`](super::Button) it can show an icon before its label, or an
+/// icon alone (a formatting toolbar's bold or alignment toggle).
 pub struct ToggleButton<M: 'static> {
     control: Control<M>,
     text: Rc<RefCell<String>>,
+    icon: Rc<Cell<Option<IconRef>>>,
     checked: Rc<Cell<bool>>,
     enabled: Rc<Cell<bool>>,
     hover: Rc<Cell<bool>>,
@@ -55,10 +61,12 @@ impl<M: 'static> ToggleButton<M> {
         let enabled = Rc::new(Cell::new(true));
         let hover = Rc::new(Cell::new(false));
         let pressed = Rc::new(Cell::new(false));
+        let icon = Rc::new(Cell::new(None));
         let on_toggle: ToggleMapper<M> = Rc::new(RefCell::new(None));
 
         {
             let label = Rc::clone(&label);
+            let icon = Rc::clone(&icon);
             let checked = Rc::clone(&checked);
             let enabled = Rc::clone(&enabled);
             let hover = Rc::clone(&hover);
@@ -78,8 +86,17 @@ impl<M: 'static> ToggleButton<M> {
                 canvas.stroke_rounded_rect(bounds, RADIUS, border, 1.0);
                 let base = pick(checked, theme.text_on_accent, theme.text);
                 let color = pick(enabled.get(), base, theme.text_disabled);
+                let text = label.borrow();
+                let (icon_rect, text_rect) =
+                    layout_content(bounds, icon.get().is_some(), text.is_empty());
+                if let Some(icon_rect) = icon_rect
+                    && let Some(icon) = icon.get()
+                {
+                    let dpi = canvas.dpi();
+                    draw_icon(canvas, icon, icon_rect, color, dpi);
+                }
                 let style = TextStyle::new(color, TEXT_SIZE).centered().middle();
-                canvas.draw_text(&label.borrow(), bounds, &style);
+                canvas.draw_text(&text, text_rect, &style);
                 if selected.get() {
                     canvas.stroke_rect(bounds, theme.accent, 2.0);
                 }
@@ -146,12 +163,39 @@ impl<M: 'static> ToggleButton<M> {
         Ok(ToggleButton {
             control,
             text: label,
+            icon,
             checked,
             enabled,
             hover,
             pressed,
             on_toggle,
         })
+    }
+
+    /// Draws `icon` before the label (or centred when there is no label), in
+    /// the label's colour: on-accent while checked, dimmed while disabled.
+    ///
+    /// Any [`IconRef`] works: a generated [`Lucide`](crate::icon::Lucide) icon,
+    /// the legacy [`Icon`](super::Icon) set or a [`Glyph`](super::Glyph).
+    pub fn icon(self, icon: impl Into<IconRef>) -> ToggleButton<M> {
+        self.set_icon(Some(icon));
+        self
+    }
+
+    /// Replaces the leading icon, or removes it with `None`.
+    ///
+    /// Accepts the same [`IconRef`] inputs as [`ToggleButton::icon`]; use
+    /// [`ToggleButton::clear_icon`] to remove the icon without a type
+    /// annotation on `None`.
+    pub fn set_icon(&self, icon: Option<impl Into<IconRef>>) {
+        self.icon.set(icon.map(Into::into));
+        self.control.invalidate();
+    }
+
+    /// Removes the button's leading icon.
+    pub fn clear_icon(&self) {
+        self.icon.set(None);
+        self.control.invalidate();
     }
 
     /// Maps a toggle to the app's message: the closure receives the new state
@@ -240,7 +284,9 @@ mod tests {
     use crate::backend::headless::HeadlessBackend;
     use crate::backend::{Backend, Event, PlatformSpec, WidgetId};
     use crate::geometry::Rect;
+    use crate::icon::{IconRef, Lucide};
     use crate::message::{Modifiers, MouseButton};
+    use crate::widget::Glyph;
 
     struct TestApp {
         log: Rc<RefCell<Vec<u32>>>,
@@ -308,6 +354,24 @@ mod tests {
         assert!(button.is_checked());
         assert!(log.borrow().is_empty(), "a programmatic set raised nothing");
     }
+    #[test]
+    fn icon_is_set_replaced_and_cleared_without_toggling() {
+        let (ui, runtime, log) = setup();
+        let button = ToggleButton::new(&ui, Rect::new(0, 0, 28, 28), "")
+            .unwrap()
+            .icon(Lucide::Bold)
+            .on_toggle(|checked| Some(checked as u32));
+        assert_eq!(button.icon.get(), Some(IconRef::Lucide(Lucide::Bold)));
+        button.set_icon(Some(Glyph::Play));
+        assert_eq!(button.icon.get(), Some(IconRef::Glyph(Glyph::Play)));
+        button.clear_icon();
+        assert_eq!(button.icon.get(), None);
+        assert!(!button.is_checked(), "changing the icon toggles nothing");
+        click(&runtime, button.id());
+        assert!(button.is_checked(), "an icon-only button still toggles");
+        assert_eq!(*log.borrow(), vec![1]);
+    }
+
     #[test]
     fn hovering_repaints_once_then_stays_quiet() {
         let backend = Rc::new(HeadlessBackend::new());
