@@ -99,6 +99,7 @@ fn from_high_contrast(colors: HighContrastColors) -> Theme {
         surface_end: colors.btn_face,
         bevel: Rgba::with_alpha(0, 0, 0, 0),
         shade: 0,
+        gloss: 0,
         corner_radius: 0,
         glow: 0,
     }

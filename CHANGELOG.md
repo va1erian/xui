@@ -10,6 +10,14 @@
   `surface_end`, `bevel`, `shade`, `corner_radius` and `glow` (off in
   `light()`/`dark()`, which paint as before), and `theme::look` paints them.
   A `Theme` built as a struct literal must now set these fields.
+- **Gloss, captions, plain panels and primary buttons.** `Theme::gloss`
+  lightens a control face toward its top (Midnight's buttons, check boxes,
+  radios and swatches); `Label::title` and `Label::caption` set a page title
+  and an upper-case section caption (a rounded theme's `GroupBox` titles use
+  the caption style); `Panel::plain` is a container that draws nothing;
+  `Button::primary` marks the default action in the accent with a halo; on a
+  decorated theme `IconView` highlights the whole tile like a selected row and
+  `ColorPicker` draws glossy swatches ringed apart when selected.
 - **Widgets draw on their container.** `Canvas::composites_parents` tells a
   painter whether its ancestors are already painted under it (true on
   `xui-canvas`, through `Surface::with_canvas_over_parents`); bundled widgets
