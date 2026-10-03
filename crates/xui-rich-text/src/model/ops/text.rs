@@ -6,7 +6,7 @@ use super::{EditError, EditOp};
 use crate::model::object::OBJECT_CHAR;
 use crate::model::paragraph::Paragraph;
 use crate::model::selection::DocRange;
-use crate::model::style::CharStyleId;
+use crate::model::style::{CharStyleId, ParaStyle, ParaStyleId};
 use crate::model::{DocPos, Document, InlineImage, ObjectId};
 
 /// Content cut out of a document, exact enough to put back: whole paragraphs
@@ -133,9 +133,14 @@ impl Document {
             None => self.typing_style(at),
         };
         let para_style = self.paragraphs[at.para].style;
+        let rest_style = self.continued_style(para_style);
         let paras = sanitize(text)
             .split('\n')
-            .map(|line| Paragraph::new(line, para_style, style))
+            .enumerate()
+            .map(|(i, line)| {
+                let para_style = if i == 0 { para_style } else { rest_style };
+                Paragraph::new(line, para_style, style)
+            })
             .collect();
         self.reinsert(
             at,
@@ -146,15 +151,31 @@ impl Document {
         )
     }
 
+    /// `id` without the page break before it: the style a paragraph split
+    /// off (or typed after) one carries on in, so Enter does not start
+    /// another page.
+    fn continued_style(&mut self, id: ParaStyleId) -> ParaStyleId {
+        let style = self.styles.para(id);
+        if !style.page_break_before {
+            return id;
+        }
+        let style = ParaStyle {
+            page_break_before: false,
+            ..style.clone()
+        };
+        self.styles.intern_para(style)
+    }
+
     pub(super) fn op_split(&mut self, at: DocPos) -> Result<EditOp, EditError> {
         self.check_pos(at)?;
         let style = self.paragraphs[at.para].style;
         let typing = self.typing_style(at);
         let piece = Paragraph::new("", style, typing);
+        let rest = Paragraph::new("", self.continued_style(style), typing);
         self.reinsert(
             at,
             Slice {
-                paras: vec![piece.clone(), piece],
+                paras: vec![piece, rest],
                 objects: Vec::new(),
             },
         )

@@ -8,8 +8,12 @@
 //!  "objects": [{"id": 0, "png_base64": "...", "width": 120, "height": 80,
 //!               "wrap": {"kind": "inline"}, "alt": ""}],
 //!  "paragraphs": [{"text": "...", "spans": [[len, style], ...],
-//!                  "anchors": [0], "style": 0}]}
+//!                  "anchors": [0], "style": 0}],
+//!  "page": {"width": 793.7, "height": 1122.5, "margins": [l, t, r, b]}}
 //! ```
+//!
+//! `page` (in dip) and a paragraph style's `page_break_before` came with page
+//! view; files without them load with an A4 page and no breaks.
 //!
 //! Styles are written as the interned tables, so ids survive a round trip.
 //! Images are embedded as base64 PNG (a JPEG source comes back as PNG). The
@@ -29,7 +33,7 @@ use crate::model::{
     CharStyle, CharStyleId, Document, InlineImage, ObjectId, ObjectTable, ParaStyle, ParaStyleId,
     Paragraph, Span, StyleTable,
 };
-use dto::{CharDto, ParaDto, WrapDto};
+use dto::{CharDto, PageDto, ParaDto, WrapDto};
 
 /// The version `to_json` writes and `from_json` reads.
 const VERSION: u32 = 1;
@@ -45,6 +49,9 @@ struct FileDto {
     styles: StylesDto,
     objects: Vec<ObjectDto>,
     paragraphs: Vec<ParagraphDto>,
+    /// Absent in files written before page view: they get the default page.
+    #[serde(default)]
+    page: Option<PageDto>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -115,6 +122,7 @@ pub fn to_json(doc: &Document) -> String {
                 style: p.style().0,
             })
             .collect(),
+        page: Some(PageDto::from(doc.page())),
     };
     serde_json::to_string(&file).expect("the shadow types always serialize")
 }
@@ -153,7 +161,13 @@ pub fn from_json(json: &str) -> Result<Document, FormatError> {
             )));
         }
     }
-    Document::from_parts(paragraphs, styles, objects).map_err(FormatError::Invalid)
+    let doc = Document::from_parts(paragraphs, styles, objects).map_err(FormatError::Invalid)?;
+    match file.page {
+        Some(page) => doc
+            .with_page(page.into())
+            .map_err(|e| FormatError::Invalid(format!("page: {e}"))),
+        None => Ok(doc),
+    }
 }
 
 fn build_styles(dto: StylesDto) -> Result<StyleTable, FormatError> {

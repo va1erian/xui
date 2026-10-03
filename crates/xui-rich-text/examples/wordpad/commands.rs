@@ -7,6 +7,7 @@ use std::path::PathBuf;
 use xui_core::Dip;
 use xui_core::app::Ui;
 use xui_core::widget::DialogAction;
+use xui_rich_text::ViewMode;
 use xui_rich_text::edit::Command;
 use xui_rich_text::model::{
     Align, BlockKind, CharStylePatch, Document, ListKind, Selection, Side, StyleSummary, Wrap,
@@ -28,6 +29,21 @@ pub fn refresh_title(app: &Wordpad, ui: &Ui<Msg>) {
     ));
     app.status
         .set_text(1, if app.dirty { "Modified" } else { "Saved" });
+}
+
+/// Shows the caret's page and the page count in the status bar.
+pub fn refresh_pages(app: &Wordpad) {
+    let (page, count) = app.editor.page_info();
+    app.status
+        .set_text(2, &format!("Page {} of {count}", page + 1));
+}
+
+/// Switches between page and draft view.
+pub fn page_view(app: &mut Wordpad, on: bool) {
+    app.editor
+        .set_view_mode(if on { ViewMode::Page } else { ViewMode::Draft });
+    app.editor.focus();
+    refresh_pages(app);
 }
 
 /// The document changed.

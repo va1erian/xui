@@ -41,7 +41,10 @@ impl Layout {
             self.reposition(doc);
             let todo: Vec<usize> = self
                 .visible(top, bottom)
-                .filter(|&i| self.paras[i].dirty || self.paras[i].number != numbers[i])
+                .filter(|&i| {
+                    let p = &self.paras[i];
+                    p.dirty || p.number != numbers[i] || !self.fits_at(i, p.y)
+                })
                 .collect();
             if todo.is_empty() || laid >= budget {
                 break;
@@ -55,6 +58,7 @@ impl Layout {
                     ),
                     None => (FloatCtx::default(), false),
                 };
+                let ctx = ctx.with_pages(self.pages);
                 let y = self.paras[index].y;
                 let mut ctx = ctx;
                 let old_exit = std::mem::take(&mut self.paras[index].exit);

@@ -14,7 +14,7 @@ use super::items::ShapeCtx;
 use super::line::{Params, break_lines};
 use super::resolve::{para_metrics, quote_rule_x, scale_for};
 use super::shape_cache::ShapeCache;
-use super::{Marker, ParaLayout};
+use super::{Marker, Pages, ParaLayout};
 use crate::model::{BlockKind, Document, ListKind};
 
 /// The laid-out document: one [`ParaLayout`] per paragraph.
@@ -24,6 +24,7 @@ pub struct Layout {
     pub(super) dpi: u32,
     cache: ShapeCache,
     pub(super) height: f32,
+    pub(super) pages: Option<Pages>,
 }
 
 impl Default for Layout {
@@ -42,6 +43,7 @@ impl Layout {
             dpi: 96,
             cache: ShapeCache::default(),
             height: 0.0,
+            pages: None,
         }
     }
 
@@ -61,6 +63,46 @@ impl Layout {
             p.lines.clear();
         }
         true
+    }
+
+    /// Paginates the flow (`None` for one continuous column). Returns
+    /// whether anything changed, in which case every paragraph is relaid out
+    /// by the next [`update`](Layout::update).
+    pub fn set_pages(&mut self, pages: Option<Pages>) -> bool {
+        if self.pages == pages {
+            return false;
+        }
+        self.pages = pages;
+        self.mark_all_dirty();
+        true
+    }
+
+    /// The pages the flow is cut into, if it is paginated.
+    pub fn pages(&self) -> Option<Pages> {
+        self.pages
+    }
+
+    /// How many pages the flow fills: 1 when it is not paginated.
+    pub fn page_count(&self) -> usize {
+        self.pages.map_or(1, |p| p.count(self.height))
+    }
+
+    /// The page (from 0) holding flow position `y`: 0 when not paginated.
+    pub fn page_at(&self, y: f32) -> usize {
+        self.pages.map_or(0, |p| p.index_at(y))
+    }
+
+    /// Whether paragraph `index`, laid out at `laid_y`, is still right at
+    /// `y`: always off pages; on pages when it has not moved, or when it
+    /// starts no page and lies inside one page's text area both where it was
+    /// laid out and at `y`.
+    pub(super) fn fits_at(&self, index: usize, y: f32) -> bool {
+        let (Some(pages), Some(p)) = (self.pages, self.paras.get(index)) else {
+            return true;
+        };
+        let extent = p.extent();
+        (p.laid_y - y).abs() < 0.01
+            || (!p.page_break && pages.fits(p.laid_y, extent) && pages.fits(y, extent))
     }
 
     /// The area width in pixels.
@@ -151,12 +193,13 @@ impl Layout {
         budget: usize,
     ) -> usize {
         let count = self.paras.len();
+        let pages = self.pages;
         let (mut y, mut ctx) = match first.checked_sub(1).map(|i| &self.paras[i]) {
             Some(prev) => (
                 prev.bottom(),
-                FloatCtx::from_relative(&prev.exit, prev.bottom()),
+                FloatCtx::from_relative(&prev.exit, prev.bottom()).with_pages(pages),
             ),
-            None => (0.0, FloatCtx::default()),
+            None => (0.0, FloatCtx::default().with_pages(pages)),
         };
         let numbers = list_numbers(doc);
         let (mut index, mut laid) = (first, 0);
@@ -164,9 +207,11 @@ impl Layout {
             let entering = ctx.relative(y);
             let reusable = !self.paras[index].dirty
                 && self.paras[index].entering == entering
-                && self.paras[index].number == numbers[index];
+                && self.paras[index].number == numbers[index]
+                && self.fits_at(index, y);
             if reusable {
                 self.paras[index].y = y;
+                self.paras[index].laid_y = y;
                 self.paras[index].speculative = false;
             } else if laid < budget {
                 laid += 1;
@@ -179,7 +224,7 @@ impl Layout {
             }
             let p = &self.paras[index];
             y = p.bottom();
-            ctx = FloatCtx::from_relative(&p.exit, y);
+            ctx = FloatCtx::from_relative(&p.exit, y).with_pages(pages);
             index += 1;
         }
         self.reposition(doc);
@@ -267,6 +312,10 @@ fn lay_out(
     };
     let items = shape.build(para);
     let entering = ctx.relative(y);
+    let start = match ctx.pages() {
+        Some(pages) if style.page_break_before && !pages.at_top(y) => pages.break_before(y),
+        _ => y + metrics.before,
+    };
     let params = Params {
         area: env.width,
         left: metrics.left,
@@ -276,14 +325,7 @@ fn lay_out(
         spacing: metrics.spacing,
         empty_style: first_style,
     };
-    let mut broken = break_lines(
-        para.text(),
-        items,
-        &params,
-        ctx,
-        y + metrics.before,
-        &mut shape,
-    );
+    let mut broken = break_lines(para.text(), items, &params, ctx, start, &mut shape);
     for line in &mut broken.lines {
         line.y -= y;
         line.baseline -= y;
@@ -327,6 +369,8 @@ fn lay_out(
         rule,
         entering,
         exit: ctx.relative(bottom),
+        laid_y: y,
+        page_break: style.page_break_before,
         dirty: false,
         speculative: false,
         text: Arc::from(para.text()),

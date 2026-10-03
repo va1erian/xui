@@ -11,6 +11,7 @@ mod flow;
 mod hit;
 mod lines;
 mod nav;
+mod pages;
 mod partial;
 
 use std::any::Any;

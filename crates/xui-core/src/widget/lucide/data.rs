@@ -95,6 +95,8 @@ pub enum Lucide {
     ArrowDownAZ,
     /// The `bold` outline.
     Bold,
+    /// The `book-open` outline.
+    BookOpen,
     /// The `box` outline.
     Box,
     /// The `bug` outline.
@@ -209,6 +211,8 @@ pub enum Lucide {
     RefreshCw,
     /// The `repeat` outline.
     Repeat,
+    /// The `ruler` outline.
+    Ruler,
     /// The `save-all` outline.
     SaveAll,
     /// The `save` outline.
@@ -217,6 +221,8 @@ pub enum Lucide {
     Scissors,
     /// The `search` outline.
     Search,
+    /// The `separator-horizontal` outline.
+    SeparatorHorizontal,
     /// The `settings` outline.
     Settings,
     /// The `shuffle` outline.
@@ -283,6 +289,7 @@ impl Lucide {
         Lucide::AppWindow,
         Lucide::ArrowDownAZ,
         Lucide::Bold,
+        Lucide::BookOpen,
         Lucide::Box,
         Lucide::Bug,
         Lucide::Check,
@@ -340,10 +347,12 @@ impl Lucide {
         Lucide::Redo2,
         Lucide::RefreshCw,
         Lucide::Repeat,
+        Lucide::Ruler,
         Lucide::SaveAll,
         Lucide::Save,
         Lucide::Scissors,
         Lucide::Search,
+        Lucide::SeparatorHorizontal,
         Lucide::Settings,
         Lucide::Shuffle,
         Lucide::SkipBack,
@@ -382,6 +391,7 @@ pub(crate) fn path(icon: Lucide) -> &'static [PathSeg] {
         Lucide::AppWindow => APP_WINDOW,
         Lucide::ArrowDownAZ => ARROW_DOWN_A_Z,
         Lucide::Bold => BOLD,
+        Lucide::BookOpen => BOOK_OPEN,
         Lucide::Box => BOX,
         Lucide::Bug => BUG,
         Lucide::Check => CHECK,
@@ -439,10 +449,12 @@ pub(crate) fn path(icon: Lucide) -> &'static [PathSeg] {
         Lucide::Redo2 => REDO_2,
         Lucide::RefreshCw => REFRESH_CW,
         Lucide::Repeat => REPEAT,
+        Lucide::Ruler => RULER,
         Lucide::SaveAll => SAVE_ALL,
         Lucide::Save => SAVE,
         Lucide::Scissors => SCISSORS,
         Lucide::Search => SEARCH,
+        Lucide::SeparatorHorizontal => SEPARATOR_HORIZONTAL,
         Lucide::Settings => SETTINGS,
         Lucide::Shuffle => SHUFFLE,
         Lucide::SkipBack => SKIP_BACK,

@@ -15,8 +15,8 @@ use xui_core::widget::{
     Button, ComboBox, Dialog, FileDialog, Lucide, Placeable, StatusBar, ToggleButton, Toolbar,
     Tooltip,
 };
-use xui_rich_text::RichTextEditor;
 use xui_rich_text::model::{Align, BlockKind, ListKind, StyleSummary, Tri, Wrap};
+use xui_rich_text::{RichTextEditor, ViewMode};
 
 use crate::app::{Mark, Msg, Wordpad, shortcut};
 
@@ -185,6 +185,11 @@ pub fn build(ui: &Ui<Msg>) -> Result<Wordpad> {
         .item_with_text(Lucide::Redo2, "Redo (Ctrl+Y)", "Redo")
         .separator()
         .item_with_text(Lucide::Image, "Insert image", "Image")
+        .item_with_text(
+            Lucide::SeparatorHorizontal,
+            "Page break (Ctrl+Enter)",
+            "Page break",
+        )
         .on_click(|index| {
             Some(match index {
                 0 => Msg::New,
@@ -193,7 +198,8 @@ pub fn build(ui: &Ui<Msg>) -> Result<Wordpad> {
                 3 => Msg::Export,
                 4 => Msg::Undo,
                 5 => Msg::Redo,
-                _ => Msg::InsertImage,
+                6 => Msg::InsertImage,
+                _ => Msg::PageBreak,
             })
         });
 
@@ -247,9 +253,18 @@ pub fn build(ui: &Ui<Msg>) -> Result<Wordpad> {
         })?,
     ];
     let indent = push(ui, t, (Lucide::IndentIncrease, "Indent"), || Msg::Indent)?;
+    let page_view = ToggleButton::auto(ui, "")?
+        .icon(Lucide::BookOpen)
+        .on_toggle(|on| Some(Msg::PageView(on)));
+    page_view.set_checked(true);
+    t.push(Tooltip::attach(ui, page_view.id(), "Page view")?);
+    editor.set_view_mode(ViewMode::Page);
     let outdent = push(ui, t, (Lucide::IndentDecrease, "Outdent"), || Msg::Outdent)?;
 
-    let status = Rc::new(StatusBar::auto(ui, &["New document", "Saved"])?);
+    let status = Rc::new(StatusBar::auto(
+        ui,
+        &["New document", "Saved", "Page 1 of 1"],
+    )?);
 
     let confirm = Dialog::confirm(
         ui,
@@ -308,6 +323,7 @@ pub fn build(ui: &Ui<Msg>) -> Result<Wordpad> {
                 .child(spacer().width(Dip(6.0)))
                 .child((&wrap).width(Dip(120.0)))
                 .child(spacer())
+                .child(page_view.width(ICON_WIDTH))
                 .fixed(FORMAT_HEIGHT),
         )
         .child(widget(EditorPane(Rc::clone(&editor))).fill(1))

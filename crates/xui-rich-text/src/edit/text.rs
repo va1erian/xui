@@ -119,6 +119,25 @@ impl EditorState {
         })
     }
 
+    /// Ctrl+Enter: Enter, with the second half starting a new page.
+    pub(super) fn insert_page_break(&mut self) -> Effect {
+        let Some(range) = self.selection_range() else {
+            return Effect::NONE;
+        };
+        let at = range.start;
+        self.run(|cx| {
+            if !range.is_empty() {
+                cx.apply(EditOp::Delete { range })?;
+            }
+            cx.apply(EditOp::SplitParagraph { at })?;
+            cx.apply(EditOp::SetParaStyle {
+                paras: at.para + 1..at.para + 2,
+                patch: ParaStylePatch::page_break_before(true),
+            })?;
+            Ok(Some(Selection::caret(DocPos::new(at.para + 1, 0))))
+        })
+    }
+
     /// Deletes the selected text or image.
     pub(super) fn delete_selection_step(&mut self) -> Effect {
         let Some(range) = self.selection_range().filter(|r| !r.is_empty()) else {
@@ -148,6 +167,16 @@ impl EditorState {
                     cx.apply(EditOp::SetParaStyle {
                         paras: pos.para..pos.para + 1,
                         patch: ParaStylePatch::list(None),
+                    })?;
+                    Ok(None)
+                });
+            }
+            let para_style = self.doc.paragraphs()[pos.para].style();
+            if self.doc.styles().para(para_style).page_break_before {
+                return self.run(|cx| {
+                    cx.apply(EditOp::SetParaStyle {
+                        paras: pos.para..pos.para + 1,
+                        patch: ParaStylePatch::page_break_before(false),
                     })?;
                     Ok(None)
                 });

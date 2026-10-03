@@ -173,6 +173,8 @@ pub struct ParaStyle {
     pub list: Option<ListItem>,
     /// The structural role.
     pub kind: BlockKind,
+    /// Whether the paragraph starts a new page in page view.
+    pub page_break_before: bool,
 }
 
 impl Eq for ParaStyle {}
@@ -195,6 +197,7 @@ impl Hash for ParaStyle {
         }
         self.list.hash(state);
         self.kind.hash(state);
+        self.page_break_before.hash(state);
     }
 }
 

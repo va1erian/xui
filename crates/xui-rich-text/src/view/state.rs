@@ -10,6 +10,7 @@ use xui_core::geometry::{Point, Rect};
 use xui_core::widget::scrollbar::THICKNESS;
 
 use super::drag::Drag;
+use super::sheets::Sheets;
 use crate::edit::{Clipboard, EditorState};
 use crate::layout::Layout;
 use crate::model::{Document, ObjectId};
@@ -25,6 +26,18 @@ const PAD: Dip = Dip(8.0);
 /// The text margin in device pixels at `dpi`.
 pub(crate) fn pad_px(dpi: u32) -> i32 {
     PAD.to_px(dpi).value()
+}
+
+/// How the document is shown.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ViewMode {
+    /// One continuous column as wide as the view (the default).
+    #[default]
+    Draft,
+    /// The pages the document would print on: sheets of its
+    /// [`PageSetup`](crate::model::PageSetup) on a desk, the text inside their
+    /// margins, shrunk to fit when the view is narrower than a sheet.
+    Page,
 }
 
 /// The previous click, for double and triple clicks.
@@ -75,6 +88,13 @@ pub(crate) struct State {
     pub drop_caret: Option<Rect>,
     /// Timer ticks so far (the blink phase counts them).
     pub ticks: u32,
+    /// Draft or page view.
+    pub mode: ViewMode,
+    /// Where the flow's origin is in client pixels before scrolling, as of
+    /// the last [`State::prepare`].
+    pub origin: Point,
+    /// The sheets, in page view.
+    pub sheets: Option<Sheets>,
 }
 
 impl State {
@@ -105,6 +125,9 @@ impl State {
             image: None,
             drop_caret: None,
             ticks: 0,
+            mode: ViewMode::Draft,
+            origin: Point::new(pad_px(dpi), pad_px(dpi)),
+            sheets: None,
         }
     }
 
@@ -127,12 +150,34 @@ impl State {
         let bar = THICKNESS.to_px(dpi).value().min(bounds.width());
         let text_area = Rect::new(bounds.left, bounds.top, bounds.right - bar, bounds.bottom);
         self.track = Rect::new(bounds.right - bar, bounds.top, bounds.right, bounds.bottom);
-        let width = (text_area.width() - 2 * pad_px(dpi)).max(0) as f32;
-        self.layout.set_metrics(width, dpi);
+        match self.mode {
+            ViewMode::Draft => {
+                let width = (text_area.width() - 2 * pad_px(dpi)).max(0) as f32;
+                self.layout.set_pages(None);
+                self.layout.set_metrics(width, dpi);
+                self.origin = Point::new(text_area.left + pad_px(dpi), pad_px(dpi));
+                self.sheets = None;
+            }
+            ViewMode::Page => self.prepare_sheets(text_area, dpi),
+        }
         self.viewport = bounds.height() as f32;
         self.layout_window();
         self.scroll = self.scroll.clamp(0.0, self.max_scroll());
         text_area
+    }
+
+    /// Switches between draft and page view, keeping the caret in view.
+    pub fn set_mode(&mut self, mode: ViewMode) {
+        if self.mode == mode {
+            return;
+        }
+        self.mode = mode;
+        self.ready();
+        if let crate::model::Selection::Text { head, .. } = self.ed.selection {
+            self.ensure_para(head.para);
+            let caret = self.layout.caret_rect(&self.ed.doc, head);
+            self.ensure_visible(caret);
+        }
     }
 
     /// Brings the layout up to date: all of it for a short document, else the
@@ -166,12 +211,36 @@ impl State {
 
     /// The offset from view y to layout y: the scroll less the top margin.
     pub fn shift(&self) -> i32 {
-        self.scroll.round() as i32 - pad_px(self.dpi)
+        self.scroll.round() as i32 - self.origin.y
     }
 
-    /// The scrollable height: the flow and a margin above and below.
+    /// The scrollable height: the flow and a margin above and below, or the
+    /// sheets and the desk around them.
     pub fn content_height(&self) -> f32 {
-        self.layout.height() + 2.0 * pad_px(self.dpi) as f32
+        match self.sheets {
+            Some(s) => s.top + self.layout.page_count() as f32 * s.pitch,
+            None => self.layout.height() + 2.0 * pad_px(self.dpi) as f32,
+        }
+    }
+
+    /// The page the caret is on (from 0) and the number of pages; one page
+    /// in draft view.
+    pub fn page_info(&mut self) -> (usize, usize) {
+        let page = match self.ed.selection {
+            crate::model::Selection::Text { head, .. } => {
+                self.ensure_para(head.para);
+                let caret = self.layout.caret_rect(&self.ed.doc, head);
+                self.layout.page_at(caret.top as f32)
+            }
+            crate::model::Selection::Object(id) => self
+                .ed
+                .doc
+                .object_pos(id)
+                .and_then(|pos| self.layout.paragraphs().get(pos.para))
+                .map_or(0, |p| self.layout.page_at(p.y)),
+        };
+        let count = self.layout.page_count();
+        (page.min(count - 1), count)
     }
 
     /// The largest scroll offset.

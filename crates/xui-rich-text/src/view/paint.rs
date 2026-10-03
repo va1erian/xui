@@ -3,13 +3,14 @@
 //! Painting: visible paragraphs only, from the cached layout. Nothing here
 //! shapes text or allocates per item.
 
-use xui_core::backend::{Canvas, Rgba};
+use xui_core::backend::{Canvas, Dash, Rgba, Stroke};
 use xui_core::geometry::{Point, Rect};
 use xui_core::widget::scrollbar::{self, Orientation, ThumbState};
 use xui_core::{Color, Theme};
 
 use super::overlay;
-use super::state::{State, pad_px};
+use super::sheets;
+use super::state::State;
 use crate::layout::{FRect, Line, ParaLayout, PlacedItem, PlacedKind};
 use crate::model::{CharStyle, DocPos, Selection, TextColor};
 
@@ -36,25 +37,40 @@ pub(crate) fn paint(canvas: &mut dyn Canvas, state: &mut State, theme: &Theme) {
 fn paint_local(canvas: &mut dyn Canvas, state: &mut State, theme: &Theme, bounds: Rect) {
     let dpi = canvas.dpi();
     let text_area = state.prepare(bounds, dpi);
-    let (track, pad) = (state.track, pad_px(dpi));
-    canvas.fill_rect(bounds, theme.input_background);
+    let track = state.track;
+    // On paper the text is what gets printed: dark on white in either theme.
+    let paper = Theme::light();
+    let ink = match state.sheets {
+        Some(sheets) => {
+            canvas.fill_rect(bounds, sheets::desk(theme));
+            canvas.push_clip(text_area);
+            sheets::paint(canvas, state, sheets, theme);
+            canvas.pop_clip();
+            &paper
+        }
+        None => {
+            canvas.fill_rect(bounds, theme.input_background);
+            theme
+        }
+    };
 
     let layout = &state.layout;
     let shift = state.shift();
+    let pad = state.origin.x;
     let range = layout.visible(shift as f32, (shift + bounds.height()) as f32);
     let painter = Painter {
-        theme,
+        theme: ink,
         state,
         shift,
         pad,
-        scale: dpi as f32 / 96.0,
+        scale: layout.dpi() as f32 / 96.0,
     };
     canvas.push_clip(text_area);
     painter.selection(canvas, range.clone());
     for para in &layout.paragraphs()[range.clone()] {
         painter.paragraph(canvas, para);
     }
-    overlay::paint(canvas, state, theme, pad, shift);
+    overlay::paint(canvas, state, ink, pad, shift);
     canvas.pop_clip();
 
     let thumb = if state.bar_drag.is_some() {
@@ -148,13 +164,26 @@ impl Painter<'_> {
         if let Some((x, top, bottom)) = para.rule {
             let w = (2.0 * self.scale).round().max(1.0) as i32;
             let x = x.round() as i32;
-            let rect = Rect::new(
-                x,
-                (para.y + top).round() as i32,
-                x + w,
-                (para.y + bottom).round() as i32,
-            );
-            canvas.fill_rect(self.rect(rect), self.theme.text_secondary);
+            let bar = |canvas: &mut dyn Canvas, top: f32, bottom: f32| {
+                let rect = Rect::new(
+                    x,
+                    (para.y + top).round() as i32,
+                    x + w,
+                    (para.y + bottom).round() as i32,
+                );
+                canvas.fill_rect(self.rect(rect), self.theme.text_secondary);
+            };
+            if self.state.sheets.is_some() {
+                // Line by line, so the rule stops at a page's edge.
+                for line in &para.lines {
+                    bar(canvas, line.y, line.y + line.height);
+                }
+            } else {
+                bar(canvas, top, bottom);
+            }
+        }
+        if self.state.sheets.is_none() {
+            self.page_break_marker(canvas, para);
         }
         if let Some(marker) = &para.marker {
             let origin = Point::new(
@@ -178,6 +207,23 @@ impl Painter<'_> {
                 self.item(canvas, para.y, line, item);
             }
         }
+    }
+
+    /// In draft view, a dashed rule across the top of a paragraph that starts
+    /// a new page.
+    fn page_break_marker(&self, canvas: &mut dyn Canvas, para: &ParaLayout) {
+        if !para.page_break {
+            return;
+        }
+        let y = para.y.round() as i32 - self.shift;
+        let right = self.state.layout.width().round() as i32 + self.pad;
+        let stroke = Stroke::new(1.0).dash(Dash::Dashed);
+        canvas.draw_line_stroked(
+            Point::new(self.pad, y),
+            Point::new(right, y),
+            self.theme.text_secondary.into(),
+            &stroke,
+        );
     }
 
     fn item(&self, canvas: &mut dyn Canvas, para_y: f32, line: &Line, item: &PlacedItem) {

@@ -36,6 +36,10 @@ pub enum Msg {
     ExportChosen(PathBuf),
     InsertImage,
     ImageChosen(PathBuf),
+    /// Ctrl+Enter from the toolbar: the rest of the paragraph starts a page.
+    PageBreak,
+    /// The Page view toggle.
+    PageView(bool),
     Undo,
     Redo,
     /// The document changed.
@@ -124,10 +128,18 @@ impl App for Wordpad {
             Msg::ExportChosen(path) => commands::export_chosen(self, path),
             Msg::InsertImage => commands::insert_image(self),
             Msg::ImageChosen(path) => commands::image_chosen(self, path),
+            Msg::PageBreak => commands::format(self, xui_rich_text::edit::Command::InsertPageBreak),
+            Msg::PageView(on) => commands::page_view(self, on),
             Msg::Undo => commands::format(self, xui_rich_text::edit::Command::Undo),
             Msg::Redo => commands::format(self, xui_rich_text::edit::Command::Redo),
-            Msg::Edited => commands::edited(self, ui),
-            Msg::Selection(summary) => commands::selection(self, summary),
+            Msg::Edited => {
+                commands::edited(self, ui);
+                commands::refresh_pages(self);
+            }
+            Msg::Selection(summary) => {
+                commands::selection(self, summary);
+                commands::refresh_pages(self);
+            }
             Msg::Link(url) => self.status.set_text(0, &url),
             Msg::Block(index) => commands::block(self, index),
             Msg::Size(index) => commands::size(self, index),

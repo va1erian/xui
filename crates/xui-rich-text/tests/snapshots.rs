@@ -9,7 +9,7 @@ mod common;
 
 use common::sample_document;
 use xui_rich_text::edit::Command;
-use xui_rich_text::{DocPos, RichTextEditor};
+use xui_rich_text::{DocPos, RichTextEditor, ViewMode};
 
 struct Host {
     _editor: RichTextEditor<()>,
@@ -232,4 +232,38 @@ fn select(editor: &RichTextEditor<()>, anchor: DocPos, head: DocPos) {
         pos: head,
         extend: true,
     });
+}
+
+fn render_page_view(theme: Theme, width: f32, height: f32) -> Image {
+    try_render(Snapshot::new(Dip(width), Dip(height)).theme(theme), |ui| {
+        let editor = RichTextEditor::new(ui, Rect::new(0, 0, width as i32, height as i32))?
+            .document(sample_document())
+            .view_mode(ViewMode::Page);
+        Ok(Host { _editor: editor })
+    })
+    .expect("render")
+}
+
+#[test]
+fn page_view_draws_white_sheets_with_dark_text_in_either_theme() {
+    for (name, theme) in [("light", Theme::light()), ("dark", Theme::dark())] {
+        let image = render_page_view(theme, 900.0, 700.0);
+        save(&format!("rich-text-page-{name}.png"), &image);
+        let white = |p: [u8; 4]| p[0] > 250 && p[1] > 250 && p[2] > 250;
+        // The desk at the left edge is not paper; the middle of the sheet is.
+        assert!(!white(image.pixel(10, 300).unwrap()), "{name}: desk");
+        assert!(white(image.pixel(450, 30).unwrap()), "{name}: paper");
+        // The heading is dark ink on the paper, in the dark theme too.
+        let ink = count(&image, (150, 750), (100, 140), |p| p[0] < 90 && p[1] < 90);
+        assert!(ink > 200, "{name}: {ink} ink pixels");
+    }
+}
+
+#[test]
+fn page_view_shrinks_the_sheet_into_a_narrow_window() {
+    let image = render_page_view(Theme::light(), 480.0, 500.0);
+    save("rich-text-page-narrow.png", &image);
+    let white = |p: [u8; 4]| p[0] > 250 && p[1] > 250 && p[2] > 250;
+    assert!(white(image.pixel(240, 40).unwrap()), "paper in the middle");
+    assert!(!white(image.pixel(4, 40).unwrap()), "desk at the edge");
 }

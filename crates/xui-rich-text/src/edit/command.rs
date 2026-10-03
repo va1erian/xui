@@ -5,7 +5,8 @@
 use xui_core::Dip;
 
 use crate::model::{
-    Align, BlockKind, CharStylePatch, DocPos, InlineImage, ListKind, ObjectId, ParaStylePatch, Wrap,
+    Align, BlockKind, CharStylePatch, DocPos, InlineImage, ListKind, ObjectId, PageSetup,
+    ParaStylePatch, Wrap,
 };
 
 /// A caret movement.
@@ -46,6 +47,9 @@ pub enum Command {
     InsertParagraph,
     /// Shift+Enter: a line break (U+2028) inside the paragraph.
     InsertLineBreak,
+    /// Ctrl+Enter: splits the paragraph and starts its second half on a new
+    /// page.
+    InsertPageBreak,
     /// Backspace: deletes the selection, the grapheme before the caret, leaves
     /// a list at an item's start, or merges with the previous paragraph.
     Backspace,
@@ -98,6 +102,8 @@ pub enum Command {
     Outdent,
     /// Sets the structural role (body, heading, quote).
     SetBlockKind(BlockKind),
+    /// Changes the paper size and margins.
+    SetPageSetup(PageSetup),
     /// Inserts an image over the selection and selects it.
     InsertImage(InlineImage),
     /// Changes an image's size, wrap, alt text or pixels.

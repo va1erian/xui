@@ -30,6 +30,7 @@ pub(crate) fn command_for(key: Key, mods: Modifiers, in_list: bool) -> Option<Co
         Key::BACK => Some(Command::Backspace),
         Key::DELETE if ctrl => Some(Command::DeleteWordForward),
         Key::DELETE => Some(Command::Delete),
+        Key::RETURN if ctrl => Some(Command::InsertPageBreak),
         Key::RETURN if mods.shift => Some(Command::InsertLineBreak),
         Key::RETURN => Some(Command::InsertParagraph),
         Key::TAB if ctrl => None,
