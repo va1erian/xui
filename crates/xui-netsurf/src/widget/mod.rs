@@ -125,6 +125,9 @@ impl NetSurfWidget {
                     self.loading.set(on);
                     events.push(NetSurfViewEvent::LoadingChanged(on));
                 }
+                Ok(Output::FetchFailed { url, message }) => {
+                    events.push(NetSurfViewEvent::FetchFailed { url, message });
+                }
                 Ok(Output::Failed(why)) => {
                     self.failed.set(true);
                     self.loading.set(false);
