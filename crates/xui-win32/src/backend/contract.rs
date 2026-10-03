@@ -222,6 +222,12 @@ impl Backend for Win32Backend {
         }
     }
 
+    fn set_password(&self, id: WidgetId, password: bool) {
+        if let Some(node) = self.nodes.borrow().get(&id.raw()) {
+            node.set_password(password);
+        }
+    }
+
     fn text(&self, id: WidgetId) -> String {
         self.nodes
             .borrow()

@@ -6,13 +6,15 @@
 //! Coordinates are device pixels; [`Canvas::bounds`] is the field's rectangle
 //! in the window. Text width comes from the canvas itself, and the caret and
 //! selection x come from [`super::geometry`], the same arithmetic hit-testing
-//! is the inverse of, at the canvas's DPI.
+//! is the inverse of, at the canvas's DPI. A masked field draws and measures
+//! [`super::mask::display`], so its caret lines up with the mask glyphs.
 
 use crate::theme::look;
 use std::cell::{Cell, RefCell};
 
 use super::TEXT_SIZE;
 use super::geometry::{padding, text_x};
+use super::mask;
 use super::model::EditModel;
 use crate::backend::{Canvas, TextStyle};
 use crate::geometry::{Point, Rect};
@@ -32,6 +34,8 @@ pub(super) struct PaintState<'a> {
     pub focused: &'a Cell<bool>,
     /// Whether a form editor has selected the field, so it draws an outline.
     pub selected: &'a Cell<bool>,
+    /// Whether the field masks its text, as a password field does.
+    pub masked: &'a Cell<bool>,
 }
 
 /// Paints the field described by `state`.
@@ -49,7 +53,8 @@ pub(super) fn paint(canvas: &mut dyn Canvas, theme: &Theme, state: &PaintState) 
     let pad = padding(dpi);
     let inner = bounds.shrink(pad);
     let model = state.model.borrow();
-    let value = model.text();
+    // A masked field allocates its mask once per paint; it is one short line.
+    let value = mask::display(model.text(), state.masked.get());
     let style = TextStyle::new(theme.text, TEXT_SIZE).middle();
 
     if value.is_empty() {
@@ -70,6 +75,7 @@ pub(super) fn paint(canvas: &mut dyn Canvas, theme: &Theme, state: &PaintState) 
             theme,
             state,
             &model,
+            &value,
             &style,
             bounds.left,
             inner,
@@ -82,20 +88,20 @@ pub(super) fn paint(canvas: &mut dyn Canvas, theme: &Theme, state: &PaintState) 
     }
 }
 
-/// Paints the text, its selection and the caret, scrolled so the caret is
-/// visible.
+/// Paints `value` (the text, or its mask), its selection and the caret,
+/// scrolled so the caret is visible.
 #[allow(clippy::too_many_arguments)]
 fn paint_text(
     canvas: &mut dyn Canvas,
     theme: &Theme,
     state: &PaintState,
     model: &EditModel,
+    value: &str,
     style: &TextStyle,
     left: i32,
     inner: Rect,
     dpi: u32,
 ) {
-    let value = model.text();
     let caret = model.caret().min(value.chars().count());
     let (selection_start, selection_end) = model.selection();
     let view = inner.width();

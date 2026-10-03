@@ -7,6 +7,10 @@
 //! Split from the widget so the map is a pure function of the key, the
 //! modifiers and the clipboard text: a unit test feeds it a key and checks the
 //! model, with no backend.
+//!
+//! A masked (password) field keeps its text in: copy and cut do nothing, and
+//! word keys treat the whole text as one word, since stopping at a space would
+//! reveal where the password's words break.
 
 use super::model::EditModel;
 use crate::message::{Key, Modifiers};
@@ -31,14 +35,19 @@ pub(super) trait Clipboard {
     fn set(&self, text: &str);
 }
 
-/// Applies `key` with `modifiers` to `model`.
+/// Applies `key` with `modifiers` to `model`. A `masked` field refuses copy
+/// and cut and moves by whole text instead of by word.
 pub(super) fn apply(
     model: &mut EditModel,
     key: Key,
     modifiers: Modifiers,
     clipboard: &dyn Clipboard,
+    masked: bool,
 ) -> KeyResult {
     let (ctrl, shift) = (modifiers.ctrl, modifiers.shift);
+    if masked && let Some(result) = masked_key(model, key, ctrl, shift) {
+        return result;
+    }
     match key {
         Key::A if ctrl => {
             model.select_all();
@@ -100,6 +109,40 @@ pub(super) fn apply(
         Key::DELETE => changed(model.delete()),
         _ => KeyResult::Ignored,
     }
+}
+
+/// The keys a masked field handles differently, or `None` for the rest.
+fn masked_key(model: &mut EditModel, key: Key, ctrl: bool, shift: bool) -> Option<KeyResult> {
+    let result = match key {
+        // Copy and cut would put the secret on the clipboard.
+        Key::C | Key::X if ctrl => KeyResult::Redraw,
+        Key::DELETE if shift && !ctrl => KeyResult::Redraw,
+        Key::LEFT if ctrl => {
+            model.move_home(shift);
+            KeyResult::Redraw
+        }
+        Key::RIGHT if ctrl => {
+            model.move_end(shift);
+            KeyResult::Redraw
+        }
+        Key::BACK if ctrl => delete_through(model, EditModel::move_home, EditModel::backspace),
+        Key::DELETE if ctrl => delete_through(model, EditModel::move_end, EditModel::delete),
+        _ => return None,
+    };
+    Some(result)
+}
+
+/// Deletes the selection, or else from the caret to the end `extend` reaches:
+/// a masked field's Ctrl+Backspace (to the start) and Ctrl+Delete (to the end).
+fn delete_through(
+    model: &mut EditModel,
+    extend: fn(&mut EditModel, bool),
+    remove: fn(&mut EditModel) -> bool,
+) -> KeyResult {
+    if !model.has_selection() {
+        extend(model, true);
+    }
+    changed(remove(model))
 }
 
 /// Pastes the clipboard over the selection.

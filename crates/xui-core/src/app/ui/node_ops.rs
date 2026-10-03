@@ -121,6 +121,12 @@ impl<M: 'static> Ui<M> {
         self.core.backend().set_cue(id, cue);
     }
 
+    /// Masks a native text field's characters (or shows them again); a
+    /// painted field masks itself instead.
+    pub fn set_password(&self, id: WidgetId, password: bool) {
+        self.core.backend().set_password(id, password);
+    }
+
     /// A node's current text (a native control answers from its own state).
     pub fn text(&self, id: WidgetId) -> String {
         self.core.backend().text(id)

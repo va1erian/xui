@@ -288,6 +288,14 @@ pub trait Backend {
         let _ = (id, cue);
     }
 
+    /// Masks a text field's characters, as a password field does, or shows
+    /// them again. A backend hosting a native control forwards it (the Win32
+    /// `EDIT`'s `EM_SETPASSWORDCHAR`, which also refuses copy and cut); a
+    /// painted field masks itself, so the default does nothing.
+    fn set_password(&self, id: WidgetId, password: bool) {
+        let _ = (id, password);
+    }
+
     /// A node's current text; empty for a node that has none. A native control
     /// answers from its own state.
     fn text(&self, id: WidgetId) -> String {
