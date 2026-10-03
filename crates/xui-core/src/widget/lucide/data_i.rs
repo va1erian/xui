@@ -33,6 +33,16 @@ pub(crate) const IMAGE: &[PathSeg] = &[
     CubicTo(16.679, 11.306, 16.321, 11.306, 15.982, 11.397),
     CubicTo(15.643, 11.487, 15.334, 11.666, 15.086, 11.914), LineTo(6.0, 21.0),
 ];
+pub(crate) const INDENT_DECREASE: &[PathSeg] = &[
+    MoveTo(21.0, 5.0), LineTo(11.0, 5.0), MoveTo(21.0, 12.0), LineTo(11.0, 12.0),
+    MoveTo(21.0, 19.0), LineTo(11.0, 19.0), MoveTo(7.0, 8.0), LineTo(3.0, 12.0),
+    LineTo(7.0, 16.0),
+];
+pub(crate) const INDENT_INCREASE: &[PathSeg] = &[
+    MoveTo(21.0, 5.0), LineTo(11.0, 5.0), MoveTo(21.0, 12.0), LineTo(11.0, 12.0),
+    MoveTo(21.0, 19.0), LineTo(11.0, 19.0), MoveTo(3.0, 8.0), LineTo(7.0, 12.0),
+    LineTo(3.0, 16.0),
+];
 pub(crate) const INFO: &[PathSeg] = &[
     MoveTo(22.0, 12.0), CubicTo(22.0, 13.755, 21.538, 15.48, 20.66, 17.0),
     CubicTo(19.783, 18.52, 18.52, 19.783, 17.0, 20.66),
@@ -45,4 +55,8 @@ pub(crate) const INFO: &[PathSeg] = &[
     CubicTo(18.52, 4.217, 19.783, 5.48, 20.66, 7.0),
     CubicTo(21.538, 8.52, 22.0, 10.245, 22.0, 12.0), Close, MoveTo(12.0, 16.0),
     LineTo(12.0, 12.0), MoveTo(12.0, 8.0), LineTo(12.01, 8.0),
+];
+pub(crate) const ITALIC: &[PathSeg] = &[
+    MoveTo(19.0, 4.0), LineTo(10.0, 4.0), MoveTo(14.0, 20.0), LineTo(5.0, 20.0),
+    MoveTo(15.0, 4.0), LineTo(9.0, 20.0),
 ];

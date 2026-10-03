@@ -13,6 +13,7 @@ use xui_core::geometry::{Rect, Size};
 use xui_core::layout::Insets;
 use xui_core::widget::{
     Button, ComboBox, Dialog, FileDialog, Lucide, Placeable, StatusBar, ToggleButton, Toolbar,
+    Tooltip,
 };
 use xui_rich_text::RichTextEditor;
 use xui_rich_text::model::{Align, BlockKind, ListKind, StyleSummary, Tri, Wrap};
@@ -21,6 +22,14 @@ use crate::app::{Mark, Msg, Wordpad, shortcut};
 
 /// The block kinds the picker offers, in order.
 pub const BLOCKS: [&str; 5] = ["Normal", "Heading 1", "Heading 2", "Heading 3", "Quote"];
+/// The icon of each block kind in the picker, in the same order.
+const BLOCK_ICONS: [Lucide; 5] = [
+    Lucide::Type,
+    Lucide::Heading1,
+    Lucide::Heading2,
+    Lucide::Heading3,
+    Lucide::TextQuote,
+];
 /// The font sizes the picker offers, in design units.
 pub const SIZES: [f32; 8] = [10.0, 12.0, 14.0, 16.0, 18.0, 24.0, 32.0, 48.0];
 /// The image wraps the picker offers, in order.
@@ -28,6 +37,8 @@ pub const WRAPS: [&str; 4] = ["Inline", "Float left", "Float right", "Top and bo
 
 const TOOLBAR_HEIGHT: Dip = Dip(36.0);
 const FORMAT_HEIGHT: Dip = Dip(34.0);
+/// The width of an icon-only button in the formatting row.
+const ICON_WIDTH: Dip = Dip(32.0);
 
 /// The toolbar as a layout entry.
 struct ToolbarPane(Toolbar<Msg>);
@@ -63,6 +74,8 @@ pub struct Tools {
     aligns: [Rc<ToggleButton<Msg>>; 4],
     lists: [Rc<ToggleButton<Msg>>; 2],
     wrap: Rc<ComboBox<Msg>>,
+    /// The icon-only buttons' names, shown on hover.
+    _tips: Vec<Tooltip<Msg>>,
 }
 
 impl Tools {
@@ -119,10 +132,32 @@ impl Tools {
 
 const ALIGNS: [Align; 4] = [Align::Left, Align::Center, Align::Right, Align::Justify];
 
-fn toggle(ui: &Ui<Msg>, text: &str, msg: fn() -> Msg) -> Result<Rc<ToggleButton<Msg>>> {
-    Ok(Rc::new(
-        ToggleButton::auto(ui, text)?.on_toggle(move |_| Some(msg())),
-    ))
+/// An icon-only toggle that raises `msg` and is named `tip` on hover.
+fn toggle(
+    ui: &Ui<Msg>,
+    tips: &mut Vec<Tooltip<Msg>>,
+    (icon, tip): (Lucide, &str),
+    msg: fn() -> Msg,
+) -> Result<Rc<ToggleButton<Msg>>> {
+    let button = ToggleButton::auto(ui, "")?
+        .icon(icon)
+        .on_toggle(move |_| Some(msg()));
+    tips.push(Tooltip::attach(ui, button.id(), tip)?);
+    Ok(Rc::new(button))
+}
+
+/// An icon-only push button that raises `msg` and is named `tip` on hover.
+fn push(
+    ui: &Ui<Msg>,
+    tips: &mut Vec<Tooltip<Msg>>,
+    (icon, tip): (Lucide, &str),
+    msg: fn() -> Msg,
+) -> Result<Button<Msg>> {
+    let button = Button::auto(ui, "")?
+        .icon(icon)
+        .on_click(move || Some(msg()));
+    tips.push(Tooltip::attach(ui, button.id(), tip)?);
+    Ok(button)
 }
 
 fn picker(ui: &Ui<Msg>, items: &[&str], msg: fn(usize) -> Msg) -> Result<Rc<ComboBox<Msg>>> {
@@ -163,6 +198,9 @@ pub fn build(ui: &Ui<Msg>) -> Result<Wordpad> {
         });
 
     let block = picker(ui, &BLOCKS, Msg::Block)?;
+    for (index, icon) in BLOCK_ICONS.into_iter().enumerate() {
+        block.set_item_icon(index, Some(icon.into()));
+    }
     let size_labels: Vec<String> = SIZES.iter().map(|s| format!("{s}")).collect();
     let size_refs: Vec<&str> = size_labels.iter().map(String::as_str).collect();
     let size = picker(ui, &size_refs, Msg::Size)?;
@@ -170,24 +208,46 @@ pub fn build(ui: &Ui<Msg>) -> Result<Wordpad> {
     let wrap = picker(ui, &WRAPS, Msg::Wrap)?;
     wrap.set_enabled(false);
 
+    let mut tips = Vec::new();
+    let t = &mut tips;
     let marks = [
-        toggle(ui, "B", || Msg::Toggle(Mark::Bold))?,
-        toggle(ui, "I", || Msg::Toggle(Mark::Italic))?,
-        toggle(ui, "U", || Msg::Toggle(Mark::Underline))?,
-        toggle(ui, "S", || Msg::Toggle(Mark::Strike))?,
+        toggle(ui, t, (Lucide::Bold, "Bold (Ctrl+B)"), || {
+            Msg::Toggle(Mark::Bold)
+        })?,
+        toggle(ui, t, (Lucide::Italic, "Italic (Ctrl+I)"), || {
+            Msg::Toggle(Mark::Italic)
+        })?,
+        toggle(ui, t, (Lucide::Underline, "Underline (Ctrl+U)"), || {
+            Msg::Toggle(Mark::Underline)
+        })?,
+        toggle(ui, t, (Lucide::Strikethrough, "Strikethrough"), || {
+            Msg::Toggle(Mark::Strike)
+        })?,
     ];
     let aligns = [
-        toggle(ui, "Left", || Msg::Align(Align::Left))?,
-        toggle(ui, "Center", || Msg::Align(Align::Center))?,
-        toggle(ui, "Right", || Msg::Align(Align::Right))?,
-        toggle(ui, "Justify", || Msg::Align(Align::Justify))?,
+        toggle(ui, t, (Lucide::TextAlignStart, "Align left"), || {
+            Msg::Align(Align::Left)
+        })?,
+        toggle(ui, t, (Lucide::TextAlignCenter, "Centre"), || {
+            Msg::Align(Align::Center)
+        })?,
+        toggle(ui, t, (Lucide::TextAlignEnd, "Align right"), || {
+            Msg::Align(Align::Right)
+        })?,
+        toggle(ui, t, (Lucide::TextAlignJustify, "Justify"), || {
+            Msg::Align(Align::Justify)
+        })?,
     ];
     let lists = [
-        toggle(ui, "Bullets", || Msg::List(ListKind::Bullet))?,
-        toggle(ui, "Numbers", || Msg::List(ListKind::Numbered))?,
+        toggle(ui, t, (Lucide::List, "Bulleted list"), || {
+            Msg::List(ListKind::Bullet)
+        })?,
+        toggle(ui, t, (Lucide::ListOrdered, "Numbered list"), || {
+            Msg::List(ListKind::Numbered)
+        })?,
     ];
-    let indent = Button::auto(ui, "Indent")?.on_click(|| Some(Msg::Indent));
-    let outdent = Button::auto(ui, "Outdent")?.on_click(|| Some(Msg::Outdent));
+    let indent = push(ui, t, (Lucide::IndentIncrease, "Indent"), || Msg::Indent)?;
+    let outdent = push(ui, t, (Lucide::IndentDecrease, "Outdent"), || Msg::Outdent)?;
 
     let status = Rc::new(StatusBar::auto(ui, &["New document", "Saved"])?);
 
@@ -231,20 +291,20 @@ pub fn build(ui: &Ui<Msg>) -> Result<Wordpad> {
                 .child((&block).width(Dip(120.0)))
                 .child((&size).width(Dip(64.0)))
                 .child(spacer().width(Dip(6.0)))
-                .child((&marks[0]).width(Dip(32.0)))
-                .child((&marks[1]).width(Dip(32.0)))
-                .child((&marks[2]).width(Dip(32.0)))
-                .child((&marks[3]).width(Dip(32.0)))
+                .child((&marks[0]).width(ICON_WIDTH))
+                .child((&marks[1]).width(ICON_WIDTH))
+                .child((&marks[2]).width(ICON_WIDTH))
+                .child((&marks[3]).width(ICON_WIDTH))
                 .child(spacer().width(Dip(6.0)))
-                .child((&aligns[0]).width(Dip(52.0)))
-                .child((&aligns[1]).width(Dip(60.0)))
-                .child((&aligns[2]).width(Dip(52.0)))
-                .child((&aligns[3]).width(Dip(60.0)))
+                .child((&aligns[0]).width(ICON_WIDTH))
+                .child((&aligns[1]).width(ICON_WIDTH))
+                .child((&aligns[2]).width(ICON_WIDTH))
+                .child((&aligns[3]).width(ICON_WIDTH))
                 .child(spacer().width(Dip(6.0)))
-                .child((&lists[0]).width(Dip(68.0)))
-                .child((&lists[1]).width(Dip(68.0)))
-                .child(indent.width(Dip(64.0)))
-                .child(outdent.width(Dip(64.0)))
+                .child((&lists[0]).width(ICON_WIDTH))
+                .child((&lists[1]).width(ICON_WIDTH))
+                .child(outdent.width(ICON_WIDTH))
+                .child(indent.width(ICON_WIDTH))
                 .child(spacer().width(Dip(6.0)))
                 .child((&wrap).width(Dip(120.0)))
                 .child(spacer())
@@ -264,6 +324,7 @@ pub fn build(ui: &Ui<Msg>) -> Result<Wordpad> {
             aligns,
             lists,
             wrap,
+            _tips: tips,
         },
         status,
         open_dialog,

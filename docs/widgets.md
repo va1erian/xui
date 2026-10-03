@@ -54,7 +54,7 @@ Event builders return `Self`, so they chain at construction.
 |---|---|---|
 | `Button<M>` | `Button::new(ui, rect, text)` | `on_click`, `icon(Icon)` |
 | `CheckBox<M>` | `CheckBox::new(ui, rect, text)` | `on_toggle(bool)`; `is_checked`/`set_checked` |
-| `ToggleButton<M>` | `ToggleButton::new(ui, rect, text)` | `on_toggle(bool)` |
+| `ToggleButton<M>` | `ToggleButton::new(ui, rect, text)` | `on_toggle(bool)`, `icon(IconRef)` |
 | `RadioGroup<M>` | `RadioGroup::new(ui, rect, &[labels])` | `on_select(usize)`; `selected`/`select` |
 | `ColorPicker<M>` | `ColorPicker::new(ui, rect, &[Color])` | `columns(n)`, `selected(Color)`, `on_select(Color)` |
 | `ColorPanel<M>` | `ColorPanel::new(ui, rect)` | tabbed picker: `with_color(Color)`, `color`, `set_color`, `select_tab`, `on_change(Color)`, `on_commit(Color)`; `ColorField`/`HueSlider` are reusable parts |
