@@ -4,16 +4,32 @@
 //!
 //! Nothing here shapes text or touches a backend.
 
+mod compare;
+mod edit;
+pub mod fragment;
+pub mod grapheme;
+pub mod history;
 pub mod object;
+pub mod ops;
 pub mod paragraph;
+pub mod patch;
+mod pieces;
+pub mod selection;
 pub mod style;
+pub mod summary;
 
+pub use fragment::Fragment;
+pub use history::{COALESCE_GAP, EditContext, History, Transaction};
 pub use object::{InlineImage, OBJECT_CHAR, ObjectId, ObjectTable, Side, Wrap};
+pub use ops::{EditError, EditOp, Slice};
 pub use paragraph::{Paragraph, Span};
+pub use patch::{CharStylePatch, ParaStylePatch};
+pub use selection::{DocRange, Selection};
 pub use style::{
     Align, Baseline, BlockKind, CharStyle, CharStyleId, LineSpacing, ListItem, ListKind, ParaStyle,
     ParaStyleId, StyleTable, TextColor,
 };
+pub use summary::{StyleSummary, Tri};
 
 /// Which way a caret leans at a position shared by two lines (a soft wrap):
 /// `Upstream` draws it at the end of the earlier line.
