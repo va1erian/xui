@@ -129,6 +129,14 @@ impl BackendNode {
             sys::edit::set_cue(self.hwnd, cue, true);
         }
     }
+
+    /// Masks (or unmasks) a native edit's text; other kinds have no text to
+    /// mask.
+    pub(super) fn set_password(&self, password: bool) {
+        if self.kind == NodeKind::Edit {
+            sys::edit::set_password(self.hwnd, password);
+        }
+    }
 }
 
 /// A real `EDIT` control: it edits itself (IME included) and reports changes to

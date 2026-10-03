@@ -4,6 +4,15 @@
 
 ### Additions
 
+- **Password fields.** `Edit::password(true)` masks a single-line field for a
+  secret: it paints one bullet (U+2022) per character, with the caret,
+  selection and clicks measured on the bullets; refuses copy and cut (paste and
+  undo still work); treats the text as one word for Ctrl+arrows,
+  Ctrl+Backspace/Delete and double-click; and reports its `text` property as
+  bullets. `text()` and `on_change` still deliver the real text, and the cue
+  still shows while it is empty. `Edit::is_password` reads the mode. On Win32
+  the native `EDIT` gets `EM_SETPASSWORDCHAR` through the new
+  `Backend::set_password` (a no-op by default) and `Ui::set_password`.
 - **Midnight theme and decoration tokens.** `Theme::midnight()` is a navy dark
   theme with vertical gradients, bevelled cards and controls, round swatches
   and an accent glow on checked indicators. `Theme` gains `background_end`,
