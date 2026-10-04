@@ -174,6 +174,15 @@ impl HeadlessBackend {
         self.state.borrow().nodes.contains_key(&id.raw())
     }
 
+    /// The widget `id` was created under, or `None` for a node parented to
+    /// the window (or one that does not exist).
+    pub fn parent_of(&self, id: WidgetId) -> Option<WidgetId> {
+        match self.state.borrow().nodes.get(&id.raw())?.parent {
+            ParentRef::Widget(parent) => Some(parent),
+            ParentRef::Window(_) => None,
+        }
+    }
+
     /// How many batched move calls were made.
     pub fn move_calls(&self) -> u32 {
         self.state.borrow().moves

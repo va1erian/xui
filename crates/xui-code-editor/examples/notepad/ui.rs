@@ -9,12 +9,14 @@ use std::rc::Rc;
 use xui_code_editor::{Editor, FontConfig, Options};
 use xui_core::Dip;
 use xui_core::app::Ui;
-use xui_core::arrange::{LayoutExt, column, row, widget};
+use xui_core::arrange::{
+    Handle, Layout, LayoutExt, build as build_with, button, checkbox, column, edit, label, row,
+    status_bar,
+};
 use xui_core::backend::{Result, WidgetId};
 use xui_core::geometry::{Rect, Size};
-use xui_core::widget::{
-    Button, CheckBox, Dialog, Edit, FileDialog, Label, Menu, MenuId, Placeable, StatusBar,
-};
+use xui_core::layout::Constraints;
+use xui_core::widget::{Dialog, FileDialog, Menu, MenuId, Placeable};
 
 use crate::app::{FindBar, Msg, Notepad};
 
@@ -68,7 +70,8 @@ impl<M: 'static> Placeable<M> for MenuPane<M> {
         self.0.id().expect("a menu bar owns a node")
     }
 
-    fn natural_size(&self, _ui: &Ui<M>, dpi: u32) -> Size {
+    fn measure(&self, _ui: &Ui<M>, constraints: Constraints) -> Size {
+        let dpi = constraints.dpi;
         Size::new(0, MENU_HEIGHT.to_px(dpi).value())
     }
 }
@@ -81,15 +84,76 @@ impl<M: 'static> Placeable<M> for EditorPane<M> {
         self.0.id()
     }
 
-    fn natural_size(&self, _ui: &Ui<M>, _dpi: u32) -> Size {
+    fn measure(&self, _ui: &Ui<M>, _constraints: Constraints) -> Size {
         Size::new(0, 0)
     }
 }
 
 /// Builds the app's widgets and mounts the layout.
 pub fn build(ui: &Ui<Msg>) -> Result<Notepad> {
-    // The editor is a monospace grid: the default UI font is proportional and
-    // would space the glyphs apart.
+    let editor_pane = Handle::new();
+    let find_bar = FindBar::default();
+    let status = Handle::new();
+
+    let confirm = Dialog::confirm(
+        ui,
+        "Discard unsaved changes?",
+        "This document has unsaved changes. Discard them?",
+    )?
+    .on_action(dialog_msg);
+    let message = Dialog::message(ui, "Error", "")?.on_action(dialog_msg);
+
+    let dialog_open = Rc::new(Cell::new(false));
+    let find_open = Rc::new(Cell::new(false));
+
+    let open_dialog = FileDialog::open_file(ui, "Open")?
+        .require_existing(true)
+        .on_accept(|path| Some(Msg::OpenChosen(path)))
+        .on_cancel(refocus(&editor_pane, &dialog_open));
+    let save_dialog = FileDialog::save_file(ui, "Save As")?
+        .filter("Text files", &["txt", "md", "rs"])
+        .filter("All files", &[])
+        .on_accept(|path| Some(Msg::SaveChosen(path)))
+        .on_cancel(refocus(&editor_pane, &dialog_open));
+    ui.on_close(|| Some(Msg::CloseRequested));
+    {
+        let dialog_open = Rc::clone(&dialog_open);
+        let find_open = Rc::clone(&find_open);
+        ui.on_key(move |key, modifiers| {
+            crate::app::shortcut(key, modifiers, &dialog_open, &find_open)
+        });
+    }
+
+    ui.root(column().children((
+        build_with(menu_bar).height(MENU_HEIGHT),
+        find_row(&find_bar).fixed(FIND_HEIGHT),
+        build_with(editor).bind(&editor_pane).fill(1),
+        status_bar(&["Ln 1, Col 1", "Sel 0", "LF", "Saved"]).bind(&status),
+    )))?;
+    find_bar.set_visible(ui, false);
+
+    let editor = Rc::clone(&editor_pane.get().0);
+    editor.focus();
+
+    Ok(Notepad {
+        editor,
+        document: xui_code_editor::Document::untitled(),
+        search: Default::default(),
+        find_bar,
+        status,
+        open_dialog,
+        save_dialog,
+        confirm,
+        message,
+        pending: crate::app::Pending::None,
+        dialog_open,
+        find_open,
+    })
+}
+
+/// Creates the editor: a monospace grid, since the default UI font is
+/// proportional and would space the glyphs apart.
+fn editor(ui: &Ui<Msg>) -> Result<EditorPane<Msg>> {
     let options = Options {
         font: FontConfig {
             family: Some("monospace".to_owned()),
@@ -97,10 +161,13 @@ pub fn build(ui: &Ui<Msg>) -> Result<Notepad> {
         },
         ..Options::default()
     };
-    let editor = Rc::new(
-        Editor::with_options(ui, Rect::default(), options)?.on_change(|_text| Some(Msg::Edited)),
-    );
+    let editor =
+        Editor::with_options(ui, Rect::default(), options)?.on_change(|_text| Some(Msg::Edited));
+    Ok(EditorPane(Rc::new(editor)))
+}
 
+/// Creates the File and Edit menu bar.
+fn menu_bar(ui: &Ui<Msg>) -> Result<MenuPane<Msg>> {
     let menu = Menu::bar(ui, Rect::default())?
         .on_select(menu_msg)
         .build(|bar| {
@@ -126,140 +193,50 @@ pub fn build(ui: &Ui<Msg>) -> Result<Notepad> {
                 edit.item(REPLACE, "&Replace...");
             });
         });
-
-    let find_bar = build_find_bar(ui)?;
-    find_bar.set_visible(ui, false);
-
-    let status = Rc::new(StatusBar::auto(
-        ui,
-        &["Ln 1, Col 1", "Sel 0", "LF", "Saved"],
-    )?);
-
-    let confirm = Dialog::confirm(
-        ui,
-        "Discard unsaved changes?",
-        "This document has unsaved changes. Discard them?",
-    )?
-    .on_action(dialog_msg);
-    let message = Dialog::message(ui, "Error", "")?.on_action(dialog_msg);
-
-    let dialog_open = Rc::new(Cell::new(false));
-    let find_open = Rc::new(Cell::new(false));
-
-    let cancel = {
-        let editor = Rc::clone(&editor);
-        let dialog_open = Rc::clone(&dialog_open);
-        move || {
-            dialog_open.set(false);
-            editor.focus();
-            None
-        }
-    };
-    let open_dialog = FileDialog::open_file(ui, "Open")?
-        .require_existing(true)
-        .on_accept(|path| Some(Msg::OpenChosen(path)))
-        .on_cancel(cancel);
-    let cancel = {
-        let editor = Rc::clone(&editor);
-        let dialog_open = Rc::clone(&dialog_open);
-        move || {
-            dialog_open.set(false);
-            editor.focus();
-            None
-        }
-    };
-    let save_dialog = FileDialog::save_file(ui, "Save As")?
-        .filter("Text files", &["txt", "md", "rs"])
-        .filter("All files", &[])
-        .on_accept(|path| Some(Msg::SaveChosen(path)))
-        .on_cancel(cancel);
-    ui.on_close(|| Some(Msg::CloseRequested));
-    {
-        let dialog_open = Rc::clone(&dialog_open);
-        let find_open = Rc::clone(&find_open);
-        ui.on_key(move |key, modifiers| {
-            crate::app::shortcut(key, modifiers, &dialog_open, &find_open)
-        });
-    }
-
-    let root = column()
-        .child(widget(MenuPane(menu)).height(MENU_HEIGHT))
-        .child(
-            row()
-                .spacing(Dip(4.0))
-                .child(&find_bar.query)
-                .child(&find_bar.replacement)
-                .child(&find_bar.buttons[0])
-                .child(&find_bar.buttons[1])
-                .child(&find_bar.buttons[2])
-                .child(&find_bar.buttons[3])
-                .child(&find_bar.regex)
-                .child(&find_bar.case)
-                .child(&find_bar.status)
-                .fixed(FIND_HEIGHT),
-        )
-        .child(widget(EditorPane(Rc::clone(&editor))).fill(1))
-        .child(&status);
-    let mounted = ui.mount(root)?;
-
-    editor.focus();
-
-    Ok(Notepad {
-        editor,
-        document: xui_code_editor::Document::untitled(),
-        search: Default::default(),
-        find_bar,
-        status,
-        open_dialog,
-        save_dialog,
-        confirm,
-        message,
-        pending: crate::app::Pending::None,
-        dialog_open,
-        find_open,
-        _mounted: mounted,
-    })
+    Ok(MenuPane(menu))
 }
 
-/// The find/replace bar's widgets, wired to their messages.
-fn build_find_bar(ui: &Ui<Msg>) -> Result<FindBar> {
-    let query = Rc::new(
-        Edit::auto(ui, "")?
-            .cue("Find")
-            .on_change(|text| Some(Msg::QueryChanged(text.to_string()))),
-    );
-    let replacement = Rc::new(Edit::auto(ui, "")?.cue("Replace"));
-    let status = Rc::new(Label::auto(ui, "")?);
-    let regex = Rc::new(CheckBox::auto(ui, "Regex")?.on_toggle(|on| Some(Msg::RegexToggled(on))));
-    let case =
-        Rc::new(CheckBox::auto(ui, "Match case")?.on_toggle(|on| Some(Msg::CaseToggled(on))));
-    let next = Rc::new(Button::auto(ui, "Next")?.on_click(|| Some(Msg::FindNext)));
-    let prev = Rc::new(Button::auto(ui, "Previous")?.on_click(|| Some(Msg::FindPrevious)));
-    let replace = Rc::new(Button::auto(ui, "Replace")?.on_click(|| Some(Msg::ReplaceCurrent)));
-    let replace_all = Rc::new(Button::auto(ui, "Replace all")?.on_click(|| Some(Msg::ReplaceAll)));
+/// The find/replace bar's widgets, wired to their messages and bound to
+/// `bar`'s handles.
+fn find_row(bar: &FindBar) -> Layout<Msg> {
+    let [next, prev, replace, replace_all] = &bar.buttons;
+    row().gap(4).children((
+        edit()
+            .placeholder("Find")
+            .on_change(Msg::QueryChanged)
+            .bind(&bar.query),
+        edit().placeholder("Replace").bind(&bar.replacement),
+        button("Next").on_click(Msg::FindNext).bind(next),
+        button("Previous").on_click(Msg::FindPrevious).bind(prev),
+        button("Replace")
+            .on_click(Msg::ReplaceCurrent)
+            .bind(replace),
+        button("Replace all")
+            .on_click(Msg::ReplaceAll)
+            .bind(replace_all),
+        checkbox("Regex")
+            .on_toggle(Msg::RegexToggled)
+            .bind(&bar.regex),
+        checkbox("Match case")
+            .on_toggle(Msg::CaseToggled)
+            .bind(&bar.case),
+        label("").bind(&bar.status),
+    ))
+}
 
-    let nodes = [
-        query.id(),
-        replacement.id(),
-        next.id(),
-        prev.id(),
-        replace.id(),
-        replace_all.id(),
-        regex.id(),
-        case.id(),
-        status.id(),
-    ]
-    .to_vec();
-
-    Ok(FindBar {
-        query,
-        replacement,
-        status,
-        regex,
-        case,
-        buttons: [next, prev, replace, replace_all],
-        nodes,
-    })
+/// A file dialog's cancel handler: it closes the dialog state and gives the
+/// editor its focus back.
+fn refocus(
+    editor: &Handle<EditorPane<Msg>>,
+    dialog_open: &Rc<Cell<bool>>,
+) -> impl Fn() -> Option<Msg> + 'static {
+    let editor = editor.clone();
+    let dialog_open = Rc::clone(dialog_open);
+    move || {
+        dialog_open.set(false);
+        editor.get().0.focus();
+        None
+    }
 }
 
 /// Maps a dialog dismissal to a message.

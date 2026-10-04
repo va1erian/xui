@@ -54,6 +54,21 @@ impl Dip {
     }
 }
 
+/// A bare number is a design value, so a builder can take `8` for
+/// `dip(8.0)`.
+impl From<f32> for Dip {
+    fn from(value: f32) -> Dip {
+        Dip(value)
+    }
+}
+
+/// A whole design value, so a builder can take `8` for `dip(8.0)`.
+impl From<i32> for Dip {
+    fn from(value: i32) -> Dip {
+        Dip(value as f32)
+    }
+}
+
 impl Px {
     /// Creates a device-pixel value.
     pub const fn new(value: i32) -> Px {

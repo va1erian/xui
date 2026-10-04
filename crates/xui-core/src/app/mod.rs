@@ -11,6 +11,7 @@
 //! a drain that runs while it is borrowed puts its message back.
 
 mod design;
+mod launch;
 mod proxy;
 mod runtime;
 mod secondary;
@@ -18,6 +19,7 @@ mod secondary;
 mod tests;
 mod ui;
 
+pub use launch::{Launch, app};
 pub use proxy::Proxy;
 pub use runtime::run_app;
 pub use secondary::WindowHandle;
@@ -101,6 +103,9 @@ pub(crate) struct Core<M> {
     /// opener reads it after the child's loop returns; `Any` erases its type
     /// until then.
     result: RefCell<Option<Box<dyn Any>>>,
+    /// Values kept alive as long as the window: the layout [`Ui::root`]
+    /// mounted.
+    retained: RefCell<Vec<Box<dyn Any>>>,
 }
 
 impl<M> Core<M> {
@@ -125,6 +130,7 @@ impl<M> Core<M> {
             layout_hooks: RefCell::new(Vec::new()),
             next_layout_hook: Cell::new(0),
             result: RefCell::new(None),
+            retained: RefCell::new(Vec::new()),
         })
     }
 
@@ -266,6 +272,18 @@ impl<M> Core<M> {
         for hook in hooks {
             hook();
         }
+    }
+
+    /// Keeps `value` alive until [`Core::release_retained`].
+    pub(crate) fn retain(&self, value: Box<dyn Any>) {
+        self.retained.borrow_mut().push(value);
+    }
+
+    /// Drops what [`Core::retain`] kept, outside the borrow: a retained layout
+    /// removes its hooks from this core as it drops.
+    pub(crate) fn release_retained(&self) {
+        let retained = self.retained.take();
+        drop(retained);
     }
 
     /// Stores the value a modal child closes with.

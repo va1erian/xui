@@ -15,6 +15,7 @@ use super::{
 use crate::app::Ui;
 use crate::backend::{TextStyle, WidgetId};
 use crate::geometry::{Rect, Size};
+use crate::layout::{Constraints, Insets};
 use crate::units::Dip;
 
 /// The design size of widget text.
@@ -41,16 +42,26 @@ const STATUS_HEIGHT: Dip = Dip(24.0);
 /// A widget a layout can place.
 ///
 /// A capability trait, not a base type: it needs only the widget's node and a
-/// preferred size. The default size is the widget's current bounds, so a widget
+/// measured size. The default size is the widget's current bounds, so a widget
 /// that has not opted in keeps whatever size it was built at.
 pub trait Placeable<M: 'static> {
     /// The widget's node.
     fn id(&self) -> WidgetId;
 
-    /// The size the widget would like at `dpi`, in device pixels.
-    fn natural_size(&self, ui: &Ui<M>, dpi: u32) -> Size {
-        let _ = dpi;
+    /// The size the widget would like within `constraints`, in device pixels.
+    /// A widget whose height depends on its width (wrapping text) reads
+    /// [`Constraints::max_width`]; the result may exceed a bound when the
+    /// widget cannot shrink to it.
+    fn measure(&self, ui: &Ui<M>, constraints: Constraints) -> Size {
+        let _ = constraints;
         ui.bounds(self.id()).size()
+    }
+
+    /// For a widget that frames other widgets (a group box), the insets
+    /// between its edge and the content a layout places inside it.
+    fn content_insets(&self, ui: &Ui<M>) -> Insets {
+        let _ = ui;
+        Insets::default()
     }
 
     /// Reacts to the layout having placed the widget's node at `rect` (device
@@ -83,7 +94,8 @@ impl<M: 'static> Placeable<M> for Label<M> {
         Label::id(self)
     }
 
-    fn natural_size(&self, ui: &Ui<M>, dpi: u32) -> Size {
+    fn measure(&self, ui: &Ui<M>, constraints: Constraints) -> Size {
+        let dpi = constraints.dpi;
         let text = text_size(ui, &self.text(), dpi);
         Size::new(text.width, text.height + 2 * px(TEXT_PADDING, dpi))
     }
@@ -94,7 +106,8 @@ impl<M: 'static> Placeable<M> for Hyperlink<M> {
         Hyperlink::id(self)
     }
 
-    fn natural_size(&self, ui: &Ui<M>, dpi: u32) -> Size {
+    fn measure(&self, ui: &Ui<M>, constraints: Constraints) -> Size {
+        let dpi = constraints.dpi;
         let text = text_size(ui, &self.text(), dpi);
         Size::new(text.width, text.height + 2 * px(TEXT_PADDING, dpi))
     }
@@ -108,7 +121,8 @@ macro_rules! labelled_button {
                 $widget::id(self)
             }
 
-            fn natural_size(&self, ui: &Ui<M>, dpi: u32) -> Size {
+            fn measure(&self, ui: &Ui<M>, constraints: Constraints) -> Size {
+        let dpi = constraints.dpi;
                 let width = text_size(ui, &self.text(), dpi).width + 2 * px(BUTTON_PADDING, dpi);
                 row(width.max(px(BUTTON_MIN_WIDTH, dpi)), dpi)
             }
@@ -122,7 +136,8 @@ impl<M: 'static> Placeable<M> for CheckBox<M> {
         CheckBox::id(self)
     }
 
-    fn natural_size(&self, ui: &Ui<M>, dpi: u32) -> Size {
+    fn measure(&self, ui: &Ui<M>, constraints: Constraints) -> Size {
+        let dpi = constraints.dpi;
         row(
             text_size(ui, &self.text(), dpi).width + px(CHECK_LEAD, dpi),
             dpi,
@@ -138,7 +153,8 @@ macro_rules! field {
                 $widget::id(self)
             }
 
-            fn natural_size(&self, _ui: &Ui<M>, dpi: u32) -> Size {
+            fn measure(&self, _ui: &Ui<M>, constraints: Constraints) -> Size {
+        let dpi = constraints.dpi;
                 row(px(FIELD_WIDTH, dpi), dpi)
             }
         }
@@ -151,7 +167,8 @@ impl<M: 'static> Placeable<M> for MultilineEdit<M> {
         MultilineEdit::id(self)
     }
 
-    fn natural_size(&self, _ui: &Ui<M>, dpi: u32) -> Size {
+    fn measure(&self, _ui: &Ui<M>, constraints: Constraints) -> Size {
+        let dpi = constraints.dpi;
         Size::new(px(FIELD_WIDTH, dpi), 3 * px(CONTROL_HEIGHT, dpi))
     }
 }
@@ -161,7 +178,8 @@ impl<M: 'static> Placeable<M> for ProgressBar<M> {
         ProgressBar::id(self)
     }
 
-    fn natural_size(&self, _ui: &Ui<M>, dpi: u32) -> Size {
+    fn measure(&self, _ui: &Ui<M>, constraints: Constraints) -> Size {
+        let dpi = constraints.dpi;
         Size::new(px(FIELD_WIDTH, dpi), px(PROGRESS_HEIGHT, dpi))
     }
 }
@@ -171,7 +189,8 @@ impl<M: 'static> Placeable<M> for Separator<M> {
         Separator::id(self)
     }
 
-    fn natural_size(&self, _ui: &Ui<M>, dpi: u32) -> Size {
+    fn measure(&self, _ui: &Ui<M>, constraints: Constraints) -> Size {
+        let dpi = constraints.dpi;
         let line = px(Dip(1.0), dpi).max(1);
         match self.orientation() {
             Orientation::Horizontal => Size::new(0, line),
@@ -185,7 +204,8 @@ impl<M: 'static> Placeable<M> for StatusBar<M> {
         StatusBar::id(self)
     }
 
-    fn natural_size(&self, _ui: &Ui<M>, dpi: u32) -> Size {
+    fn measure(&self, _ui: &Ui<M>, constraints: Constraints) -> Size {
+        let dpi = constraints.dpi;
         Size::new(px(STATUS_WIDTH, dpi), px(STATUS_HEIGHT, dpi))
     }
 }

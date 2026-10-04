@@ -12,8 +12,7 @@ use std::rc::Rc;
 
 use xui_code_editor::{Document, Editor, SearchState};
 use xui_core::app::Ui;
-use xui_core::arrange::Mounted;
-use xui_core::backend::WidgetId;
+use xui_core::arrange::Handle;
 use xui_core::message::{Key, Modifiers};
 use xui_core::widget::{
     Button, CheckBox, Dialog, DialogAction, Edit, FileDialog, Label, StatusBar,
@@ -22,6 +21,7 @@ use xui_core::widget::{
 use crate::commands;
 
 /// The app's message: one variant per user intent.
+#[derive(Clone)]
 pub enum Msg {
     /// A menu command or shortcut asked for a new document.
     New,
@@ -97,35 +97,42 @@ pub enum Pending {
 
 /// The find/replace bar's widgets. They are hidden together and shown after
 /// Find/Replace.
+#[derive(Default)]
 pub struct FindBar {
     /// The query field.
-    pub query: Rc<Edit<Msg>>,
+    pub query: Handle<Edit<Msg>>,
     /// The replacement field.
-    pub replacement: Rc<Edit<Msg>>,
+    pub replacement: Handle<Edit<Msg>>,
     /// The "3 of 17" or error label.
-    pub status: Rc<Label<Msg>>,
+    pub status: Handle<Label<Msg>>,
     /// The Regex check box.
-    pub regex: Rc<CheckBox<Msg>>,
+    pub regex: Handle<CheckBox<Msg>>,
     /// The Match case check box.
-    pub case: Rc<CheckBox<Msg>>,
+    pub case: Handle<CheckBox<Msg>>,
     /// Next, Previous, Replace and Replace all buttons.
-    pub buttons: [Rc<Button<Msg>>; 4],
-    /// Every node in the bar, for one show/hide call.
-    pub nodes: Vec<WidgetId>,
+    pub buttons: [Handle<Button<Msg>>; 4],
 }
 
 impl FindBar {
     /// Shows or hides the whole bar; a mounted layout re-flows.
     pub fn set_visible(&self, ui: &Ui<Msg>, visible: bool) {
-        for id in &self.nodes {
-            ui.set_visible(*id, visible);
+        let fields = [
+            self.query.get().id(),
+            self.replacement.get().id(),
+            self.status.get().id(),
+            self.regex.get().id(),
+            self.case.get().id(),
+        ];
+        let buttons = self.buttons.iter().map(|button| button.get().id());
+        for id in fields.into_iter().chain(buttons) {
+            ui.set_visible(id, visible);
         }
     }
 
     /// The replacement text as typed.
     pub fn replacement_text(&self) -> String {
         use xui_core::widget::HasText;
-        self.replacement.text()
+        self.replacement.get().text()
     }
 }
 
@@ -140,7 +147,7 @@ pub struct Notepad {
     /// The find/replace bar.
     pub find_bar: FindBar,
     /// The status bar.
-    pub status: Rc<StatusBar<Msg>>,
+    pub status: Handle<StatusBar<Msg>>,
     /// The portable file picker for opening a file.
     pub open_dialog: FileDialog<Msg>,
     /// The portable file picker for Save As.
@@ -155,8 +162,6 @@ pub struct Notepad {
     pub dialog_open: Rc<Cell<bool>>,
     /// Whether the find bar is open, so Escape closes it.
     pub find_open: Rc<Cell<bool>>,
-    /// The mounted widget tree; dropping it destroys the widgets.
-    pub _mounted: Mounted<Msg>,
 }
 
 /// Maps a key to a shortcut, if it is one this app owns.

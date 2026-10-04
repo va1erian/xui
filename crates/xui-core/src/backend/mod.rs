@@ -368,6 +368,13 @@ pub trait Backend {
     /// A window's client area, in device pixels.
     fn client_rect(&self, window: WindowId) -> Rect;
 
+    /// The theme the platform asks apps to use (the desktop's dark mode and
+    /// accent), applied to every window before its app is built; `None`
+    /// keeps xui's light theme.
+    fn system_theme(&self) -> Option<Theme> {
+        None
+    }
+
     /// Applies a theme to a window and its nodes.
     fn set_theme(&self, window: WindowId, theme: &Theme);
 

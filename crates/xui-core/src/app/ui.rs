@@ -11,6 +11,7 @@ use crate::geometry::Rect;
 use crate::image::Image;
 use crate::theme::Theme;
 
+mod every;
 mod node_ops;
 
 /// The widget layer's handle to a top-level window.

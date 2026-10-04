@@ -27,6 +27,23 @@ impl<M: 'static> ListView<M> {
         self.replace_rows(rows);
     }
 
+    /// Replaces the rows with a fresh read of the same data (a live table):
+    /// unlike [`ListView::set_model`], the scroll position is kept, clamped to
+    /// the new rows, so a periodic refresh does not jump to the top.
+    pub fn refresh_model(&self, model: impl ListModel + 'static) {
+        let offset = self.state.borrow().offset;
+        self.set_model(model);
+        let len = self.state.borrow().rows.len();
+        self.state.borrow_mut().offset = offset.min(len.saturating_sub(1));
+        bar::layout(
+            self.control.ui(),
+            self.control.id(),
+            &self.bar,
+            &self.state.borrow(),
+        );
+        self.control.invalidate();
+    }
+
     /// Replaces the rows with plain text. A selection past the new end moves
     /// to the last row.
     pub fn set_items(&self, items: &[&str]) {

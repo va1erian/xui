@@ -1,30 +1,20 @@
-//! A small form built with `xui_core::arrange`: no coordinates and no
-//! per-widget fields. Resize the window and the form re-flows; toggle the
-//! check box and the hint row appears and disappears without leaving a gap.
+//! A small form built from layouts and builders: no coordinates, no `ui`
+//! argument per widget, and fields only for the widgets the app changes.
+//! Resize the window and the form re-flows; toggle the check box and the hint
+//! row appears and disappears without leaving a gap.
 //!
 //! Run with:
 //!
 //! ```text
-//! XUI_BACKEND=canvas cargo run -p xui --features canvas --example layout
+//! cargo run -p xui --example layout
 //! ```
 //!
-//! `XUI_DEMO_AUTOCLOSE_MS` makes it quit itself.
+//! `XUI_DEMO_AUTOCLOSE_MS` makes it quit itself; `XUI_SNAPSHOT=<dir>` saves a
+//! light and a dark screenshot instead of opening a window.
 
-use std::rc::Rc;
+use xui::prelude::*;
 
-use xui_core::app::{App, Ui, run_app};
-use xui_core::arrange::{LayoutExt, Mounted, column, row, spacer};
-use xui_core::backend::{PlatformSpec, Result};
-use xui_core::widget::{Button, CheckBox, Edit, HasText, Label, ProgressBar, Slider};
-use xui_core::{Dip, Insets, dip};
-
-// This demo needs only `backend` and `autoclose`; the DIP converter is for the
-// hand-placed demos.
-#[allow(dead_code)]
-#[path = "controls/support.rs"]
-mod support;
-use support::{autoclose, backend};
-
+#[derive(Clone)]
 enum Msg {
     Name(String),
     Loud(bool),
@@ -33,14 +23,13 @@ enum Msg {
     Quit,
 }
 
+#[derive(Default)]
 struct Form {
-    greeting: Rc<Label<Msg>>,
-    hint: Rc<Label<Msg>>,
-    volume: Rc<ProgressBar<Msg>>,
-    name: Rc<Edit<Msg>>,
+    greeting: Handle<Label<Msg>>,
+    hint: Handle<Label<Msg>>,
+    volume: Handle<ProgressBar<Msg>>,
+    name: Handle<Edit<Msg>>,
     loud: bool,
-    /// The whole widget tree: one field instead of one per widget.
-    _mounted: Mounted<Msg>,
 }
 
 impl Form {
@@ -51,7 +40,7 @@ impl Form {
         } else {
             format!("Hello, {name}")
         };
-        self.greeting.set_text(&greeting);
+        self.greeting.get().set_text(&greeting);
     }
 }
 
@@ -63,12 +52,12 @@ impl App for Form {
             Msg::Name(name) => self.greet(&name),
             Msg::Loud(loud) => {
                 self.loud = loud;
-                ui.set_visible(self.hint.id(), loud);
-                self.greet(&self.name.text());
+                ui.set_visible(self.hint.get().id(), loud);
+                self.greet(&self.name.get().text());
             }
-            Msg::Volume(value) => self.volume.set_value(value as i32),
+            Msg::Volume(value) => self.volume.get().set_value(value as i32),
             Msg::Reset => {
-                self.name.set_text("");
+                self.name.get().set_text("");
                 self.greet("");
             }
             Msg::Quit => ui.quit(),
@@ -78,56 +67,32 @@ impl App for Form {
     }
 }
 
-/// Builds the form. Constructor results go straight into the layout; the only
-/// `?` is for the widgets the app keeps a handle to.
-fn build(ui: &Ui<Msg>) -> Result<Form> {
-    let greeting = Rc::new(Label::auto(ui, "Hello, world")?);
-    let hint = Rc::new(Label::auto(ui, "Shouting is on")?);
-    let volume = Rc::new(ProgressBar::auto(ui, 100)?);
-    let name = Rc::new(Edit::auto(ui, "")?.on_change(|text| Some(Msg::Name(text.to_string()))));
-    ui.set_visible(hint.id(), false);
-
-    let root = column()
-        .margins(Insets::all(dip(16.0)))
-        .spacing(dip(8.0))
-        .child(&greeting)
-        .child(&name)
-        .child(
-            CheckBox::auto(ui, "Loud")
-                .map(|check| check.on_toggle(|checked| Some(Msg::Loud(checked)))),
-        )
-        .child(&hint)
-        .child(
-            Slider::auto(ui, 0.0, 100.0).map(|slider| slider.on_change(|v| Some(Msg::Volume(v)))),
-        )
-        .child(&volume)
-        .child(spacer())
-        .child(
-            row()
-                .spacing(dip(8.0))
-                .child(spacer())
-                .child(Button::auto(ui, "Reset").map(|b| b.on_click(|| Some(Msg::Reset))))
-                .child(Button::auto(ui, "Quit").map(|b| b.on_click(|| Some(Msg::Quit))))
-                .height(dip(28.0)),
-        );
-
-    Ok(Form {
-        greeting,
-        hint,
-        volume,
-        name,
-        loud: false,
-        _mounted: ui.mount(root)?,
-    })
-}
-
 fn main() -> Result<()> {
-    run_app(
-        backend(),
-        PlatformSpec::new("Layout demo").size(Dip(420.0), Dip(280.0)),
-        |ui| {
-            autoclose(ui, || Msg::Quit);
-            build(ui).expect("the form's widgets were created")
-        },
-    )
+    xui::app("Layout demo").size(420, 300).run(|ui| {
+        let form = Form::default();
+        ui.root(
+            column().padding(16).gap(8).children((
+                grid([Track::Auto, Track::Fill(1)]).gap(8).children((
+                    label("Name").align(Align::Center),
+                    edit()
+                        .placeholder("world")
+                        .bind(&form.name)
+                        .on_change(Msg::Name),
+                    label("Volume").align(Align::Center),
+                    slider(0.0, 100.0).on_change(Msg::Volume),
+                )),
+                label("Hello, world").title().bind(&form.greeting),
+                checkbox("Loud").on_toggle(Msg::Loud),
+                label("Shouting is on").caption().bind(&form.hint),
+                progress(100).bind(&form.volume),
+                spacer(),
+                row().gap(8).justify(Align::End).children((
+                    button("Reset").on_click(Msg::Reset),
+                    button("Quit").on_click(Msg::Quit),
+                )),
+            )),
+        )?;
+        ui.set_visible(form.hint.get().id(), false);
+        Ok(form)
+    })
 }

@@ -32,6 +32,7 @@ use xui_core::app::Ui;
 use xui_core::backend::WidgetId;
 use xui_core::backend::{NodeKind, NodeSpec, Result};
 use xui_core::geometry::{Point, Rect, Size};
+use xui_core::layout::Constraints;
 use xui_core::theme::{Theme, Themed};
 use xui_core::widget::Control;
 use xui_core::widget::Placeable;
@@ -253,7 +254,7 @@ impl<M: 'static> Placeable<M> for RichTextEditor<M> {
         self.control.id()
     }
 
-    fn natural_size(&self, _ui: &Ui<M>, _dpi: u32) -> Size {
+    fn measure(&self, _ui: &Ui<M>, _constraints: Constraints) -> Size {
         Size::new(0, 0)
     }
 }

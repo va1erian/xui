@@ -28,6 +28,7 @@ use super::scrollbar::{self, ScrollBar};
 use crate::app::Ui;
 use crate::backend::{NodeKind, NodeSpec, Result, WidgetId};
 use crate::geometry::{Point, Rect, Size};
+use crate::layout::Constraints;
 use crate::theme::{Theme, Themed};
 use crate::units::Dip;
 
@@ -173,7 +174,8 @@ impl<M: 'static> Placeable<M> for IconView<M> {
         self.control.id()
     }
 
-    fn natural_size(&self, _ui: &Ui<M>, dpi: u32) -> Size {
+    fn measure(&self, _ui: &Ui<M>, constraints: Constraints) -> Size {
+        let dpi = constraints.dpi;
         Size::new(
             NATURAL_WIDTH.to_px(dpi).value(),
             NATURAL_HEIGHT.to_px(dpi).value(),

@@ -191,3 +191,19 @@ fn a_dpi_change_without_a_mapper_is_a_no_op() {
     runtime.deliver(WidgetId::NONE, &Event::Wake);
     assert!(log.borrow().is_empty(), "nothing was mapped");
 }
+
+#[test]
+fn every_raises_its_message_on_its_own_timer_only() {
+    let (_backend, _window, core, ui) = setup();
+    ui.every(1000, 7);
+    ui.every(500, 8);
+    let log = Rc::new(RefCell::new(Vec::new()));
+    let runtime = Runtime::primary(Rc::clone(&core), test_app(&log));
+
+    // The headless backend numbers timers from one, in creation order.
+    runtime.deliver(WidgetId::NONE, &Event::Timer { id: TimerId(2) });
+    runtime.deliver(WidgetId::NONE, &Event::Timer { id: TimerId(1) });
+    runtime.deliver(WidgetId::NONE, &Event::Timer { id: TimerId(1) });
+    runtime.deliver(WidgetId::NONE, &Event::Wake);
+    assert_eq!(*log.borrow(), vec![8, 7, 7]);
+}

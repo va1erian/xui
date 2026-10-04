@@ -16,12 +16,27 @@
 //! - `icons` adds [`xui_icons`], the optional Global Village icon set.
 //! - `rich-text` adds [`xui_rich_text`], the editable rich-text widget.
 //!
-//! Both backends run the exact same widgets; an app written against
-//! `xui::prelude::*` and `xui_core::run_app` moves between them by swapping
-//! which backend it constructs. See [Backends](https://github.com/va1erian/xui/blob/main/docs/backends.md).
+//! Both backends run the exact same widgets. An app starts with [`app`],
+//! which picks the backend (and renders headless screenshots when
+//! `XUI_SNAPSHOT` is set); `xui_core::run_app` takes an explicit one. See
+//! [Backends](https://github.com/va1erian/xui/blob/main/docs/backends.md).
 
 pub use xui_core;
 pub use xui_core::*;
+
+#[cfg(feature = "canvas")]
+mod launch;
+#[cfg(feature = "canvas")]
+pub use launch::{Launch, app, default_backend};
+
+/// Everything an app needs in one `use`: the widget builders, layouts,
+/// handles and widget types, and [`app`].
+pub mod prelude {
+    pub use xui_core::prelude::*;
+
+    #[cfg(feature = "canvas")]
+    pub use crate::app;
+}
 
 #[cfg(feature = "canvas")]
 pub use xui_canvas;

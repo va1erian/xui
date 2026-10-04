@@ -29,7 +29,7 @@ pub mod theme;
 pub mod units;
 pub mod widget;
 
-pub use app::{App, Proxy, Ui, WindowHandle, run_app};
+pub use app::{App, Launch, Proxy, Ui, WindowHandle, app, run_app};
 
 pub use backend::{
     Backdrop, Backend, BackendError, Canvas, Cap, Corner, Dash, Decorations, Event, FontSpec,
@@ -66,4 +66,12 @@ pub mod prelude {
     pub use crate::message::{HitTest, Key, Modifiers, MouseButton};
     pub use crate::theme::{Theme, Themed};
     pub use crate::units::prelude::*;
+
+    pub use crate::app::{App, Ui, app};
+    pub use crate::arrange::*;
+    pub use crate::backend::Result;
+    pub use crate::widget::{
+        Button, CheckBox, ComboBox, Edit, Fill, GroupBox, HasText, Hyperlink, Label, ListView,
+        MultilineEdit, NumberField, ProgressBar, Separator, Slider, StatusBar, Tabs, ToggleButton,
+    };
 }

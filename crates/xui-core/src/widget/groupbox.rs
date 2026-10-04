@@ -5,10 +5,13 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
+use super::Placeable;
 use super::control::{Control, HasText};
 use crate::app::Ui;
+use crate::backend::WidgetId;
 use crate::backend::{NodeKind, NodeSpec, Result, TextStyle};
-use crate::geometry::Rect;
+use crate::geometry::{Rect, Size};
+use crate::layout::{Constraints, Insets};
 use crate::property::{Properties, Property, Value};
 use crate::theme::look::{self, backdrop};
 use crate::units::Dip;
@@ -149,6 +152,35 @@ impl<M: 'static> Properties for GroupBox<M> {
             }
             _ => false,
         }
+    }
+}
+
+/// A group box frames the widgets a layout places inside it: they sit within
+/// [`content_insets`](Placeable::content_insets), below the title.
+impl<M: 'static> Placeable<M> for GroupBox<M> {
+    fn id(&self) -> WidgetId {
+        self.control.id()
+    }
+
+    /// Wide enough for the title, tall enough for the title band.
+    fn measure(&self, ui: &Ui<M>, constraints: Constraints) -> Size {
+        let dpi = constraints.dpi;
+        let style = TextStyle::new(ui.theme().text, TEXT_SIZE);
+        let title = ui.measure_text(&self.title.borrow(), &style, dpi).width;
+        let pad = PAD.to_px(dpi).value();
+        Size::new(title + 4 * pad, 2 * INSET.to_px(dpi).value() + pad)
+    }
+
+    /// Below the title band (the caption above the card on a rounded theme,
+    /// the title straddling the frame otherwise) and inside the frame.
+    fn content_insets(&self, ui: &Ui<M>) -> Insets {
+        let band = if ui.theme().corner_radius > 0 {
+            // The caption, the 2-dip gap above the card, then the padding.
+            Dip(INSET.0 * 2.0 + 2.0 + PAD.0)
+        } else {
+            Dip(INSET.0 * 2.0 + PAD.0 / 2.0)
+        };
+        Insets::new(PAD, band, PAD, PAD)
     }
 }
 
