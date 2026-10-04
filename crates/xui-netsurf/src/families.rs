@@ -51,8 +51,11 @@ enum Class {
     Mono,
 }
 
+/// Words that make a family monospace ("DejaVu Sans Mono", "ui-monospace"),
+/// matched as whole words so "Monotype Corsiva" is not one.
+const MONO_WORDS: &[&str] = &["mono", "monospace"];
 /// Families whose name says monospace (lower case, matched as substrings).
-const MONO_HINTS: &[&str] = &["mono", "courier", "consolas", "menlo", "monaco", "fixed"];
+const MONO_HINTS: &[&str] = &["courier", "consolas", "menlo", "monaco", "fixed"];
 /// Families whose name says serif.
 const SERIF_HINTS: &[&str] = &[
     "times",
@@ -70,7 +73,10 @@ fn classify(named: &str) -> Option<Class> {
     if name.is_empty() {
         return None;
     }
-    if MONO_HINTS.iter().any(|h| name.contains(h)) {
+    let mono_word = name
+        .split(|c: char| !c.is_ascii_alphanumeric())
+        .any(|word| MONO_WORDS.contains(&word));
+    if mono_word || MONO_HINTS.iter().any(|h| name.contains(h)) {
         return Some(Class::Mono);
     }
     if name.contains("sans") {
@@ -116,6 +122,10 @@ mod tests {
         assert_eq!(classify("serif"), Some(Class::Serif));
         assert_eq!(classify("Courier New"), Some(Class::Mono));
         assert_eq!(classify("monospace"), Some(Class::Mono));
+        assert_eq!(classify("ui-monospace"), Some(Class::Mono));
+        assert_eq!(classify("DejaVu Sans Mono"), Some(Class::Mono));
+        assert_eq!(classify("Fixedsys"), Some(Class::Mono));
+        assert_eq!(classify("Monotype Corsiva"), None);
         assert_eq!(classify(""), None);
     }
 
