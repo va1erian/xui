@@ -171,6 +171,8 @@ pub enum Lucide {
     Home,
     /// The `image` outline.
     Image,
+    /// The `inbox` outline.
+    Inbox,
     /// The `indent-decrease` outline.
     IndentDecrease,
     /// The `indent-increase` outline.
@@ -193,6 +195,8 @@ pub enum Lucide {
     Lock,
     /// The `log-out` outline.
     LogOut,
+    /// The `mail` outline.
+    Mail,
     /// The `menu` outline.
     Menu,
     /// The `minus` outline.
@@ -219,6 +223,8 @@ pub enum Lucide {
     RefreshCw,
     /// The `repeat` outline.
     Repeat,
+    /// The `reply` outline.
+    Reply,
     /// The `ruler` outline.
     Ruler,
     /// The `save-all` outline.
@@ -229,6 +235,8 @@ pub enum Lucide {
     Scissors,
     /// The `search` outline.
     Search,
+    /// The `send` outline.
+    Send,
     /// The `separator-horizontal` outline.
     SeparatorHorizontal,
     /// The `settings` outline.
@@ -337,6 +345,7 @@ impl Lucide {
         Lucide::History,
         Lucide::Home,
         Lucide::Image,
+        Lucide::Inbox,
         Lucide::IndentDecrease,
         Lucide::IndentIncrease,
         Lucide::Info,
@@ -348,6 +357,7 @@ impl Lucide {
         Lucide::List,
         Lucide::Lock,
         Lucide::LogOut,
+        Lucide::Mail,
         Lucide::Menu,
         Lucide::Minus,
         Lucide::Monitor,
@@ -361,11 +371,13 @@ impl Lucide {
         Lucide::Redo2,
         Lucide::RefreshCw,
         Lucide::Repeat,
+        Lucide::Reply,
         Lucide::Ruler,
         Lucide::SaveAll,
         Lucide::Save,
         Lucide::Scissors,
         Lucide::Search,
+        Lucide::Send,
         Lucide::SeparatorHorizontal,
         Lucide::Settings,
         Lucide::Shuffle,
