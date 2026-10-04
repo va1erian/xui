@@ -69,6 +69,7 @@ pub(crate) fn path(icon: Lucide) -> &'static [PathSeg] {
         Lucide::Pencil => PENCIL,
         Lucide::Play => PLAY,
         Lucide::Plus => PLUS,
+        Lucide::Printer => PRINTER,
         Lucide::RectangleHorizontal => RECTANGLE_HORIZONTAL,
         Lucide::Redo2 => REDO_2,
         Lucide::RefreshCw => REFRESH_CW,

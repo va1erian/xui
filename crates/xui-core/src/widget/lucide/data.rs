@@ -215,6 +215,8 @@ pub enum Lucide {
     Play,
     /// The `plus` outline.
     Plus,
+    /// The `printer` outline.
+    Printer,
     /// The `rectangle-horizontal` outline.
     RectangleHorizontal,
     /// The `redo-2` outline.
@@ -367,6 +369,7 @@ impl Lucide {
         Lucide::Pencil,
         Lucide::Play,
         Lucide::Plus,
+        Lucide::Printer,
         Lucide::RectangleHorizontal,
         Lucide::Redo2,
         Lucide::RefreshCw,

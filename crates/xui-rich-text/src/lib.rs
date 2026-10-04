@@ -29,4 +29,4 @@ extern crate self as xui_rich_text;
 
 pub use layout::Layout;
 pub use model::{DocPos, Document};
-pub use view::{RichTextEditor, ViewMode};
+pub use view::{Printout, RichTextEditor, ViewMode};

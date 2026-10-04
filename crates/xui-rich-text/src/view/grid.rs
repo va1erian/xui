@@ -13,8 +13,7 @@ impl Painter<'_> {
     /// Paints the grids and repeated header rows of the tables that reach
     /// into the layout's vertical span `top..bottom`.
     pub(super) fn tables(&self, canvas: &mut dyn Canvas, top: f32, bottom: f32) {
-        let layout = &self.state.layout;
-        for t in layout.tables() {
+        for t in self.layout.tables() {
             if t.bottom() < top || t.top() > bottom {
                 continue;
             }
@@ -39,7 +38,7 @@ impl Painter<'_> {
             shift: self.shift - dy,
             ..*self
         };
-        let paras = self.state.layout.paragraphs();
+        let paras = self.layout.paragraphs();
         for cells in &header.cells {
             for para in &paras[cells.clone()] {
                 moved.paragraph(canvas, para);
@@ -58,7 +57,7 @@ impl Painter<'_> {
             return;
         };
         let (left, right) = (left.round() as i32, right.round() as i32);
-        for (from, to) in segments(self.state.layout.pages(), top, bottom) {
+        for (from, to) in segments(self.layout.pages(), top, bottom) {
             let (from, to) = (from.round() as i32, to.round() as i32);
             let color = self.theme.text;
             canvas.fill_rect(
