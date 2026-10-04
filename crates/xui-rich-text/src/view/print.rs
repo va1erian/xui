@@ -139,7 +139,9 @@ mod tests {
     /// The darkest pixel's luminance in `pixels` (RGBA rows).
     fn darkest(pixels: &[u8]) -> u8 {
         pixels
-            .chunks_exact(4)
+            .as_chunks::<4>()
+            .0
+            .iter()
             .map(|p| p[0].min(p[1]).min(p[2]))
             .min()
             .unwrap_or(255)
