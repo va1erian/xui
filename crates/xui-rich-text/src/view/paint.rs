@@ -11,8 +11,8 @@ use xui_core::{Color, Theme};
 use super::overlay;
 use super::sheets;
 use super::state::State;
-use crate::layout::{FRect, Line, ParaLayout, PlacedItem, PlacedKind};
-use crate::model::{CharStyle, DocPos, Selection, TextColor};
+use crate::layout::{FRect, Layout, Line, ParaLayout, PlacedItem, PlacedKind};
+use crate::model::{CharStyle, DocPos, Document, Selection, TextColor};
 
 /// The contrast (WCAG ratio) automatic text must keep against a highlight.
 const MIN_CONTRAST: f32 = 4.5;
@@ -60,7 +60,12 @@ fn paint_local(canvas: &mut dyn Canvas, state: &mut State, theme: &Theme, bounds
     let range = layout.visible(shift as f32, (shift + bounds.height()) as f32);
     let painter = Painter {
         theme: ink,
-        state,
+        doc: &state.ed.doc,
+        layout,
+        selection: Some(state.ed.selection),
+        focused: state.focused,
+        viewport: state.viewport,
+        paged: state.sheets.is_some(),
         shift,
         pad,
         scale: layout.dpi() as f32 / 96.0,
@@ -89,9 +94,22 @@ fn paint_local(canvas: &mut dyn Canvas, state: &mut State, theme: &Theme, bounds
     );
 }
 
+/// Paints laid-out paragraphs and tables: the editor's view, or an area of a
+/// printed sheet.
+#[derive(Clone, Copy)]
 pub(super) struct Painter<'a> {
     pub(super) theme: &'a Theme,
-    pub(super) state: &'a State,
+    pub(super) doc: &'a Document,
+    pub(super) layout: &'a Layout,
+    /// The selection to paint behind the text (`None` on paper).
+    pub(super) selection: Option<Selection>,
+    /// Whether the editor has the focus (the selection's colour).
+    pub(super) focused: bool,
+    /// The painted area's height: lines below it are skipped.
+    pub(super) viewport: f32,
+    /// Whether the flow is cut into pages (no page-break markers, rules cut
+    /// at page edges).
+    pub(super) paged: bool,
     /// The scroll offset in whole pixels.
     pub(super) shift: i32,
     /// The left margin in whole pixels.
@@ -138,20 +156,20 @@ impl Painter<'_> {
 
     /// Paints the selection of the visible paragraphs behind the text.
     fn selection(&self, canvas: &mut dyn Canvas, visible: std::ops::Range<usize>) {
-        let (Selection::Text { anchor: a, head: b }, Some(last)) =
-            (self.state.ed.selection, visible.end.checked_sub(1))
+        let (Some(Selection::Text { anchor: a, head: b }), Some(last)) =
+            (self.selection, visible.end.checked_sub(1))
         else {
             return;
         };
         let (a, b) = if a <= b { (a, b) } else { (b, a) };
-        let doc = &self.state.ed.doc;
+        let doc = &self.doc;
         let from = a.max(DocPos::new(visible.start, 0));
         let to = b.min(DocPos::new(last, doc.paragraphs()[last].text().len()));
         if from >= to {
             return;
         }
-        for rect in self.state.layout.selection_rects(doc, from, to) {
-            let color = if self.state.focused {
+        for rect in self.layout.selection_rects(doc, from, to) {
+            let color = if self.focused {
                 self.theme.selection
             } else {
                 self.theme.selection_unfocused
@@ -161,7 +179,7 @@ impl Painter<'_> {
     }
 
     pub(super) fn paragraph(&self, canvas: &mut dyn Canvas, para: &ParaLayout) {
-        let height = self.state.viewport as i32;
+        let height = self.viewport as i32;
         if let Some((x, top, bottom)) = para.rule {
             let w = (2.0 * self.scale).round().max(1.0) as i32;
             let x = x.round() as i32;
@@ -174,7 +192,7 @@ impl Painter<'_> {
                 );
                 canvas.fill_rect(self.rect(rect), self.theme.text_secondary);
             };
-            if self.state.sheets.is_some() {
+            if self.paged {
                 // Line by line, so the rule stops at a page's edge.
                 for line in &para.lines {
                     bar(canvas, line.y, line.y + line.height);
@@ -183,7 +201,7 @@ impl Painter<'_> {
                 bar(canvas, top, bottom);
             }
         }
-        if self.state.sheets.is_none() {
+        if !self.paged {
             self.page_break_marker(canvas, para);
         }
         if let Some(marker) = &para.marker {
@@ -191,11 +209,11 @@ impl Painter<'_> {
                 marker.x.round() as i32 + self.pad,
                 (para.y + marker.y).round() as i32 - self.shift,
             );
-            let style = self.state.ed.doc.styles().char(marker.style);
+            let style = self.doc.styles().char(marker.style);
             canvas.draw_layout(marker.layout.as_ref(), origin, self.color(style));
         }
         for float in &para.floats {
-            if let Some(object) = self.state.ed.doc.objects().get(float.id) {
+            if let Some(object) = self.doc.objects().get(float.id) {
                 canvas.draw_image(&object.image, self.frect(&float.rect, para.y));
             }
         }
@@ -217,7 +235,7 @@ impl Painter<'_> {
             return;
         }
         let y = para.y.round() as i32 - self.shift;
-        let right = self.state.layout.width().round() as i32 + self.pad;
+        let right = self.layout.width().round() as i32 + self.pad;
         let stroke = Stroke::new(1.0).dash(Dash::Dashed);
         canvas.draw_line_stroked(
             Point::new(self.pad, y),
@@ -228,7 +246,7 @@ impl Painter<'_> {
     }
 
     fn item(&self, canvas: &mut dyn Canvas, para_y: f32, line: &Line, item: &PlacedItem) {
-        let style = self.state.ed.doc.styles().char(item.style);
+        let style = self.doc.styles().char(item.style);
         let top = para_y + line.y;
         let baseline = para_y + line.baseline + item.dy;
         let (left, right) = (item.x.round() as i32, (item.x + item.width).round() as i32);
@@ -251,7 +269,7 @@ impl Painter<'_> {
                 canvas.draw_layout(layout.as_ref(), origin, color);
             }
             PlacedKind::Object { id, height } => {
-                if let Some(object) = self.state.ed.doc.objects().get(*id) {
+                if let Some(object) = self.doc.objects().get(*id) {
                     let bottom = para_y + line.baseline;
                     let rect = Rect::new(
                         left,

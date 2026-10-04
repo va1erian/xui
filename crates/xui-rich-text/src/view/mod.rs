@@ -18,6 +18,7 @@ mod keys;
 mod mouse;
 mod overlay;
 mod paint;
+mod print;
 mod scroll;
 mod shared;
 mod sheets;
@@ -39,6 +40,7 @@ use xui_core::widget::Placeable;
 use crate::edit::{Clipboard, Command, TableCursor};
 use crate::model::{Affinity, DocPos, Document, Selection, StyleSummary};
 use events::Out;
+pub use print::Printout;
 use shared::Shared;
 pub use state::ViewMode;
 
@@ -192,6 +194,14 @@ impl<M: 'static> RichTextEditor<M> {
     /// The current view.
     pub fn current_view_mode(&self) -> ViewMode {
         self.shared.state.borrow().mode
+    }
+
+    /// The document laid out on its pages at `dpi` dots per inch, for
+    /// printing: shaped with the editor's own shaper, so it uses the fonts the
+    /// screen does.
+    pub fn printout(&self, dpi: u32) -> Printout {
+        let state = self.shared.state.borrow();
+        Printout::new(&state.ed.doc, state.shaper.as_ref(), dpi)
     }
 
     /// The page the caret is on (from 0) and the number of pages, as laid
