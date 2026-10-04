@@ -93,6 +93,11 @@ impl<A: App> Runtime<A> {
                 .and_then(|f| f(*key, *modifiers));
             if let Some(msg) = mapped {
                 self.core.enqueue(msg);
+                // Handled now, not at the next wake: the keys typed after a
+                // shortcut may already be queued behind it, and they must
+                // see what it did (Ctrl+L clearing an address field before
+                // the new address is typed into it).
+                self.drain();
             }
         }
         if target.is_none() {
