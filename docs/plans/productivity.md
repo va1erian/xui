@@ -13,7 +13,7 @@ works on four levers:
    theme, `Quit`, keep-alive fields, `unwrap` per widget.
 2. **Fewer setup lines.** One declarative description of the UI, used by Rust
    apps, `.lfm` forms and Rhai alike.
-3. **Layout instead of rects.** Ship a complete layout system, then deprecate
+3. **Layout instead of rects.** Ship a complete layout system, then remove
    `Widget::new(ui, Rect, …)`.
 4. **Faster generation.** Need fewer tokens to write an app and fewer
    compiles to check it. Prefer interpreted forms and Rhai where they fit.
@@ -142,13 +142,17 @@ The foundation. Everything else builds on it.
 9. **Layout debugging for agents.**
    - `Snapshot::with_layout_overlay()` draws bounds and baselines.
    - `ui.layout_report()` returns a text dump: the tree, the rects, and
-     warnings for overlap, clipping, zero size and text truncation.
+     warnings for clipping, zero size, text truncation and overlap. Overlap
+     is reported only inside containers whose children must be disjoint, so
+     `stack()`, `overlay()` and `absolute()` are exempt.
    - An agent can read the report instead of a screenshot. CI can assert
      "no warnings" over every example.
 
 Constraints: each piece is its own file under `layout/` or `arrange/`, kept
-under 300 lines. Each gets a proptest that children never overlap or escape
-the container, and a light and a dark snapshot.
+under 300 lines. Each gets a proptest that children never escape the
+container, and a light and a dark snapshot. Disjoint containers (row,
+column, grid, wrap) also assert that children never overlap. Layered
+containers (`stack()`, `overlay()`) assert z-order instead.
 
 ### W2: Construction API without `ui` or rects [xui]
 
@@ -263,9 +267,18 @@ the container, and a light and a dark snapshot.
    panes, monitors) default to `.lfm` plus `.rhai` packaged as `.lzp` with
    `lrplay`. Rust is for apps that need it (editors, Paint, browsers).
    Document this decision rule in AGENTS.md.
-5. **One xui pin.** Use a workspace-level `[patch]`, or a single
-   `xui-rev.toml` read by `tools/xui/build.py`, so that xui-app, lazyrad-os
-   and LazyRAD all move together. Add a CI check that fails on drift.
+5. **One xui pin.**
+   - The canonical revision lives in one file, `lazyos/xui-rev.toml`.
+     lazyOS is the integration point that ships all three.
+   - A workspace-level `[patch]` only affects the workspace that declares
+     it, so each consumer pins explicitly:
+     - xui-app and lazyrad-os: their `Cargo.toml` `rev` is rewritten from
+       the file by `tools/xui/bump.py`, the same script that bumps the file.
+     - LazyRAD: the bump PR is opened in LazyRAD with the same rev, and its
+       transitive xui must resolve to that rev too.
+   - CI in each repo reads the resolved xui rev from `Cargo.lock` and fails
+     when it differs from `xui-rev.toml`. LazyRAD fetches the file from
+     lazyOS `main`.
 
 ### W6: Generation and iteration speed [all]
 
