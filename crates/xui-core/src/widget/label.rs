@@ -31,6 +31,27 @@ enum Kind {
     Caption,
 }
 
+impl Kind {
+    /// The style the label paints (and is measured) in.
+    fn style(self, theme: &crate::theme::Theme) -> TextStyle {
+        match self {
+            Kind::Body => TextStyle::new(theme.text, TEXT_SIZE),
+            Kind::Title => TextStyle::new(theme.text, TITLE_SIZE).bold().middle(),
+            Kind::Caption => TextStyle::new(theme.text_secondary, CAPTION_SIZE)
+                .bold()
+                .middle(),
+        }
+    }
+
+    /// The text as painted: a caption is upper case.
+    fn shown(self, text: &str) -> String {
+        match self {
+            Kind::Caption => text.to_uppercase(),
+            Kind::Body | Kind::Title => text.to_string(),
+        }
+    }
+}
+
 /// A painted static text label.
 pub struct Label<M: 'static> {
     control: Control<M>,
@@ -60,22 +81,9 @@ impl<M: 'static> Label<M> {
             // The node is an opaque child window: paint its background first,
             // or the back buffer shows through around the text.
             backdrop(canvas, theme.background);
-            let text = text_for_paint.borrow();
-            match kind_for_paint.get() {
-                Kind::Body => {
-                    canvas.draw_text(&text, bounds, &TextStyle::new(theme.text, TEXT_SIZE));
-                }
-                Kind::Title => {
-                    let style = TextStyle::new(theme.text, TITLE_SIZE).bold().middle();
-                    canvas.draw_text(&text, bounds, &style);
-                }
-                Kind::Caption => {
-                    let style = TextStyle::new(theme.text_secondary, CAPTION_SIZE)
-                        .bold()
-                        .middle();
-                    canvas.draw_text(&text.to_uppercase(), bounds, &style);
-                }
-            }
+            let kind = kind_for_paint.get();
+            let text = kind.shown(&text_for_paint.borrow());
+            canvas.draw_text(&text, bounds, &kind.style(&theme));
             if selected.get() {
                 canvas.stroke_rect(bounds, theme.accent, 2.0);
             }
@@ -100,6 +108,18 @@ impl<M: 'static> Label<M> {
         self.kind.set(Kind::Caption);
         self.control.invalidate();
         self
+    }
+
+    /// The size of the label's text as painted, at `dpi`: a title's larger
+    /// bold face and a caption's upper case included.
+    pub(super) fn text_size(&self, ui: &Ui<M>, dpi: u32) -> crate::geometry::Size {
+        let kind = self.kind.get();
+        let metrics = ui.measure_text(
+            &kind.shown(&self.text.borrow()),
+            &kind.style(&ui.theme()),
+            dpi,
+        );
+        crate::geometry::Size::new(metrics.width, metrics.height)
     }
 
     /// The label's node identity.
