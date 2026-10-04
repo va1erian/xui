@@ -28,13 +28,28 @@ impl<M: 'static> ListView<M> {
     }
 
     /// Replaces the rows with a fresh read of the same data (a live table):
-    /// unlike [`ListView::set_model`], the scroll position is kept, clamped to
-    /// the new rows, so a periodic refresh does not jump to the top.
+    /// unlike [`ListView::set_model`], the scroll position, the selection and
+    /// the focus are kept where the new rows still have them, and nothing is
+    /// selected that was not, so a periodic refresh does not move the view.
     pub fn refresh_model(&self, model: impl ListModel + 'static) {
-        let offset = self.state.borrow().offset;
+        let (offset, selected, focused, anchor) = {
+            let state = self.state.borrow();
+            (
+                state.offset,
+                state.selected.clone(),
+                state.focused,
+                state.anchor,
+            )
+        };
         self.set_model(model);
-        let len = self.state.borrow().rows.len();
-        self.state.borrow_mut().offset = offset.min(len.saturating_sub(1));
+        {
+            let mut state = self.state.borrow_mut();
+            let len = state.rows.len();
+            state.selected = selected.into_iter().filter(|row| *row < len).collect();
+            state.focused = focused.filter(|row| *row < len);
+            state.anchor = anchor.filter(|row| *row < len);
+            state.offset = offset.min(len.saturating_sub(1));
+        }
         bar::layout(
             self.control.ui(),
             self.control.id(),

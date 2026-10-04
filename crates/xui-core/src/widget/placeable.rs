@@ -96,7 +96,7 @@ impl<M: 'static> Placeable<M> for Label<M> {
 
     fn measure(&self, ui: &Ui<M>, constraints: Constraints) -> Size {
         let dpi = constraints.dpi;
-        let text = text_size(ui, &self.text(), dpi);
+        let text = self.text_size(ui, dpi);
         Size::new(text.width, text.height + 2 * px(TEXT_PADDING, dpi))
     }
 }

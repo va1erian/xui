@@ -38,8 +38,13 @@ fn a_refresh_keeps_the_scroll_position_and_set_model_resets_it() {
     table.set_model(rows(100));
     table.state.borrow_mut().offset = 40;
 
+    table.select(None);
     table.refresh_model(rows(100));
     assert_eq!(table.state.borrow().offset, 40);
+    assert_eq!(table.selected(), None, "a refresh selects nothing");
+    table.select(Some(5));
+    table.refresh_model(rows(100));
+    assert_eq!(table.selected(), Some(5), "and keeps the selection");
     table.refresh_model(rows(10));
     assert_eq!(table.state.borrow().offset, 9, "clamped to the new rows");
     table.set_model(rows(100));
