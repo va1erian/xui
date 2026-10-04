@@ -154,6 +154,53 @@ fn a_shortcut_key_maps_to_a_message_and_still_reaches_the_widget() {
 }
 
 #[test]
+fn a_shortcut_is_handled_before_the_keys_typed_after_it() {
+    use crate::message::{Key, Modifiers};
+
+    let (backend, window, core, ui) = setup();
+    let node = backend
+        .create(
+            ParentRef::Window(window),
+            &NodeSpec::new(NodeKind::Custom, Rect::default()),
+        )
+        .unwrap();
+    let log = Rc::new(RefCell::new(Vec::new()));
+    // The widget records what the app had handled when each character
+    // reached it.
+    let typed = Rc::new(RefCell::new(Vec::new()));
+    {
+        let log = Rc::clone(&log);
+        let typed = Rc::clone(&typed);
+        ui.register_events(node, move |event| {
+            if let Event::Char(c) = event {
+                typed.borrow_mut().push((*c, log.borrow().len()));
+            }
+            None
+        });
+    }
+    ui.on_key(|key, modifiers| (key == Key::L && modifiers.ctrl).then_some(7));
+
+    let runtime = Runtime::primary(Rc::clone(&core), test_app(&log));
+    runtime.deliver(
+        node,
+        &Event::KeyDown {
+            key: Key::L,
+            modifiers: Modifiers {
+                ctrl: true,
+                ..Modifiers::NONE
+            },
+            repeat: 1,
+            system: false,
+        },
+    );
+    // No wake in between: the backend had the character queued already.
+    runtime.deliver(node, &Event::Char('h'));
+
+    assert_eq!(*log.borrow(), vec![7]);
+    assert_eq!(*typed.borrow(), vec![('h', 1)], "the shortcut ran first");
+}
+
+#[test]
 fn a_key_the_shortcut_mapper_declines_stays_unmapped() {
     use crate::message::{Key, Modifiers};
 
