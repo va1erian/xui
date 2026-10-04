@@ -86,6 +86,13 @@ pub enum ColumnWidth {
     Fill,
 }
 
+/// A whole number of design units, so a builder can take `80` for a column.
+impl From<i32> for ColumnWidth {
+    fn from(width: i32) -> ColumnWidth {
+        ColumnWidth::Fixed(Dip(width as f32))
+    }
+}
+
 impl From<Dip> for ColumnWidth {
     fn from(width: Dip) -> ColumnWidth {
         ColumnWidth::Fixed(width)

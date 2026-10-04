@@ -6,7 +6,6 @@ use std::path::PathBuf;
 use std::rc::Rc;
 
 use xui_core::app::{App, Ui};
-use xui_core::arrange::Mounted;
 use xui_core::message::{Key, Modifiers};
 use xui_core::widget::{Dialog, DialogAction, FileDialog, StatusBar};
 use xui_rich_text::RichTextEditor;
@@ -100,7 +99,6 @@ pub struct Wordpad {
     pub after: Option<After>,
     /// Whether a dialog or picker is open, so shortcuts leave it alone.
     pub dialog_open: bool,
-    pub _mounted: Mounted<Msg>,
 }
 
 /// Maps Ctrl+N / O / S (and Shift for Save As) to messages.

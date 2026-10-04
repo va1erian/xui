@@ -3,17 +3,14 @@
 //! The table row: inserting a table, adding and deleting rows and columns,
 //! and the header and border switches, enabled while the caret is in a table.
 
-use std::rc::Rc;
-
 use xui_core::Dip;
-use xui_core::app::Ui;
-use xui_core::arrange::{Layout, LayoutExt, row, spacer};
-use xui_core::backend::Result;
+use xui_core::arrange::{Entry, Handle, Layout, LayoutExt, button, row, spacer, toggle_button};
 use xui_core::layout::Insets;
-use xui_core::widget::{Button, Lucide, ToggleButton, Tooltip};
+use xui_core::widget::{Button, Lucide, ToggleButton};
 use xui_rich_text::edit::{Command, TableCursor};
 
 use crate::app::Msg;
+use crate::ui::{ICON_WIDTH, Tips, tipped};
 
 /// A table action from the table row.
 #[derive(Clone, Copy, Debug)]
@@ -64,120 +61,131 @@ impl TableAction {
     }
 }
 
+/// The buttons that act on the caret's table: icon (a text button has none),
+/// text, tooltip and action.
+const EDITS: [(Option<Lucide>, &str, &str, TableAction); 7] = [
+    (
+        Some(Lucide::BetweenHorizontalStart),
+        "",
+        "Insert row above",
+        TableAction::RowAbove,
+    ),
+    (
+        Some(Lucide::BetweenHorizontalEnd),
+        "",
+        "Insert row below",
+        TableAction::RowBelow,
+    ),
+    (
+        Some(Lucide::BetweenVerticalStart),
+        "",
+        "Insert column left",
+        TableAction::ColumnLeft,
+    ),
+    (
+        Some(Lucide::BetweenVerticalEnd),
+        "",
+        "Insert column right",
+        TableAction::ColumnRight,
+    ),
+    (None, "Delete row", "Delete rows", TableAction::DeleteRows),
+    (
+        None,
+        "Delete column",
+        "Delete columns",
+        TableAction::DeleteColumns,
+    ),
+    (
+        Some(Lucide::Trash2),
+        "",
+        "Delete table",
+        TableAction::DeleteTable,
+    ),
+];
+
 /// The table row's controls.
+#[derive(Default)]
 pub struct TableTools {
-    insert: Rc<Button<Msg>>,
-    /// The buttons that act on the caret's table.
-    edits: Vec<Rc<Button<Msg>>>,
-    header: Rc<ToggleButton<Msg>>,
-    border: Rc<ToggleButton<Msg>>,
-    _tips: Vec<Tooltip<Msg>>,
+    insert: Handle<Button<Msg>>,
+    /// The buttons that act on the caret's table, in [`EDITS`] order.
+    edits: [Handle<Button<Msg>>; 7],
+    header: Handle<ToggleButton<Msg>>,
+    border: Handle<ToggleButton<Msg>>,
+    tips: Tips,
 }
 
-/// The width of an icon-only button.
-const ICON_WIDTH: Dip = Dip(32.0);
-
 impl TableTools {
-    /// Builds the controls.
-    pub fn new(ui: &Ui<Msg>) -> Result<TableTools> {
-        let mut tips = Vec::new();
-        let mut button = |icon: Option<Lucide>, text: &str, tip: &str, action: TableAction| {
-            let label = if icon.is_some() { "" } else { text };
-            let mut button = Button::auto(ui, label)?.on_click(move || Some(Msg::Table(action)));
-            if let Some(icon) = icon {
-                button = button.icon(icon);
-            }
-            tips.push(Tooltip::attach(ui, button.id(), tip)?);
-            Result::Ok(Rc::new(button))
-        };
-        let insert = button(Some(Lucide::Table), "", "Insert table", TableAction::Insert)?;
-        let edits = vec![
-            button(
-                Some(Lucide::BetweenHorizontalStart),
+    /// The row of controls, bound to these handles.
+    pub fn row(&self) -> Layout<Msg> {
+        let edits: Vec<Entry<Msg>> = self
+            .edits
+            .iter()
+            .zip(EDITS)
+            .map(|(handle, (icon, text, tip, action))| {
+                self.action_button(handle, icon, text, tip, action)
+            })
+            .collect();
+        row()
+            .gap(4)
+            .padding(Insets::symmetric(Dip(8.0), Dip(3.0)))
+            .child(self.action_button(
+                &self.insert,
+                Some(Lucide::Table),
                 "",
-                "Insert row above",
-                TableAction::RowAbove,
-            )?,
-            button(
-                Some(Lucide::BetweenHorizontalEnd),
-                "",
-                "Insert row below",
-                TableAction::RowBelow,
-            )?,
-            button(
-                Some(Lucide::BetweenVerticalStart),
-                "",
-                "Insert column left",
-                TableAction::ColumnLeft,
-            )?,
-            button(
-                Some(Lucide::BetweenVerticalEnd),
-                "",
-                "Insert column right",
-                TableAction::ColumnRight,
-            )?,
-            button(None, "Delete row", "Delete rows", TableAction::DeleteRows)?,
-            button(
-                None,
-                "Delete column",
-                "Delete columns",
-                TableAction::DeleteColumns,
-            )?,
-            button(
-                Some(Lucide::Trash2),
-                "",
-                "Delete table",
-                TableAction::DeleteTable,
-            )?,
-        ];
-        let header = ToggleButton::auto(ui, "Header row")?
-            .on_toggle(|on| Some(Msg::Table(TableAction::Header(on))));
-        let border = ToggleButton::auto(ui, "Borders")?
-            .on_toggle(|on| Some(Msg::Table(TableAction::Border(on))));
-        let tools = TableTools {
-            insert,
-            edits,
-            header: Rc::new(header),
-            border: Rc::new(border),
-            _tips: tips,
-        };
-        tools.sync(None);
-        Ok(tools)
+                "Insert table",
+                TableAction::Insert,
+            ))
+            .child(spacer().width(6))
+            .children(edits)
+            .children((
+                spacer().width(6),
+                toggle_button("Header row")
+                    .bind(&self.header)
+                    .on_toggle(|on| Msg::Table(TableAction::Header(on)))
+                    .width(96),
+                toggle_button("Borders")
+                    .bind(&self.border)
+                    .on_toggle(|on| Msg::Table(TableAction::Border(on)))
+                    .width(80),
+                spacer(),
+            ))
     }
 
-    /// The row of controls.
-    pub fn row(&self) -> Layout<Msg> {
-        let mut layout = row()
-            .spacing(Dip(4.0))
-            .margins(Insets::symmetric(Dip(8.0), Dip(3.0)))
-            .child((&self.insert).width(ICON_WIDTH))
-            .child(spacer().width(Dip(6.0)));
-        for (i, button) in self.edits.iter().enumerate() {
-            let width = if i == 4 || i == 5 {
-                Dip(104.0)
-            } else {
+    /// A button bound to `handle` that raises `action` and is named `tip` on
+    /// hover: icon-only when it has an icon, else showing `text`.
+    fn action_button(
+        &self,
+        handle: &Handle<Button<Msg>>,
+        icon: Option<Lucide>,
+        text: &str,
+        tip: &'static str,
+        action: TableAction,
+    ) -> Entry<Msg> {
+        let mut button = button(text)
+            .bind(handle)
+            .on_click_with(move || Some(Msg::Table(action)));
+        let width = match icon {
+            Some(icon) => {
+                button = button.then(move |button| button.icon(icon));
                 ICON_WIDTH
-            };
-            layout = layout.child(button.width(width));
-        }
-        layout
-            .child(spacer().width(Dip(6.0)))
-            .child((&self.header).width(Dip(96.0)))
-            .child((&self.border).width(Dip(80.0)))
-            .child(spacer())
+            }
+            None => Dip(104.0),
+        };
+        tipped(button, &self.tips, tip).width(width)
     }
 
     /// Enables the controls that need a table when the caret is in one, and
     /// shows its switches.
     pub fn sync(&self, cursor: Option<&TableCursor>) {
-        self.insert.set_enabled(cursor.is_none());
+        self.insert.get().set_enabled(cursor.is_none());
         for button in &self.edits {
-            button.set_enabled(cursor.is_some());
+            button.get().set_enabled(cursor.is_some());
         }
         for (toggle, on) in [
             (&self.header, cursor.is_some_and(|c| c.table.header)),
             (&self.border, cursor.is_some_and(|c| c.table.border)),
         ] {
+            let toggle = toggle.get();
             toggle.set_enabled(cursor.is_some());
             toggle.set_checked(on);
         }

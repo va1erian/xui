@@ -10,7 +10,7 @@ use super::Layout;
 use crate::app::Ui;
 use crate::backend::{Event, Result, WidgetId};
 use crate::geometry::{Rect, Size};
-use crate::layout::{Group, Leaf};
+use crate::layout::{Constraints, Group, Leaf};
 use crate::widget::Placeable;
 
 /// Where a mounted layout gets its area from.
@@ -39,12 +39,13 @@ impl<M: 'static> State<M> {
         }
     }
 
-    fn leaf(&self, key: &usize, dpi: u32) -> Leaf {
+    fn leaf(&self, key: &usize, constraints: Constraints) -> Leaf {
         let widget = &self.widgets[*key];
         let id = widget.id();
         Leaf {
-            natural: widget.natural_size(&self.ui, dpi),
+            natural: widget.measure(&self.ui, constraints),
             visible: id.is_none() || self.ui.is_visible(id),
+            content: widget.content_insets(&self.ui),
         }
     }
 
@@ -55,7 +56,7 @@ impl<M: 'static> State<M> {
         let area = self.area_rect();
         if !area.is_empty() {
             let dpi = self.ui.dpi();
-            let placed = self.tree.compute(area, dpi, &|key| self.leaf(key, dpi));
+            let placed = self.tree.compute(area, dpi, &|key, c| self.leaf(key, c));
             let mut moves = Vec::with_capacity(placed.len());
             let mut after = Vec::with_capacity(placed.len());
             for (key, rect) in placed {
@@ -100,7 +101,7 @@ impl<M: 'static> Mounted<M> {
         let dpi = self.state.ui.dpi();
         self.state
             .tree
-            .preferred_size(dpi, &|key| self.state.leaf(key, dpi))
+            .preferred_size(dpi, &|key, c| self.state.leaf(key, c))
     }
 }
 
@@ -114,24 +115,38 @@ impl<M: 'static> Drop for Mounted<M> {
 }
 
 impl<M: 'static> Ui<M> {
-    /// Places `layout` in the window's client area and keeps it placed as the
-    /// window resizes, changes DPI or shows and hides widgets. Fails with the
-    /// first widget constructor error the layout was given.
+    /// Creates `layout`'s widgets as the window's content and keeps them
+    /// placed in its client area as it resizes, changes DPI or shows and hides
+    /// widgets, for as long as the window lives. Fails with the first widget
+    /// constructor error.
+    pub fn root(&self, layout: Layout<M>) -> Result<()> {
+        let mounted = self.mount(layout)?;
+        self.retain(Box::new(mounted));
+        Ok(())
+    }
+
+    /// Like [`Ui::root`], but returns the [`Mounted`] layout instead of
+    /// keeping it: dropping it destroys the widgets, for content that is
+    /// replaced while the window lives.
     pub fn mount(&self, layout: Layout<M>) -> Result<Mounted<M>> {
         mount(self, Area::Window, layout)
     }
 
-    /// Places `layout` inside the container node `container` (a `Panel`, say),
-    /// re-flowing when the container is resized. Build the layout's widgets
-    /// with the container's own scoped `ui()` so they are parented to it.
+    /// Creates `layout`'s widgets inside the container node `container` (a
+    /// `Panel`, say) and keeps them placed in it, re-flowing when the
+    /// container is resized.
     pub fn mount_in(&self, container: WidgetId, layout: Layout<M>) -> Result<Mounted<M>> {
         mount(self, Area::Node(container), layout)
     }
 }
 
 fn mount<M: 'static>(ui: &Ui<M>, area: Area, layout: Layout<M>) -> Result<Mounted<M>> {
+    let parent = match area {
+        Area::Window => ui.clone(),
+        Area::Node(id) => ui.with_parent(id),
+    };
     let mut widgets = Vec::new();
-    let tree = layout.flatten(&mut widgets)?;
+    let tree = layout.realize(&parent, &mut widgets)?;
     let state = Rc::new(State {
         ui: ui.clone(),
         area,

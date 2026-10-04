@@ -10,14 +10,13 @@ use std::rc::Rc;
 
 use xui_canvas::{OffscreenBackend, RgbaImage};
 use xui_core::app::{App, Ui, run_app};
-use xui_core::arrange::{LayoutExt, Mounted, column, row, spacer};
+use xui_core::arrange::{
+    Handle, button, checkbox, column, edit, label, progress, row, slider, spacer,
+};
 use xui_core::backend::{Backend, PlatformSpec, WidgetId};
-use xui_core::widget::{Button, CheckBox, Edit, Label, ProgressBar, Slider};
-use xui_core::{Dip, Insets, Rect, Theme, dip};
+use xui_core::{Dip, Rect, Theme};
 
-struct Form {
-    _mounted: Mounted<()>,
-}
+struct Form;
 
 impl App for Form {
     type Msg = ();
@@ -25,45 +24,34 @@ impl App for Form {
     fn update(&mut self, _msg: (), _ui: &mut Ui<()>) {}
 }
 
-/// The widgets' ids in tree order, so the test can inspect where they landed.
-fn build(ui: &Ui<()>) -> (Form, Vec<WidgetId>) {
-    let title = Rc::new(Label::auto(ui, "Layout").unwrap());
-    let name = Rc::new(Edit::auto(ui, "Ada").unwrap());
-    let loud = Rc::new(CheckBox::auto(ui, "Loud").unwrap());
-    let volume = Rc::new(Slider::auto(ui, 0.0, 100.0).unwrap());
-    let level = Rc::new(ProgressBar::auto(ui, 100).unwrap());
-    let reset = Rc::new(Button::auto(ui, "Reset").unwrap());
-    let quit = Rc::new(Button::auto(ui, "Quit").unwrap());
-    level.set_value(60);
-
-    let root = column()
-        .margins(Insets::all(dip(16.0)))
-        .spacing(dip(8.0))
-        .child(&title)
-        .child(&name)
-        .child(&loud)
-        .child(&volume)
-        .child(&level)
-        .child(spacer())
-        .child(
-            row()
-                .spacing(dip(8.0))
-                .child(spacer())
-                .child(&reset)
-                .child(&quit)
-                .height(dip(28.0)),
-        );
-    let mounted = ui.mount(root).unwrap();
-    let ids = vec![
-        title.id(),
-        name.id(),
-        loud.id(),
-        volume.id(),
-        level.id(),
-        reset.id(),
-        quit.id(),
-    ];
-    (Form { _mounted: mounted }, ids)
+/// Mounts the form and returns its widgets' ids in tree order, so the test
+/// can inspect where they landed.
+fn build(ui: &Ui<()>) -> Vec<WidgetId> {
+    let (title, name, loud, volume) = (Handle::new(), Handle::new(), Handle::new(), Handle::new());
+    let (level, reset, quit) = (Handle::new(), Handle::new(), Handle::new());
+    ui.root(column().padding(16).gap(8).children((
+        label("Layout").bind(&title),
+        edit().text("Ada").bind(&name),
+        checkbox("Loud").bind(&loud),
+        slider(0.0, 100.0).bind(&volume),
+        progress(100).value(60).bind(&level),
+        spacer(),
+        row().gap(8).children((
+            spacer(),
+            button("Reset").bind(&reset),
+            button("Quit").bind(&quit),
+        )),
+    )))
+    .unwrap();
+    vec![
+        title.get().id(),
+        name.get().id(),
+        loud.get().id(),
+        volume.get().id(),
+        level.get().id(),
+        reset.get().id(),
+        quit.get().id(),
+    ]
 }
 
 fn save(name: &str, image: &RgbaImage) {
@@ -93,7 +81,7 @@ fn a_mounted_form_lays_out_and_renders_light_and_dark() {
         run,
         PlatformSpec::new("layout").size(Dip(420.0), Dip(280.0)),
         move |ui| {
-            let (form, ids) = build(ui);
+            let ids = build(ui);
             let client = ui.client_rect();
             let mut seen = seen_for_make.borrow_mut();
             for id in ids {
@@ -110,7 +98,7 @@ fn a_mounted_form_lays_out_and_renders_light_and_dark() {
             let mut images = images_for_make.borrow_mut();
             images.push(light);
             images.push(dark);
-            form
+            Form
         },
     )
     .expect("the offscreen form ran");

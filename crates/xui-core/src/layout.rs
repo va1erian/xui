@@ -29,7 +29,7 @@ pub use anchor::{Anchor, MIN_ANCHOR_PX, anchored};
 pub use dock::{Dock, DockLayout};
 pub use pack::free_preferred;
 pub use stack::{Stack, StackDirection, StackSlot};
-pub use tree::{Group, Item, Leaf, Sizing};
+pub use tree::{Align, Constraints, Group, Item, Leaf, LeafFn, Sizing, Track};
 
 use crate::geometry::Rect;
 use crate::units::Dip;
@@ -77,6 +77,27 @@ impl Insets {
         let right = (rect.right - self.right.to_px(dpi).value()).max(left);
         let bottom = (rect.bottom - self.bottom.to_px(dpi).value()).max(top);
         Rect::new(left, top, right, bottom)
+    }
+}
+
+/// The same inset on every edge, from a design value.
+impl From<Dip> for Insets {
+    fn from(value: Dip) -> Insets {
+        Insets::all(value)
+    }
+}
+
+/// The same inset on every edge, from a bare design number.
+impl From<f32> for Insets {
+    fn from(value: f32) -> Insets {
+        Insets::all(Dip(value))
+    }
+}
+
+/// The same inset on every edge, from a whole design number.
+impl From<i32> for Insets {
+    fn from(value: i32) -> Insets {
+        Insets::all(Dip(value as f32))
     }
 }
 

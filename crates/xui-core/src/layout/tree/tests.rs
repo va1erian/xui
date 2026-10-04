@@ -4,15 +4,18 @@ use super::*;
 use crate::units::dip;
 
 /// Leaf `n`'s natural size and visibility, from a small table.
-fn leaf(natural: &'static [(u32, i32, i32)], hidden: &'static [u32]) -> impl Fn(&u32) -> Leaf {
-    move |key| {
+fn leaf(
+    natural: &'static [(u32, i32, i32)],
+    hidden: &'static [u32],
+) -> impl Fn(&u32, Constraints) -> Leaf {
+    move |key, _| {
         let (width, height) = natural
             .iter()
             .find(|(k, ..)| k == key)
             .map_or((0, 0), |&(_, w, h)| (w, h));
         Leaf {
-            natural: Size::new(width, height),
             visible: !hidden.contains(key),
+            ..Leaf::new(Size::new(width, height))
         }
     }
 }
@@ -74,11 +77,13 @@ fn spacing_and_margins_apply() {
 }
 
 #[test]
-fn nested_groups_recurse() {
+fn nested_groups_recurse_and_fill_when_asked() {
     let inner = Group::row()
         .push(Item::leaf(1).sized(Sizing::Fixed(dip(20.0))))
         .push(Item::leaf(2).sized(Sizing::Fill(1)));
-    let tree = Group::column().push(Item::leaf(0)).push(Item::group(inner));
+    let tree = Group::column()
+        .push(Item::leaf(0))
+        .push(Item::group(inner).sized(Sizing::Fill(1)));
     let placed = tree.compute(Rect::new(0, 0, 100, 60), 96, &leaf(&[(0, 0, 10)], &[]));
     assert_eq!(
         rects(&placed),
@@ -168,4 +173,39 @@ fn preferred_size_honours_fixed_min_and_width() {
         .push(Item::leaf(2).sized(Sizing::Width(dip(15.0))));
     let size = tree.preferred_size(96, &leaf(&[(0, 5, 10), (1, 20, 12), (2, 99, 8)], &[]));
     assert_eq!(size, Size::new(40 + 50 + 15, 12));
+}
+
+#[test]
+fn a_nested_group_takes_its_natural_size_by_default() {
+    let inner = Group::row()
+        .push(Item::leaf(1))
+        .push(Item::leaf(2).sized(Sizing::Fill(1)));
+    let tree = Group::column().push(Item::group(inner)).push(Item::leaf(0));
+    let placed = tree.compute(
+        Rect::new(0, 0, 100, 60),
+        96,
+        &leaf(&[(0, 0, 10), (1, 30, 25), (2, 0, 12)], &[]),
+    );
+    assert_eq!(
+        rects(&placed),
+        [
+            Rect::new(0, 0, 30, 25),
+            Rect::new(30, 0, 100, 25),
+            Rect::new(0, 25, 100, 35)
+        ]
+    );
+}
+
+#[test]
+fn a_column_measures_its_leaves_at_its_own_width() {
+    // Leaf 0 wraps: its height is 1000 / the width it is given.
+    let wrapping = |key: &u32, constraints: Constraints| {
+        let width = constraints.max_width.unwrap_or(1000);
+        let height = if *key == 0 { 1000 / width.max(1) } else { 5 };
+        Leaf::new(Size::new(width.min(1000), height))
+    };
+    let tree = Group::column().push(Item::leaf(0)).push(Item::leaf(1));
+    let placed = tree.compute(Rect::new(0, 0, 100, 60), 96, &wrapping);
+    assert_eq!(placed[0].1, Rect::new(0, 0, 100, 10));
+    assert_eq!(placed[1].1, Rect::new(0, 10, 100, 15));
 }

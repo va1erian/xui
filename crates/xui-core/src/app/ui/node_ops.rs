@@ -68,6 +68,11 @@ impl<M: 'static> Ui<M> {
         self.core.add_layout_hook(f)
     }
 
+    /// Keeps `value` alive as long as the window.
+    pub(crate) fn retain(&self, value: Box<dyn std::any::Any>) {
+        self.core.retain(value);
+    }
+
     /// Removes a relayout callback added with [`Ui::add_layout_hook`].
     pub(crate) fn remove_layout_hook(&self, token: usize) {
         self.core.remove_layout_hook(token);

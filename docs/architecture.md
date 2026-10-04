@@ -136,9 +136,9 @@ returns the value the child passed to `Ui::close_with_result`.
 `Stack`/`StackSlot` (tile a row or column, largest-remainder rounding). Every
 value is resolved to device pixels once, from `Dip` through the window's DPI.
 
-Portable widgets are **positioned explicitly**: each takes a `Rect` at
-construction, in device pixels. Container widgets own their children and arrange
-them:
+Below the declarative layer, a widget is placed by a `Rect` in device pixels;
+apps describe layouts instead (the rect constructors are being retired).
+Container widgets own their children and arrange them:
 
 - `Panel` scopes child creation through `panel.ui()`; the caller (or a `Stack`)
   positions them in the panel's own coordinates.
@@ -147,23 +147,34 @@ them:
 - `ScrollView` stacks registered rows, clips descendants and scrolls.
 - `Dialog`, `Menu`, `ComboBox` and `Tooltip` share the popup elevation helper.
 
-On top of that arithmetic, `xui_core::arrange` is a small declarative layer: nest
-`row()`/`column()` builders of widgets, then `ui.mount(layout)` places them and
-keeps them placed. The pieces:
+On top of that arithmetic, `xui_core::arrange` is how apps lay windows out:
+nest `row()`/`column()`/`grid()` layouts of widget **builders**, then
+`ui.root(layout)` creates the widgets and keeps them placed. The pieces:
 
-- `layout::Group`/`Item`/`Sizing` are a pure tree (leaves are opaque keys, natural
-  size and visibility are asked for at layout time), so it is testable with no
-  backend. `Sizing` is `Auto`, `Fixed`, `Min`, `Fill`, `Width` or `Height`.
-- `widget::Placeable` is the capability a layout needs from a widget: its node
-  and a natural size measured from its text and the design tokens. A widget
-  built with `::auto(ui, ..)` has no bounds of its own.
-- `arrange::Layout` owns the widgets it is given (a constructor's `Result` goes
-  straight in and the first error surfaces from `mount`); the app shares one it
-  wants to keep through an `Rc`. `Mounted` is what `mount` returns; keep it alive
-  and it re-flows on window resize, DPI change and `Ui::set_visible`, and
-  dropping it destroys the widgets.
-- `Ui::mount_in(container, layout)` lays a layout out inside a `Panel` (or any
-  container node) in the container's own coordinates.
+- `layout::Group`/`Item` are a pure tree (leaves are opaque keys) with rows,
+  columns and grids (`Track::Auto`/`Fixed`/`Fill` columns, spans), per-item
+  `Align` and max sizes, and framed items (a leaf with a group inside its
+  content insets). Leaves are measured through a callback with `Constraints`
+  (a column bounds its children's width, so wrapping content reports its
+  height for that width), so the tree is testable with no backend. A nested
+  group takes its natural size unless it is sized to fill.
+- `widget::Placeable` is the capability a layout needs from a widget: its
+  node, `measure(ui, constraints)` from its text and the design tokens, the
+  `content_insets` of a frame (`GroupBox`), and a `placed` hook for satellite
+  nodes and containers (`Tabs` re-lays its pages there).
+- `arrange::Build` describes a widget; it is created at mount time with the
+  `Ui` of the container the layout is mounted in, so builders take no `ui` and
+  no `Rect`. `Handle<W>` is the app's typed reference to a widget it changes
+  later (`bind` fills it at mount). Events map to `Msg` by value
+  (`on_click(Msg::Ok)`, `on_change(Msg::Name)`), so `Msg: Clone` is the norm.
+- `Ui::root` keeps the mounted layout for the window's lifetime (the runtime
+  releases it when the window goes); `Ui::mount` returns a `Mounted` to drop
+  for content that is replaced; `Ui::mount_in(container, layout)` places a
+  layout inside a container node. All re-flow on window resize, DPI change and
+  `Ui::set_visible`; a container's layout re-flows on its `Event::Resize`.
+- `app(title)...run(make)` (and the umbrella's `xui::app`, which also picks the
+  backend and handles `XUI_SNAPSHOT`) opens the window, applies the backend's
+  `system_theme`, builds the app and honours `XUI_DEMO_AUTOCLOSE_MS`.
 
 A layout does not observe a text change; call `Ui::relayout()` after one that
 alters a widget's natural size.

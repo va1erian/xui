@@ -1,84 +1,73 @@
 #![forbid(unsafe_code)]
 
-//! A pure layout tree: nested rows and columns of keyed leaves.
+//! A pure layout tree: nested rows, columns and grids of keyed leaves.
 //!
 //! The tree knows nothing about widgets. A leaf is an opaque key `K`; what the
-//! layout needs to know about it (its natural size and whether it is visible)
-//! is asked for through a [`Leaf`] callback each time the tree is laid out, so
-//! a text change or a hidden widget is picked up without rebuilding the tree.
-//! Slot arithmetic is the existing [`Stack`], so leftover pixels are shared with
-//! largest-remainder rounding and there are no gaps or overlaps.
+//! layout needs to know about it (its natural size within some
+//! [`Constraints`], whether it is visible, and the insets of any content it
+//! frames) is asked for through a [`Leaf`] callback each time the tree is laid
+//! out, so a text change or a hidden widget is picked up without rebuilding
+//! the tree. Slot arithmetic is the existing [`Stack`](super::Stack), so
+//! leftover pixels are shared with largest-remainder rounding and there are no
+//! gaps or overlaps.
 
-use super::{Insets, Stack, StackDirection, StackSlot};
+mod flow;
+mod grid;
+#[cfg(test)]
+mod tests;
+mod types;
+
+pub use types::{Align, Constraints, Leaf, LeafFn, Sizing, Track};
+
+use super::{Insets, StackDirection};
 use crate::geometry::{Rect, Size};
-use crate::units::{Dip, Px};
+use crate::units::Dip;
 
-/// What the tree asks about a leaf when it lays out.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Leaf {
-    /// The leaf's natural size, in device pixels.
-    pub natural: Size,
-    /// Whether the leaf takes part in layout. A hidden leaf takes no space.
-    pub visible: bool,
-}
-
-impl Leaf {
-    /// A visible leaf of `natural` size.
-    pub const fn new(natural: Size) -> Leaf {
-        Leaf {
-            natural,
-            visible: true,
-        }
-    }
-}
-
-/// How an [`Item`] is sized: along its parent's main axis, or, for
-/// [`Width`](Sizing::Width) and [`Height`](Sizing::Height), along a named axis.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum Sizing {
-    /// The natural size along the main axis.
-    Auto,
-    /// Exactly this many design units along the main axis.
-    Fixed(Dip),
-    /// At least this many design units along the main axis; shrinks only when
-    /// the parent is too small to honour every item.
-    Min(Dip),
-    /// A share of the leftover main-axis space, proportional to its weight.
-    Fill(u32),
-    /// Exactly this many design units of width, whichever axis that is.
-    Width(Dip),
-    /// Exactly this many design units of height, whichever axis that is.
-    Height(Dip),
-}
-
-/// One entry of a [`Group`]: a leaf or a nested group, with its sizing.
+/// One entry of a [`Group`]: a leaf, a nested group, or a leaf that frames a
+/// nested group, with its sizing and placement.
 #[derive(Clone, Debug)]
 pub struct Item<K> {
     content: Content<K>,
     sizing: Sizing,
+    align: Option<Align>,
+    max_width: Option<Dip>,
+    max_height: Option<Dip>,
+    span: usize,
 }
 
 #[derive(Clone, Debug)]
 enum Content<K> {
     Leaf(K),
     Group(Group<K>),
+    Framed(K, Group<K>),
 }
 
 impl<K: Copy> Item<K> {
-    /// A leaf keyed by `key`, at its natural size.
-    pub fn leaf(key: K) -> Item<K> {
+    fn new(content: Content<K>) -> Item<K> {
         Item {
-            content: Content::Leaf(key),
+            content,
             sizing: Sizing::Auto,
+            align: None,
+            max_width: None,
+            max_height: None,
+            span: 1,
         }
     }
 
-    /// A nested group, sharing leftover space equally by default.
+    /// A leaf keyed by `key`, at its natural size.
+    pub fn leaf(key: K) -> Item<K> {
+        Item::new(Content::Leaf(key))
+    }
+
+    /// A nested group, at its natural size.
     pub fn group(group: Group<K>) -> Item<K> {
-        Item {
-            content: Content::Group(group),
-            sizing: Sizing::Fill(1),
-        }
+        Item::new(Content::Group(group))
+    }
+
+    /// The leaf `key` with `group` laid out inside it, within the insets the
+    /// leaf reports as [`Leaf::content`].
+    pub fn framed(key: K, group: Group<K>) -> Item<K> {
+        Item::new(Content::Framed(key, group))
     }
 
     /// Sets how the item is sized.
@@ -92,111 +81,195 @@ impl<K: Copy> Item<K> {
         self.sizing
     }
 
-    fn is_visible(&self, leaf: &dyn Fn(&K) -> Leaf) -> bool {
-        match &self.content {
-            Content::Leaf(key) => leaf(key).visible,
-            Content::Group(group) => group.items.iter().any(|item| item.is_visible(leaf)),
-        }
+    /// Places the item across its parent's cross axis (in a grid, within its
+    /// cell on both axes) instead of the parent's default.
+    pub fn align(mut self, align: Align) -> Item<K> {
+        self.align = Some(align);
+        self
     }
 
-    fn slot(&self, direction: StackDirection, leaf: &dyn Fn(&K) -> Leaf) -> StackSlot {
-        match self.sizing {
-            Sizing::Fill(weight) => StackSlot::Fill(weight),
-            Sizing::Fixed(size) => StackSlot::Fixed(size),
-            Sizing::Min(size) => StackSlot::Min(size),
-            Sizing::Width(size) if direction == StackDirection::Horizontal => {
-                StackSlot::Fixed(size)
+    /// Caps the item's width at `width` design units.
+    pub fn max_width(mut self, width: Dip) -> Item<K> {
+        self.max_width = Some(width);
+        self
+    }
+
+    /// Caps the item's height at `height` design units.
+    pub fn max_height(mut self, height: Dip) -> Item<K> {
+        self.max_height = Some(height);
+        self
+    }
+
+    /// In a grid, makes the item cover `columns` columns (at least one).
+    pub fn span(mut self, columns: usize) -> Item<K> {
+        self.span = columns.max(1);
+        self
+    }
+
+    fn is_visible(&self, leaf: LeafFn<'_, K>, dpi: u32) -> bool {
+        match &self.content {
+            Content::Leaf(key) | Content::Framed(key, _) => {
+                leaf(key, Constraints::unbounded(dpi)).visible
             }
-            Sizing::Height(size) if direction == StackDirection::Vertical => StackSlot::Fixed(size),
-            // A named-axis size on the cross axis leaves the main axis at its
-            // natural size.
-            Sizing::Auto | Sizing::Width(_) | Sizing::Height(_) => match &self.content {
-                Content::Leaf(key) => {
-                    let natural = leaf(key).natural;
-                    StackSlot::FixedPx(Px(main(direction, natural).max(0)))
-                }
-                Content::Group(_) => StackSlot::Fill(1),
-            },
+            Content::Group(group) => group.items.iter().any(|item| item.is_visible(leaf, dpi)),
         }
     }
 
-    /// The cross-axis extent this item asked for, if any.
-    fn cross_extent(&self, direction: StackDirection) -> Option<Dip> {
-        match (self.sizing, direction) {
-            (Sizing::Width(size), StackDirection::Vertical) => Some(size),
-            (Sizing::Height(size), StackDirection::Horizontal) => Some(size),
-            _ => None,
-        }
-    }
-
-    fn place(&self, rect: Rect, dpi: u32, leaf: &dyn Fn(&K) -> Leaf, out: &mut Vec<(K, Rect)>) {
+    /// The content's natural size within `constraints`, before the item's
+    /// own sizing applies.
+    fn measure(&self, constraints: Constraints, leaf: LeafFn<'_, K>) -> Size {
         match &self.content {
-            Content::Leaf(key) => out.push((*key, rect)),
-            Content::Group(group) => group.place(rect, dpi, leaf, out),
+            Content::Leaf(key) => leaf(key, constraints).natural,
+            Content::Group(group) => group.measure(constraints, leaf),
+            Content::Framed(key, group) => {
+                let frame = leaf(key, constraints);
+                let inner = group.measure(constraints.shrink(frame.content), leaf);
+                let px = |value: Dip| value.to_px(constraints.dpi).value();
+                let insets = frame.content;
+                Size::new(
+                    frame
+                        .natural
+                        .width
+                        .max(inner.width + px(insets.left) + px(insets.right)),
+                    frame
+                        .natural
+                        .height
+                        .max(inner.height + px(insets.top) + px(insets.bottom)),
+                )
+            }
         }
     }
 
-    fn natural(&self, direction: StackDirection, dpi: u32, leaf: &dyn Fn(&K) -> Leaf) -> Size {
-        let content = match &self.content {
-            Content::Leaf(key) => leaf(key).natural,
-            Content::Group(group) => group.preferred_size(dpi, leaf),
-        };
+    /// The item's natural size within `constraints` as its parent lays it
+    /// along `direction`: the content's size with the sizing and the caps
+    /// applied. A fill item has no natural main extent of its own.
+    fn natural(
+        &self,
+        direction: StackDirection,
+        constraints: Constraints,
+        leaf: LeafFn<'_, K>,
+    ) -> Size {
+        let dpi = constraints.dpi;
         let px = |value: Dip| value.to_px(dpi).value().max(0);
-        match self.sizing {
+        let content = self.measure(constraints, leaf);
+        let sized = match self.sizing {
             Sizing::Width(value) => Size::new(px(value), content.height),
             Sizing::Height(value) => Size::new(content.width, px(value)),
             sizing => {
                 let main_extent = match sizing {
                     Sizing::Fixed(value) => px(value),
                     Sizing::Min(value) => main(direction, content).max(px(value)),
-                    // A fill item has no natural extent of its own.
                     Sizing::Fill(_) => 0,
                     _ => main(direction, content),
                 };
                 with_main(direction, content, main_extent)
             }
+        };
+        self.capped(sized, dpi)
+    }
+
+    /// `size` with the item's caps applied.
+    fn capped(&self, size: Size, dpi: u32) -> Size {
+        let cap = |value: i32, max: Option<Dip>| match max {
+            Some(max) => value.min(max.to_px(dpi).value().max(0)),
+            None => value,
+        };
+        Size::new(
+            cap(size.width, self.max_width),
+            cap(size.height, self.max_height),
+        )
+    }
+
+    fn place(&self, rect: Rect, dpi: u32, leaf: LeafFn<'_, K>, out: &mut Vec<(K, Rect)>) {
+        match &self.content {
+            Content::Leaf(key) => out.push((*key, rect)),
+            Content::Group(group) => group.place(rect, dpi, leaf, out),
+            Content::Framed(key, group) => {
+                out.push((*key, rect));
+                let insets = leaf(key, Constraints::unbounded(dpi)).content;
+                group.place(insets.apply(rect, dpi), dpi, leaf, out);
+            }
         }
     }
 }
 
-/// A row or column of [`Item`]s.
+/// How a [`Group`] arranges its items.
+#[derive(Clone, Debug)]
+enum Arrangement {
+    Stack(StackDirection),
+    Grid(Vec<Track>),
+}
+
+/// A row, column or grid of [`Item`]s.
 #[derive(Clone, Debug)]
 pub struct Group<K> {
-    direction: StackDirection,
+    arrangement: Arrangement,
     spacing: Dip,
     margins: Insets,
+    align: Align,
+    justify: Align,
     items: Vec<Item<K>>,
 }
 
 impl<K: Copy> Group<K> {
     /// A group that places its items left to right.
     pub const fn row() -> Group<K> {
-        Group::new(StackDirection::Horizontal)
+        Group::new(Arrangement::Stack(StackDirection::Horizontal))
     }
 
     /// A group that places its items top to bottom.
     pub const fn column() -> Group<K> {
-        Group::new(StackDirection::Vertical)
+        Group::new(Arrangement::Stack(StackDirection::Vertical))
     }
 
-    const fn new(direction: StackDirection) -> Group<K> {
+    /// A group that places its items in `columns`, left to right and then
+    /// row by row; an item spanning more columns than remain in a row starts
+    /// the next one.
+    pub fn grid(columns: Vec<Track>) -> Group<K> {
+        let columns = if columns.is_empty() {
+            vec![Track::Fill(1)]
+        } else {
+            columns
+        };
+        Group::new(Arrangement::Grid(columns))
+    }
+
+    const fn new(arrangement: Arrangement) -> Group<K> {
         Group {
-            direction,
+            arrangement,
             spacing: Dip(0.0),
             margins: Insets::new(Dip(0.0), Dip(0.0), Dip(0.0), Dip(0.0)),
+            align: Align::Stretch,
+            justify: Align::Start,
             items: Vec::new(),
         }
     }
 
-    /// The gap between adjacent items, in design units.
-    pub const fn spacing(mut self, spacing: Dip) -> Group<K> {
+    /// The gap between adjacent items (in a grid, between rows and between
+    /// columns), in design units.
+    pub fn spacing(mut self, spacing: Dip) -> Group<K> {
         self.spacing = spacing;
         self
     }
 
     /// Margins inside the parent, in design units.
-    pub const fn margins(mut self, margins: Insets) -> Group<K> {
+    pub fn margins(mut self, margins: Insets) -> Group<K> {
         self.margins = margins;
+        self
+    }
+
+    /// Where items sit across the main axis (in a grid, within their cells)
+    /// unless they set their own [`Item::align`]. The default stretches them.
+    pub fn align(mut self, align: Align) -> Group<K> {
+        self.align = align;
+        self
+    }
+
+    /// Where a row's or column's items sit along the main axis when none of
+    /// them fills it. The default packs them at the start; `Stretch` is the
+    /// same as `Start`. A grid ignores it.
+    pub fn justify(mut self, justify: Align) -> Group<K> {
+        self.justify = justify;
         self
     }
 
@@ -208,54 +281,39 @@ impl<K: Copy> Group<K> {
 
     /// Lays the tree out inside `rect`, returning one rectangle per visible
     /// leaf, in tree order.
-    pub fn compute(&self, rect: Rect, dpi: u32, leaf: &dyn Fn(&K) -> Leaf) -> Vec<(K, Rect)> {
+    pub fn compute(&self, rect: Rect, dpi: u32, leaf: LeafFn<'_, K>) -> Vec<(K, Rect)> {
         let mut out = Vec::new();
         self.place(rect, dpi, leaf, &mut out);
         out
     }
 
-    fn stack(&self) -> Stack {
-        match self.direction {
-            StackDirection::Horizontal => Stack::horizontal(),
-            StackDirection::Vertical => Stack::vertical(),
-        }
-        .spacing(self.spacing)
-        .margins(self.margins)
-    }
-
-    fn place(&self, rect: Rect, dpi: u32, leaf: &dyn Fn(&K) -> Leaf, out: &mut Vec<(K, Rect)>) {
-        let visible: Vec<&Item<K>> = self
-            .items
-            .iter()
-            .filter(|item| item.is_visible(leaf))
-            .collect();
-        if visible.is_empty() {
-            return;
-        }
-        let stack = visible.iter().fold(self.stack(), |stack, item| {
-            stack.push(item.slot(self.direction, leaf))
-        });
-        for (item, area) in visible.iter().zip(stack.split(rect, dpi)) {
-            let area = match item.cross_extent(self.direction) {
-                Some(size) => cross_rect(area, self.direction, size.to_px(dpi).value()),
-                None => area,
-            };
-            item.place(area, dpi, leaf, out);
+    fn place(&self, rect: Rect, dpi: u32, leaf: LeafFn<'_, K>, out: &mut Vec<(K, Rect)>) {
+        match &self.arrangement {
+            Arrangement::Stack(direction) => flow::place(self, *direction, rect, dpi, leaf, out),
+            Arrangement::Grid(columns) => grid::place(self, columns, rect, dpi, leaf, out),
         }
     }
 
-    /// The size the group's content wants, in device pixels at `dpi`: along the
-    /// main axis the margins plus each visible item's natural extent plus one
-    /// gap between neighbours; across it the margins plus the largest natural
-    /// cross extent. A [`Sizing::Fill`] item contributes no natural extent.
-    pub fn preferred_size(&self, dpi: u32, leaf: &dyn Fn(&K) -> Leaf) -> Size {
-        let naturals: Vec<Size> = self
-            .items
+    /// The size the group's content wants, in device pixels at `dpi`, with no
+    /// bound on either axis. A [`Sizing::Fill`] item contributes no natural
+    /// extent along its parent's main axis.
+    pub fn preferred_size(&self, dpi: u32, leaf: LeafFn<'_, K>) -> Size {
+        self.measure(Constraints::unbounded(dpi), leaf)
+    }
+
+    /// The size the group's content wants within `constraints`.
+    fn measure(&self, constraints: Constraints, leaf: LeafFn<'_, K>) -> Size {
+        match &self.arrangement {
+            Arrangement::Stack(direction) => flow::measure(self, *direction, constraints, leaf),
+            Arrangement::Grid(columns) => grid::measure(self, columns, constraints, leaf),
+        }
+    }
+
+    fn visible_items(&self, leaf: LeafFn<'_, K>, dpi: u32) -> Vec<&Item<K>> {
+        self.items
             .iter()
-            .filter(|item| item.is_visible(leaf))
-            .map(|item| item.natural(self.direction, dpi, leaf))
-            .collect();
-        self.stack().preferred_size(&naturals, dpi)
+            .filter(|item| item.is_visible(leaf, dpi))
+            .collect()
     }
 }
 
@@ -267,6 +325,14 @@ fn main(direction: StackDirection, size: Size) -> i32 {
     }
 }
 
+/// The extent of `size` across `direction`.
+fn cross(direction: StackDirection, size: Size) -> i32 {
+    match direction {
+        StackDirection::Horizontal => size.height,
+        StackDirection::Vertical => size.width,
+    }
+}
+
 /// `size` with its extent along `direction` replaced by `extent`.
 fn with_main(direction: StackDirection, size: Size, extent: i32) -> Size {
     match direction {
@@ -275,24 +341,44 @@ fn with_main(direction: StackDirection, size: Size, extent: i32) -> Size {
     }
 }
 
-/// Narrows `rect` to `extent` pixels along the cross axis, keeping the start
-/// edge (the top for a row, the left for a column).
-fn cross_rect(rect: Rect, direction: StackDirection, extent: i32) -> Rect {
-    match direction {
-        StackDirection::Horizontal => Rect::new(
-            rect.left,
-            rect.top,
-            rect.right,
-            (rect.top + extent).min(rect.bottom),
-        ),
-        StackDirection::Vertical => Rect::new(
-            rect.left,
-            rect.top,
-            (rect.left + extent).min(rect.right),
-            rect.bottom,
-        ),
+/// Places a span of `extent` pixels inside `start..end` by `align`. `Stretch`
+/// fills the span.
+fn align_span(start: i32, end: i32, extent: i32, align: Align) -> (i32, i32) {
+    let room = (end - start).max(0);
+    let extent = extent.clamp(0, room);
+    match align {
+        Align::Stretch => (start, end),
+        Align::Start => (start, start + extent),
+        Align::Center => {
+            let from = start + (room - extent) / 2;
+            (from, from + extent)
+        }
+        Align::End => (end - extent, end),
     }
 }
 
-#[cfg(test)]
-mod tests;
+/// `rect` with each axis narrowed to the item's caps, kept where `align`
+/// says (a stretched item keeps its start edge).
+fn clamp_to_caps<K: Copy>(item: &Item<K>, rect: Rect, align: Align, dpi: u32) -> Rect {
+    let align = if align == Align::Stretch {
+        Align::Start
+    } else {
+        align
+    };
+    let mut rect = rect;
+    if let Some(max) = item.max_width {
+        let max = max.to_px(dpi).value().max(0);
+        if rect.width() > max {
+            let (left, right) = align_span(rect.left, rect.right, max, align);
+            rect = Rect::new(left, rect.top, right, rect.bottom);
+        }
+    }
+    if let Some(max) = item.max_height {
+        let max = max.to_px(dpi).value().max(0);
+        if rect.height() > max {
+            let (top, bottom) = align_span(rect.top, rect.bottom, max, align);
+            rect = Rect::new(rect.left, top, rect.right, bottom);
+        }
+    }
+    rect
+}

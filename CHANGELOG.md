@@ -2,7 +2,38 @@
 
 ## Unreleased
 
+### Breaking changes
+
+- **Layouts take builders, not widgets.** `arrange` layouts hold widget
+  builders (`label("...")`, `button("...").on_click(Msg::X)`, `edit()`,
+  `list()`, `group(title, layout)`, `tabs().page(..)`, or `build(|ui| ...)`
+  for any other widget), created at mount time with the right parent.
+  Already-built widgets (by value, as a `Result`, or as `&Rc<W>`) and
+  `arrange::widget` are gone: bind a `Handle<W>` instead.
+  `Layout::spacing`/`margins` are now `gap` and `padding` and take plain
+  numbers.
+- **A nested row or column takes its natural size** along its parent's main
+  axis instead of filling it; add `.fill(1)` where it should take the rest.
+- **`Placeable::natural_size(ui, dpi)` is now `measure(ui, constraints)`**,
+  with the DPI in `Constraints::dpi`; `layout::Leaf` gains `content`, and the
+  tree's leaf callback takes `Constraints`.
+
 ### Additions
+
+- **Declarative app setup.** `xui::app(title).size(w, h).run(|ui| ...)` opens
+  a window on the default backend (or `xui_core::app` with `.backend(..)`),
+  applies the backend's new `Backend::system_theme`, returns the first widget
+  error, honours `XUI_DEMO_AUTOCLOSE_MS`, and with `XUI_SNAPSHOT=<dir>` saves
+  light and dark screenshots headlessly. `Ui::root(layout)` keeps a layout
+  for the window's lifetime, `Ui::every(ms, msg)` raises a message
+  periodically, and `xui::prelude` brings builders, layouts, handles and
+  widget types in.
+- **Layout v2.** `grid([Track::Auto, Track::Fill(1)])` with column spans,
+  per-entry `align`, `max_width`/`max_height`, a layout's `align`/`justify`,
+  `group(title, layout)` (a `GroupBox` framing a layout), `Tabs` pages built
+  from layouts (`Tabs::add_layout_page`), height-for-width measuring through
+  `Constraints`, and `ListView::refresh_model` for live tables that keep their
+  scroll position.
 
 - **Password fields.** `Edit::password(true)` masks a single-line field for a
   secret: it paints one bullet (U+2022) per character, with the caret,

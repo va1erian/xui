@@ -222,6 +222,8 @@ impl<A: App> Drop for Runtime<A> {
         // Idempotent: clears this window's registry entry if the runtime is
         // dropped without a close having done it (for example at process exit).
         super::secondary::unregister_window(self.core.window());
+        // The root layout holds a `Ui`, so it would keep this core alive.
+        self.core.release_retained();
     }
 }
 
@@ -286,6 +288,9 @@ where
             return;
         };
         let mut ui = Ui::new(Rc::clone(&ready_core));
+        if let Some(theme) = ready_core.backend().system_theme() {
+            ui.set_theme(theme);
+        }
         let app = make(&mut ui);
         ready_runtime.prime(app);
     };

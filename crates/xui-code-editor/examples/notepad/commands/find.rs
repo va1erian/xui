@@ -16,7 +16,7 @@ pub fn show_find(app: &mut Notepad, ui: &mut Ui<Msg>) {
     }
     app.find_open.set(true);
     app.find_bar.set_visible(ui, true);
-    app.find_bar.query.focus();
+    app.find_bar.query.get().focus();
     find_refresh(app, ui);
 }
 
@@ -31,21 +31,21 @@ pub fn close_find(app: &mut Notepad, ui: &mut Ui<Msg>) {
 pub fn find_refresh(app: &mut Notepad, _ui: &mut Ui<Msg>) {
     let text = app.editor.text();
     match search::matches(&text, &app.search) {
-        Err(error) => app.find_bar.status.set_text(&error),
+        Err(error) => app.find_bar.status.get().set_text(&error),
         Ok(found) if found.is_empty() => {
             let label = if app.search.is_empty() {
                 String::new()
             } else {
                 "No matches".to_string()
             };
-            app.find_bar.status.set_text(&label);
+            app.find_bar.status.get().set_text(&label);
         }
         Ok(found) => {
             let label = match search::current_index(&text, &app.search, app.editor.selection()) {
                 Some(index) => format!("{} of {}", index + 1, found.len()),
                 None => format!("{} matches", found.len()),
             };
-            app.find_bar.status.set_text(&label);
+            app.find_bar.status.get().set_text(&label);
         }
     }
 }
@@ -61,9 +61,9 @@ pub fn find_step(app: &mut Notepad, ui: &mut Ui<Msg>, forward: bool) {
             find_refresh(app, ui);
         }
         Ok(false) => {
-            app.find_bar.status.set_text("No matches");
+            app.find_bar.status.get().set_text("No matches");
         }
-        Err(error) => app.find_bar.status.set_text(&error),
+        Err(error) => app.find_bar.status.get().set_text(&error),
     }
 }
 
@@ -83,7 +83,7 @@ pub fn replace_current(app: &mut Notepad, ui: &mut Ui<Msg>) {
             find_step(app, ui, true);
         }
         Ok(None) => find_step(app, ui, true),
-        Err(error) => app.find_bar.status.set_text(&error),
+        Err(error) => app.find_bar.status.get().set_text(&error),
     }
 }
 
@@ -102,6 +102,6 @@ pub fn replace_all(app: &mut Notepad, ui: &mut Ui<Msg>) {
             find_refresh(app, ui);
         }
         Ok(None) => {}
-        Err(error) => app.find_bar.status.set_text(&error),
+        Err(error) => app.find_bar.status.get().set_text(&error),
     }
 }

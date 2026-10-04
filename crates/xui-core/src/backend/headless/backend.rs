@@ -7,9 +7,9 @@ use std::rc::Rc;
 use super::text::HeadlessShaper;
 use super::{HeadlessBackend, Node, SinkWindow, remove_orphans};
 use crate::backend::{
-    Backend, BackendError, FileDialogOutcome, FileDialogRequest, FontSpec, ImplKind, NodeKind,
-    NodeSpec, Painter, ParentRef, PlatformSpec, Result, TextLayout, TextMetrics, TextShaper,
-    TextStyle, TimerId, Waker, WidgetId, WindowId,
+    Backend, BackendError, Event, FileDialogOutcome, FileDialogRequest, FontSpec, ImplKind,
+    NodeKind, NodeSpec, Painter, ParentRef, PlatformSpec, Result, TextLayout, TextMetrics,
+    TextShaper, TextStyle, TimerId, Waker, WidgetId, WindowId,
 };
 use crate::geometry::Rect;
 use crate::image::Image;
@@ -140,13 +140,31 @@ impl Backend for HeadlessBackend {
         remove_orphans(&mut state);
     }
 
-    fn apply_moves(&self, _window: WindowId, moves: &[(WidgetId, Rect)]) {
-        let mut state = self.state.borrow_mut();
-        state.moves += 1;
-        for (id, rect) in moves {
-            if let Some(node) = state.nodes.get_mut(&id.raw()) {
-                node.bounds = *rect;
+    fn apply_moves(&self, window: WindowId, moves: &[(WidgetId, Rect)]) {
+        let mut resized = Vec::new();
+        {
+            let mut state = self.state.borrow_mut();
+            state.moves += 1;
+            for (id, rect) in moves {
+                if let Some(node) = state.nodes.get_mut(&id.raw()) {
+                    if node.bounds.size() != rect.size() {
+                        resized.push((*id, *rect));
+                    }
+                    node.bounds = *rect;
+                }
             }
+        }
+        // As the canvas backend does: a moved node has no native size
+        // notification, so a resized one is told directly.
+        for (id, rect) in resized {
+            self.inject(
+                window,
+                id,
+                Event::Resize {
+                    width: rect.width(),
+                    height: rect.height(),
+                },
+            );
         }
     }
 

@@ -8,14 +8,17 @@
 //! no space and cannot receive focus. [`Tabs::on_change`] maps a selection to
 //! the app's message.
 
+mod pages;
 #[cfg(test)]
 mod tests;
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
+use super::Panel;
 use super::control::Control;
 use crate::app::Ui;
+use crate::arrange::Mounted;
 use crate::backend::{Canvas, Event, NodeKind, NodeSpec, Result, TextStyle, WidgetId};
 use crate::geometry::{Point, Rect};
 use crate::layout::Dock;
@@ -57,6 +60,9 @@ pub struct Tabs<M: 'static> {
     _strip: Control<M>,
     scoped: Ui<M>,
     shared: Rc<Shared<M>>,
+    /// The panel and mounted layout behind each page added with
+    /// [`Tabs::add_layout_page`].
+    layouts: RefCell<Vec<(Panel<M>, Mounted<M>)>>,
 }
 
 impl<M: 'static> Tabs<M> {
@@ -101,6 +107,7 @@ impl<M: 'static> Tabs<M> {
             _strip: strip,
             scoped,
             shared,
+            layouts: RefCell::new(Vec::new()),
         })
     }
 

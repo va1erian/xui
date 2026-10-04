@@ -46,12 +46,11 @@ pub fn refresh(app: &mut Notepad, ui: &mut Ui<Msg>) {
         xui_code_editor::LineEnding::Lf => "LF",
         xui_code_editor::LineEnding::CrLf => "CRLF",
     };
-    app.status
-        .set_text(0, &format!("Ln {}, Col {}", line + 1, col + 1));
-    app.status.set_text(1, &format!("Sel {selected}"));
-    app.status.set_text(2, ending);
-    app.status
-        .set_text(3, if dirty { "Modified" } else { "Saved" });
+    let status = app.status.get();
+    status.set_text(0, &format!("Ln {}, Col {}", line + 1, col + 1));
+    status.set_text(1, &format!("Sel {selected}"));
+    status.set_text(2, ending);
+    status.set_text(3, if dirty { "Modified" } else { "Saved" });
     ui.set_window_title(&format!(
         "{}{} - xui notepad",
         if dirty { "*" } else { "" },
@@ -232,11 +231,11 @@ fn clear_find(app: &mut Notepad, ui: &mut Ui<Msg>) {
     app.search = Default::default();
     app.find_open.set(false);
     app.find_bar.set_visible(ui, false);
-    app.find_bar.query.set_text("");
-    app.find_bar.replacement.set_text("");
-    app.find_bar.status.set_text("");
-    app.find_bar.regex.set_checked(false);
-    app.find_bar.case.set_checked(false);
+    app.find_bar.query.get().set_text("");
+    app.find_bar.replacement.get().set_text("");
+    app.find_bar.status.get().set_text("");
+    app.find_bar.regex.get().set_checked(false);
+    app.find_bar.case.get().set_checked(false);
 }
 
 /// Show the error dialog.
