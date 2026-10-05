@@ -335,14 +335,14 @@ fn a_layout_that_never_settles_gets_a_bounded_number_of_deferred_passes() {
     let _mounted = ui
         .mount(column().child(build(move |_| Ok(Restless(id)))))
         .unwrap();
-    let wakes = backend.wakes(window);
+    backend.pump_wakes(window);
 
-    // Each delivered event (the wake included) flushes; a layout still dirty
-    // after its passes asks for one more wake, three in a row at most.
-    for _ in 0..6 {
-        ui.invalidate_layout();
-        settle(&backend, window);
-    }
-    assert_eq!(backend.wakes(window) - wakes, 3, "bounded retries");
+    // One change; the passes run when the event that made it is handled.
+    // Still dirty, the flush asks for a wake, and only those requested wakes
+    // are delivered: each runs another flush, three in a row at most.
+    ui.invalidate_layout();
+    settle(&backend, window);
+    assert_eq!(backend.pump_wakes(window), 3, "bounded deferred passes");
+    assert_eq!(backend.pump_wakes(window), 0, "and then it stops");
     drop(node);
 }
