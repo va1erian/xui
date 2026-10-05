@@ -329,6 +329,7 @@ fn an_entry_aligns_per_axis_and_takes_a_size() {
         bounds(&ui, &fixed).size(),
         crate::geometry::Size::new(100, 40)
     );
+}
 
 /// A widget whose `placed` dirties the layout again every time.
 struct Restless(crate::backend::WidgetId);
