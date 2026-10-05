@@ -91,6 +91,8 @@ pub(crate) enum Output {
     Title(String),
     Url(String),
     Loading(bool),
+    /// NetSurf's `gui_pointer_shape` for the page under the pointer.
+    Pointer(i32),
     Failed(String),
     FetchFailed { url: String, message: String },
 }
@@ -146,6 +148,10 @@ impl WinState {
             sys::EVENT_UPDATE_EXTENT => self.dirty.set(true),
             _ => {}
         }
+    }
+
+    pub(crate) fn pointer(&self, shape: i32) {
+        self.send(Output::Pointer(shape));
     }
 
     pub(crate) fn title(&self, title: &str) {

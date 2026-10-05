@@ -48,6 +48,7 @@ pub enum NetSurfViewEvent {
 /// a `Proxy`, so the UI thread never blocks); the app answers it by calling
 /// [`NetSurfView::update`], which repaints and returns the view's events.
 pub struct NetSurfView<M: 'static> {
+    ui: Ui<M>,
     control: Control<M>,
     widget: Rc<NetSurfWidget>,
 }
@@ -123,13 +124,22 @@ impl<M: Send + 'static> NetSurfView<M> {
             out,
             wake,
         });
-        Ok(NetSurfView { control, widget })
+        Ok(NetSurfView {
+            ui: ui.clone(),
+            control,
+            widget,
+        })
     }
 
     /// Takes the engine's news: repaints with the newest frame and returns
     /// what else happened. Call it when `on_frame`'s message arrives.
     pub fn update(&self) -> Vec<NetSurfViewEvent> {
         let events = self.widget.drain();
+        // The hand over a link, the beam over a field, the busy pointer while
+        // a page loads: only when NetSurf's choice changed.
+        if let Some(cursor) = self.widget.take_cursor() {
+            self.ui.set_cursor(self.control.id(), cursor);
+        }
         self.control.invalidate();
         events
     }

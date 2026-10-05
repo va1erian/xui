@@ -9,13 +9,14 @@ use std::cell::{Cell, RefCell};
 use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 
 use xui_core::Color;
-use xui_core::backend::Canvas;
+use xui_core::backend::{Canvas, Cursor};
 use xui_core::geometry::Rect as PxRect;
 use xui_core::theme::Theme;
 use xui_core::widget::scrollbar::{self, Orientation, Scroll, THICKNESS, ThumbState};
 use xui_litehtml::{Painter, Rect, TextSystem};
 
 use crate::engine::{Command, Frame, Output};
+use crate::pointer::cursor_for;
 use crate::view::NetSurfViewEvent;
 
 mod input;
@@ -46,6 +47,10 @@ pub(crate) struct NetSurfWidget {
     /// pointer has since moved far enough to be a drag.
     press: Cell<Option<(i32, i32)>>,
     moved: Cell<bool>,
+    /// The cursor last handed to the view, and the one NetSurf asked for
+    /// since, if it differs.
+    cursor: Cell<Cursor>,
+    pending_cursor: Cell<Option<Cursor>>,
 }
 
 impl NetSurfWidget {
@@ -74,6 +79,8 @@ impl NetSurfWidget {
             scale: Cell::new(scale),
             press: Cell::new(None),
             moved: Cell::new(false),
+            cursor: Cell::new(Cursor::Default),
+            pending_cursor: Cell::new(None),
         }
     }
 
@@ -125,6 +132,11 @@ impl NetSurfWidget {
                     self.loading.set(on);
                     events.push(NetSurfViewEvent::LoadingChanged(on));
                 }
+                Ok(Output::Pointer(shape)) => {
+                    let cursor = cursor_for(shape);
+                    self.pending_cursor
+                        .set((cursor != self.cursor.get()).then_some(cursor));
+                }
                 Ok(Output::FetchFailed { url, message }) => {
                     events.push(NetSurfViewEvent::FetchFailed { url, message });
                 }
@@ -141,6 +153,14 @@ impl NetSurfWidget {
             }
         }
         events
+    }
+
+    /// The cursor NetSurf asked for since the last call, when it differs from
+    /// the one the view already shows.
+    pub(crate) fn take_cursor(&self) -> Option<Cursor> {
+        let next = self.pending_cursor.take()?;
+        self.cursor.set(next);
+        Some(next)
     }
 
     fn content_height(&self) -> f32 {

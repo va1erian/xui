@@ -77,6 +77,7 @@ pub(super) fn cursor_icon(cursor: Cursor) -> CursorIcon {
         Cursor::SizeVertical => CursorIcon::NsResize,
         Cursor::SizeNwSe => CursorIcon::NwseResize,
         Cursor::SizeNeSw => CursorIcon::NeswResize,
+        Cursor::Busy => CursorIcon::Wait,
     }
 }
 
@@ -215,6 +216,7 @@ mod tests {
         assert_eq!(cursor_icon(Cursor::SizeVertical), CursorIcon::NsResize);
         assert_eq!(cursor_icon(Cursor::SizeNwSe), CursorIcon::NwseResize);
         assert_eq!(cursor_icon(Cursor::SizeNeSw), CursorIcon::NeswResize);
+        assert_eq!(cursor_icon(Cursor::Busy), CursorIcon::Wait);
     }
 
     #[test]

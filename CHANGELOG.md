@@ -45,6 +45,12 @@
 
 ### Additions
 
+- **`Cursor::Busy`** is the busy (wait) pointer: `winit`'s `Wait` and Win32's
+  `IDC_WAIT`. `Cursor` has no `#[non_exhaustive]`, so a backend that matches it
+  exhaustively needs the new arm. `xui-netsurf` now maps NetSurf's pointer
+  shapes (hand over links, I-beam over fields, busy while loading, the resize
+  arrows) to cursors and applies them to its `NetSurfView`.
+
 - **Declarative forms (`xui::form`, feature `form`).** The `xui-form` crate
   moves in from LazyRAD: a `Catalog` schema of widget kinds, the format-1
   `.lfm` document (`FormDoc`, TOML, byte-stable), validation with

@@ -23,4 +23,7 @@ pub enum Cursor {
     /// A diagonal (north-east to south-west) resize arrow, for a top-right or
     /// bottom-left corner handle.
     SizeNeSw,
+    /// The platform's busy (wait) pointer, for a page or document that is
+    /// still loading and cannot answer yet.
+    Busy,
 }
