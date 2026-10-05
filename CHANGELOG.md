@@ -57,6 +57,10 @@
   writes, and `Handlers` attaches closures by name. Format-1 TOML forms are
   converted by `xui_form::migrate` (feature `migrate`), not loaded at
   runtime. See [Forms](docs/forms.md) and `examples/form.rs`.
+- **The `xui-form` tool** (`crates/xui-form-cli`): `check` (located errors
+  with a "did you mean"), `render` (light and dark PNGs headlessly, with an
+  optional script, layout overlay and layout report), `fmt`, `migrate`
+  (format 1 to 2) and `schema --json`. See [Forms](docs/forms.md).
 - **Rhai-scripted forms (`xui::script`, feature `rhai`).** The LazyRAD
   `xui-rhai` crate moves in as `xui-script`: `fn <control>_<event>`
   handlers, the `on_var` control resolver, `form.state`, the operation

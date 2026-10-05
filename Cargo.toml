@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/xui-core", "crates/xui-code-editor", "crates/xui-gpu", "crates/xui-win32", "crates/xui-canvas", "crates/xui", "crates/xui-litehtml", "crates/xui-paint", "crates/xui-icons", "crates/xui-explorer", "crates/xui-rich-text", "crates/xui-form", "crates/xui-script"]
+members = ["crates/xui-core", "crates/xui-code-editor", "crates/xui-gpu", "crates/xui-win32", "crates/xui-canvas", "crates/xui", "crates/xui-litehtml", "crates/xui-paint", "crates/xui-icons", "crates/xui-explorer", "crates/xui-rich-text", "crates/xui-form", "crates/xui-script", "crates/xui-form-cli"]
 resolver = "3"
 # Its own workspace: GPL-2.0-only C that the MSVC CI does not build.
 exclude = ["crates/xui-netsurf"]
