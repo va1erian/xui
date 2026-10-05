@@ -55,6 +55,8 @@ proptest! {
 
     #[test]
     fn hsl_round_trips_through_hsv(h in 0.0f32..360.0, s in 0.0f32..1.0, l in 0.0f32..1.0) {
+        // Saturation is undefined for black and white (l at 0 or 1).
+        prop_assume!(l > 1e-3 && l < 1.0 - 1e-3);
         let hsv = Hsl { h, s, l }.to_hsv();
         let back = hsv.to_hsl();
         prop_assert!((back.s - s).abs() < 1e-3, "s {} vs {}", back.s, s);

@@ -1,6 +1,7 @@
 //! Mounting builder trees on a headless window.
 
 mod containers;
+mod features;
 mod grid;
 mod views;
 
@@ -33,6 +34,12 @@ fn setup() -> (Rc<HeadlessBackend>, WindowId, Ui<u32>, Rc<Runtime<Idle>>) {
     let runtime = Runtime::primary(core, Idle);
     runtime.attach(backend.as_ref());
     (backend, window, ui, runtime)
+}
+
+/// Delivers a no-op event, as the backend does for each input: the runtime
+/// runs the layout pass the test's changes asked for once it is handled.
+fn settle(backend: &HeadlessBackend, window: WindowId) {
+    backend.inject(window, crate::backend::WidgetId::NONE, Event::Wake);
 }
 
 fn bounds<W: crate::widget::Placeable<u32>>(ui: &Ui<u32>, handle: &Handle<W>) -> Rect {
@@ -128,8 +135,8 @@ fn a_list_and_a_status_bar_fill_a_column_and_follow_a_resize() {
 }
 
 #[test]
-fn hiding_a_widget_reflows_the_layout() {
-    let (_backend, _window, ui, _runtime) = setup();
+fn hiding_a_widget_reflows_the_layout_once_the_event_is_handled() {
+    let (backend, window, ui, _runtime) = setup();
     let (top, rest) = (Handle::<Edit<u32>>::new(), Handle::new());
     let _mounted = ui
         .mount(column().children((edit().bind(&top), button("rest").bind(&rest).fill(1))))
@@ -137,6 +144,8 @@ fn hiding_a_widget_reflows_the_layout() {
     assert_eq!(bounds(&ui, &rest).top, 28);
 
     ui.set_visible(top.get().id(), false);
+    assert_eq!(bounds(&ui, &rest).top, 28, "not before the event is done");
+    settle(&backend, window);
     assert_eq!(
         bounds(&ui, &rest),
         Rect::new(0, 0, 400, 300),
@@ -144,6 +153,7 @@ fn hiding_a_widget_reflows_the_layout() {
     );
 
     ui.set_visible(top.get().id(), true);
+    settle(&backend, window);
     assert_eq!(bounds(&ui, &rest).top, 28);
 }
 

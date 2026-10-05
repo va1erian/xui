@@ -36,6 +36,7 @@ use xui_core::{Dip, Theme};
 use crate::OffscreenBackend;
 
 mod gallery;
+mod overlay;
 mod session;
 mod stage;
 #[cfg(test)]
@@ -101,6 +102,7 @@ pub struct Snapshot {
     theme: Theme,
     dpi: u32,
     title: String,
+    layout_overlay: bool,
 }
 
 impl Snapshot {
@@ -112,6 +114,7 @@ impl Snapshot {
             theme: Theme::light(),
             dpi: 96,
             title: "snapshot".to_string(),
+            layout_overlay: false,
         }
     }
 
@@ -130,6 +133,14 @@ impl Snapshot {
     /// Sets the window title.
     pub fn title(mut self, title: impl Into<String>) -> Snapshot {
         self.title = title.into();
+        self
+    }
+
+    /// Outlines every group and widget the window's layouts placed (see
+    /// [`Ui::layout_rects`]) in magenta over the capture, to check spacing
+    /// and alignment by eye.
+    pub fn with_layout_overlay(mut self) -> Snapshot {
+        self.layout_overlay = true;
         self
     }
 

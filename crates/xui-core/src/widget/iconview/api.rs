@@ -46,6 +46,7 @@ impl<M: 'static> IconView<M> {
     pub fn set_model(&self, model: impl IconModel + 'static) {
         self.state.borrow_mut().replace_model(Rc::new(model));
         self.reflow();
+        self.control.invalidate_layout();
     }
 
     /// Replaces the model with plain names.

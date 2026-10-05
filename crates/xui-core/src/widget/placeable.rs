@@ -12,6 +12,8 @@ use super::{
     Button, CheckBox, ComboBox, Edit, HasText, Hyperlink, Label, MultilineEdit, NumberField,
     ProgressBar, Separator, Slider, StatusBar, ToggleButton,
 };
+use std::rc::Rc;
+
 use crate::app::Ui;
 use crate::backend::{TextStyle, WidgetId};
 use crate::geometry::{Rect, Size};
@@ -71,6 +73,46 @@ pub trait Placeable<M: 'static> {
     fn placed(&self, ui: &Ui<M>, rect: Rect) {
         let _ = (ui, rect);
     }
+
+    /// The text the widget shows, for a widget sized by its text: a layout
+    /// report prints it and warns when the widget is placed too narrow for it.
+    fn layout_text(&self) -> Option<String> {
+        None
+    }
+
+    /// The widget's type, as a layout report names it.
+    fn type_name(&self) -> &'static str {
+        std::any::type_name::<Self>()
+    }
+}
+
+/// A widget shared through an `Rc` is placed like the widget itself, so one
+/// the app already holds goes into a layout through
+/// [`build`](crate::arrange::build): `build(move |_| Ok(Rc::clone(&shared)))`.
+impl<M: 'static, W: Placeable<M> + ?Sized> Placeable<M> for Rc<W> {
+    fn id(&self) -> WidgetId {
+        (**self).id()
+    }
+
+    fn measure(&self, ui: &Ui<M>, constraints: Constraints) -> Size {
+        (**self).measure(ui, constraints)
+    }
+
+    fn content_insets(&self, ui: &Ui<M>) -> Insets {
+        (**self).content_insets(ui)
+    }
+
+    fn placed(&self, ui: &Ui<M>, rect: Rect) {
+        (**self).placed(ui, rect);
+    }
+
+    fn layout_text(&self) -> Option<String> {
+        (**self).layout_text()
+    }
+
+    fn type_name(&self) -> &'static str {
+        (**self).type_name()
+    }
 }
 
 /// The measured size of `text` in the standard widget font.
@@ -99,6 +141,10 @@ impl<M: 'static> Placeable<M> for Label<M> {
         let text = self.text_size(ui, dpi);
         Size::new(text.width, text.height + 2 * px(TEXT_PADDING, dpi))
     }
+
+    fn layout_text(&self) -> Option<String> {
+        Some(self.text())
+    }
 }
 
 impl<M: 'static> Placeable<M> for Hyperlink<M> {
@@ -110,6 +156,10 @@ impl<M: 'static> Placeable<M> for Hyperlink<M> {
         let dpi = constraints.dpi;
         let text = text_size(ui, &self.text(), dpi);
         Size::new(text.width, text.height + 2 * px(TEXT_PADDING, dpi))
+    }
+
+    fn layout_text(&self) -> Option<String> {
+        Some(self.text())
     }
 }
 
@@ -125,6 +175,10 @@ macro_rules! labelled_button {
         let dpi = constraints.dpi;
                 let width = text_size(ui, &self.text(), dpi).width + 2 * px(BUTTON_PADDING, dpi);
                 row(width.max(px(BUTTON_MIN_WIDTH, dpi)), dpi)
+            }
+
+            fn layout_text(&self) -> Option<String> {
+                Some(self.text())
             }
         }
     )*};
@@ -142,6 +196,10 @@ impl<M: 'static> Placeable<M> for CheckBox<M> {
             text_size(ui, &self.text(), dpi).width + px(CHECK_LEAD, dpi),
             dpi,
         )
+    }
+
+    fn layout_text(&self) -> Option<String> {
+        Some(self.text())
     }
 }
 

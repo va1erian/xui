@@ -118,6 +118,13 @@ impl<M: 'static> Control<M> {
         self.ui.invalidate(self.id);
     }
 
+    /// Marks the window's layouts dirty after a change to the widget's
+    /// natural size (its text, its icon), so they re-flow once the event
+    /// being handled is done.
+    pub fn invalidate_layout(&self) {
+        self.ui.invalidate_layout();
+    }
+
     /// The node's current text.
     pub fn text(&self) -> String {
         self.ui.text(self.id)

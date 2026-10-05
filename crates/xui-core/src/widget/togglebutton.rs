@@ -5,6 +5,7 @@
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
+use super::Tooltip;
 use super::button::layout_content;
 use super::control::{Control, HasText};
 use crate::app::Ui;
@@ -34,6 +35,8 @@ fn pick<T>(cond: bool, yes: T, no: T) -> T {
 /// Like [`Button`](super::Button) it can show an icon before its label, or an
 /// icon alone (a formatting toolbar's bold or alignment toggle).
 pub struct ToggleButton<M: 'static> {
+    /// Declared first so it is dropped before the node it watches.
+    tooltip: RefCell<Option<Tooltip<M>>>,
     control: Control<M>,
     text: Rc<RefCell<String>>,
     icon: Rc<Cell<Option<IconRef>>>,
@@ -162,6 +165,7 @@ impl<M: 'static> ToggleButton<M> {
         }
 
         Ok(ToggleButton {
+            tooltip: RefCell::new(None),
             control,
             text: label,
             icon,
@@ -191,12 +195,26 @@ impl<M: 'static> ToggleButton<M> {
     pub fn set_icon(&self, icon: Option<impl Into<IconRef>>) {
         self.icon.set(icon.map(Into::into));
         self.control.invalidate();
+        self.control.invalidate_layout();
+    }
+
+    /// Shows `text` in a tooltip while the pointer rests on the button,
+    /// replacing any earlier one; an empty `text` removes it.
+    pub fn set_tooltip(&self, text: &str) -> Result<()> {
+        let tip = if text.is_empty() {
+            None
+        } else {
+            Some(Tooltip::attach(self.control.ui(), self.control.id(), text)?)
+        };
+        self.tooltip.replace(tip);
+        Ok(())
     }
 
     /// Removes the button's leading icon.
     pub fn clear_icon(&self) {
         self.icon.set(None);
         self.control.invalidate();
+        self.control.invalidate_layout();
     }
 
     /// Maps a toggle to the app's message: the closure receives the new state
@@ -249,6 +267,7 @@ impl<M: 'static> HasText for ToggleButton<M> {
     fn set_text(&self, text: &str) {
         *self.text.borrow_mut() = text.to_string();
         self.control.invalidate();
+        self.control.invalidate_layout();
     }
 }
 

@@ -70,8 +70,22 @@ type DisplayMapper<M> = Box<dyn Fn() -> Option<M>>;
 /// A DPI change mapped to an optional app message, with the new dots-per-inch
 /// and the backend's suggested window bounds in device pixels.
 type DpiMapper<M> = Box<dyn Fn(u32, Rect) -> Option<M>>;
-/// A mounted layout's relayout callback.
-type LayoutHook = Rc<dyn Fn()>;
+/// The layout passes [`Core::flush_layout`] runs before deferring the rest.
+const LAYOUT_PASSES: usize = 4;
+/// The deferred layout passes it schedules in a row before giving up.
+const LAYOUT_RETRIES: u8 = 3;
+
+/// A mounted layout, as the window it lives in sees it.
+pub(crate) trait LayoutHook {
+    /// Lays the layout out again (a layout its container drives does
+    /// nothing: the container re-lays it when it is placed).
+    fn relayout(&self);
+    /// Appends the layout's tree, rectangles and warnings to `out`.
+    fn report(&self, out: &mut String);
+    /// Appends the rectangle of every node a window-level layout placed, in
+    /// the window's client coordinates; a layout inside a container adds none.
+    fn rects(&self, out: &mut Vec<Rect>);
+}
 
 /// The shared, interior-mutable state behind a window's [`Ui`].
 pub(crate) struct Core<M> {
@@ -95,10 +109,16 @@ pub(crate) struct Core<M> {
     on_dpi_changed: RefCell<Option<DpiMapper<M>>>,
     /// Nodes hidden through [`Ui::set_visible`], which layout leaves out.
     hidden: RefCell<HashSet<u64>>,
-    /// Mounted layouts' relayout callbacks, run when the window resizes, its
-    /// DPI changes or a node's visibility does.
-    layout_hooks: RefCell<Vec<(usize, LayoutHook)>>,
+    /// Mounted layouts, re-laid when the window resizes or its DPI changes,
+    /// and once per delivered event after something marked them dirty.
+    layout_hooks: RefCell<Vec<(usize, Rc<dyn LayoutHook>)>>,
     next_layout_hook: Cell<usize>,
+    /// Set by a change that may alter a widget's natural size (its text, its
+    /// visibility, the theme); [`Core::flush_layout`] clears it.
+    layout_dirty: Cell<bool>,
+    /// Deferred layout passes scheduled in a row by [`Core::flush_layout`]
+    /// for layouts that would not settle; reset once they do.
+    layout_retries: Cell<u8>,
     /// A value a modal child closes with (see [`Ui::close_with_result`]). The
     /// opener reads it after the child's loop returns; `Any` erases its type
     /// until then.
@@ -129,6 +149,8 @@ impl<M> Core<M> {
             hidden: RefCell::new(HashSet::new()),
             layout_hooks: RefCell::new(Vec::new()),
             next_layout_hook: Cell::new(0),
+            layout_dirty: Cell::new(false),
+            layout_retries: Cell::new(0),
             result: RefCell::new(None),
             retained: RefCell::new(Vec::new()),
         })
@@ -245,11 +267,11 @@ impl<M> Core<M> {
         self.hidden.borrow().contains(&id.raw())
     }
 
-    /// Adds a relayout callback, returning a token to remove it again.
-    pub(crate) fn add_layout_hook(&self, f: impl Fn() + 'static) -> usize {
+    /// Adds a mounted layout, returning a token to remove it again.
+    pub(crate) fn add_layout_hook(&self, hook: Rc<dyn LayoutHook>) -> usize {
         let token = self.next_layout_hook.get();
         self.next_layout_hook.set(token.wrapping_add(1));
-        self.layout_hooks.borrow_mut().push((token, Rc::new(f)));
+        self.layout_hooks.borrow_mut().push((token, hook));
         token
     }
 
@@ -260,17 +282,48 @@ impl<M> Core<M> {
             .retain(|(existing, _)| *existing != token);
     }
 
-    /// Runs every relayout callback. They are cloned out first: one may mount
-    /// or drop another layout, which would fight the borrow flag.
-    pub(crate) fn run_layout_hooks(&self) {
-        let hooks: Vec<LayoutHook> = self
-            .layout_hooks
+    /// The mounted layouts, cloned out of the borrow: one may mount or drop
+    /// another layout, which would fight the borrow flag.
+    pub(crate) fn layout_hooks(&self) -> Vec<Rc<dyn LayoutHook>> {
+        self.layout_hooks
             .borrow()
             .iter()
             .map(|(_, hook)| Rc::clone(hook))
-            .collect();
-        for hook in hooks {
-            hook();
+            .collect()
+    }
+
+    /// Lays every mounted layout out again now.
+    pub(crate) fn run_layout_hooks(&self) {
+        self.layout_dirty.set(false);
+        for hook in self.layout_hooks() {
+            hook.relayout();
+        }
+    }
+
+    /// Marks the layouts as needing a pass, run by [`Core::flush_layout`].
+    pub(crate) fn invalidate_layout(&self) {
+        self.layout_dirty.set(true);
+    }
+
+    /// Runs the layout pass a change asked for, if any. A pass may itself
+    /// change visibility (a scroll bar appearing), so it repeats while that
+    /// happens, a few times at most. A layout still dirty after that (a
+    /// widget whose `placed` keeps changing its own size) gets one deferred
+    /// pass through a wake rather than being left stale until the next
+    /// input, up to [`LAYOUT_RETRIES`] in a row so it cannot spin forever.
+    pub(crate) fn flush_layout(&self) {
+        for _ in 0..LAYOUT_PASSES {
+            if !self.layout_dirty.get() {
+                self.layout_retries.set(0);
+                return;
+            }
+            self.run_layout_hooks();
+        }
+        if !self.layout_dirty.get() {
+            self.layout_retries.set(0);
+        } else if self.layout_retries.get() < LAYOUT_RETRIES {
+            self.layout_retries.set(self.layout_retries.get() + 1);
+            self.backend.wake(self.window);
         }
     }
 

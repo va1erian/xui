@@ -10,7 +10,7 @@
 //! drag, the wheel and the arrow/Page/Home/End keys all scroll it, and
 //! [`ScrollView::on_scroll`] maps the offset to the app's message.
 
-mod place;
+mod content;
 #[cfg(test)]
 mod tests;
 mod view;
@@ -22,6 +22,7 @@ use super::Orientation;
 use super::control::Control;
 use super::scrollbar::{self, Scroll, ScrollBar};
 use crate::app::Ui;
+use crate::arrange::Mounted;
 use crate::backend::{NodeKind, NodeSpec, Result, WidgetId};
 use crate::geometry::Rect;
 use crate::layout::Stack;
@@ -54,6 +55,8 @@ struct Shared<M: 'static> {
     /// The scrollbar's geometry and drag.
     bar: ScrollBar,
     rows: RefCell<Vec<Row>>,
+    /// A layout set with [`ScrollView::set_layout`], in place of the rows.
+    layout: RefCell<Option<Mounted<M>>>,
     on_scroll: ScrollMapper<M>,
 }
 
@@ -92,6 +95,7 @@ impl<M: 'static> ScrollView<M> {
             offset: Cell::new(0),
             bar: ScrollBar::new(bar_node.id()),
             rows: RefCell::new(Vec::new()),
+            layout: RefCell::new(None),
             on_scroll: RefCell::new(None),
         });
         {
@@ -192,6 +196,15 @@ impl<M: 'static> ScrollView<M> {
     }
 }
 
+impl<M: 'static> Drop for ScrollView<M> {
+    fn drop(&mut self) {
+        // The content's widgets go before the view's node, and with them the
+        // `Ui` the layout holds, which would otherwise keep a cycle through
+        // the view's event mapper alive.
+        drop(self.shared.layout.take());
+    }
+}
+
 impl<M: 'static> Properties for ScrollView<M> {
     fn properties(&self) -> Vec<Property> {
         vec![Property {
@@ -225,6 +238,9 @@ fn relayout<M>(ui: &Ui<M>, s: &Shared<M>) {
     // descendants to it so only what fits is painted (Win32 does this for a
     // child window already).
     ui.set_clip(s.id, Some(bounds));
+    if content::relayout(ui, s, bounds) {
+        return;
+    }
     let dpi = ui.dpi();
     let content: i32 = s
         .rows

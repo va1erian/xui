@@ -8,7 +8,9 @@
 //! [`Stack`], so leftover pixels are shared the same way rows and columns share
 //! them.
 
-use super::{Align, Constraints, Group, Item, LeafFn, Sizing, Track, align_span, clamp_to_caps};
+use super::{
+    Align, Constraints, Group, Item, LeafFn, Out, Sizing, Track, align_both, clamp_to_caps,
+};
 use crate::geometry::{Rect, Size};
 use crate::layout::{Stack, StackDirection, StackSlot};
 use crate::units::{Dip, Px};
@@ -153,7 +155,7 @@ pub(super) fn place<K: Copy>(
     rect: Rect,
     dpi: u32,
     leaf: LeafFn<'_, K>,
-    out: &mut Vec<(K, Rect)>,
+    out: &mut Out<K>,
 ) {
     let visible = group.visible_items(leaf, dpi);
     let cells = cells(&visible, columns.len());
@@ -208,9 +210,7 @@ fn align_in_cell<K: Copy>(
     }
     let constraints = Constraints::unbounded(dpi).with_width(area.width());
     let natural = item.natural(StackDirection::Vertical, constraints, leaf);
-    let (left, right) = align_span(area.left, area.right, natural.width, align);
-    let (top, bottom) = align_span(area.top, area.bottom, natural.height, align);
-    Rect::new(left, top, right, bottom)
+    align_both(area, natural, align)
 }
 
 /// The grid's natural size within `constraints`: the margins plus the
