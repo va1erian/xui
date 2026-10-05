@@ -14,7 +14,7 @@ use crate::units::Dip;
 /// top-left: its [`Item::at`] position, or its natural size at the origin.
 fn design_rect<K: Copy>(item: &Item<K>, dpi: u32, leaf: LeafFn<'_, K>) -> Rect {
     let px = |value: Dip| value.to_px(dpi).value();
-    match item.at {
+    match item.free_position().0 {
         Some([x, y, width, height]) => {
             let (x, y) = (px(x), px(y));
             Rect::new(x, y, x + px(width).max(0), y + px(height).max(0))
@@ -67,7 +67,7 @@ pub(super) fn place<K: Copy>(
             origin,
             inner.size(),
             design_rect(item, dpi, leaf),
-            item.anchor,
+            item.free_position().1,
         );
         item.place(placed.offset(inner.left, inner.top), dpi, leaf, out);
     }

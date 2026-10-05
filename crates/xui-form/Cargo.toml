@@ -1,0 +1,18 @@
+[package]
+name = "xui-form"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "Declarative forms for xui: schema, document, validation and a widget builder"
+repository = "https://github.com/va1erian/xui"
+
+[dependencies]
+xui-core = { path = "../xui-core" }
+serde = { version = "1", features = ["derive"] }
+toml = "0.9"
+thiserror = "2"
+
+[dev-dependencies]
+# The offscreen backend only: the build tests run headlessly.
+xui-canvas = { path = "../xui-canvas", default-features = false }
+serde_json = "1"

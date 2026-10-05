@@ -21,6 +21,12 @@ icons = ["dep:xui-icons"]
 icons-aero = ["icons", "xui-icons/aero"]
 # The optional editable rich-text widget (`xui::xui_rich_text`).
 rich-text = ["dep:xui-rich-text"]
+# Declarative forms (`xui::form`): the `.lfm` document, its schema and the
+# builder that turns it into widgets.
+form = ["dep:xui-form"]
+# Rhai-scripted forms (`xui::script`). Off by default, so Rust-only apps do
+# not compile Rhai.
+rhai = ["form", "dep:xui-script"]
 
 [dependencies]
 xui-core = { path = "../xui-core" }
@@ -28,6 +34,8 @@ xui-win32 = { path = "../xui-win32", optional = true }
 xui-canvas = { path = "../xui-canvas", optional = true }
 xui-icons = { path = "../xui-icons", optional = true }
 xui-rich-text = { path = "../xui-rich-text", optional = true }
+xui-form = { path = "../xui-form", optional = true }
+xui-script = { path = "../xui-script", optional = true }
 
 [[example]]
 name = "widgets"
@@ -61,6 +69,16 @@ required-features = ["canvas"]
 [[example]]
 name = "absolute"
 required-features = ["canvas"]
+
+[[example]]
+name = "form"
+path = "examples/form.rs"
+required-features = ["canvas", "form"]
+
+[[example]]
+name = "script"
+path = "examples/script.rs"
+required-features = ["canvas", "rhai"]
 
 [[example]]
 name = "menu_bar_flicker"
