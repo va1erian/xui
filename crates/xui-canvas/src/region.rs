@@ -27,7 +27,8 @@ use crate::paint::intersect;
 
 /// The part of a [`Surface`] being repainted by [`Surface::paint_region`].
 pub struct Region<'a> {
-    pixmap: Pixmap,
+    /// The surface's own pixmap for a whole-surface region, else the scratch.
+    pixmap: &'a mut Pixmap,
     area: Rect,
     images: &'a mut ImageCache,
 }
@@ -66,7 +67,7 @@ impl Region<'_> {
     }
 
     fn canvas(&mut self, bounds: Rect, dpi: u32) -> SkiaCanvas<'_> {
-        let mut canvas = SkiaCanvas::new(&mut self.pixmap, self.images, bounds, dpi);
+        let mut canvas = SkiaCanvas::new(self.pixmap, self.images, bounds, dpi);
         canvas.origin = (self.area.left, self.area.top);
         canvas
     }
@@ -82,34 +83,43 @@ impl Surface {
     /// still runs `paint` and changes nothing.
     pub fn paint_region<R>(&mut self, region: Rect, paint: impl FnOnce(&mut Region<'_>) -> R) -> R {
         let (width, height) = self.size();
-        let area = intersect(region, Rect::new(0, 0, width as i32, height as i32));
+        let whole = Rect::new(0, 0, width as i32, height as i32);
+        let area = intersect(region, whole);
+        // A whole-surface repaint (a first frame, a resize) needs no copy.
+        if area == whole {
+            return paint(&mut Region {
+                pixmap: &mut self.pixmap,
+                area,
+                images: &mut self.images,
+            });
+        }
         let area = if area.is_empty() {
             Rect::new(0, 0, 0, 0)
         } else {
             area
         };
         // The scratch buffer is kept between calls, so a repaint per frame
-        // does not allocate (and fault in) a fresh pixmap each time.
+        // does not allocate (and fault in) a fresh pixmap each time; it is
+        // filled row by row from the surface, never zeroed first.
         let mut data = std::mem::take(&mut self.scratch);
-        let row = area.width().max(1) as usize * 4;
+        let row = area.width() as usize * 4;
         data.clear();
-        data.resize(row * area.height().max(1) as usize, 0);
-        if !area.is_empty() {
-            for (y, out) in (area.top..area.bottom).zip(data.chunks_exact_mut(row)) {
-                let at = (y as usize * width as usize + area.left as usize) * 4;
-                out.copy_from_slice(&self.pixmap.data()[at..at + row]);
-            }
+        for y in area.top..area.bottom {
+            let at = (y as usize * width as usize + area.left as usize) * 4;
+            data.extend_from_slice(&self.pixmap.data()[at..at + row]);
+        }
+        if area.is_empty() {
+            data.extend_from_slice(&[0; 4]);
         }
         let size = IntSize::from_wh(area.width().max(1) as u32, area.height().max(1) as u32)
             .expect("non-zero size");
-        let pixmap = Pixmap::from_vec(data, size).expect("sized to the region");
-        let mut region = Region {
-            pixmap,
+        let mut scratch = Pixmap::from_vec(data, size).expect("sized to the region");
+        let result = paint(&mut Region {
+            pixmap: &mut scratch,
             area,
             images: &mut self.images,
-        };
-        let result = paint(&mut region);
-        let data = region.pixmap.take();
+        });
+        let data = scratch.take();
         if !area.is_empty() {
             let surface = self.pixmap.data_mut();
             for (y, from) in (area.top..area.bottom).zip(data.chunks_exact(row)) {
