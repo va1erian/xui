@@ -147,7 +147,7 @@ impl EngineHost {
                 return Ok(None);
             }
             if let Some(control) = controls.get(name) {
-                context.scope_mut().push(name, control.clone());
+                context.scope_mut().push_dynamic(name, control.clone());
             } else if name == "form" {
                 context.scope_mut().push(name, form.clone());
             } else if let Some(value) = globals_resolver.borrow().get(name) {

@@ -56,20 +56,22 @@ impl<M: 'static> FormHost for LiveForm<M> {
     }
 
     fn property_type(&self, control: &str, property: &str) -> Option<ValueType> {
-        LiveForm::property_type(self, control, property)
+        self.controls().property_type(control, property)
     }
 
     fn names(&self) -> Vec<String> {
-        LiveForm::names(self).map(str::to_owned).collect()
+        self.controls().names().map(str::to_owned).collect()
     }
 
     fn kind(&self, control: &str) -> Option<String> {
-        LiveForm::kind(self, control).map(str::to_owned)
+        self.controls().kind(control).map(str::to_owned)
     }
 
     fn property_names(&self, control: &str) -> Vec<String> {
-        LiveForm::kind(self, control)
-            .map(|kind| self.catalog().property_names(kind))
+        let controls = self.controls();
+        controls
+            .kind(control)
+            .map(|kind| controls.catalog().property_names(kind))
             .unwrap_or_default()
     }
 }
@@ -122,14 +124,12 @@ impl Control {
 
     /// The error for a property this control's kind does not have.
     ///
-    /// It suggests the script name when `property` differs from a real one only
-    /// by case or by CamelCase (`Text`, `TabIndex`); otherwise it lists the
-    /// names the kind accepts.
+    /// It suggests the closest real name when there is one (`Text` or `txt`
+    /// for `text`); otherwise it lists the names the kind accepts.
     fn unknown_property(&self, property: &str) -> Box<EvalAltResult> {
         let kind = self.host.kind(&self.name).unwrap_or_default();
         let names = self.host.property_names(&self.name);
-        let wanted = snake_case(property);
-        let message = match names.iter().find(|name| **name == wanted) {
+        let message = match xui_form::closest(property, names.iter().map(String::as_str)) {
             Some(suggestion) => format!(
                 "unknown property '{property}' on {} ({kind}); did you mean '{suggestion}'?",
                 self.name
@@ -158,26 +158,6 @@ impl Control {
                 ))
             })
     }
-}
-
-/// `name` in snake_case: `TabIndex` becomes `tab_index`, `TEXT` becomes `text`.
-fn snake_case(name: &str) -> String {
-    let chars: Vec<char> = name.chars().collect();
-    let mut out = String::new();
-    for (index, &c) in chars.iter().enumerate() {
-        if c.is_uppercase() {
-            let after_lower = index > 0 && chars[index - 1].is_lowercase();
-            let before_lower = chars.get(index + 1).is_some_and(|n| n.is_lowercase());
-            let after_upper = index > 0 && chars[index - 1].is_uppercase();
-            if after_lower || (after_upper && before_lower) {
-                out.push('_');
-            }
-            out.extend(c.to_lowercase());
-        } else {
-            out.push(c);
-        }
-    }
-    out
 }
 
 /// The form object a script calls `form`.
@@ -287,8 +267,7 @@ pub fn register_form(engine: &mut Engine) {
 const FORM_PROPERTIES: [&str; 2] = ["title", "state"];
 
 fn unknown_form_property(property: &str) -> Box<EvalAltResult> {
-    let wanted = snake_case(property);
-    runtime_error(match FORM_PROPERTIES.iter().find(|name| **name == wanted) {
+    runtime_error(match xui_form::closest(property, FORM_PROPERTIES) {
         Some(suggestion) => {
             format!("unknown property '{property}' on form; did you mean '{suggestion}'?")
         }
@@ -307,15 +286,39 @@ pub(crate) fn runtime_error(message: impl Into<String>) -> Box<EvalAltResult> {
     ))
 }
 
-/// A map of controls by name, for the `on_var` resolver.
-pub(crate) fn controls_by_name(host: &Rc<dyn FormHost>) -> BTreeMap<String, Control> {
-    host.names()
-        .into_iter()
-        .map(|name| {
-            let control = Control::new(Rc::clone(host), name.clone());
-            (name, control)
-        })
-        .collect()
+/// The controls by name, for the `on_var` resolver: a [`Control`] each, and
+/// for a control array (`digit[0]`, `digit[1]`, …) one Rhai array under the
+/// array's name, so a script writes `digit[3].text`. An index the form does
+/// not have is `()`.
+pub(crate) fn controls_by_name(host: &Rc<dyn FormHost>) -> BTreeMap<String, Dynamic> {
+    let mut controls = BTreeMap::new();
+    let mut arrays: BTreeMap<String, Vec<Dynamic>> = BTreeMap::new();
+    for name in host.names() {
+        let control = Dynamic::from(Control::new(Rc::clone(host), name.clone()));
+        match element(&name) {
+            Some((base, index)) => {
+                let array = arrays.entry(base.to_owned()).or_default();
+                if array.len() <= index {
+                    array.resize(index + 1, Dynamic::UNIT);
+                }
+                array[index] = control;
+            }
+            None => {
+                controls.insert(name, control);
+            }
+        }
+    }
+    for (name, array) in arrays {
+        controls.insert(name, Dynamic::from_array(array));
+    }
+    controls
+}
+
+/// A control array element's name split into the array's name and the
+/// index: `digit[3]` is `("digit", 3)`.
+fn element(name: &str) -> Option<(&str, usize)> {
+    let (base, rest) = name.split_once('[')?;
+    Some((base, rest.strip_suffix(']')?.parse().ok()?))
 }
 
 #[cfg(test)]

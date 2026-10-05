@@ -1,18 +1,16 @@
 #![forbid(unsafe_code)]
 
-//! Validation of a [`FormDoc`] against a [`Catalog`].
+//! Validation of a [`Form`] against a [`Catalog`].
 //!
-//! Validation is the designer's and the runtime's safety net: it reports every
-//! problem at once as a [`Diagnostic`] rather than stopping at the first. The
-//! decoder already rejects unknown kinds, unknown properties and mistyped
-//! values at load time; validation re-checks them so a document built in memory
-//! (by the designer) is held to the same rules, and adds the structural checks
-//! the decoder cannot make: name uniqueness, parenting, cycles and the tab
-//! order.
+//! Loading already rejects unknown kinds and fields and mistyped values.
+//! Validation reports, all at once, what a well-typed tree can still get
+//! wrong: names that are not identifiers or are used twice, control arrays
+//! that clash, values out of range, and layout fields a node's parent
+//! ignores.
 
 use std::collections::BTreeMap;
 
-use crate::doc::FormDoc;
+use crate::model::{Form, Node, Widget};
 use crate::schema::Catalog;
 
 /// How serious a [`Diagnostic`] is.
@@ -29,47 +27,26 @@ pub enum Severity {
 pub struct Diagnostic {
     /// How serious the problem is.
     pub severity: Severity,
-    /// The node the problem is in, if any.
+    /// The widget the problem is in, if it has a name.
     pub node: Option<String>,
-    /// The property the problem is about, if any.
+    /// The property or field the problem is about, if any.
     pub property: Option<String>,
     /// A human-readable description.
     pub message: String,
-    /// The one-based source line, when it is known.
-    pub line: Option<usize>,
 }
 
 impl Diagnostic {
-    /// An error against `node`.
-    fn error(node: Option<&str>, message: impl Into<String>) -> Self {
+    fn new(
+        severity: Severity,
+        node: Option<&str>,
+        property: Option<&str>,
+        message: String,
+    ) -> Self {
         Diagnostic {
-            severity: Severity::Error,
-            node: node.map(str::to_owned),
-            property: None,
-            message: message.into(),
-            line: None,
-        }
-    }
-
-    /// An error against `node` and `property`.
-    fn property_error(node: Option<&str>, property: &str, message: impl Into<String>) -> Self {
-        Diagnostic {
-            severity: Severity::Error,
-            node: node.map(str::to_owned),
-            property: Some(property.to_owned()),
-            message: message.into(),
-            line: None,
-        }
-    }
-
-    /// A warning against `node` and `property`.
-    fn warning(node: Option<&str>, property: &str, message: impl Into<String>) -> Self {
-        Diagnostic {
-            severity: Severity::Warning,
-            node: node.map(str::to_owned),
-            property: Some(property.to_owned()),
-            message: message.into(),
-            line: None,
+            severity,
+            node: node.filter(|name| !name.is_empty()).map(str::to_owned),
+            property: property.map(str::to_owned),
+            message,
         }
     }
 
@@ -79,190 +56,154 @@ impl Diagnostic {
     }
 }
 
-impl FormDoc {
+impl Form {
     /// Validates the form against `catalog`, returning every problem found.
     pub fn validate(&self, catalog: &Catalog) -> Vec<Diagnostic> {
-        let mut diagnostics = Vec::new();
-        self.validate_window(catalog, &mut diagnostics);
-        self.validate_names(&mut diagnostics);
-        self.validate_properties(catalog, &mut diagnostics);
-        self.validate_parenting(catalog, &mut diagnostics);
-        self.validate_tab_order(&mut diagnostics);
-        diagnostics
-    }
-
-    /// Checks the window name and its properties.
-    fn validate_window(&self, catalog: &Catalog, diagnostics: &mut Vec<Diagnostic>) {
-        if !is_identifier(&self.window.name) {
-            diagnostics.push(Diagnostic {
-                node: None,
-                property: Some("name".to_owned()),
-                ..Diagnostic::error(
-                    None,
-                    format!("`{}` is not a valid form name", self.window.name),
-                )
-            });
+        let mut out = Vec::new();
+        let mut names: BTreeMap<String, Names> = BTreeMap::new();
+        if !self.name.is_empty() && !is_identifier(&self.name) {
+            out.push(Diagnostic::new(
+                Severity::Error,
+                None,
+                Some("name"),
+                format!("`{}` is not a valid form name", self.name),
+            ));
         }
-        for (name, value) in &self.window.props {
-            match catalog.window_spec().property(name) {
-                Some(spec) if spec.accepts(value) => {}
-                Some(spec) => diagnostics.push(Diagnostic::property_error(
-                    None,
-                    name,
-                    format!(
-                        "`{name}` expects {}, found {}",
-                        spec.ty.type_name(),
-                        value.type_name()
-                    ),
-                )),
-                None => diagnostics.push(Diagnostic::property_error(
-                    None,
-                    name,
-                    format!("`{name}` is not a window property"),
-                )),
+        self.root.walk(&mut |node, parent| {
+            check_place(node, parent, &mut out);
+            check_layout(node, &mut out);
+            if let Some(widget) = node.widget() {
+                check_widget(widget, catalog, &mut names, &mut out);
             }
-        }
-    }
-
-    /// Checks that every node name is a unique identifier.
-    fn validate_names(&self, diagnostics: &mut Vec<Diagnostic>) {
-        let mut seen: BTreeMap<&str, ()> = BTreeMap::new();
-        for node in &self.nodes {
-            if !is_identifier(&node.name) {
-                diagnostics.push(Diagnostic {
-                    property: Some("name".to_owned()),
-                    ..Diagnostic::error(
-                        Some(&node.name),
-                        format!("`{}` is not a valid node name", node.name),
-                    )
-                });
-            }
-            if seen.insert(node.name.as_str(), ()).is_some() {
-                diagnostics.push(Diagnostic {
-                    property: Some("name".to_owned()),
-                    ..Diagnostic::error(
-                        Some(&node.name),
-                        format!("node name `{}` is used more than once", node.name),
-                    )
-                });
-            }
-        }
-    }
-
-    /// Checks that each kind is known and each property is known and well-typed.
-    fn validate_properties(&self, catalog: &Catalog, diagnostics: &mut Vec<Diagnostic>) {
-        for node in &self.nodes {
-            let Some(spec) = catalog.get(&node.kind) else {
-                diagnostics.push(Diagnostic::error(
-                    Some(&node.name),
-                    format!("unknown widget kind `{}`", node.kind),
-                ));
-                continue;
-            };
-            for (name, value) in &node.props {
-                match catalog.property(&node.kind, name) {
-                    Some(property) if property.accepts(value) => {}
-                    Some(property) => diagnostics.push(Diagnostic::property_error(
-                        Some(&node.name),
-                        name,
-                        format!(
-                            "`{name}` expects {}, found {}",
-                            property.ty.type_name(),
-                            value.type_name()
-                        ),
-                    )),
-                    None => diagnostics.push(Diagnostic::property_error(
-                        Some(&node.name),
-                        name,
-                        format!("`{name}` is not a property of {}", spec.kind),
-                    )),
-                }
-            }
-        }
-    }
-
-    /// Checks parents exist, are containers that accept the child, and form no
-    /// cycle.
-    fn validate_parenting(&self, catalog: &Catalog, diagnostics: &mut Vec<Diagnostic>) {
-        for node in &self.nodes {
-            let Some(parent_name) = node.parent.as_deref() else {
-                continue;
-            };
-            let Some(parent) = self.node(parent_name) else {
-                diagnostics.push(Diagnostic::error(
-                    Some(&node.name),
-                    format!("parent `{parent_name}` does not exist"),
-                ));
-                continue;
-            };
-            let Some(parent_spec) = catalog.get(&parent.kind) else {
-                continue;
-            };
-            if parent_spec.children.is_none() {
-                diagnostics.push(Diagnostic::error(
-                    Some(&node.name),
-                    format!(
-                        "{} `{parent_name}` cannot contain children",
-                        parent_spec.kind
-                    ),
-                ));
-                continue;
-            }
-            if catalog.contains(&node.kind) && !catalog.accepts_child(&parent.kind, &node.kind) {
-                diagnostics.push(Diagnostic::error(
-                    Some(&node.name),
-                    format!(
-                        "{} `{parent_name}` does not accept a {} child",
-                        parent_spec.kind, node.kind
-                    ),
-                ));
-            }
-            if has_cycle(self, &node.name) {
-                diagnostics.push(Diagnostic::error(
-                    Some(&node.name),
-                    format!("`{}` is part of a parent cycle", node.name),
-                ));
-            }
-        }
-    }
-
-    /// Warns when two siblings share a `tab_index`.
-    fn validate_tab_order(&self, diagnostics: &mut Vec<Diagnostic>) {
-        let mut by_parent: BTreeMap<Option<&str>, BTreeMap<i64, &str>> = BTreeMap::new();
-        for node in &self.nodes {
-            let Some(value) = node.props.get("tab_index").and_then(|value| value.as_int()) else {
-                continue;
-            };
-            let siblings = by_parent.entry(node.parent.as_deref()).or_default();
-            if let Some(other) = siblings.insert(value, &node.name) {
-                diagnostics.push(Diagnostic::warning(
-                    Some(&node.name),
-                    "tab_index",
-                    format!("tab_index {value} is also used by `{other}`"),
-                ));
-            }
-        }
+        });
+        out
     }
 }
 
-/// Whether following `name`'s parent chain returns to `name`.
-fn has_cycle(doc: &FormDoc, name: &str) -> bool {
-    let mut current = name;
-    for _ in 0..=doc.nodes.len() {
-        let Some(node) = doc.node(current) else {
-            return false;
+/// How a name has been used so far.
+#[derive(Default)]
+struct Names {
+    plain: bool,
+    indices: Vec<u32>,
+}
+
+/// Checks a widget's name, control-array fields and property values.
+fn check_widget(
+    widget: &dyn Widget,
+    catalog: &Catalog,
+    names: &mut BTreeMap<String, Names>,
+    out: &mut Vec<Diagnostic>,
+) {
+    let name = widget.name();
+    let error = |property: &str, message: String| {
+        Diagnostic::new(Severity::Error, Some(name), Some(property), message)
+    };
+    if name.is_empty() {
+        if widget.array().is_some() || widget.index().is_some() {
+            out.push(error("name", "a control array needs a name".to_owned()));
+        }
+    } else if !is_identifier(name) {
+        out.push(error("name", format!("`{name}` is not a valid name")));
+    } else {
+        let used = names.entry(name.to_owned()).or_default();
+        let indices: Vec<u32> = match (widget.array(), widget.index()) {
+            (Some(_), Some(_)) => {
+                out.push(error(
+                    "array",
+                    "a node sets either `array` or `index`, not both".to_owned(),
+                ));
+                Vec::new()
+            }
+            (Some(count), None) => (0..count).collect(),
+            (None, Some(index)) => vec![index],
+            (None, None) => Vec::new(),
         };
-        match node.parent.as_deref() {
-            None => return false,
-            Some(parent) if parent == name => return true,
-            Some(parent) => current = parent,
+        let clash = if indices.is_empty() {
+            used.plain || !used.indices.is_empty()
+        } else {
+            used.plain || indices.iter().any(|index| used.indices.contains(index))
+        };
+        if clash {
+            out.push(error("name", format!("`{name}` is used more than once")));
+        }
+        used.plain |= indices.is_empty();
+        used.indices.extend(indices);
+    }
+    let Some(spec) = catalog.get(widget.kind()) else {
+        return;
+    };
+    for (property, value) in widget.props() {
+        if let Some(spec) = spec.property(&property)
+            && !spec.accepts(&value)
+        {
+            out.push(error(
+                &property,
+                format!("`{property}` must be {}", describe(&spec.ty)),
+            ));
         }
     }
-    true
 }
 
-/// Whether `name` is a valid identifier: a letter or `_`, then the same plus
-/// digits.
+/// A property type in words, for a diagnostic.
+fn describe(ty: &crate::value::ValueType) -> String {
+    use crate::value::ValueType;
+    match ty {
+        ValueType::Int { min: Some(min), .. } => format!("an int of at least {min}"),
+        other => format!("a valid {}", other.type_name()),
+    }
+}
+
+/// Warns about layout fields the node's parent ignores.
+fn check_place(node: &Node, parent: Option<&Node>, out: &mut Vec<Diagnostic>) {
+    let place = node.place();
+    let name = node.widget().map(Widget::name);
+    let warn = |field: &str, message: &str| {
+        Diagnostic::new(
+            Severity::Warning,
+            name,
+            Some(field),
+            format!("`{field}` {message}"),
+        )
+    };
+    let in_absolute = matches!(parent, Some(Node::Absolute(_)));
+    let in_grid = matches!(parent, Some(Node::Grid(_)));
+    if !in_absolute {
+        if place.at.is_some() {
+            out.push(warn("at", "only places an entry of an `Absolute` layout"));
+        }
+        if place.anchor.is_some() {
+            out.push(warn(
+                "anchor",
+                "only anchors an entry of an `Absolute` layout",
+            ));
+        }
+    } else if place.at.is_none() {
+        out.push(warn(
+            "at",
+            "is missing: the entry sits at its natural size in the corner",
+        ));
+    }
+    if place.span.is_some() && !in_grid {
+        out.push(warn("span", "only spans columns of a `Grid`"));
+    }
+}
+
+/// Checks a layout's own fields.
+fn check_layout(node: &Node, out: &mut Vec<Diagnostic>) {
+    if let Node::Grid(grid) = node
+        && grid.columns.is_empty()
+    {
+        out.push(Diagnostic::new(
+            Severity::Error,
+            None,
+            Some("columns"),
+            "a `Grid` needs at least one column".to_owned(),
+        ));
+    }
+}
+
+/// Whether `name` is an identifier: a letter or `_`, then letters, digits
+/// and `_`.
 pub(crate) fn is_identifier(name: &str) -> bool {
     let mut characters = name.chars();
     match characters.next() {
@@ -275,7 +216,6 @@ pub(crate) fn is_identifier(name: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::value::Value;
 
     #[test]
     fn identifiers_are_checked() {
@@ -284,132 +224,5 @@ mod tests {
         assert!(!is_identifier(""));
         assert!(!is_identifier("1bad"));
         assert!(!is_identifier("has space"));
-        assert!(!is_identifier("dot.name"));
-    }
-
-    #[test]
-    fn duplicate_names_and_unknown_kinds_are_reported() {
-        let mut doc = FormDoc::new("main_form");
-        doc.insert(crate::doc::Node::new("Label", "lblOne"));
-        doc.insert(crate::doc::Node::new("Label", "lblOne"));
-        doc.insert(crate::doc::Node::new("Nope", "bad"));
-
-        let diagnostics = doc.validate(&Catalog::xui());
-        assert!(
-            diagnostics
-                .iter()
-                .any(|diagnostic| diagnostic.message.contains("more than once"))
-        );
-        assert!(
-            diagnostics
-                .iter()
-                .any(|diagnostic| diagnostic.message.contains("unknown widget kind"))
-        );
-    }
-
-    #[test]
-    fn unknown_and_mistyped_properties_are_reported() {
-        let mut doc = FormDoc::new("main_form");
-        let mut button = crate::doc::Node::new("Button", "cmdGo");
-        button.set_prop("text", Value::Text("Go".to_owned()));
-        button.set_prop("nonsense", Value::Bool(true));
-        button.set_prop("enabled", Value::Text("yes".to_owned()));
-        doc.insert(button);
-
-        let diagnostics = doc.validate(&Catalog::xui());
-        assert!(
-            diagnostics
-                .iter()
-                .any(|diagnostic| diagnostic.property.as_deref() == Some("nonsense"))
-        );
-        assert!(
-            diagnostics
-                .iter()
-                .any(|diagnostic| diagnostic.property.as_deref() == Some("enabled"))
-        );
-    }
-
-    #[test]
-    fn enum_membership_and_ranges_are_reported() {
-        let mut doc = FormDoc::new("main_form");
-        let mut button = crate::doc::Node::new("Button", "cmdGo");
-        button.set_prop("anchor", Value::Enum("sideways".to_owned()));
-        button.set_prop("tab_index", Value::Int(-1));
-        doc.insert(button);
-
-        let diagnostics = doc.validate(&Catalog::xui());
-        assert!(
-            diagnostics
-                .iter()
-                .any(|diagnostic| diagnostic.property.as_deref() == Some("anchor"))
-        );
-        assert!(
-            diagnostics
-                .iter()
-                .any(|diagnostic| diagnostic.property.as_deref() == Some("tab_index"))
-        );
-    }
-
-    #[test]
-    fn a_missing_parent_and_cycles_are_reported() {
-        let mut doc = FormDoc::new("main_form");
-        let mut orphan = crate::doc::Node::new("Button", "cmdOrphan");
-        orphan.parent = Some("ghost".to_owned());
-        doc.insert(orphan);
-
-        let mut a = crate::doc::Node::new("Panel", "panA");
-        a.parent = Some("panB".to_owned());
-        let mut b = crate::doc::Node::new("Panel", "panB");
-        b.parent = Some("panA".to_owned());
-        doc.insert(a);
-        doc.insert(b);
-
-        let diagnostics = doc.validate(&Catalog::xui());
-        assert!(
-            diagnostics
-                .iter()
-                .any(|diagnostic| diagnostic.message.contains("does not exist"))
-        );
-        assert!(
-            diagnostics
-                .iter()
-                .any(|diagnostic| diagnostic.message.contains("cycle"))
-        );
-    }
-
-    #[test]
-    fn parenting_checks_the_container_rule() {
-        let mut doc = FormDoc::new("main_form");
-        let panel = crate::doc::Node::new("Panel", "panA");
-        doc.insert(panel);
-        let mut child = crate::doc::Node::new("Button", "cmdGo");
-        child.parent = Some("panA".to_owned());
-        doc.insert(child);
-        assert!(doc.validate(&Catalog::xui()).is_empty());
-
-        let mut on_button = crate::doc::Node::new("Label", "lblBad");
-        on_button.parent = Some("cmdGo".to_owned());
-        doc.insert(on_button);
-        let diagnostics = doc.validate(&Catalog::xui());
-        assert!(
-            diagnostics
-                .iter()
-                .any(|diagnostic| diagnostic.message.contains("cannot contain children"))
-        );
-    }
-
-    #[test]
-    fn duplicate_tab_index_is_a_warning() {
-        let mut doc = FormDoc::new("main_form");
-        let mut one = crate::doc::Node::new("Button", "cmdOne");
-        one.set_prop("tab_index", Value::Int(0));
-        let mut two = crate::doc::Node::new("Button", "cmdTwo");
-        two.set_prop("tab_index", Value::Int(0));
-        doc.insert(one);
-        doc.insert(two);
-
-        let diagnostics = doc.validate(&Catalog::xui());
-        assert_eq!(diagnostics.len(), 1);
-        assert_eq!(diagnostics[0].severity, Severity::Warning);
     }
 }

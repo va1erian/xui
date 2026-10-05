@@ -30,7 +30,7 @@ fn labels(items: &[String]) -> Vec<&str> {
 }
 
 /// The non-negative `selected` property, if any.
-fn initial(cx: &BuildCx<'_, impl Sized>, default: i64) -> Option<usize> {
+fn initial<M: 'static>(cx: &BuildCx<'_, M>, default: i64) -> Option<usize> {
     usize::try_from(cx.int("selected", default)).ok()
 }
 

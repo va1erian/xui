@@ -33,8 +33,8 @@ use std::rc::Rc;
 use rhai::{AST, Dynamic, FnPtr};
 use xui_core::app::Ui;
 use xui_form::{
-    Binder, BuildError, BuildOptions, Catalog, EventHandler, EventRef, Factories, FormDoc,
-    LiveForm, Value, build_with,
+    Binder, BuildError, BuildOptions, Catalog, EventHandler, EventRef, Factories, Form, LiveForm,
+    Value, build_with,
 };
 
 use crate::control::FormHost;
@@ -130,12 +130,14 @@ impl Binder<Msg> for ScriptBinder {
 
         let form = self.form.clone();
         let control = event.node.to_owned();
+        // A control array's handler gets the element's index first.
+        let index = event.index.map(|index| Value::Int(index as i64));
         Some(Rc::new(move |args| {
             Some(Msg::Event {
                 form: form.clone(),
                 control: control.clone(),
                 event: event_name.clone(),
-                args: args.to_vec(),
+                args: index.iter().chain(args).cloned().collect(),
             })
         }))
     }
@@ -210,14 +212,16 @@ pub struct ScriptForm {
 impl ScriptForm {
     /// Builds `doc`'s widgets, wires its handlers and runs `form_load`.
     ///
+    /// A control array's handler (`fn digit_click(index)`) receives the
+    /// element's index before the event's own arguments.
+    ///
     /// `source` names the form and carries its script; `setup` installs the
     /// host's standard library on the new engine, and `configure` runs after
     /// that so the host can register modules, extra globals or form references
     /// before the script is compiled and its top-level code runs.
     pub fn build<S: EngineSetup>(
         ui: &mut Ui<Msg>,
-        doc: &FormDoc,
-        catalog: &Catalog,
+        doc: &Form,
         source: ScriptSource<'_>,
         setup: S,
         configure: impl FnOnce(&mut EngineHost) -> Result<(), ScriptError>,
@@ -230,15 +234,15 @@ impl ScriptForm {
         let form = Rc::new(build_with(
             ui,
             doc,
-            catalog,
             &factories,
             &binder,
             BuildOptions::default(),
         )?);
 
+        let catalog = Catalog::xui();
         let mut host = EngineHost::new(
             Rc::clone(&form) as Rc<dyn FormHost>,
-            catalog,
+            &catalog,
             source.file,
             setup,
         );
@@ -366,6 +370,7 @@ mod tests {
 
         let bound = binder.bind(EventRef {
             node: "go_button",
+            index: None,
             event: "Click",
             spec: &spec,
         });
@@ -373,6 +378,7 @@ mod tests {
 
         let missing = binder.bind(EventRef {
             node: "other_button",
+            index: None,
             event: "Click",
             spec: &spec,
         });

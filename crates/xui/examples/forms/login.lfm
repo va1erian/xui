@@ -1,83 +1,18 @@
-format = 1
-
-[window]
-name = "login_form"
-height = 200
-title = "Sign in"
-width = 320
-
-[[node]]
-kind = "Label"
-name = "user_label"
-left = 16
-top = 20
-width = 80
-height = 20
-text = "User name"
-
-[[node]]
-kind = "Edit"
-name = "user_edit"
-left = 100
-top = 16
-width = 204
-height = 28
-anchor = "stretch_horizontal"
-cue = "your name"
-
-[[node]]
-kind = "Label"
-name = "password_label"
-left = 16
-top = 56
-width = 80
-height = 20
-text = "Password"
-
-[[node]]
-kind = "Edit"
-name = "password_edit"
-left = 100
-top = 52
-width = 204
-height = 28
-anchor = "stretch_horizontal"
-cue = "password"
-
-[[node]]
-kind = "CheckBox"
-name = "remember_check"
-left = 100
-top = 90
-width = 160
-height = 24
-text = "Remember me"
-
-[[node]]
-kind = "Label"
-name = "status_label"
-left = 16
-top = 160
-width = 160
-height = 24
-anchor = "bottom_left"
-
-[[node]]
-kind = "Button"
-name = "sign_in_button"
-left = 184
-top = 124
-width = 120
-height = 28
-anchor = "bottom_right"
-text = "Sign in"
-
-[[node]]
-kind = "Button"
-name = "cancel_button"
-left = 184
-top = 160
-width = 120
-height = 28
-anchor = "bottom_right"
-text = "Cancel"
+Form(name: "login_form", title: "Sign in", size: (320, 168), root: Column(gap: 12, padding: 16, children: [
+    Grid(columns: [
+        Auto,
+        Fill(1),
+    ], gap: 8, children: [
+        Label(text: "User name"),
+        Edit(name: "user_edit", placeholder: "your name"),
+        Label(text: "Password"),
+        Edit(name: "password_edit", placeholder: "password", password: true),
+        Label(),
+        CheckBox(name: "remember_check", text: "Remember me"),
+    ]),
+    Row(gap: 8, children: [
+        Label(name: "status_label", fill: 1),
+        Button(name: "sign_in_button", text: "Sign in"),
+        Button(name: "cancel_button", text: "Cancel"),
+    ]),
+]))
