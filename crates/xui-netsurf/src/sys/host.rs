@@ -141,9 +141,11 @@ pub(super) unsafe extern "C" fn host_win_size(
 
 pub(super) unsafe extern "C" fn host_win_pointer(
     _ctx: *mut c_void,
-    _w: *mut c_void,
-    _shape: c_int,
+    w: *mut c_void,
+    shape: c_int,
 ) {
+    // SAFETY: NetSurf only reports for live windows.
+    unsafe { win(w) }.pointer(shape);
 }
 
 pub(super) unsafe extern "C" fn host_resource(

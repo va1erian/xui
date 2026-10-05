@@ -34,6 +34,7 @@ mod families;
 mod fetch;
 mod fonts;
 mod image;
+mod pointer;
 mod record;
 mod sys;
 mod view;
