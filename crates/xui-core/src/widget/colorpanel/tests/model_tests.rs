@@ -55,6 +55,10 @@ proptest! {
 
     #[test]
     fn hsl_round_trips_through_hsv(h in 0.0f32..360.0, s in 0.0f32..1.0, l in 0.0f32..1.0) {
+        // At l = 0 or 1 (black, white) saturation is undefined, and next to
+        // them it is a ratio of two vanishing f32 differences: 1 - l below
+        // ~1e-6 loses it outright. Those edges get exact checks below.
+        prop_assume!(l > 1e-3 && l < 1.0 - 1e-3);
         let hsv = Hsl { h, s, l }.to_hsv();
         let back = hsv.to_hsl();
         prop_assert!((back.s - s).abs() < 1e-3, "s {} vs {}", back.s, s);
@@ -114,4 +118,18 @@ fn parsers_reject_out_of_range_and_malformed_input() {
     assert_eq!(parse_hsv("361°, 0%, 0%"), None);
     assert_eq!(parse_hsv("0°, 101%, 0%"), None);
     assert_eq!(parse_hsl("0°, 0%, 200%"), None);
+}
+
+/// Close to black and white saturation still round-trips at a lightness f32
+/// can hold apart from the endpoint, which the property above leaves out.
+#[test]
+fn hsl_round_trips_near_lightness_endpoints() {
+    for l in [5e-4, 1.0 - 5e-4] {
+        for h in [0.0, 120.0, 300.0] {
+            let input = Hsl { h, s: 0.5, l };
+            let back = input.to_hsv().to_hsl();
+            assert!((back.s - input.s).abs() < 1e-3, "s {} at l {l}", back.s);
+            assert!((back.l - input.l).abs() < 1e-3, "l {} at l {l}", back.l);
+        }
+    }
 }
