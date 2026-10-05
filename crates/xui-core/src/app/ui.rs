@@ -12,6 +12,7 @@ use crate::image::Image;
 use crate::theme::Theme;
 
 mod every;
+mod layouts;
 mod node_ops;
 
 /// The widget layer's handle to a top-level window.
@@ -105,6 +106,7 @@ impl<M: 'static> Ui<M> {
 
     /// Renders this window's current content into an image.
     pub fn capture(&self) -> Result<Image> {
+        self.core.flush_layout();
         self.core.backend().capture(self.core.window())
     }
 
@@ -193,6 +195,7 @@ impl<M: 'static> Ui<M> {
     /// Applies `theme` to the window and its nodes.
     pub fn set_theme(&self, theme: Theme) {
         self.core.theme().set(theme);
+        self.core.invalidate_layout();
         self.core.backend().set_theme(self.core.window(), &theme);
     }
 

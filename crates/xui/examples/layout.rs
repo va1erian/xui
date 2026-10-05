@@ -62,8 +62,6 @@ impl App for Form {
             }
             Msg::Quit => ui.quit(),
         }
-        // A longer greeting changes the label's natural size.
-        ui.relayout();
     }
 }
 

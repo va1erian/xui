@@ -29,7 +29,10 @@ pub use anchor::{Anchor, MIN_ANCHOR_PX, anchored};
 pub use dock::{Dock, DockLayout};
 pub use pack::free_preferred;
 pub use stack::{Stack, StackDirection, StackSlot};
-pub use tree::{Align, Constraints, Group, Item, Leaf, LeafFn, Sizing, Track};
+pub use tree::{
+    Align, Constraints, Group, GroupKind, Item, Leaf, LeafFn, Sizing, TraceNode, Traced, Track,
+    Warning,
+};
 
 use crate::geometry::Rect;
 use crate::units::Dip;
@@ -70,10 +73,10 @@ impl Insets {
 
     /// Shrinks `rect` by the insets, scaled to `dpi`. The result never has a
     /// negative width or height, so a parent smaller than the insets is empty
-    /// rather than inverted.
+    /// rather than inverted, and the result always lies within `rect`.
     pub fn apply(self, rect: Rect, dpi: u32) -> Rect {
-        let left = rect.left + self.left.to_px(dpi).value();
-        let top = rect.top + self.top.to_px(dpi).value();
+        let left = (rect.left + self.left.to_px(dpi).value()).min(rect.right);
+        let top = (rect.top + self.top.to_px(dpi).value()).min(rect.bottom);
         let right = (rect.right - self.right.to_px(dpi).value()).max(left);
         let bottom = (rect.bottom - self.bottom.to_px(dpi).value()).max(top);
         Rect::new(left, top, right, bottom)

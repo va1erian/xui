@@ -291,3 +291,37 @@ fn an_open_dialog_blocks_clicks_to_the_content_behind_it() {
     .unwrap();
     assert_eq!(blocked.get(), 0, "the scrim swallows clicks behind it");
 }
+
+/// An app with nothing to update.
+struct Still;
+
+impl App for Still {
+    type Msg = ();
+
+    fn update(&mut self, _msg: (), _ui: &mut Ui<()>) {}
+}
+
+#[test]
+fn the_layout_overlay_outlines_what_the_layout_placed() {
+    use xui_core::arrange::{button, column};
+
+    let build = |ui: &mut Ui<()>| -> Result<Still, BackendError> {
+        ui.root(column().padding(10).child(button("OK")))?;
+        Ok(Still)
+    };
+    let plain = try_render(Snapshot::new(Dip(200.0), Dip(100.0)), build).unwrap();
+    let outlined = try_render(
+        Snapshot::new(Dip(200.0), Dip(100.0)).with_layout_overlay(),
+        build,
+    )
+    .unwrap();
+    let magenta = Some([255, 0, 255, 255]);
+    assert_ne!(plain.pixel(0, 50), magenta);
+    assert_eq!(outlined.pixel(0, 50), magenta, "the column's edge");
+    assert_eq!(outlined.pixel(10, 20), magenta, "the button's edge");
+    assert_eq!(
+        outlined.pixel(100, 60),
+        plain.pixel(100, 60),
+        "inside, untouched"
+    );
+}

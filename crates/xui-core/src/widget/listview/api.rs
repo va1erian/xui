@@ -64,6 +64,7 @@ impl<M: 'static> ListView<M> {
     pub fn set_items(&self, items: &[&str]) {
         let rows = Rows::Simple(items.iter().map(|item| item.to_string()).collect());
         self.replace_rows(rows);
+        self.control.invalidate_layout();
     }
 
     fn replace_rows(&self, rows: Rows) {

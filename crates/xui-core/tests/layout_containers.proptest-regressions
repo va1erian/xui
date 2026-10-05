@@ -1,0 +1,11 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 8f705c61775b7301f1488e0c6d2b52c9c6d30d319f434752e69e2041843a8059 # shrinks to specs = [Spec { natural: (0, 0), sizing: Auto, align: None, at: (0.0, 0.0, 0.0, 0.0), anchor: TopLeft }], area = Rect { left: 0, top: 0, right: 0, bottom: 0 }, dpi = 96, margin = 12.809179, design = None
+cc 7788b0960d70ad23f3ede0851e9dab620b3f36bbeb8e0ee63ef8b039f56b8ae1 # shrinks to specs = [Spec { natural: (0, 0), sizing: Auto, align: None, at: (0.0, 0.0, 0.0, 0.0), anchor: TopLeft }], area = Rect { left: 0, top: 0, right: 0, bottom: 0 }, dpi = 96, gap = 0.0, margin = 14.144507, column = false
+cc 1fad799f5c061dafb700694f30f607f7e012b0f64fd12d0ab46ed2576fc453e2 # shrinks to specs = [Spec { natural: (0, 0), sizing: Auto, align: None, at: (0.0, 0.0, 0.0, 0.0), anchor: TopLeft }], area = Rect { left: 0, top: 0, right: 0, bottom: 0 }, dpi = 96, gap = 0.0, margin = 11.832891, columns = [Auto]
+cc 638a455403e6cc5f5b7bf05225c74f133f246d9c5de53be5a8fdc35f42e68dce # shrinks to specs = [Spec { natural: (0, 0), sizing: Auto, align: None, at: (0.0, 0.0, 0.0, 0.0), anchor: TopLeft }], area = Rect { left: 0, top: 0, right: 0, bottom: 0 }, dpi = 96, gap = 0.0, margin = 8.995048
+cc bf12929a22b3888df1e3c9e61931204207b97062e3f365029a82f3f19a34dc9e # shrinks to specs = [Spec { natural: (0, 0), sizing: Auto, align: None, at: (0.0, 0.0, 0.0, 0.0), anchor: TopLeft }], area = Rect { left: 0, top: 0, right: 0, bottom: 0 }, dpi = 96, margin = 13.2598295

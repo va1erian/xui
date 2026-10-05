@@ -9,6 +9,7 @@
 //! closure that may raise nothing.
 
 use super::{Build, build};
+use crate::icon::IconRef;
 use crate::widget::{
     Button, CheckBox, ColumnWidth, ComboBox, Edit, HasText, Hyperlink, Label, ListView,
     MultilineEdit, NumberField, ProgressBar, Separator, Slider, StatusBar, ToggleButton,
@@ -50,6 +51,26 @@ impl<M: 'static> Build<Button<M>, M> {
     /// Maps a click through `f`, which may raise nothing.
     pub fn on_click_with(self, f: impl Fn() -> Option<M> + 'static) -> Build<Button<M>, M> {
         self.then(move |button| button.on_click(f))
+    }
+
+    /// Draws `icon` before the label (or alone, for an empty label).
+    pub fn icon(self, icon: impl Into<IconRef>) -> Build<Button<M>, M> {
+        let icon = icon.into();
+        self.then(move |button| button.icon(icon))
+    }
+
+    /// Shows `text` in a tooltip while the pointer rests on the button.
+    pub fn tooltip(self, text: impl Into<String>) -> Build<Button<M>, M> {
+        let text = text.into();
+        self.then_with(move |button, _| {
+            button.set_tooltip(&text)?;
+            Ok(button)
+        })
+    }
+
+    /// Makes it the default action: an accent face.
+    pub fn primary(self) -> Build<Button<M>, M> {
+        self.then(Button::primary)
     }
 }
 
@@ -108,6 +129,21 @@ impl<M: 'static> Build<ToggleButton<M>, M> {
     /// Raises `f(down)` when the user toggles it.
     pub fn on_toggle(self, f: impl Fn(bool) -> M + 'static) -> Build<ToggleButton<M>, M> {
         self.then(move |toggle| toggle.on_toggle(move |on| Some(f(on))))
+    }
+
+    /// Draws `icon` before the label (or alone, for an empty label).
+    pub fn icon(self, icon: impl Into<IconRef>) -> Build<ToggleButton<M>, M> {
+        let icon = icon.into();
+        self.then(move |toggle| toggle.icon(icon))
+    }
+
+    /// Shows `text` in a tooltip while the pointer rests on the button.
+    pub fn tooltip(self, text: impl Into<String>) -> Build<ToggleButton<M>, M> {
+        let text = text.into();
+        self.then_with(move |toggle, _| {
+            toggle.set_tooltip(&text)?;
+            Ok(toggle)
+        })
     }
 }
 
