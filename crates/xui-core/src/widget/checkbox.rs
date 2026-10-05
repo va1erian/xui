@@ -239,6 +239,11 @@ impl<M: 'static> HasText for CheckBox<M> {
     }
 
     fn set_text(&self, text: &str) {
+        // Apps refresh status lines with the text they already show: an
+        // unchanged text needs neither a repaint nor a re-flow.
+        if *self.text.borrow() == text {
+            return;
+        }
         *self.text.borrow_mut() = text.to_string();
         self.control.invalidate();
         self.control.invalidate_layout();

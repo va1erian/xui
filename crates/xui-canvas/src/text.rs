@@ -329,7 +329,11 @@ pub(crate) fn blend(
 ) {
     let (left, top) = (origin.x, origin.y);
     let (pw, ph) = (pixmap.width() as i32, pixmap.height() as i32);
-    // A whole block beyond the clip rectangle needs no per-pixel work.
+    // A whole block off the pixmap (a region's) or beyond the clip rectangle
+    // needs no per-pixel work.
+    if left + w as i32 <= 0 || top + h as i32 <= 0 || left >= pw || top >= ph {
+        return;
+    }
     if let Some(bounds) = clip.bounds
         && (left + w as i32 <= bounds.left
             || top + h as i32 <= bounds.top

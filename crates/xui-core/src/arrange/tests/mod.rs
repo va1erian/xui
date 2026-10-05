@@ -4,6 +4,7 @@ mod bars;
 mod containers;
 mod features;
 mod grid;
+mod settled;
 mod views;
 
 use std::rc::Rc;
