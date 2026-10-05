@@ -3,7 +3,7 @@
 //! [`LayoutExt`]: sizing and placement for anything a layout holds.
 
 use super::{Align, Anchor, Entry, IntoEntry};
-use crate::layout::Sizing;
+use crate::layout::{Placement, Sizing};
 use crate::units::Dip;
 
 /// Sizing and placement for anything a [`Layout`](super::Layout) can hold:
@@ -122,6 +122,17 @@ pub trait LayoutExt<M: 'static>: IntoEntry<M> + Sized {
     fn anchor(self, anchor: Anchor) -> Entry<M> {
         let mut entry = self.into_entry();
         entry.anchor = Some(anchor);
+        entry
+    }
+
+    /// In an [`absolute`](super::absolute) layout, places the entry where
+    /// `placement` says each time the layout runs, in place of
+    /// [`at`](Self::at) and [`anchor`](Self::anchor): change the placement
+    /// and [`relayout`](crate::app::Ui::relayout) to move the entry after
+    /// the layout is mounted (a designer surface, a script setting `left`).
+    fn placement(self, placement: &Placement) -> Entry<M> {
+        let mut entry = self.into_entry();
+        entry.placement = Some(placement.clone());
         entry
     }
 }

@@ -13,10 +13,10 @@ mkdir -p "$out"
 out="$(cd "$out" && pwd)"
 rm -f "$out"/*.png
 
-cargo build -q -p xui --features canvas --examples
+cargo build -q -p xui --features canvas,rhai --examples
 bin="${CARGO_TARGET_DIR:-target}/debug/examples"
 
-examples=(widgets listview gridview top_bar layout containers absolute)
+examples=(widgets listview gridview top_bar layout containers absolute form script)
 for file in crates/xui/examples/controls/*.rs; do
     name="$(basename "$file" .rs)"
     [ "$name" = support ] || examples+=("control_$name")

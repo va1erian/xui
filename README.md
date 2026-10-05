@@ -50,6 +50,7 @@ snapshots and tests. Dark mode is first-class on every backend.
   or combine them.
 - **[Widgets](docs/widgets.md)** — the portable widget catalogue and models.
 - **[Theming](docs/theming.md)** — tokens, dark mode and live switching.
+- **[Forms and scripts](docs/forms.md)** — `.lfm` forms and Rhai handlers.
 - **[The Win32 layer](docs/win32.md)** — the Windows backend, its platform layer
   and the Windows-only window features.
 - **[Platform integration](docs/platform-integration.md)** — where OS services

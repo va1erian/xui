@@ -4,7 +4,7 @@
 
 use super::{Align, Constraints, Group, LeafFn, Out, Sizing, main, with_main};
 use crate::geometry::{Rect, Size};
-use crate::layout::{Anchor, StackDirection};
+use crate::layout::{Anchor, Placement, StackDirection};
 use crate::units::Dip;
 
 /// One entry of a [`Group`]: a leaf, a nested group, or a leaf that frames a
@@ -22,6 +22,8 @@ pub struct Item<K> {
     pub(super) span: usize,
     pub(super) at: Option<[Dip; 4]>,
     pub(super) anchor: Anchor,
+    /// A changeable position that overrides `at` and `anchor`.
+    pub(super) placement: Option<Placement>,
 }
 
 #[derive(Clone, Debug)]
@@ -44,6 +46,7 @@ impl<K: Copy> Item<K> {
             span: 1,
             at: None,
             anchor: Anchor::TopLeft,
+            placement: None,
         }
     }
 
@@ -145,6 +148,23 @@ impl<K: Copy> Item<K> {
     pub fn anchor(mut self, anchor: Anchor) -> Item<K> {
         self.anchor = anchor;
         self
+    }
+
+    /// In a [`Group::absolute`], places the item where `placement` says each
+    /// time the group is laid out, instead of a fixed [`at`](Self::at) and
+    /// [`anchor`](Self::anchor), so it can be moved after the tree is built.
+    pub fn placement(mut self, placement: Placement) -> Item<K> {
+        self.placement = Some(placement);
+        self
+    }
+
+    /// The design rectangle and anchor the item is placed with in an absolute
+    /// group: its [`placement`](Self::placement), or its `at` and `anchor`.
+    pub(super) fn free_position(&self) -> (Option<[Dip; 4]>, Anchor) {
+        match &self.placement {
+            Some(placement) => (Some(placement.rect()), placement.anchor()),
+            None => (self.at, self.anchor),
+        }
     }
 
     pub(super) fn is_visible(&self, leaf: LeafFn<'_, K>, dpi: u32) -> bool {

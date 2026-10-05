@@ -51,7 +51,7 @@ use crate::layout::{Constraints, Sizing};
 use crate::units::Dip;
 use crate::widget::Placeable;
 
-pub use crate::layout::{Align, Anchor, Track};
+pub use crate::layout::{Align, Anchor, Placement, Track};
 pub use bars::{
     flow_text, grid_view, grid_view_with, icon_view, icon_view_with, material_status_bar, menu_bar,
     text_toolbar, toolbar, top_bar,
@@ -110,6 +110,7 @@ pub struct Entry<M: 'static> {
     span: usize,
     at: Option<[Dip; 4]>,
     anchor: Option<Anchor>,
+    placement: Option<Placement>,
 }
 
 impl<M: 'static> Entry<M> {
@@ -125,6 +126,7 @@ impl<M: 'static> Entry<M> {
             span: 1,
             at: None,
             anchor: None,
+            placement: None,
         }
     }
 }

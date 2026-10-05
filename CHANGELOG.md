@@ -45,6 +45,22 @@
 
 ### Additions
 
+- **Declarative forms (`xui::form`, feature `form`).** The `xui-form` crate
+  moves in from LazyRAD: a `Catalog` schema of widget kinds, the format-1
+  `.lfm` document (`FormDoc`, TOML, byte-stable), validation with
+  `Diagnostic`s, and `build` into a `LiveForm` whose properties read and
+  write by name. Each container's children become an `absolute()` layout
+  with anchors, so a form re-anchors itself on resize. See
+  [Forms](docs/forms.md) and `examples/form.rs`.
+- **Rhai-scripted forms (`xui::script`, feature `rhai`).** The LazyRAD
+  `xui-rhai` crate moves in as `xui-script`: `fn <control>_<event>`
+  handlers, the `on_var` control resolver, `form.state`, the operation
+  budget and located `ScriptError`s. Rhai is pinned to `=1.26.1` and stays
+  out of the default build. See `examples/script.rs`.
+- **`layout::Placement`**: an absolute entry's rectangle and anchor in a
+  shared cell (`LayoutExt::placement`, `Item::placement`), read each time the
+  layout runs, so a designer or a script can move an entry after the mount.
+
 - **Declarative app setup.** `xui::app(title).size(w, h).run(|ui| ...)` opens
   a window on the default backend (or `xui_core::app` with `.backend(..)`),
   applies the backend's new `Backend::system_theme`, returns the first widget

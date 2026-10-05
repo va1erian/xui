@@ -207,6 +207,9 @@ impl<M: 'static> Layout<M> {
             if let Some(anchor) = entry.anchor {
                 item = item.anchor(anchor);
             }
+            if let Some(placement) = entry.placement {
+                item = item.placement(placement);
+            }
             group = group.push(item);
         }
         Ok(group)

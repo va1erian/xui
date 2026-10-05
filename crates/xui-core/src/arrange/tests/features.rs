@@ -5,10 +5,11 @@ use std::rc::Rc;
 
 use super::{bounds, settle, setup};
 use crate::arrange::{
-    Align, Anchor, Handle, LayoutExt, absolute, build, button, column, group, label, overlay, row,
-    scroll, stack, wrap,
+    Align, Anchor, Handle, LayoutExt, Placement, absolute, build, button, column, group, label,
+    overlay, row, scroll, stack, wrap,
 };
 use crate::geometry::Rect;
+use crate::units::Dip;
 use crate::widget::{Button, GroupBox, HasText, Label, ScrollView};
 
 #[test]
@@ -90,6 +91,33 @@ fn an_absolute_layout_places_entries_and_follows_their_anchors() {
     backend.resize_window(window, 500, 400);
     assert_eq!(bounds(&ui, &fixed), Rect::new(10, 10, 90, 38));
     assert_eq!(bounds(&ui, &pinned), Rect::new(410, 362, 490, 390));
+}
+
+#[test]
+fn a_placement_moves_an_absolute_entry_after_the_mount() {
+    let (backend, window, ui, _runtime) = setup();
+    let moved = Handle::<Button<u32>>::new();
+    let placement = Placement::new(Dip(10.0), Dip(10.0), Dip(80.0), Dip(28.0), Anchor::TopLeft);
+    let _mounted = ui
+        .mount(
+            absolute()
+                .design_size(400, 300)
+                .child(button("move").bind(&moved).placement(&placement)),
+        )
+        .unwrap();
+    assert_eq!(bounds(&ui, &moved), Rect::new(10, 10, 90, 38));
+
+    placement.set_rect([Dip(20.0), Dip(30.0), Dip(100.0), Dip(40.0)]);
+    placement.set_anchor(Anchor::BottomRight);
+    ui.relayout();
+    assert_eq!(bounds(&ui, &moved), Rect::new(20, 30, 120, 70));
+
+    backend.resize_window(window, 500, 400);
+    assert_eq!(
+        bounds(&ui, &moved),
+        Rect::new(120, 130, 220, 170),
+        "the new anchor follows the corner"
+    );
 }
 
 #[test]

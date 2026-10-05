@@ -22,12 +22,14 @@
 mod anchor;
 mod dock;
 mod pack;
+mod placement;
 mod stack;
 mod tree;
 
 pub use anchor::{Anchor, MIN_ANCHOR_PX, anchored};
 pub use dock::{Dock, DockLayout};
 pub use pack::free_preferred;
+pub use placement::Placement;
 pub use stack::{Stack, StackDirection, StackSlot};
 pub use tree::{
     Align, Constraints, Group, GroupKind, Item, Leaf, LeafFn, Sizing, TraceNode, Traced, Track,

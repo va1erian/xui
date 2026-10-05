@@ -20,12 +20,12 @@ $Out = (Resolve-Path $Out).Path
 # Only existing PNGs are removed; a real failure (a locked file) still stops.
 Get-ChildItem -Path $Out -Filter *.png -File | Remove-Item -Force
 
-cargo build -q -p xui --features canvas --examples
+cargo build -q -p xui --features canvas,rhai --examples
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 $targetDir = if ($env:CARGO_TARGET_DIR) { $env:CARGO_TARGET_DIR } else { "target" }
 $bin = Join-Path $targetDir "debug/examples"
 
-$examples = @("widgets", "listview", "gridview", "top_bar", "layout", "containers", "absolute")
+$examples = @("widgets", "listview", "gridview", "top_bar", "layout", "containers", "absolute", "form", "script")
 foreach ($file in Get-ChildItem "crates/xui/examples/controls/*.rs") {
     if ($file.BaseName -ne "support") { $examples += "control_$($file.BaseName)" }
 }

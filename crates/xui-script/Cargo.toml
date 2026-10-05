@@ -1,0 +1,22 @@
+[package]
+name = "xui-script"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "Script xui forms with Rhai: value conversion, control handles, the engine host and event binding"
+repository = "https://github.com/va1erian/xui"
+
+[dependencies]
+xui-core = { path = "../xui-core" }
+xui-form = { path = "../xui-form" }
+# The exact Rhai LazyRAD and lazyOS's `rhai-lazy` link, so one Rhai is audited
+# everywhere. No default features: `ahash/runtime-rng` needs no `getrandom` at
+# startup on LazyOS. `debugging` (breakpoints, call stacks; it implies
+# `internals`) is all a player needs. `sync` stays off, so the engine keeps
+# `Rc`, matching xui's single-threaded widgets.
+rhai = { version = "=1.26.1", default-features = false, features = ["std", "debugging"] }
+
+[dev-dependencies]
+# `metadata` is checked by the engine tests.
+rhai = { version = "=1.26.1", default-features = false, features = ["std", "debugging", "metadata"] }
+xui-canvas = { path = "../xui-canvas", default-features = false }
