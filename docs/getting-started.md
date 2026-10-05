@@ -155,5 +155,5 @@ xui = { version = "0.1", features = ["d2d"] }      # also the Direct2D backend o
 - `crates/xui/examples/controls/` — one small example per portable widget.
 - `crates/xui-canvas/examples/gl.rs` — a `GlWidget`.
 
-Read next: [Widgets](widgets.md), [Theming](theming.md),
+Read next: [Cookbook](cookbook.md), [Widgets](widgets.md), [Theming](theming.md),
 [Architecture](architecture.md).

@@ -51,6 +51,10 @@ name = "layout"
 required-features = ["canvas"]
 
 [[example]]
+name = "cookbook"
+required-features = ["canvas"]
+
+[[example]]
 name = "containers"
 required-features = ["canvas"]
 
