@@ -50,6 +50,7 @@ where
     let frame: Rc<RefCell<Option<Result<Image, SnapshotError>>>> = Rc::new(RefCell::new(None));
     let failure: Rc<RefCell<Option<BackendError>>> = Rc::new(RefCell::new(None));
 
+    let overlay = snapshot.layout_overlay;
     // The hook lives in the backend, so it holds the backend weakly.
     let weak = Rc::downgrade(backend);
     let hook_ui = Rc::clone(&ui_slot);
@@ -61,10 +62,16 @@ where
         let stage = Stage::new(&backend, ui);
         step(&stage);
         backend.pump(stage.window());
+        let outlines = if overlay {
+            stage.ui().layout_rects()
+        } else {
+            Vec::new()
+        };
         let captured = backend
             .render(stage.window())
             .ok_or(SnapshotError::NoFrame)
-            .and_then(|image| {
+            .and_then(|mut image| {
+                super::overlay::outline(&mut image.pixels, image.width, image.height, &outlines);
                 Image::from_rgba(image.width, image.height, image.pixels)
                     .map_err(SnapshotError::Image)
             });

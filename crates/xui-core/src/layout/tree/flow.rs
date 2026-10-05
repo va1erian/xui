@@ -3,7 +3,7 @@
 //! Rows and columns: items along one axis, aligned across it.
 
 use super::{
-    Align, Constraints, Group, Item, LeafFn, Sizing, align_span, clamp_to_caps, cross, main,
+    Align, Constraints, Group, Item, LeafFn, Out, Sizing, align_span, clamp_to_caps, cross, main,
 };
 use crate::geometry::{Rect, Size};
 use crate::layout::{Stack, StackDirection, StackSlot, pack};
@@ -76,7 +76,7 @@ pub(super) fn place<K: Copy>(
     rect: Rect,
     dpi: u32,
     leaf: LeafFn<'_, K>,
-    out: &mut Vec<(K, Rect)>,
+    out: &mut Out<K>,
 ) {
     let visible = group.visible_items(leaf, dpi);
     if visible.is_empty() {

@@ -17,6 +17,14 @@
 - **`Placeable::natural_size(ui, dpi)` is now `measure(ui, constraints)`**,
   with the DPI in `Constraints::dpi`; `layout::Leaf` gains `content`, and the
   tree's leaf callback takes `Constraints`.
+- **Layouts re-flow on their own after a change, once per event.**
+  `Ui::set_visible` no longer re-lays the window at once: like a text,
+  icon, title or theme change, it marks the layouts dirty and they re-flow
+  once the event being handled is done (before the next paint). Read a
+  widget's new bounds in the same handler only after `ui.relayout()`, which is
+  otherwise rarely needed now. `group(..)` returns a `GroupBuild` (bindable)
+  instead of an `Entry`; `Insets::apply` keeps the result inside the rect
+  when the insets are larger than it.
 
 ### Additions
 
@@ -34,6 +42,25 @@
   from layouts (`Tabs::add_layout_page`), height-for-width measuring through
   `Constraints`, and `ListView::refresh_model` for live tables that keep their
   scroll position.
+- **More containers.** `wrap()` breaks entries into lines, `scroll(layout)`
+  scrolls a layout measured at the view's width (`ScrollView::set_layout`),
+  `overlay()` and `stack()` layer entries (centred and stretched by default),
+  and `absolute()` places entries `.at(x, y, w, h)` with an `.anchor(..)`
+  against a `design_size`: the one home for free positions. The pure tree
+  gains `Group::wrap`/`layered`/`absolute`, `Item::at`/`anchor` and
+  `Group::measure`.
+- **Layout debugging.** `Ui::layout_report()` dumps every mounted layout's
+  tree and rectangles with `!` warnings for clipping, zero size, truncated
+  text and overlap inside rows, columns, grids and wraps (from the pure
+  `Group::trace`); `Ui::layout_rects()` and
+  `Snapshot::with_layout_overlay()` outline them on a headless capture.
+- **Builder gaps.** A `group(..)` can be bound and hidden as one unit (its
+  content hides with it), `children` takes tuples of up to 24, a widget
+  shared through `Rc<W>` is `Placeable` (place it with
+  `build(move |_| Ok(rc))`), `button`/`toggle_button` take `.icon(..)` and
+  `.tooltip(..)` (`Button::set_tooltip`, `ToggleButton::set_tooltip`) and
+  `button` takes `.primary()`. `Ui::invalidate_layout` lets a custom widget
+  ask for a re-flow.
 
 - **Password fields.** `Edit::password(true)` masks a single-line field for a
   secret: it paints one bullet (U+2022) per character, with the caret,

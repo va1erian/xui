@@ -5,7 +5,7 @@
 use super::{Entry, IntoEntry};
 
 /// Several children for [`Layout::children`](super::Layout::children): a
-/// tuple of up to twelve builders, layouts or entries, or a `Vec` of entries
+/// tuple of up to 24 builders, layouts or entries, or a `Vec` of entries
 /// (for children made in a loop).
 pub trait IntoChildren<M: 'static> {
     /// Appends each child to `entries`, in order.
@@ -43,3 +43,23 @@ tuple_children!(A, B, C, D, E, F, G, H, I);
 tuple_children!(A, B, C, D, E, F, G, H, I, J);
 tuple_children!(A, B, C, D, E, F, G, H, I, J, K);
 tuple_children!(A, B, C, D, E, F, G, H, I, J, K, L);
+tuple_children!(A, B, C, D, E, F, G, H, I, J, K, L, N);
+tuple_children!(A, B, C, D, E, F, G, H, I, J, K, L, N, O);
+tuple_children!(A, B, C, D, E, F, G, H, I, J, K, L, N, O, P);
+tuple_children!(A, B, C, D, E, F, G, H, I, J, K, L, N, O, P, Q);
+tuple_children!(A, B, C, D, E, F, G, H, I, J, K, L, N, O, P, Q, R);
+tuple_children!(A, B, C, D, E, F, G, H, I, J, K, L, N, O, P, Q, R, S);
+tuple_children!(A, B, C, D, E, F, G, H, I, J, K, L, N, O, P, Q, R, S, T);
+tuple_children!(A, B, C, D, E, F, G, H, I, J, K, L, N, O, P, Q, R, S, T, U);
+tuple_children!(
+    A, B, C, D, E, F, G, H, I, J, K, L, N, O, P, Q, R, S, T, U, V
+);
+tuple_children!(
+    A, B, C, D, E, F, G, H, I, J, K, L, N, O, P, Q, R, S, T, U, V, W
+);
+tuple_children!(
+    A, B, C, D, E, F, G, H, I, J, K, L, N, O, P, Q, R, S, T, U, V, W, X
+);
+tuple_children!(
+    A, B, C, D, E, F, G, H, I, J, K, L, N, O, P, Q, R, S, T, U, V, W, X, Y
+);

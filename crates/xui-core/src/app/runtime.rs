@@ -72,10 +72,12 @@ impl<A: App> Runtime<A> {
         })
     }
 
-    /// Installs the app and drains what was queued before it existed.
+    /// Installs the app, drains what was queued before it existed and lays
+    /// out what building it changed.
     pub(crate) fn prime(&self, app: A) {
         *self.app.borrow_mut() = Some(app);
         self.drain();
+        self.core.flush_layout();
     }
 
     /// Offers `event` to the app: window-level events first, then the target's
@@ -210,7 +212,11 @@ impl<A: App> Host for Runtime<A> {
     }
 
     fn deliver(&self, target: WidgetId, event: &Event) -> bool {
-        Runtime::deliver(self, target, event)
+        let handled = Runtime::deliver(self, target, event);
+        // One layout pass for whatever the event changed, before the paint
+        // the change scheduled.
+        self.core.flush_layout();
+        handled
     }
 
     fn is_closed(&self) -> bool {

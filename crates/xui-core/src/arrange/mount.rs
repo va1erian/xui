@@ -3,11 +3,11 @@
 //! Mounting a [`Layout`]: placing it on a window or container and keeping it
 //! placed.
 
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::rc::{Rc, Weak};
 
 use super::Layout;
-use crate::app::Ui;
+use crate::app::{LayoutHook, Ui};
 use crate::backend::{Event, Result, WidgetId};
 use crate::geometry::{Rect, Size};
 use crate::layout::{Constraints, Group, Leaf};
@@ -15,31 +15,40 @@ use crate::widget::Placeable;
 
 /// Where a mounted layout gets its area from.
 #[derive(Clone, Copy)]
-enum Area {
+pub(super) enum Area {
     /// The window's client area.
     Window,
     /// A container node's own extent (its children use its coordinates).
     Node(WidgetId),
+    /// Whatever area the container node that owns it places it in (a scroll
+    /// view's content); it never lays itself out.
+    Driven(WidgetId),
 }
 
-struct State<M: 'static> {
-    ui: Ui<M>,
-    area: Area,
-    tree: Group<usize>,
-    widgets: Vec<Rc<dyn Placeable<M>>>,
+pub(super) struct State<M: 'static> {
+    pub(super) ui: Ui<M>,
+    pub(super) area: Area,
+    pub(super) tree: Group<usize>,
+    pub(super) widgets: Vec<Rc<dyn Placeable<M>>>,
+    /// The area of the last placement.
+    pub(super) placed_in: Cell<Rect>,
+    /// Widgets the layout hid because a frame around them is hidden; they
+    /// show again with the frame.
+    collapsed: RefCell<Vec<bool>>,
     /// Set while placing, so a change the placement causes cannot re-enter it.
     placing: Cell<bool>,
 }
 
 impl<M: 'static> State<M> {
-    fn area_rect(&self) -> Rect {
+    fn area_rect(&self) -> Option<Rect> {
         match self.area {
-            Area::Window => self.ui.client_rect(),
-            Area::Node(id) => Rect::from_size(self.ui.bounds(id).size()),
+            Area::Window => Some(self.ui.client_rect()),
+            Area::Node(id) => Some(Rect::from_size(self.ui.bounds(id).size())),
+            Area::Driven(_) => None,
         }
     }
 
-    fn leaf(&self, key: &usize, constraints: Constraints) -> Leaf {
+    pub(super) fn leaf(&self, key: &usize, constraints: Constraints) -> Leaf {
         let widget = &self.widgets[*key];
         let id = widget.id();
         Leaf {
@@ -50,16 +59,25 @@ impl<M: 'static> State<M> {
     }
 
     fn relayout(&self) {
+        if let Some(area) = self.area_rect() {
+            self.place(area);
+        }
+    }
+
+    /// Places the tree in `area`.
+    fn place(&self, area: Rect) {
         if self.placing.replace(true) {
             return;
         }
-        let area = self.area_rect();
+        self.placed_in.set(area);
         if !area.is_empty() {
             let dpi = self.ui.dpi();
             let placed = self.tree.compute(area, dpi, &|key, c| self.leaf(key, c));
             let mut moves = Vec::with_capacity(placed.len());
             let mut after = Vec::with_capacity(placed.len());
+            let mut shown = vec![false; self.widgets.len()];
             for (key, rect) in placed {
+                shown[key] = true;
                 let id = self.widgets[key].id();
                 if id.is_none() {
                     continue;
@@ -67,6 +85,7 @@ impl<M: 'static> State<M> {
                 moves.push((id, rect));
                 after.push((key, rect));
             }
+            self.collapse(&shown);
             // One batch for the whole tree, so a relayout does not flicker.
             self.ui.apply_moves(&moves);
             // Satellite nodes (a list's scrollbar) follow once the primary
@@ -76,6 +95,54 @@ impl<M: 'static> State<M> {
             }
         }
         self.placing.set(false);
+    }
+
+    /// Hides the widgets the tree left out although the app shows them (the
+    /// content of a hidden frame), and shows again the ones it placed after
+    /// collapsing them.
+    fn collapse(&self, shown: &[bool]) {
+        let mut collapsed = self.collapsed.borrow_mut();
+        for (key, widget) in self.widgets.iter().enumerate() {
+            let id = widget.id();
+            if id.is_none() {
+                continue;
+            }
+            let hide = !shown[key] && self.ui.is_visible(id);
+            if hide != collapsed[key] {
+                collapsed[key] = hide;
+                self.ui.show_node(id, !hide);
+            }
+        }
+    }
+
+    /// The size the tree wants within `constraints`.
+    fn measure(&self, constraints: Constraints) -> Size {
+        self.tree.measure(constraints, &|key, c| self.leaf(key, c))
+    }
+}
+
+/// The window's view of a mounted layout.
+struct Hook<M: 'static>(Weak<State<M>>);
+
+impl<M: 'static> LayoutHook for Hook<M> {
+    fn relayout(&self) {
+        if let Some(state) = self.0.upgrade() {
+            state.relayout();
+        }
+    }
+
+    fn report(&self, out: &mut String) {
+        if let Some(state) = self.0.upgrade() {
+            super::report::write(&state, out);
+        }
+    }
+
+    fn rects(&self, out: &mut Vec<Rect>) {
+        if let Some(state) = self.0.upgrade()
+            && matches!(state.area, Area::Window)
+        {
+            super::report::rects(&state, out);
+        }
     }
 }
 
@@ -98,10 +165,18 @@ impl<M: 'static> Mounted<M> {
     /// The size the content wants, in device pixels at the window's DPI: use it
     /// to choose an initial window size. A `fill` entry adds no natural extent.
     pub fn preferred_size(&self) -> Size {
-        let dpi = self.state.ui.dpi();
         self.state
-            .tree
-            .preferred_size(dpi, &|key, c| self.state.leaf(key, c))
+            .measure(Constraints::unbounded(self.state.ui.dpi()))
+    }
+
+    /// The size the content wants within `constraints`.
+    pub(crate) fn measure(&self, constraints: Constraints) -> Size {
+        self.state.measure(constraints)
+    }
+
+    /// Places the content in `area`, for the container that drives it.
+    pub(crate) fn place(&self, area: Rect) {
+        self.state.place(area);
     }
 }
 
@@ -138,34 +213,40 @@ impl<M: 'static> Ui<M> {
     pub fn mount_in(&self, container: WidgetId, layout: Layout<M>) -> Result<Mounted<M>> {
         mount(self, Area::Node(container), layout)
     }
+
+    /// Creates `layout`'s widgets inside `container`, which places them
+    /// itself through [`Mounted::place`] (a scroll view, at its offset).
+    pub(crate) fn mount_driven(
+        &self,
+        container: WidgetId,
+        layout: Layout<M>,
+    ) -> Result<Mounted<M>> {
+        mount(self, Area::Driven(container), layout)
+    }
 }
 
 fn mount<M: 'static>(ui: &Ui<M>, area: Area, layout: Layout<M>) -> Result<Mounted<M>> {
     let parent = match area {
         Area::Window => ui.clone(),
-        Area::Node(id) => ui.with_parent(id),
+        Area::Node(id) | Area::Driven(id) => ui.with_parent(id),
     };
     let mut widgets = Vec::new();
     let tree = layout.realize(&parent, &mut widgets)?;
+    let count = widgets.len();
     let state = Rc::new(State {
         ui: ui.clone(),
         area,
         tree,
         widgets,
+        placed_in: Cell::new(Rect::default()),
+        collapsed: RefCell::new(vec![false; count]),
         placing: Cell::new(false),
     });
 
     let weak: Weak<State<M>> = Rc::downgrade(&state);
-    let hook = ui.add_layout_hook({
-        let weak = weak.clone();
-        move || {
-            if let Some(state) = weak.upgrade() {
-                state.relayout();
-            }
-        }
-    });
+    let hook = ui.add_layout_hook(Rc::new(Hook(weak.clone())));
     let listener = match area {
-        Area::Window => None,
+        Area::Window | Area::Driven(_) => None,
         Area::Node(id) => {
             let token = ui.add_events(id, move |event| {
                 if let (Event::Resize { .. }, Some(state)) = (event, weak.upgrade()) {

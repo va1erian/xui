@@ -9,8 +9,10 @@ use crate::backend::{
     Result, TextMetrics, TextStyle, WidgetId,
 };
 use crate::geometry::Rect;
+use std::rc::Rc;
 
 use super::Ui;
+use crate::app::LayoutHook;
 
 impl<M: 'static> Ui<M> {
     /// Creates a node from `spec`, parented to the container this handle is
@@ -43,12 +45,20 @@ impl<M: 'static> Ui<M> {
     }
 
     /// Shows or hides a node. A mounted layout re-flows when this changes
-    /// whether the node takes part in it: a hidden node takes no space.
+    /// whether the node takes part in it (a hidden node takes no space), once
+    /// the event being handled is done.
     pub fn set_visible(&self, id: WidgetId, visible: bool) {
         self.core.backend().set_visible(id, visible);
         if self.core.set_hidden(id, !visible) {
-            self.core.run_layout_hooks();
+            self.core.invalidate_layout();
         }
+    }
+
+    /// Shows or hides a node without recording it as hidden: a layout uses it
+    /// for the content of a frame it collapsed, which shows again with the
+    /// frame.
+    pub(crate) fn show_node(&self, id: WidgetId, visible: bool) {
+        self.core.backend().set_visible(id, visible);
     }
 
     /// Whether a node is shown, as last set through [`Ui::set_visible`].
@@ -56,16 +66,28 @@ impl<M: 'static> Ui<M> {
         !self.core.is_hidden(id)
     }
 
-    /// Re-flows every mounted layout. Call it after a change that alters a
-    /// widget's natural size (its text, say); window resizes, DPI changes and
-    /// visibility changes re-flow on their own.
+    /// Re-flows every mounted layout now.
+    ///
+    /// Rarely needed: window resizes and DPI changes re-flow at once, and a
+    /// change that can alter a widget's natural size (its text, its
+    /// visibility, the theme) marks the layouts dirty so they re-flow once
+    /// the event being handled is done, before the next paint. Call it only to
+    /// read a widget's new bounds within the same handler, or after changing
+    /// widgets from outside the event loop (a test).
     pub fn relayout(&self) {
         self.core.run_layout_hooks();
     }
 
-    /// Adds a relayout callback, returning the token that removes it.
-    pub(crate) fn add_layout_hook(&self, f: impl Fn() + 'static) -> usize {
-        self.core.add_layout_hook(f)
+    /// Marks the window's layouts dirty, so they re-flow once the event being
+    /// handled is done. A widget calls it from a setter that changes its
+    /// natural size; the built-in widgets already do.
+    pub fn invalidate_layout(&self) {
+        self.core.invalidate_layout();
+    }
+
+    /// Adds a mounted layout, returning the token that removes it.
+    pub(crate) fn add_layout_hook(&self, hook: Rc<dyn LayoutHook>) -> usize {
+        self.core.add_layout_hook(hook)
     }
 
     /// Keeps `value` alive as long as the window.
@@ -115,9 +137,11 @@ impl<M: 'static> Ui<M> {
         self.core.backend().focus(id);
     }
 
-    /// Replaces a node's text.
+    /// Replaces a node's text, and marks the layouts dirty: the node's
+    /// natural size may follow its text.
     pub fn set_text(&self, id: WidgetId, text: &str) {
         self.core.backend().set_text(id, text);
+        self.core.invalidate_layout();
     }
 
     /// Sets a node's cue banner (placeholder shown while a field is empty);

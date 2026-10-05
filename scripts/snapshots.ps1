@@ -25,7 +25,7 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 $targetDir = if ($env:CARGO_TARGET_DIR) { $env:CARGO_TARGET_DIR } else { "target" }
 $bin = Join-Path $targetDir "debug/examples"
 
-$examples = @("widgets", "listview", "gridview", "top_bar", "layout")
+$examples = @("widgets", "listview", "gridview", "top_bar", "layout", "containers", "absolute")
 foreach ($file in Get-ChildItem "crates/xui/examples/controls/*.rs") {
     if ($file.BaseName -ne "support") { $examples += "control_$($file.BaseName)" }
 }

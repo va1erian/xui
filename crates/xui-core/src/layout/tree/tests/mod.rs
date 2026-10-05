@@ -1,5 +1,7 @@
 //! Pure tree-to-rects tests: no backend and no widget, only keyed leaves.
 
+mod containers;
+
 use super::*;
 use crate::units::dip;
 

@@ -112,6 +112,7 @@ impl<M: 'static> GroupBox<M> {
     pub fn set_title(&self, title: &str) {
         *self.title.borrow_mut() = title.to_string();
         self.control.invalidate();
+        self.control.invalidate_layout();
     }
 
     /// Marks the frame selected, so its painter draws an outline (a form
