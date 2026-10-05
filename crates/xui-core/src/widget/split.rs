@@ -71,12 +71,12 @@ pub struct Split<M: 'static> {
 
 impl<M: 'static> Split<M> {
     /// A split whose panes sit side by side, at `bounds`.
-    pub fn row(ui: &Ui<M>, bounds: Rect) -> Result<Split<M>> {
+    pub(crate) fn row(ui: &Ui<M>, bounds: Rect) -> Result<Split<M>> {
         Split::new(ui, bounds, true)
     }
 
     /// A split whose panes are stacked, at `bounds`.
-    pub fn column(ui: &Ui<M>, bounds: Rect) -> Result<Split<M>> {
+    pub(crate) fn column(ui: &Ui<M>, bounds: Rect) -> Result<Split<M>> {
         Split::new(ui, bounds, false)
     }
 
@@ -186,12 +186,6 @@ impl<M: 'static> Split<M> {
     pub fn on_moved(self, f: impl Fn(Dip) -> Option<M> + 'static) -> Split<M> {
         *self.shared.on_moved.borrow_mut() = Some(Box::new(f));
         self
-    }
-
-    /// Moves/resizes the split and re-lays its panes out.
-    pub fn set_bounds(&self, bounds: Rect) {
-        self.control.set_bounds(bounds);
-        relayout(&self.scoped, &self.shared);
     }
 
     /// Re-lays the panes out from the split's current bounds.

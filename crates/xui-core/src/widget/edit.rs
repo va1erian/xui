@@ -77,14 +77,8 @@ impl<M: 'static> Clipboard for UiClipboard<'_, M> {
 }
 
 impl<M: 'static> Edit<M> {
-    /// Creates an edit with no bounds of its own, for a layout to place (see
-    /// [`crate::arrange`]); its size comes from [`Placeable`](super::Placeable).
-    pub fn auto(ui: &Ui<M>, text: &str) -> Result<Edit<M>> {
-        Edit::new(ui, Rect::default(), text)
-    }
-
     /// Creates a field showing `text` at `bounds`.
-    pub fn new(ui: &Ui<M>, bounds: Rect, text: &str) -> Result<Edit<M>> {
+    pub(crate) fn new(ui: &Ui<M>, bounds: Rect, text: &str) -> Result<Edit<M>> {
         let native = ui.supports(NodeKind::Edit) == ImplKind::Native;
         let control = Control::new(
             ui,

@@ -1,16 +1,17 @@
-//! The portable kitchen-sink app: its `Msg`, the widget tree it keeps alive,
-//! and the `update` dispatch. The widgets are assembled in [`build`](super::build).
+//! The portable kitchen-sink app: its `Msg`, the handles it keeps, and the
+//! `update` dispatch. The widgets are assembled in [`build`](super::build).
 
-use std::any::Any;
 use std::rc::Rc;
 
 use xui_core::Theme;
 use xui_core::app::{App as AppTrait, Ui};
-use xui_core::backend::WidgetId;
+use xui_core::arrange::Handle;
 use xui_core::color::Color;
 use xui_core::geometry::Point;
 use xui_core::units::Dip;
-use xui_core::widget::{Dialog, DialogAction, ListView, Menu, SortDirection, StatusBar, TreeView};
+use xui_core::widget::{
+    Dialog, DialogAction, ListView, Menu, Panel, SortDirection, StatusBar, Tooltip, TreeView,
+};
 
 use super::data::{Track, TrackModel};
 
@@ -18,6 +19,7 @@ use super::data::{Track, TrackModel};
 const ROW_TO_PAGE: [usize; 6] = [0, 0, 0, 1, 2, 3];
 const PAGE_TO_ROW: [usize; 4] = [0, 3, 4, 5];
 
+#[derive(Clone)]
 pub(crate) enum Msg {
     Navigate(usize),
     Select(Vec<usize>),
@@ -43,49 +45,23 @@ pub(crate) enum Msg {
     Autoclose,
 }
 
+/// The app state. The window's root layout owns the widgets; the app keeps
+/// handles to the ones it changes, and the window-level dialog, context menu
+/// and tooltips that no layout holds.
 pub(crate) struct App {
-    status: StatusBar<Msg>,
-    nav: TreeView<Msg>,
-    dialog: Dialog<Msg>,
-    context: Menu<Msg>,
-    list: ListView<Msg>,
-    tracks: Rc<Vec<Track>>,
-    order: Vec<usize>,
-    sort: Option<(usize, bool)>,
-    pages: Vec<WidgetId>,
-    /// Every other widget, kept alive so its node is not destroyed. The
-    /// containers (`Tabs`, `Split`, `ScrollView`, panels) and the leaf widgets
-    /// they own live here; dropping one would destroy its node.
-    _alive: Vec<Box<dyn Any>>,
+    pub(super) status: Handle<StatusBar<Msg>>,
+    pub(super) nav: Handle<TreeView<Msg>>,
+    pub(super) dialog: Dialog<Msg>,
+    pub(super) context: Menu<Msg>,
+    pub(super) list: Handle<ListView<Msg>>,
+    pub(super) tracks: Rc<Vec<Track>>,
+    pub(super) order: Vec<usize>,
+    pub(super) sort: Option<(usize, bool)>,
+    pub(super) pages: Vec<Handle<Panel<Msg>>>,
+    pub(super) _tips: Vec<Tooltip<Msg>>,
 }
 
 impl App {
-    #[allow(clippy::too_many_arguments)]
-    pub(crate) fn new(
-        status: StatusBar<Msg>,
-        nav: TreeView<Msg>,
-        dialog: Dialog<Msg>,
-        context: Menu<Msg>,
-        list: ListView<Msg>,
-        tracks: Rc<Vec<Track>>,
-        order: Vec<usize>,
-        pages: Vec<WidgetId>,
-        alive: Vec<Box<dyn Any>>,
-    ) -> App {
-        App {
-            status,
-            nav,
-            dialog,
-            context,
-            list,
-            tracks,
-            order,
-            sort: None,
-            pages,
-            _alive: alive,
-        }
-    }
-
     fn model(&self) -> TrackModel {
         TrackModel::new(Rc::clone(&self.tracks), self.order.clone())
     }
@@ -95,10 +71,11 @@ impl App {
             Some((sorted, was)) if sorted == column => !was,
             _ => true,
         };
+        let list = self.list.get();
         if let Some((sorted, _)) = self.sort
             && sorted != column
         {
-            self.list.clear_sort_indicator(sorted);
+            list.clear_sort_indicator(sorted);
         }
         let tracks = Rc::clone(&self.tracks);
         let key = |&row: &usize| &tracks[row];
@@ -116,7 +93,7 @@ impl App {
             self.order.reverse();
         }
         self.sort = Some((column, ascending));
-        self.list.set_sort_indicator(
+        list.set_sort_indicator(
             column,
             if ascending {
                 SortDirection::Ascending
@@ -124,17 +101,17 @@ impl App {
                 SortDirection::Descending
             },
         );
-        self.list.set_model(self.model());
+        list.set_model(self.model());
     }
 
-    fn show_page(&self, page: usize, ui: &Ui<Msg>) {
-        for (index, id) in self.pages.iter().enumerate() {
-            ui.set_visible(*id, index == page);
+    pub(super) fn show_page(&self, page: usize, ui: &Ui<Msg>) {
+        for (index, panel) in self.pages.iter().enumerate() {
+            ui.set_visible(panel.get().id(), index == page);
         }
     }
 
     fn note(&self, text: &str) {
-        self.status.set_text(1, text);
+        self.status.get().set_text(1, text);
     }
 }
 
@@ -146,11 +123,12 @@ impl AppTrait for App {
             Msg::Navigate(page) => {
                 let page = page.min(self.pages.len().saturating_sub(1));
                 self.show_page(page, ui);
-                self.nav.select(Some(PAGE_TO_ROW[page]));
+                self.nav.get().select(Some(PAGE_TO_ROW[page]));
                 self.note(&format!("page {}", page + 1));
             }
             Msg::Select(rows) => {
                 self.status
+                    .get()
                     .set_text(0, &format!("{}/{} selected", rows.len(), self.order.len()));
                 self.note("selection changed");
             }

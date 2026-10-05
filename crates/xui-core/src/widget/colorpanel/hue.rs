@@ -83,12 +83,12 @@ impl Track {
 
 impl<M: 'static> HueSlider<M> {
     /// Creates a slider at `bounds` set to `hue`.
-    pub fn new(ui: &Ui<M>, bounds: Rect, hue: f32) -> Result<HueSlider<M>> {
+    pub(crate) fn new(ui: &Ui<M>, bounds: Rect, hue: f32) -> Result<HueSlider<M>> {
         HueSlider::with_state(ui, bounds, Rc::new(Cell::new(hue)))
     }
 
     /// Creates a slider over a shared hue cell.
-    pub fn with_state(ui: &Ui<M>, bounds: Rect, hue: Rc<Cell<f32>>) -> Result<HueSlider<M>> {
+    pub(crate) fn with_state(ui: &Ui<M>, bounds: Rect, hue: Rc<Cell<f32>>) -> Result<HueSlider<M>> {
         let control = Control::new(ui, &NodeSpec::new(NodeKind::Custom, bounds).tab_stop())?;
         let dragging = Rc::new(Cell::new(false));
         let on_change: Mapper<M> = Rc::new(RefCell::new(None));
@@ -252,11 +252,6 @@ impl<M: 'static> HueSlider<M> {
     /// A handle to whether a drag is in progress.
     pub(crate) fn dragging(&self) -> Rc<Cell<bool>> {
         Rc::clone(&self.dragging)
-    }
-
-    /// Moves/resizes the slider.
-    pub fn set_bounds(&self, bounds: Rect) {
-        self.control.set_bounds(bounds);
     }
 
     /// Shows or hides the slider, ending a drag in progress.

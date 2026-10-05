@@ -103,22 +103,15 @@ pub struct ListView<M: 'static> {
 impl<M: 'static> ListView<M> {
     /// Creates a list of `items` at `bounds`, with the first row selected (or
     /// no selection when empty). It has one full-width column and no header.
-    pub fn new(ui: &Ui<M>, bounds: Rect, items: &[&str]) -> Result<ListView<M>> {
+    pub(crate) fn new(ui: &Ui<M>, bounds: Rect, items: &[&str]) -> Result<ListView<M>> {
         let rows = Rows::Simple(items.iter().map(|item| item.to_string()).collect());
         Self::build(ui, bounds, rows)
-    }
-
-    /// Creates a virtual list with no bounds of its own, for a layout to place
-    /// (see [`crate::arrange`]); add columns with [`column`](ListView::column).
-    /// The model can be replaced later with [`set_model`](ListView::set_model).
-    pub fn auto(ui: &Ui<M>, model: impl ListModel + 'static) -> Result<ListView<M>> {
-        Self::with_model(ui, Rect::default(), model)
     }
 
     /// Creates a virtual list backed by `model` at `bounds`. Add columns with
     /// [`column`](ListView::column)/[`add_column`](ListView::add_column); a
     /// list with at least one column draws a header.
-    pub fn with_model(
+    pub(crate) fn with_model(
         ui: &Ui<M>,
         bounds: Rect,
         model: impl ListModel + 'static,

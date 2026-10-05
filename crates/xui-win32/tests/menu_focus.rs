@@ -11,11 +11,12 @@ use windows::Win32::Foundation::{HWND, LPARAM, WPARAM};
 use windows::Win32::UI::Input::KeyboardAndMouse::{GetFocus, VK_DOWN, VK_RETURN};
 use windows::Win32::UI::WindowsAndMessaging::{GetForegroundWindow, PostMessageW, WM_KEYDOWN};
 
+use xui_core::Dip;
 use xui_core::app::{App, Ui};
+use xui_core::arrange::{Handle, LayoutExt, absolute, menu_bar};
 use xui_core::backend::{Backend, PlatformSpec};
 use xui_core::property::{Properties, Value};
 use xui_core::widget::{Menu, MenuId};
-use xui_core::{Dip, Rect};
 use xui_win32::{Hwnd, Win32Backend};
 
 #[derive(Clone, Copy, Default)]
@@ -40,7 +41,7 @@ enum Msg {
 }
 
 struct MenuApp {
-    menu: Menu<Msg>,
+    menu: Handle<Menu<Msg>>,
     owner: Hwnd,
     popup: Option<Hwnd>,
     selected: i32,
@@ -53,7 +54,7 @@ impl App for MenuApp {
     fn update(&mut self, msg: Msg, ui: &mut Ui<Msg>) {
         match msg {
             Msg::Open => {
-                self.menu.set_property("open", Value::Bool(true));
+                self.menu.get().set_property("open", Value::Bool(true));
             }
             Msg::Keys => {
                 let hwnd = raw(self.owner);
@@ -83,7 +84,7 @@ impl App for MenuApp {
                     popup_not_foreground: self.popup.is_none_or(|popup| foreground != raw(popup)),
                     focus_off_popup: self.popup.is_none_or(|popup| focus != raw(popup)),
                     selected: self.selected,
-                    menu_closed: !self.menu.is_open(),
+                    menu_closed: !self.menu.get().is_open(),
                 });
                 ui.quit();
             }
@@ -139,25 +140,34 @@ fn keyboard_navigation_keeps_the_host_active() {
                     .native_window()
                     .map(|handle| Hwnd::from_raw(handle.raw()))
                     .expect("the Win32 backend exposes the host handle");
-                let menu = Menu::bar(ui, Rect::new(0, 0, 260, 28))
-                    .expect("create the menu bar")
-                    .on_select(|id| {
-                        let which = if id == MenuId::new(1) {
-                            1
-                        } else if id == MenuId::new(2) {
-                            2
-                        } else {
-                            0
-                        };
-                        Some(Msg::Selected(which))
-                    })
-                    .build(|m| {
-                        m.submenu(MenuId::new(0), "&File", |f| {
-                            f.item(MenuId::new(1), "&New");
-                            f.item(MenuId::new(2), "&Open");
-                        });
-                    });
+                let menu = Handle::new();
+                ui.root(
+                    absolute().child(
+                        menu_bar(|m| {
+                            m.submenu(MenuId::new(0), "&File", |f| {
+                                f.item(MenuId::new(1), "&New");
+                                f.item(MenuId::new(2), "&Open");
+                            });
+                        })
+                        .then(|bar| {
+                            bar.on_select(|id| {
+                                let which = if id == MenuId::new(1) {
+                                    1
+                                } else if id == MenuId::new(2) {
+                                    2
+                                } else {
+                                    0
+                                };
+                                Some(Msg::Selected(which))
+                            })
+                        })
+                        .bind(&menu)
+                        .at(0, 0, 260, 28),
+                    ),
+                )
+                .expect("create the menu bar");
                 let popup = menu
+                    .get()
                     .popup_id(0)
                     .and_then(|id| backend_for_make.node_hwnd(id));
                 MenuApp {

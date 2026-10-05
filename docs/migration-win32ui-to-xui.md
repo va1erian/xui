@@ -28,10 +28,12 @@ low-level platform layer it is built on.
 
 ## Moving app code to the portable layer
 
-- **Widgets are constructed with a `Rect`, not added to a layout tree.**
-  `Label::new(ui, rect, text)`, `Button::new(ui, rect, text)`, … A container
-  (`Panel`, `ScrollView`, `Split`, `Tabs`) owns its children, and `Dock`/`Stack`
-  are available for manual arithmetic.
+- **Widgets are described by builders in a layout, not constructed with a
+  `Rect`.** `column().children((label("Name"), button("OK").on_click(Msg::Ok)))`
+  mounted with `ui.root(..)`; a `Handle` reaches a widget later. Containers
+  (`panel(..)`, `scroll(..)`, `split(a, b)`, `tabs()`) hold layouts, and
+  `absolute()` keeps free positions (with anchors) for forms ported as they
+  are.
 - **Events map to `Msg` the same way** — `on_click`, `on_select`, `on_change`,
   `on_toggle`, and `App::update` is never re-entered.
 - **Some widgets differ slightly.** `TreeView`/`ListView`/`GridView` are

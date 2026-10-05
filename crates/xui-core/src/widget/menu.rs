@@ -193,7 +193,7 @@ pub struct Menu<M: 'static> {
 
 impl<M: 'static> Menu<M> {
     /// Creates a menu bar of `bounds`; fill it with [`Menu::build`].
-    pub fn bar(ui: &Ui<M>, bounds: Rect) -> Result<Menu<M>> {
+    pub(crate) fn bar(ui: &Ui<M>, bounds: Rect) -> Result<Menu<M>> {
         let control = Control::new(ui, &NodeSpec::new(NodeKind::Toolbar, bounds).tab_stop())?;
         let rt = Runtime::new(ui);
         rt.bar.set(Some(control.id()));

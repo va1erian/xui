@@ -1,13 +1,8 @@
 use super::*;
+use xui_core::arrange::{LayoutExt, absolute, button, checkbox, label, progress, slider};
 
-/// Keeps the widgets alive for the duration of a `run_app` call.
-struct Widgets {
-    _button: Button<u32>,
-    _check: CheckBox<u32>,
-    _bar: ProgressBar<u32>,
-    _slider: Slider<u32>,
-    _label: Label<u32>,
-}
+/// An app with nothing to update; the root layout owns the widgets.
+struct Widgets;
 
 impl App for Widgets {
     type Msg = u32;
@@ -34,14 +29,21 @@ fn portable_widgets_render_on_the_software_backend() {
         backend_for_run,
         PlatformSpec::new("canvas widgets").size(Dip(420.0), Dip(200.0)),
         |ui| {
-            let button = Button::new(ui, Rect::new(20, 20, 180, 52), "Click").unwrap();
-            let check = CheckBox::new(ui, Rect::new(20, 64, 240, 92), "Enabled").unwrap();
-            check.set_checked(true);
-            let bar = ProgressBar::new(ui, Rect::new(20, 104, 380, 112), 100).unwrap();
-            bar.set_value(60);
-            let slider = Slider::new(ui, Rect::new(20, 128, 380, 156), 0.0, 100.0).unwrap();
-            slider.set_value(40.0);
-            let label = Label::new(ui, Rect::new(20, 168, 380, 196), "xui on tiny-skia").unwrap();
+            ui.root(
+                absolute().children((
+                    button("Click").at(20, 20, 160, 32),
+                    checkbox("Enabled").checked(true).at(20, 64, 220, 28),
+                    progress(100).value(60).at(20, 104, 360, 8),
+                    slider(0.0, 100.0)
+                        .then(|slider| {
+                            slider.set_value(40.0);
+                            slider
+                        })
+                        .at(20, 128, 360, 28),
+                    label("xui on tiny-skia").at(20, 168, 360, 28),
+                )),
+            )
+            .unwrap();
 
             let image = backend.render(ui.window()).expect("a rendered window");
             assert!(
@@ -51,13 +53,7 @@ fn portable_widgets_render_on_the_software_backend() {
             save("canvas-widgets.png", &image);
             captured = Some(image);
 
-            Widgets {
-                _button: button,
-                _check: check,
-                _bar: bar,
-                _slider: slider,
-                _label: label,
-            }
+            Widgets
         },
     );
 

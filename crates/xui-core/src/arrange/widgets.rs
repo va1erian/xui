@@ -18,7 +18,7 @@ use crate::widget::{
 /// A line of text.
 pub fn label<M: 'static>(text: impl Into<String>) -> Build<Label<M>, M> {
     let text = text.into();
-    build(move |ui| Label::auto(ui, &text))
+    build(move |ui| Label::new(ui, Default::default(), &text))
 }
 
 impl<M: 'static> Build<Label<M>, M> {
@@ -36,7 +36,7 @@ impl<M: 'static> Build<Label<M>, M> {
 /// A push button.
 pub fn button<M: 'static>(text: impl Into<String>) -> Build<Button<M>, M> {
     let text = text.into();
-    build(move |ui| Button::auto(ui, &text))
+    build(move |ui| Button::new(ui, Default::default(), &text))
 }
 
 impl<M: 'static> Build<Button<M>, M> {
@@ -77,7 +77,7 @@ impl<M: 'static> Build<Button<M>, M> {
 /// A link-styled button.
 pub fn hyperlink<M: 'static>(text: impl Into<String>) -> Build<Hyperlink<M>, M> {
     let text = text.into();
-    build(move |ui| Hyperlink::auto(ui, &text))
+    build(move |ui| Hyperlink::new(ui, Default::default(), &text))
 }
 
 impl<M: 'static> Build<Hyperlink<M>, M> {
@@ -93,7 +93,7 @@ impl<M: 'static> Build<Hyperlink<M>, M> {
 /// A check box.
 pub fn checkbox<M: 'static>(text: impl Into<String>) -> Build<CheckBox<M>, M> {
     let text = text.into();
-    build(move |ui| CheckBox::auto(ui, &text))
+    build(move |ui| CheckBox::new(ui, Default::default(), &text))
 }
 
 impl<M: 'static> Build<CheckBox<M>, M> {
@@ -114,7 +114,7 @@ impl<M: 'static> Build<CheckBox<M>, M> {
 /// A button that stays down.
 pub fn toggle_button<M: 'static>(text: impl Into<String>) -> Build<ToggleButton<M>, M> {
     let text = text.into();
-    build(move |ui| ToggleButton::auto(ui, &text))
+    build(move |ui| ToggleButton::new(ui, Default::default(), &text))
 }
 
 impl<M: 'static> Build<ToggleButton<M>, M> {
@@ -149,7 +149,7 @@ impl<M: 'static> Build<ToggleButton<M>, M> {
 
 /// A single-line text field.
 pub fn edit<M: 'static>() -> Build<Edit<M>, M> {
-    build(|ui| Edit::auto(ui, ""))
+    build(|ui| Edit::new(ui, Default::default(), ""))
 }
 
 impl<M: 'static> Build<Edit<M>, M> {
@@ -181,7 +181,7 @@ impl<M: 'static> Build<Edit<M>, M> {
 
 /// A multi-line text field.
 pub fn multiline_edit<M: 'static>() -> Build<MultilineEdit<M>, M> {
-    build(|ui| MultilineEdit::auto(ui, ""))
+    build(|ui| MultilineEdit::new(ui, Default::default(), ""))
 }
 
 impl<M: 'static> Build<MultilineEdit<M>, M> {
@@ -193,7 +193,7 @@ impl<M: 'static> Build<MultilineEdit<M>, M> {
 
 /// A numeric field from `min` to `max` in steps of `step`.
 pub fn number_field<M: 'static>(min: f64, max: f64, step: f64) -> Build<NumberField<M>, M> {
-    build(move |ui| NumberField::auto(ui, min, max, step))
+    build(move |ui| NumberField::new(ui, Default::default(), min, max, step))
 }
 
 impl<M: 'static> Build<NumberField<M>, M> {
@@ -205,7 +205,7 @@ impl<M: 'static> Build<NumberField<M>, M> {
 
 /// A slider from `min` to `max`.
 pub fn slider<M: 'static>(min: f64, max: f64) -> Build<Slider<M>, M> {
-    build(move |ui| Slider::auto(ui, min, max))
+    build(move |ui| Slider::new(ui, Default::default(), min, max))
 }
 
 impl<M: 'static> Build<Slider<M>, M> {
@@ -220,7 +220,7 @@ pub fn combo_box<M: 'static>(items: &[&str]) -> Build<ComboBox<M>, M> {
     let items: Vec<String> = items.iter().map(|item| item.to_string()).collect();
     build(move |ui| {
         let items: Vec<&str> = items.iter().map(String::as_str).collect();
-        ComboBox::auto(ui, &items)
+        ComboBox::new(ui, Default::default(), &items)
     })
 }
 
@@ -233,7 +233,7 @@ impl<M: 'static> Build<ComboBox<M>, M> {
 
 /// A progress bar from zero to `max`.
 pub fn progress<M: 'static>(max: i32) -> Build<ProgressBar<M>, M> {
-    build(move |ui| ProgressBar::auto(ui, max))
+    build(move |ui| ProgressBar::new(ui, Default::default(), max))
 }
 
 impl<M: 'static> Build<ProgressBar<M>, M> {
@@ -248,7 +248,12 @@ impl<M: 'static> Build<ProgressBar<M>, M> {
 
 /// A horizontal rule.
 pub fn separator<M: 'static>() -> Build<Separator<M>, M> {
-    build(Separator::auto)
+    build(|ui| Separator::new(ui, Default::default()))
+}
+
+/// A vertical rule, for a row.
+pub fn vertical_separator<M: 'static>() -> Build<Separator<M>, M> {
+    build(|ui| Separator::vertical(ui, Default::default()))
 }
 
 /// A status bar with one part per entry of `parts`.
@@ -256,7 +261,7 @@ pub fn status_bar<M: 'static>(parts: &[&str]) -> Build<StatusBar<M>, M> {
     let parts: Vec<String> = parts.iter().map(|part| part.to_string()).collect();
     build(move |ui| {
         let parts: Vec<&str> = parts.iter().map(String::as_str).collect();
-        StatusBar::auto(ui, &parts)
+        StatusBar::new(ui, Default::default(), &parts)
     })
 }
 
@@ -264,7 +269,7 @@ pub fn status_bar<M: 'static>(parts: &[&str]) -> Build<StatusBar<M>, M> {
 /// fill it with [`ListView::set_model`] (or [`ListView::refresh_model`] for
 /// live data).
 pub fn list<M: 'static>() -> Build<ListView<M>, M> {
-    build(|ui| ListView::auto(ui, Vec::<Vec<String>>::new()))
+    build(|ui| ListView::with_model(ui, Default::default(), Vec::<Vec<String>>::new()))
 }
 
 impl<M: 'static> Build<ListView<M>, M> {
@@ -287,6 +292,17 @@ impl<M: 'static> Build<ListView<M>, M> {
     ) -> Build<ListView<M>, M> {
         let (title, width) = (title.into(), width.into());
         self.then(move |list| list.column_right(title, width))
+    }
+
+    /// Shows `items`, one row each, with the first selected.
+    pub fn items(self, items: &[&str]) -> Build<ListView<M>, M> {
+        let items: Vec<String> = items.iter().map(|item| item.to_string()).collect();
+        self.then(move |list| {
+            let rows: Vec<&str> = items.iter().map(String::as_str).collect();
+            list.set_items(&rows);
+            list.select(if rows.is_empty() { None } else { Some(0) });
+            list
+        })
     }
 
     /// Raises `f(row)` when the selection moves to `row`.

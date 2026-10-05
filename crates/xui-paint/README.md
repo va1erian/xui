@@ -40,8 +40,8 @@ crates/xui-paint/src/
     document.rs       Model: fields and accessors
     document/edit.rs  Model actions (begin/extend/end, fill, pick, undo/redo)
   view/               xui glue: PaintApp, canvas, tool strip, palette, status
-    app.rs            Msg -> model glue, layout and status bar wiring
-    layout.rs         the four rectangles and the Observer mirror
+    app.rs            the window's column layout and Msg -> model glue
+    layout.rs         strip items, the placed parts and the Observer mirror
     canvas.rs         custom canvas node; canvas/paint.rs draws it
     toolbar.rs        custom tool strip; toolbar/paint.rs draws it
     palette.rs        custom palette
@@ -94,9 +94,9 @@ things an app normally gets from xui:
 
 `PaintApp::build_observed(ui, storage, observer)` also reports tool, size,
 colours, history and status to an `Observer`, for a host that wants to mirror
-them. `xui_paint::layout(client, dpi, io)` returns the four rectangles the
-widgets occupy (`io` is whether the storage is available, which decides whether
-Save/Open cells take space).
+them. The widgets are one column (tool strip, canvas filling the rest, palette,
+status bar) that re-flows on resize; the observer's `parts` names their nodes,
+and `Parts::layout(ui)` returns the four rectangles they occupy now.
 
 ## lazyOS notes
 

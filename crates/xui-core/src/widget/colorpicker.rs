@@ -45,7 +45,7 @@ pub struct ColorPicker<M: 'static> {
 
 impl<M: 'static> ColorPicker<M> {
     /// Creates a picker over `colors`.
-    pub fn new(ui: &Ui<M>, bounds: Rect, colors: &[Color]) -> Result<ColorPicker<M>> {
+    pub(crate) fn new(ui: &Ui<M>, bounds: Rect, colors: &[Color]) -> Result<ColorPicker<M>> {
         let control = Control::new(ui, &NodeSpec::new(NodeKind::Custom, bounds))?;
         let colors = Rc::new(colors.to_vec());
         let columns = Rc::new(Cell::new(DEFAULT_COLUMNS));

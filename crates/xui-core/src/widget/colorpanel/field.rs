@@ -79,7 +79,7 @@ impl Gradients {
 
 impl<M: 'static> ColorField<M> {
     /// Creates a field at `bounds` for `hsv`.
-    pub fn new(ui: &Ui<M>, bounds: Rect, hsv: Hsv) -> Result<ColorField<M>> {
+    pub(crate) fn new(ui: &Ui<M>, bounds: Rect, hsv: Hsv) -> Result<ColorField<M>> {
         ColorField::with_state(ui, bounds, Rc::new(Cell::new(hsv)))
     }
 
@@ -264,11 +264,6 @@ impl<M: 'static> ColorField<M> {
     /// hides or disables the field.
     pub(crate) fn dragging(&self) -> Rc<Cell<bool>> {
         Rc::clone(&self.dragging)
-    }
-
-    /// Moves/resizes the field.
-    pub fn set_bounds(&self, bounds: Rect) {
-        self.control.set_bounds(bounds);
     }
 
     /// Shows or hides the field, ending a drag in progress.

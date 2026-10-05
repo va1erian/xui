@@ -89,13 +89,13 @@ pub struct TreeView<M: 'static> {
 
 impl<M: 'static> TreeView<M> {
     /// Creates a tree of `rows` at `bounds`.
-    pub fn new(ui: &Ui<M>, bounds: Rect, rows: &[TreeRow]) -> Result<TreeView<M>> {
+    pub(crate) fn new(ui: &Ui<M>, bounds: Rect, rows: &[TreeRow]) -> Result<TreeView<M>> {
         Self::build(ui, bounds, State::flat(rows))
     }
 
     /// Creates a virtual tree at `bounds`, loading `model`'s roots now and a
     /// branch's children the first time it expands.
-    pub fn with_model(
+    pub(crate) fn with_model(
         ui: &Ui<M>,
         bounds: Rect,
         model: impl TreeModel + 'static,

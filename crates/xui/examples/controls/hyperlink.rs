@@ -4,60 +4,44 @@
 //! Run with:
 //!
 //! ```text
-//! cargo run -p xui --features canvas --example control_hyperlink
+//! cargo run -p xui --example control_hyperlink
 //! ```
 
-use xui_core::Dip;
-use xui_core::app::{App, Ui, run_app};
-use xui_core::backend::PlatformSpec;
-use xui_core::widget::{HasText, Hyperlink, Label};
+use xui::prelude::*;
 
-#[path = "support.rs"]
-mod support;
-use support::{Layout, autoclose, backend};
-
+#[derive(Clone)]
 enum Msg {
     Open,
-    Quit,
 }
 
+#[derive(Default)]
 struct Demo {
-    result: Label<Msg>,
+    result: Handle<Label<Msg>>,
     clicks: u32,
-    _link: Hyperlink<Msg>,
 }
 
 impl App for Demo {
     type Msg = Msg;
 
-    fn update(&mut self, msg: Msg, ui: &mut Ui<Msg>) {
+    fn update(&mut self, msg: Msg, _ui: &mut Ui<Msg>) {
         match msg {
             Msg::Open => {
                 self.clicks += 1;
                 self.result
+                    .get()
                     .set_text(&format!("Link opened {} times", self.clicks));
             }
-            Msg::Quit => ui.quit(),
         }
     }
 }
 
-fn main() -> xui_core::backend::Result<()> {
-    run_app(
-        backend(),
-        PlatformSpec::new("Hyperlink demo").size(Dip(520.0), Dip(360.0)),
-        |ui| {
-            let l = Layout::new(ui.dpi());
-            let result = Label::new(ui, l.rect(16.0, 16.0, 504.0, 48.0), "Not opened yet").unwrap();
-            let link = Hyperlink::new(ui, l.rect(16.0, 64.0, 320.0, 96.0), "Open the docs")
-                .unwrap()
-                .on_click(|| Some(Msg::Open));
-            autoclose(ui, || Msg::Quit);
-            Demo {
-                result,
-                clicks: 0,
-                _link: link,
-            }
-        },
-    )
+fn main() -> Result<()> {
+    xui::app("Hyperlink demo").size(520, 360).run(|ui| {
+        let demo = Demo::default();
+        ui.root(column().padding(16).gap(16).children((
+            label("Not opened yet").bind(&demo.result),
+            hyperlink("Open the docs").on_click(Msg::Open),
+        )))?;
+        Ok(demo)
+    })
 }

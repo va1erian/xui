@@ -6,8 +6,9 @@ use xui_canvas::snapshot::{Snapshot, render};
 use xui_core::app::{App, Ui};
 use xui_core::icon::{IconRef, Lucide};
 use xui_core::image::Image;
-use xui_core::widget::{ListModel, ListView};
-use xui_core::{Dip, Rect, Theme};
+use xui_core::prelude::{LayoutExt, column, list};
+use xui_core::widget::ListModel;
+use xui_core::{Dip, Theme};
 
 /// Four rows; the odd ones carry an error icon.
 struct Model;
@@ -26,7 +27,7 @@ impl ListModel for Model {
     }
 }
 
-struct Demo(#[allow(dead_code)] ListView<()>);
+struct Demo;
 
 impl App for Demo {
     type Msg = ();
@@ -51,13 +52,12 @@ fn check(theme: Theme, dpi: u32) {
     let image = render(
         Snapshot::new(Dip(200.0), Dip(100.0)).theme(theme).dpi(dpi),
         |ui| {
-            let list = ListView::with_model(
-                ui,
-                Rect::new(0, 0, 200 * dpi as i32 / 96, 100 * dpi as i32 / 96),
-                Model,
-            )
-            .unwrap();
-            Demo(list)
+            let list = list().then(|list| {
+                list.set_model(Model);
+                list
+            });
+            ui.root(column().child(list.fill(1))).unwrap();
+            Demo
         },
     )
     .expect("a snapshot");

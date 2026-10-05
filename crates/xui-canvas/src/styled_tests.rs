@@ -8,9 +8,10 @@ use std::rc::Rc;
 use crate::tests::{dark_pixels, save};
 use crate::{OffscreenBackend, RgbaImage, Surface, measure_text};
 use xui_core::app::{App, Ui, run_app};
+use xui_core::arrange::{LayoutExt, absolute, button, flow_text};
 use xui_core::backend::{Backend, PlatformSpec};
 use xui_core::geometry::Rect;
-use xui_core::widget::{Button, FlowText, Icon, Run};
+use xui_core::widget::{Icon, Run};
 use xui_core::{Canvas, Color, Dip, TextStyle, Theme};
 
 /// The rightmost x that carries ink darker than a light background.
@@ -73,11 +74,8 @@ fn bold_italic_coloured_text_renders_and_measures() {
     save("canvas-styled-text.png", &image);
 }
 
-/// Keeps the widgets alive for the duration of a `run_app` call.
-struct FlowDemo {
-    _flow: FlowText<u32>,
-    _button: Button<u32>,
-}
+/// An app with nothing to update; the root layout owns the widgets.
+struct FlowDemo;
 
 impl App for FlowDemo {
     type Msg = u32;
@@ -95,16 +93,19 @@ fn flow_text_and_icon_render_light_and_dark() {
         backend_for_run,
         PlatformSpec::new("flow").size(Dip(340.0), Dip(120.0)),
         |ui| {
-            let flow = FlowText::new(ui, Rect::new(12, 12, 328, 64))
-                .unwrap()
-                .run(Run::link("The Midnight Set").on_click(|| Some(1)))
-                .separator(" · ")
-                .run(Run::normal("Signal 1"))
-                .separator(" · ")
-                .run(Run::weak("(2004)"));
-            let button = Button::new(ui, Rect::new(12, 76, 150, 108), "Add")
-                .unwrap()
-                .icon(Icon::Plus);
+            ui.root(
+                absolute().children((
+                    flow_text()
+                        .run(Run::link("The Midnight Set").on_click(|| Some(1)))
+                        .separator(" · ")
+                        .run(Run::normal("Signal 1"))
+                        .separator(" · ")
+                        .run(Run::weak("(2004)"))
+                        .at(12, 12, 316, 52),
+                    button("Add").icon(Icon::Plus).at(12, 76, 138, 32),
+                )),
+            )
+            .unwrap();
 
             let light_image = backend.render(ui.window()).expect("a light render");
             save("flow-text-light.png", &light_image);
@@ -115,10 +116,7 @@ fn flow_text_and_icon_render_light_and_dark() {
             save("flow-text-dark.png", &dark_image);
             dark = Some(dark_image);
 
-            FlowDemo {
-                _flow: flow,
-                _button: button,
-            }
+            FlowDemo
         },
     );
 

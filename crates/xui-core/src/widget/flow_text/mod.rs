@@ -141,7 +141,7 @@ pub struct FlowText<M: 'static> {
 
 impl<M: 'static> FlowText<M> {
     /// Creates an empty flow line at `bounds`, adopting `ui`'s theme.
-    pub fn new(ui: &Ui<M>, bounds: Rect) -> Result<FlowText<M>> {
+    pub(crate) fn new(ui: &Ui<M>, bounds: Rect) -> Result<FlowText<M>> {
         let control = Control::new(ui, &NodeSpec::new(NodeKind::Label, bounds))?;
         let inner = Rc::new(FlowInner {
             runs: RefCell::new(Vec::new()),

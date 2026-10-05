@@ -39,7 +39,7 @@ pub struct RadioGroup<M: 'static> {
 impl<M: 'static> RadioGroup<M> {
     /// Creates a group of `labels`, the first selected, laid out top-to-bottom
     /// from `bounds` (each option is [`ROW`] tall).
-    pub fn new(ui: &Ui<M>, bounds: Rect, labels: &[&str]) -> Result<RadioGroup<M>> {
+    pub(crate) fn new(ui: &Ui<M>, bounds: Rect, labels: &[&str]) -> Result<RadioGroup<M>> {
         let selected = Rc::new(Cell::new(0usize));
         let selected_flag = Rc::new(Cell::new(false));
         let enabled = Rc::new(Cell::new(true));

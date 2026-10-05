@@ -5,67 +5,53 @@
 //! Run with:
 //!
 //! ```text
-//! cargo run -p xui --features canvas --example control_button
+//! cargo run -p xui --example control_button
 //! ```
 
-use xui_core::Dip;
-use xui_core::app::{App, Ui, run_app};
-use xui_core::backend::PlatformSpec;
-use xui_core::icon::Lucide;
-use xui_core::widget::{Button, HasText, Label};
+use xui::icon::Lucide;
+use xui::prelude::*;
 
-#[path = "support.rs"]
-mod support;
-use support::{Layout, autoclose, backend};
-
+#[derive(Clone)]
 enum Msg {
     Click,
-    Quit,
 }
 
+#[derive(Default)]
 struct Demo {
-    result: Label<Msg>,
+    result: Handle<Label<Msg>>,
     clicks: u32,
-    _buttons: Vec<Button<Msg>>,
 }
 
 impl App for Demo {
     type Msg = Msg;
 
-    fn update(&mut self, msg: Msg, ui: &mut Ui<Msg>) {
+    fn update(&mut self, msg: Msg, _ui: &mut Ui<Msg>) {
         match msg {
             Msg::Click => {
                 self.clicks += 1;
                 self.result
+                    .get()
                     .set_text(&format!("Clicked {} times", self.clicks));
             }
-            Msg::Quit => ui.quit(),
         }
     }
 }
 
-fn main() -> xui_core::backend::Result<()> {
-    run_app(
-        backend(),
-        PlatformSpec::new("Button demo").size(Dip(520.0), Dip(360.0)),
-        |ui| {
-            let l = Layout::new(ui.dpi());
-            let result =
-                Label::new(ui, l.rect(16.0, 16.0, 504.0, 48.0), "Not clicked yet").unwrap();
-            let labelled = Button::new(ui, l.rect(16.0, 64.0, 300.0, 104.0), "Click me")
-                .unwrap()
-                .icon(Lucide::Play)
-                .on_click(|| Some(Msg::Click));
-            let icon_only = Button::new(ui, l.rect(312.0, 64.0, 360.0, 104.0), "")
-                .unwrap()
-                .icon(Lucide::Save)
-                .on_click(|| Some(Msg::Click));
-            autoclose(ui, || Msg::Quit);
-            Demo {
-                result,
-                clicks: 0,
-                _buttons: vec![labelled, icon_only],
-            }
-        },
-    )
+fn main() -> Result<()> {
+    xui::app("Button demo").size(520, 360).run(|ui| {
+        let demo = Demo::default();
+        ui.root(
+            column().padding(16).gap(16).children((
+                label("Not clicked yet").bind(&demo.result),
+                row().gap(12).children((
+                    button("Click me")
+                        .icon(Lucide::Play)
+                        .on_click(Msg::Click)
+                        .width(284),
+                    button("").icon(Lucide::Save).on_click(Msg::Click).width(48),
+                )),
+            )),
+        )?;
+        Ok(demo)
+    })
 }

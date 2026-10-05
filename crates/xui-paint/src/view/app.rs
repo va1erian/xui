@@ -1,17 +1,18 @@
 #![forbid(unsafe_code)]
 
-//! The application: widget construction, layout from the client rect, and the
-//! `Msg` -> model glue.
+//! The application: the window's layout of widgets and the `Msg` -> model
+//! glue.
 
 use std::cell::RefCell;
 use std::rc::Rc;
 
 use xui_core::app::{App, Ui};
+use xui_core::arrange::{Handle, LayoutExt, build, column, status_bar};
 use xui_core::backend::Result;
 use xui_core::widget::StatusBar;
 
 use super::canvas::CanvasMsg;
-use super::layout::{Observer, layout, strip_items};
+use super::layout::{Observer, Parts, strip_items};
 use super::palette::Palette;
 use super::toolbar::ToolStrip;
 use super::{Msg, PaintCanvas};
@@ -23,10 +24,10 @@ use crate::{DEFAULT_HEIGHT, DEFAULT_WIDTH};
 /// The paint application.
 pub struct PaintApp {
     model: Model,
-    canvas: PaintCanvas,
-    toolbar: ToolStrip,
-    palette: Palette,
-    status: StatusBar<Msg>,
+    canvas: Handle<PaintCanvas>,
+    toolbar: Handle<ToolStrip>,
+    palette: Handle<Palette>,
+    status: Handle<StatusBar<Msg>>,
     storage: Rc<dyn Storage>,
     observer: Rc<RefCell<Observer>>,
     cursor: Option<(i32, i32)>,
@@ -46,11 +47,22 @@ impl PaintApp {
         observer: Rc<RefCell<Observer>>,
     ) -> Result<PaintApp> {
         let io = storage.available();
-        let areas = layout(ui.client_rect(), ui.dpi(), io);
-        let canvas = PaintCanvas::new(ui, areas.canvas)?;
-        let toolbar = ToolStrip::new(ui, areas.toolbar, strip_items(io))?;
-        let palette = Palette::new(ui, areas.palette)?;
-        let status = StatusBar::new(ui, areas.status, &["--", "320 x 240", "Pencil"])?;
+        let canvas = Handle::new();
+        let toolbar = Handle::new();
+        let palette = Handle::new();
+        let status = Handle::new();
+        ui.root(column().children((
+            build(move |ui| ToolStrip::new(ui, strip_items(io))).bind(&toolbar),
+            build(PaintCanvas::new).bind(&canvas).fill(1),
+            build(Palette::new).bind(&palette),
+            status_bar(&["--", "320 x 240", "Pencil"]).bind(&status),
+        )))?;
+        observer.borrow_mut().parts = Some(Parts {
+            toolbar: toolbar.get().id(),
+            canvas: canvas.get().id(),
+            palette: palette.get().id(),
+            status: status.get().id(),
+        });
 
         let mut app = PaintApp {
             model: Model::new(DEFAULT_WIDTH, DEFAULT_HEIGHT),
@@ -73,18 +85,18 @@ impl PaintApp {
     }
 
     /// The canvas widget.
-    pub fn canvas(&self) -> &PaintCanvas {
-        &self.canvas
+    pub fn canvas(&self) -> Rc<PaintCanvas> {
+        self.canvas.get()
     }
 
     /// The tool strip.
-    pub fn toolbar(&self) -> &ToolStrip {
-        &self.toolbar
+    pub fn toolbar(&self) -> Rc<ToolStrip> {
+        self.toolbar.get()
     }
 
     /// The palette.
-    pub fn palette(&self) -> &Palette {
-        &self.palette
+    pub fn palette(&self) -> Rc<Palette> {
+        self.palette.get()
     }
 
     /// The last save/load message, if any.
@@ -94,14 +106,17 @@ impl PaintApp {
 
     /// Rebuilds the painter state, toolbar and status bar from the model.
     fn sync(&mut self) {
-        self.canvas.sync(
+        self.canvas.get().sync(
             self.model.bitmap(),
             self.model.revision(),
             self.model.preview(),
             self.model.size(),
         );
-        self.toolbar.sync(&self.model, self.storage.available());
+        self.toolbar
+            .get()
+            .sync(&self.model, self.storage.available());
         self.palette
+            .get()
             .sync(self.model.primary(), self.model.secondary());
         self.refresh_status();
     }
@@ -116,10 +131,11 @@ impl PaintApp {
         let size = format!("{width} x {height}");
         let tool = self.model.tool().label().to_string();
         let message = self.message.clone().unwrap_or_default();
-        self.status.set_text(0, &position);
-        self.status.set_text(1, &size);
-        self.status.set_text(2, &tool);
-        self.status.set_text(3, &message);
+        let status = self.status.get();
+        status.set_text(0, &position);
+        status.set_text(1, &size);
+        status.set_text(2, &tool);
+        status.set_text(3, &message);
 
         let mut observer = self.observer.borrow_mut();
         observer.tool = self.model.tool();

@@ -10,10 +10,11 @@ use std::rc::Rc;
 
 use xui_core::app::Ui;
 use xui_core::backend::{Event, NodeKind, NodeSpec, Result, WidgetId};
-use xui_core::geometry::Rect;
+use xui_core::geometry::{Rect, Size};
 use xui_core::image::Image;
+use xui_core::layout::Constraints;
 use xui_core::message::MouseButton;
-use xui_core::widget::Control;
+use xui_core::widget::{Control, Placeable};
 
 use super::Msg;
 use crate::model::{Bitmap, Preview, Side};
@@ -70,9 +71,12 @@ pub struct PaintCanvas {
 }
 
 impl PaintCanvas {
-    /// Creates a canvas node at `bounds`.
-    pub fn new(ui: &Ui<Msg>, bounds: Rect) -> Result<PaintCanvas> {
-        let control = Control::new(ui, &NodeSpec::new(NodeKind::Custom, bounds).tab_stop())?;
+    /// Creates a canvas node, for a layout to place.
+    pub fn new(ui: &Ui<Msg>) -> Result<PaintCanvas> {
+        let control = Control::new(
+            ui,
+            &NodeSpec::new(NodeKind::Custom, Rect::default()).tab_stop(),
+        )?;
         let state: Rc<RefCell<CanvasState>> = Rc::new(RefCell::new(CanvasState::default()));
         let releasing = Rc::new(Cell::new(false));
 
@@ -136,14 +140,21 @@ impl PaintCanvas {
         self.state.borrow().offset
     }
 
-    /// Moves/resizes the node.
-    pub fn set_bounds(&self, bounds: Rect) {
-        self.control.set_bounds(bounds);
-    }
-
     /// Shows or hides the node.
     pub fn set_visible(&self, visible: bool) {
         self.control.set_visible(visible);
+    }
+}
+
+/// The canvas is a viewport that scrolls the bitmap inside whatever slot a
+/// layout gives it, so it has no natural size of its own.
+impl Placeable<Msg> for PaintCanvas {
+    fn id(&self) -> WidgetId {
+        self.control.id()
+    }
+
+    fn measure(&self, _ui: &Ui<Msg>, _constraints: Constraints) -> Size {
+        Size::new(0, 0)
     }
 }
 
