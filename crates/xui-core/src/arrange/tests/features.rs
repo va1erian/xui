@@ -301,3 +301,48 @@ fn the_layout_report_warns_of_a_check_box_too_narrow_for_its_text() {
     );
     assert!(report.contains("! text truncated"), "{report}");
 }
+
+/// A widget whose `placed` dirties the layout again every time.
+struct Restless(crate::backend::WidgetId);
+
+impl crate::widget::Placeable<u32> for Restless {
+    fn id(&self) -> crate::backend::WidgetId {
+        self.0
+    }
+
+    fn measure(
+        &self,
+        _ui: &crate::app::Ui<u32>,
+        _constraints: crate::layout::Constraints,
+    ) -> crate::geometry::Size {
+        crate::geometry::Size::new(10, 10)
+    }
+
+    fn placed(&self, ui: &crate::app::Ui<u32>, _rect: Rect) {
+        ui.invalidate_layout();
+    }
+}
+
+#[test]
+fn a_layout_that_never_settles_gets_a_bounded_number_of_deferred_passes() {
+    let (backend, window, ui, _runtime) = setup();
+    let node = crate::widget::Control::new(
+        &ui,
+        &crate::backend::NodeSpec::new(crate::backend::NodeKind::Custom, Rect::default()),
+    )
+    .unwrap();
+    let id = node.id();
+    let _mounted = ui
+        .mount(column().child(build(move |_| Ok(Restless(id)))))
+        .unwrap();
+    let wakes = backend.wakes(window);
+
+    // Each delivered event (the wake included) flushes; a layout still dirty
+    // after its passes asks for one more wake, three in a row at most.
+    for _ in 0..6 {
+        ui.invalidate_layout();
+        settle(&backend, window);
+    }
+    assert_eq!(backend.wakes(window) - wakes, 3, "bounded retries");
+    drop(node);
+}
