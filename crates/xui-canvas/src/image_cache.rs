@@ -17,9 +17,17 @@ use xui_core::image::Image;
 /// The default budget, in bytes of premultiplied RGBA.
 const DEFAULT_BUDGET_BYTES: usize = 64 * 1024 * 1024;
 
+/// An uploaded image: its premultiplied pixels, and whether every pixel is
+/// opaque (a 1:1 draw of an opaque image is a plain row copy).
+#[derive(Clone)]
+pub(crate) struct Uploaded {
+    pub(crate) pixmap: Rc<Pixmap>,
+    pub(crate) opaque: bool,
+}
+
 /// One cached image and its LRU bookkeeping.
 struct Entry {
-    pixmap: Rc<Pixmap>,
+    image: Uploaded,
     bytes: usize,
     last_used: u64,
 }
@@ -48,20 +56,28 @@ impl ImageCache {
     /// image bigger than the whole budget draws through a one-off upload (the
     /// returned pixmap, uncached) rather than evicting everything for a single
     /// blit.
-    pub(crate) fn pixmap(&mut self, image: &Image) -> Option<Rc<Pixmap>> {
+    pub(crate) fn pixmap(&mut self, image: &Image) -> Option<Uploaded> {
         let id = image.id();
         let last_used = self.tick();
         if let Some(entry) = self.images.get_mut(&id) {
             entry.last_used = last_used;
-            return Some(Rc::clone(&entry.pixmap));
+            return Some(entry.image.clone());
         }
-        let pixmap = Rc::new(premultiplied(image)?);
-        let bytes = pixmap.data().len();
+        let uploaded = Uploaded {
+            pixmap: Rc::new(premultiplied(image)?),
+            opaque: image
+                .pixels()
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .all(|p| p[3] == 255),
+        };
+        let bytes = uploaded.pixmap.data().len();
         if bytes <= self.budget {
             self.images.insert(
                 id,
                 Entry {
-                    pixmap: Rc::clone(&pixmap),
+                    image: uploaded.clone(),
                     bytes,
                     last_used,
                 },
@@ -69,7 +85,7 @@ impl ImageCache {
             self.bytes += bytes;
             self.evict();
         }
-        Some(pixmap)
+        Some(uploaded)
     }
 
     fn tick(&mut self) -> u64 {
@@ -153,7 +169,8 @@ mod tests {
         assert_eq!(cache.images.len(), 1, "the budget fits only one image");
 
         let back = cache.pixmap(&first).expect("re-uploaded");
-        let pixels = back.data();
+        assert!(back.opaque);
+        let pixels = back.pixmap.data();
         assert_eq!(&pixels[..4], &[0x11, 0x11, 0x11, 0xFF][..]);
     }
 
