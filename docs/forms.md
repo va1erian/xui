@@ -108,6 +108,23 @@ type, default, category, access) and events (name, arguments), every node's
 file fields with their RON types and defaults, the layout fields and the
 form's fields. It is `Serialize`; `xui-form schema --json` prints it.
 
+## The `xui-form` tool
+
+`crates/xui-form-cli` builds the `xui-form` binary (`cargo install --path
+crates/xui-form-cli`, or `cargo run -p xui-form-cli --`). It works on forms
+without compiling an app, so an agent or a designer can iterate in seconds:
+
+| Command | What it does |
+|---|---|
+| `xui-form check FILE...` | Loads and validates each form: `file:line:col: error: … (did you mean `text`?)` for a load error, `file: error: `node`: …` or `warning:` for each diagnostic, `file: ok` otherwise. Exits 1 when any form has an error. |
+| `xui-form render FILE [--out DIR] [--script F.rhai] [--dpi N] [--overlay] [--report]` | Renders `<name>-light.png` and `<name>-dark.png` headlessly. `--script` runs the script's top-level code and `form_load` first; `--overlay` draws the layout's bounds; `--report` prints `Ui::layout_report` (every rect, with warnings). |
+| `xui-form fmt FILE... [--check]` | Rewrites each form canonically; `--check` only lists the ones that are not, and exits 1 when there are any. |
+| `xui-form migrate FILE [--out F]` | Converts a format-1 (TOML) form to format 2, printing what it dropped to standard error. |
+| `xui-form schema --json` | Prints the `Catalog`: every widget with its properties, events and fields, the layouts, and the common, layout, page and form fields. |
+
+A misspelt command gets a "did you mean" too. Usage errors exit with
+status 2.
+
 ## Scripting a form with Rhai
 
 ```rhai
