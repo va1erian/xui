@@ -15,7 +15,6 @@ excluded from the root one: nothing in the MIT crates depends on them.
 ## Building
 
 ```bash
-git submodule update --init --depth 1 crates/xui-netsurf/netsurf-sys/vendor
 cd crates/xui-netsurf
 cargo run --example compare                         # a window, the built-in page
 cargo run --example compare -- page.html            # any local file
@@ -27,9 +26,13 @@ cargo test --workspace
 libhubbub, libparserutils, libwapcaplet, libnsutils, libnsgif, libnsbmp) with
 the `cc` crate; it needs a C compiler and nothing else (zlib comes from
 `libz-sys`, built from source). There is no curl, OpenSSL, libpng or libjpeg:
-the network and the PNG and JPEG decoders are Rust (below). The C the libraries generate at build time is checked in under
+the network and the PNG and JPEG decoders are Rust (below). The NetSurf sources are vendored
+in `netsurf-sys/vendor/`, pruned to what the build compiles (no upstream test
+suites, whose fuzzer-named files cannot be checked out on Windows), from the
+commits in `netsurf-sys/scripts/revisions`; `netsurf-sys/scripts/vendor.sh`
+refreshes them. The C the libraries generate at build time is checked in under
 `netsurf-sys/generated/`; `netsurf-sys/scripts/regen.sh` remakes it after a
-submodule pin moves. So far it is built and tested on Linux only.
+pin moves. So far it is built and tested on Linux only.
 
 ## Fetching `http:` and `https:`
 

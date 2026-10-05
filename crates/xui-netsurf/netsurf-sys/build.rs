@@ -1,5 +1,5 @@
 //! Builds the NetSurf core and the eight NetSurf libraries it needs from the
-//! pinned submodules in `vendor/`, plus the nsx glue in `csrc/`, into one
+//! sources vendored in `vendor/`, plus the nsx glue in `csrc/`, into one
 //! static library.
 //!
 //! The file lists in `sources/` are what NetSurf's own Makefiles compile for a
@@ -40,10 +40,7 @@ fn main() {
     let vendor = root.join("vendor");
     let generated = root.join("generated");
     if !vendor.join("netsurf/desktop/netsurf.c").exists() {
-        panic!(
-            "netsurf-sys: the NetSurf sources are missing; run \
-             `git submodule update --init --recursive` in the xui checkout"
-        );
+        panic!("netsurf-sys: vendor/ is incomplete; run `scripts/vendor.sh`");
     }
 
     let zlib_include = env::var_os("DEP_Z_INCLUDE").map(PathBuf::from);
@@ -64,7 +61,7 @@ fn main() {
     println!("cargo:rerun-if-changed=csrc");
     println!("cargo:rerun-if-changed=sources");
     println!("cargo:rerun-if-changed=generated");
-    // The pinned sources: a moved submodule must rebuild the archives.
+    // The vendored sources: a moved pin must rebuild the archives.
     println!("cargo:rerun-if-changed=vendor");
 }
 
