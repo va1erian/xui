@@ -55,6 +55,8 @@ struct SinkWindow {
     sink: Option<Rc<dyn WidgetHost>>,
     theme: Theme,
     wakes: u32,
+    /// Wakes requested and not yet delivered by [`HeadlessBackend::pump_wakes`].
+    pending_wakes: u32,
     /// Whether the window is enabled. A modal opener is disabled while its
     /// child runs.
     enabled: bool,
@@ -302,6 +304,28 @@ impl HeadlessBackend {
             .windows
             .get(&window.raw())
             .map_or(0, |w| w.wakes)
+    }
+
+    /// Delivers each wake `window` asked for since the last pump as an
+    /// [`Event::Wake`], as a backend's loop does, until none are pending (a
+    /// wake handled here may ask for another). Returns how many it delivered.
+    pub fn pump_wakes(&self, window: WindowId) -> u32 {
+        let mut delivered = 0;
+        loop {
+            let pending = self
+                .state
+                .borrow_mut()
+                .windows
+                .get_mut(&window.raw())
+                .map_or(0, |w| std::mem::take(&mut w.pending_wakes));
+            if pending == 0 {
+                return delivered;
+            }
+            for _ in 0..pending {
+                self.inject(window, WidgetId::NONE, Event::Wake);
+                delivered += 1;
+            }
+        }
     }
 
     fn size(spec: &PlatformSpec) -> Rect {
