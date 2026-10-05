@@ -25,6 +25,7 @@ use crate::paint::{
 };
 use crate::{to_skia, to_skia_rgba};
 
+mod blit;
 mod geometry;
 
 /// A drawing surface over a `tiny-skia` pixmap, clipped to `bounds`.
@@ -316,10 +317,20 @@ impl Canvas for SkiaCanvas<'_> {
         // The premultiplied upload is cached on the surface (LRU over bytes,
         // keyed by the image's identity, which clones keep), so the same row
         // icon costs one pattern blit per repaint instead of a fresh pixmap.
-        let Some(pixmap) = self.images.pixmap(image) else {
+        let Some(uploaded) = self.images.pixmap(image) else {
             return;
         };
-        let pixmap: &Pixmap = &pixmap;
+        let pixmap: &Pixmap = &uploaded.pixmap;
+        // An unscaled draw (a page's pictures, a tiled background, a cached
+        // backdrop) is a row copy: tiny-skia's pattern pipeline costs tens of
+        // nanoseconds a pixel even when it samples 1:1.
+        if self.mask.is_none()
+            && dest.width() as u32 == pixmap.width()
+            && dest.height() as u32 == pixmap.height()
+        {
+            blit::unscaled(self.pixmap, pixmap, uploaded.opaque, dest, visible);
+            return;
+        }
         // Map the image's own pixel rectangle onto the full destination
         // rectangle; the filled source is only the visible slice of that map.
         let scale_x = dest.width() as f32 / image.width() as f32;
