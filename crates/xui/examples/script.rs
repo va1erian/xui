@@ -1,21 +1,22 @@
-//! A scripted form: a `.lfm` document plus a `.rhai` script, with no Rust
+//! A scripted calculator: a `.lfm` form plus a `.rhai` script, with no Rust
 //! event code.
 //!
-//! [`ScriptForm::build`] builds the form's widgets, wires every
-//! `<control>_<event>` handler the script defines and runs `form_load`; the
-//! app only routes each widget event back into the script.
+//! The digits and operators are control arrays, so the script has one
+//! handler for each (`fn digit_click(index)`). [`ScriptForm::build`] builds
+//! the widgets, wires every handler the script defines and runs
+//! `form_load`; the app only routes widget events back into the script.
 //!
 //! Run it with `cargo run -p xui --features rhai --example script`.
 
 use xui::BackendError;
-use xui::form::{Catalog, FormDoc, Value};
+use xui::form::load;
 use xui::prelude::*;
 use xui::script::Msg;
 use xui::script::form::{ScriptForm, ScriptSource};
 
 /// The form and its script, embedded so the example runs from any directory.
-const FORM: &str = include_str!("forms/hello.lfm");
-const CODE: &str = include_str!("forms/hello.rhai");
+const FORM: &str = include_str!("forms/calculator.lfm");
+const CODE: &str = include_str!("forms/calculator.rhai");
 
 /// Owns the scripted form and routes its widget events into the script.
 struct Scripted {
@@ -34,7 +35,7 @@ impl App for Scripted {
                 ..
             } => {
                 if let Err(error) = self.form.run(&control, &event, &args) {
-                    eprintln!("hello.rhai: {error}");
+                    eprintln!("{error}");
                 }
             }
             Msg::Quit => ui.quit(),
@@ -44,24 +45,17 @@ impl App for Scripted {
 }
 
 fn main() -> Result<()> {
-    let catalog = Catalog::xui();
-    let doc = FormDoc::from_toml(FORM, &catalog)
-        .map_err(|error| BackendError::Other(format!("hello.lfm: {error}")))?;
-    let extent = |name| doc.window.prop(name).and_then(Value::as_int).unwrap_or(200) as f32;
-    let title = doc
-        .window
-        .prop("title")
-        .and_then(Value::as_str)
-        .unwrap_or("Hello");
-    xui::app(title)
-        .size(extent("width"), extent("height"))
+    let form =
+        load(FORM).map_err(|error| BackendError::Other(format!("calculator.lfm:{error}")))?;
+    xui::app(form.title.clone())
+        .size(form.size.0.dip(), form.size.1.dip())
         .run(|ui| {
             let source = ScriptSource {
-                name: "main_form",
+                name: &form.name,
                 code: CODE,
-                file: "hello.rhai",
+                file: "calculator.rhai",
             };
-            let form = ScriptForm::build(ui, &doc, &catalog, source, (), |_| Ok(()))
+            let form = ScriptForm::build(ui, &form, source, (), |_| Ok(()))
                 .map_err(|error| BackendError::Other(error.to_string()))?;
             Ok(Scripted { form })
         })

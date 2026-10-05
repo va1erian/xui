@@ -1,8 +1,9 @@
 //! Shared harness for the integration tests.
 //!
-//! The only public way to obtain an `xui` [`Ui`] is through [`run_app`], so the
-//! tests build the form from inside its `make` closure and run their assertions
-//! there. The [`OffscreenBackend`] renders headlessly, so this works on CI.
+//! The only public way to obtain an `xui` [`Ui`](xui_core::Ui) is through
+//! [`run_app`], so the tests build the form from inside its `make` closure
+//! and run their assertions there. The [`OffscreenBackend`] renders
+//! headlessly, so this works on CI.
 
 // Each test binary uses its own part of the harness.
 #![allow(dead_code)]
@@ -16,15 +17,14 @@ use xui_core::backend::{Backend, Event, PlatformSpec};
 use xui_core::message::{Modifiers, MouseButton};
 use xui_core::units::Dip;
 use xui_form::{
-    Binder, BuildOptions, Catalog, EventHandler, EventRef, Factories, FormDoc, LiveForm, Value,
-    build_with,
+    Binder, BuildOptions, EventHandler, EventRef, Factories, Form, LiveForm, Value, build_with,
 };
 
 /// A message a test binder maps an event to.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Msg {
-    /// A click on the named node.
-    Click(String),
+    /// A click on the named widget, with its array index.
+    Click(String, Option<usize>),
     /// A toggle with its new state.
     Toggle(bool),
     /// A selection with its index.
@@ -38,16 +38,16 @@ pub struct TestBinder;
 
 impl Binder<Msg> for TestBinder {
     fn bind(&self, event: EventRef<'_>) -> Option<EventHandler<Msg>> {
-        let node = event.node.to_owned();
+        let (node, index) = (event.node.to_owned(), event.index);
         match event.event {
-            "Click" => Some(Rc::new(move |_| Some(Msg::Click(node.clone())))),
-            "Toggle" => Some(Rc::new(move |args| {
+            "Click" => Some(Rc::new(move |_| Some(Msg::Click(node.clone(), index)))),
+            "Toggle" => Some(Rc::new(|args| {
                 args.first().and_then(Value::as_bool).map(Msg::Toggle)
             })),
-            "Select" | "Activate" => Some(Rc::new(move |args| {
+            "Select" | "Activate" => Some(Rc::new(|args| {
                 args.first().and_then(Value::as_int).map(Msg::Select)
             })),
-            "Change" | "Commit" => Some(Rc::new(move |args| {
+            "Change" => Some(Rc::new(|args| {
                 args.first()
                     .and_then(Value::as_str)
                     .map(|text| Msg::Change(text.to_owned()))
@@ -71,101 +71,79 @@ impl App for TestApp {
     }
 }
 
-/// Builds `doc` offscreen and runs `check` against the live form, returning its
-/// result.
+/// Loads `text`, panicking with the error when it does not load.
+pub fn form(text: &str) -> Form {
+    xui_form::load(text).unwrap_or_else(|error| panic!("the form loads: {error}"))
+}
+
+/// Builds `form` offscreen in a window of its own size and runs `check`
+/// against the live form, returning its result.
 pub fn with_form<R>(
-    doc: &FormDoc,
-    catalog: &Catalog,
+    form: &Form,
     options: BuildOptions,
     check: impl FnOnce(&LiveForm<Msg>) -> R,
 ) -> R {
-    with_form_in(doc, catalog, options, (320, 200), check)
+    with_form_sized(form, (form.size.0.0, form.size.1.0), options, check)
 }
 
-/// Builds `doc` offscreen in a window of `size` design units, which the form
-/// anchors to, and runs `check` against the live form.
+/// Builds `form` offscreen in a window of `size` design units.
 pub fn with_form_sized<R>(
-    doc: &FormDoc,
-    catalog: &Catalog,
-    size: (i32, i32),
-    check: impl FnOnce(&LiveForm<Msg>) -> R,
-) -> R {
-    with_form_in(doc, catalog, BuildOptions::default(), size, check)
-}
-
-fn with_form_in<R>(
-    doc: &FormDoc,
-    catalog: &Catalog,
+    form: &Form,
+    size: (f32, f32),
     options: BuildOptions,
-    size: (i32, i32),
     check: impl FnOnce(&LiveForm<Msg>) -> R,
 ) -> R {
     let backend: Rc<dyn Backend> = Rc::new(OffscreenBackend::new());
-    let factories: Factories<Msg> = Factories::xui();
-    let binder = TestBinder;
-    let messages = Rc::new(RefCell::new(Vec::new()));
     let slot: Rc<RefCell<Option<R>>> = Rc::new(RefCell::new(None));
-    let slot_inner = Rc::clone(&slot);
-    let log = Rc::clone(&messages);
-    let spec = PlatformSpec::new("xui-form test").size(Dip(size.0 as f32), Dip(size.1 as f32));
+    let out = Rc::clone(&slot);
+    let spec = PlatformSpec::new("xui-form test").size(Dip(size.0), Dip(size.1));
     run_app(backend, spec, move |ui| {
-        let form = build_with(ui, doc, catalog, &factories, &binder, options).expect("form builds");
-        *slot_inner.borrow_mut() = Some(check(&form));
+        let live =
+            build_with(ui, form, &Factories::xui(), &TestBinder, options).expect("the form builds");
+        *out.borrow_mut() = Some(check(&live));
         TestApp {
-            messages: Rc::clone(&log),
+            messages: Rc::new(RefCell::new(Vec::new())),
         }
     })
     .expect("run_app succeeds");
     slot.borrow_mut().take().expect("the closure ran")
 }
 
-/// Builds `doc` offscreen, simulates a left click on `node_name`, and returns
-/// the messages the app received.
-pub fn click_node(
-    doc: &FormDoc,
-    catalog: &Catalog,
-    options: BuildOptions,
-    node_name: &str,
-) -> Vec<Msg> {
+/// Builds `form` offscreen, clicks the middle of each widget in `names` in
+/// turn, and returns the messages the app received.
+pub fn click(form: &Form, options: BuildOptions, names: &[&str]) -> Vec<Msg> {
     let backend = Rc::new(OffscreenBackend::new());
-    let factories: Factories<Msg> = Factories::xui();
-    let binder = TestBinder;
     let messages = Rc::new(RefCell::new(Vec::new()));
     let log = Rc::clone(&messages);
-    let backend_for_click = Rc::clone(&backend);
-    let node_name = node_name.to_owned();
-    let spec = PlatformSpec::new("xui-form click").size(Dip(320.0), Dip(200.0));
+    let clicker = Rc::clone(&backend);
+    let spec = PlatformSpec::new("xui-form click").size(form.size.0.dip(), form.size.1.dip());
     run_app(backend as Rc<dyn Backend>, spec, move |ui| {
-        let form = build_with(ui, doc, catalog, &factories, &binder, options).expect("form builds");
-        if let Some(id) = form.widget(&node_name).map(|widget| widget.id()) {
-            let bounds = ui.bounds(id);
-            let window = ui.window();
+        let live =
+            build_with(ui, form, &Factories::xui(), &TestBinder, options).expect("the form builds");
+        let window = ui.window();
+        for name in names {
+            let bounds = live.bounds(name).expect("the widget exists");
+            let (x, y) = (
+                bounds.left + bounds.width() / 2,
+                bounds.top + bounds.height() / 2,
+            );
+            let button = MouseButton::Left;
             let modifiers = Modifiers::NONE;
-            let x = bounds.left + bounds.width() / 2;
-            let y = bounds.top + bounds.height() / 2;
-            let _ = backend_for_click.inject(
+            clicker.inject(
                 window,
                 Event::MouseDown {
                     x,
                     y,
-                    button: MouseButton::Left,
+                    button,
                     modifiers,
                 },
             );
-            let _ = backend_for_click.inject(
-                window,
-                Event::MouseMove {
-                    x: x + 1,
-                    y,
-                    modifiers,
-                },
-            );
-            let _ = backend_for_click.inject(
+            clicker.inject(
                 window,
                 Event::MouseUp {
                     x,
                     y,
-                    button: MouseButton::Left,
+                    button,
                     modifiers,
                 },
             );
@@ -176,15 +154,4 @@ pub fn click_node(
     })
     .expect("run_app succeeds");
     messages.borrow().clone()
-}
-
-/// A catalog with some aliases, for the alias tests.
-pub fn aliased_catalog() -> Catalog {
-    let mut catalog = Catalog::xui();
-    catalog.alias("CommandButton", "Button");
-    catalog.alias("TextBox", "Edit");
-    catalog.alias("Frame", "GroupBox");
-    catalog.alias("ListBox", "ListView");
-    catalog.alias("OptionButton", "RadioGroup");
-    catalog
 }

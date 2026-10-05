@@ -196,6 +196,12 @@ impl<M: 'static> TabsBuild<M> {
         self
     }
 
+    /// Maps a page selection through `f`, which may raise nothing.
+    pub fn on_change_with(mut self, f: impl Fn(usize) -> Option<M> + 'static) -> TabsBuild<M> {
+        self.build = self.build.then(move |tabs| tabs.on_change(f));
+        self
+    }
+
     /// Fills `handle` with the container when it is created.
     pub fn bind(mut self, handle: &Handle<Tabs<M>>) -> TabsBuild<M> {
         self.build = self.build.bind(handle);

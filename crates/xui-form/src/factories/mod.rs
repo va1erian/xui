@@ -1,7 +1,7 @@
 #![forbid(unsafe_code)]
 
-//! The [`Factories::xui`] registry: a factory for every portable `xui-core`
-//! widget in [`Catalog::xui`](crate::Catalog::xui).
+//! The [`Factories::xui`] registry: a factory for every widget kind in
+//! [`Catalog::xui`](crate::Catalog::xui).
 //!
 //! Each factory describes its widget with the `xui_core::arrange` builder,
 //! forwards the properties the widget can set, wires only the events the
@@ -46,11 +46,7 @@ macro_rules! factory {
                 $kind
             }
 
-            fn create(
-                &self,
-                cx: &mut crate::build::BuildCx<'_, M>,
-                _node: &crate::doc::Node,
-            ) -> crate::build::Created<M> {
+            fn create(&self, cx: &mut crate::build::BuildCx<'_, M>) -> crate::build::Created<M> {
                 $create(cx)
             }
         }

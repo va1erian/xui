@@ -6,13 +6,22 @@ license = "MIT"
 description = "Declarative forms for xui: schema, document, validation and a widget builder"
 repository = "https://github.com/va1erian/xui"
 
+[features]
+# `migrate`: convert format-1 (TOML) forms to format 2. Only the tool needs
+# it; apps load format 2 alone.
+migrate = ["dep:toml"]
+
 [dependencies]
 xui-core = { path = "../xui-core" }
 serde = { version = "1", features = ["derive"] }
-toml = "0.9"
+# The `.lfm` format 2 is RON.
+ron = "0.12"
 thiserror = "2"
+toml = { version = "0.9", optional = true }
 
 [dev-dependencies]
+# The migration's tests run in every `cargo test`.
+xui-form = { path = ".", features = ["migrate"] }
 # The offscreen backend only: the build tests run headlessly.
 xui-canvas = { path = "../xui-canvas", default-features = false }
 serde_json = "1"

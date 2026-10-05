@@ -46,20 +46,28 @@
 ### Additions
 
 - **Declarative forms (`xui::form`, feature `form`).** The `xui-form` crate
-  moves in from LazyRAD: a `Catalog` schema of widget kinds, the format-1
-  `.lfm` document (`FormDoc`, TOML, byte-stable), validation with
-  `Diagnostic`s, and `build` into a `LiveForm` whose properties read and
-  write by name. Each container's children become an `absolute()` layout
-  with anchors, so a form re-anchors itself on resize. See
-  [Forms](docs/forms.md) and `examples/form.rs`.
+  moves in from LazyRAD with a new file format: `.lfm` format 2 is a RON
+  tree of layouts (`Row`, `Column`, `Wrap`, `Grid`, `Absolute`), containers
+  (`Panel`, `Group`, `Tabs`) and widgets, whose plain serde types in
+  `xui::form::model` also generate the `Catalog` schema. Defaults are
+  omitted and the output is canonical and byte-stable; `load` reports a
+  misspelt field or kind with a "did you mean". Control arrays
+  (`Button(name: "digit", array: 10)`) share one handler that gets the
+  index. `build`/`describe` produce the same `arrange` builders Rust code
+  writes, and `Handlers` attaches closures by name. Format-1 TOML forms are
+  converted by `xui_form::migrate` (feature `migrate`), not loaded at
+  runtime. See [Forms](docs/forms.md) and `examples/form.rs`.
 - **Rhai-scripted forms (`xui::script`, feature `rhai`).** The LazyRAD
   `xui-rhai` crate moves in as `xui-script`: `fn <control>_<event>`
   handlers, the `on_var` control resolver, `form.state`, the operation
-  budget and located `ScriptError`s. Rhai is pinned to `=1.26.1` and stays
-  out of the default build. See `examples/script.rs`.
+  budget and located `ScriptError`s; a control array is a Rhai array
+  (`digit[3].text`). Rhai is pinned to `=1.26.1` and stays out of the
+  default build. See the calculator in `examples/script.rs`.
 - **`layout::Placement`**: an absolute entry's rectangle and anchor in a
   shared cell (`LayoutExt::placement`, `Item::placement`), read each time the
   layout runs, so a designer or a script can move an entry after the mount.
+- `TabsBuild::on_change_with`, for a page-change mapping that may raise
+  nothing.
 
 - **Declarative app setup.** `xui::app(title).size(w, h).run(|ui| ...)` opens
   a window on the default backend (or `xui_core::app` with `.backend(..)`),
