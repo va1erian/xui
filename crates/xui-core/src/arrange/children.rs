@@ -7,6 +7,9 @@ use super::{Entry, IntoEntry};
 /// Several children for [`Layout::children`](super::Layout::children): a
 /// tuple of up to twelve builders, layouts or entries, or a `Vec` of any one
 /// kind of them (for children made in a loop).
+///
+/// An empty `Vec` has no element type to infer, so name it:
+/// `Vec::<Entry<_>>::new()`.
 pub trait IntoChildren<M: 'static> {
     /// Appends each child to `entries`, in order.
     fn push_into(self, entries: &mut Vec<Entry<M>>);

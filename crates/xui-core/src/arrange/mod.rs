@@ -275,7 +275,8 @@ impl<M: 'static> Layout<M> {
     }
 
     /// Appends several children at once: a tuple of builders and layouts, or
-    /// a `Vec` of entries.
+    /// a `Vec` of any one kind of them (an empty one needs its element type
+    /// named, `Vec::<Entry<_>>::new()`).
     pub fn children(mut self, children: impl IntoChildren<M>) -> Layout<M> {
         children.push_into(&mut self.entries);
         self
