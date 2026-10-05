@@ -54,6 +54,20 @@
   text and overlap inside rows, columns, grids and wraps (from the pure
   `Group::trace`); `Ui::layout_rects()` and
   `Snapshot::with_layout_overlay()` outline them on a headless capture.
+- **Every widget placeable.** `Toolbar`, `TopBar`, a `Menu` bar, `Split`,
+  `GridView`, `FlowText` (height for width), `MaterialStatusBar`,
+  `ColorField` and `HueSlider` measure a natural size from their content, and
+  a button with an icon counts it (an icon-only one is square). Builders:
+  `toolbar()`, `top_bar()`, `menu_bar(|menus| ..)`, `grid_view(..)`,
+  `icon_view(..)`, `flow_text().run(..)`, `material_status_bar(..)`,
+  `color_field(..)`, `hue_slider(..)` and `split(a, b)` (two layouts with a
+  divider, `Split::set_layouts`). `development.md` makes `measure` a
+  required step for a new widget.
+- **Per-axis alignment and a fixed size.** `.align_x(..)`/`.align_y(..)`
+  place an entry on one axis (a caption left-aligned and vertically centred
+  in its grid cell), and `.size(w, h)` fixes both extents at once;
+  `Item::align_x`/`align_y`/`size` in the pure tree. A `fill` item in a grid
+  aligned within its row keeps its natural size instead of collapsing.
 - **Builder gaps.** A `group(..)` can be bound and hidden as one unit (its
   content hides with it), `children` takes tuples of up to 24, a widget
   shared through `Rc<W>` is `Placeable` (place it with
@@ -61,6 +75,15 @@
   `.tooltip(..)` (`Button::set_tooltip`, `ToggleButton::set_tooltip`) and
   `button` takes `.primary()`. `Ui::invalidate_layout` lets a custom widget
   ask for a re-flow.
+
+- **More widgets in layouts.** `RadioGroup`, `TreeView`, `ColorPicker`,
+  `ColorPanel`, `Panel` and `ScrollView` implement `Placeable` with a natural
+  size from their content and the design tokens (a radio group stacks its
+  options under the node a layout places; a scroll view and a tree re-lay
+  their scrollbars when placed). New builders: `radio_group(&[..])`,
+  `tree_view().rows(..)`, `color_picker(&colors)`, `color_panel()` and
+  `panel(layout)` (`Panel::set_layout`); the prelude adds those widget types.
+  `Layout::children` takes a `Vec` of any builder, layout or entry type.
 
 - **Password fields.** `Edit::password(true)` masks a single-line field for a
   secret: it paints one bullet (U+2022) per character, with the caret,

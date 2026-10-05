@@ -301,3 +301,32 @@ fn the_layout_report_warns_of_a_check_box_too_narrow_for_its_text() {
     );
     assert!(report.contains("! text truncated"), "{report}");
 }
+
+#[test]
+fn an_entry_aligns_per_axis_and_takes_a_size() {
+    let (_backend, _window, ui, _runtime) = setup();
+    let (caption, fixed) = (Handle::<Label<u32>>::new(), Handle::<Button<u32>>::new());
+    let _mounted = ui
+        .mount(
+            column().child(
+                crate::arrange::grid([crate::arrange::Track::Fill(1)])
+                    .child(
+                        label("Caption")
+                            .bind(&caption)
+                            .align_x(Align::Start)
+                            .align_y(Align::Center)
+                            .fill(1),
+                    )
+                    .child(button("fixed").bind(&fixed).size(100, 40))
+                    .fill(1),
+            ),
+        )
+        .unwrap();
+    let rect = bounds(&ui, &caption);
+    assert_eq!(rect.left, 0);
+    assert!(rect.top > 0 && rect.width() < 400, "{rect:?}");
+    assert_eq!(
+        bounds(&ui, &fixed).size(),
+        crate::geometry::Size::new(100, 40)
+    );
+}

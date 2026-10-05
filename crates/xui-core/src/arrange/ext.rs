@@ -47,7 +47,36 @@ pub trait LayoutExt<M: 'static>: IntoEntry<M> + Sized {
     /// [`Layout::align`](super::Layout::align).
     fn align(self, align: Align) -> Entry<M> {
         let mut entry = self.into_entry();
-        entry.align = Some(align);
+        entry.align_x = Some(align);
+        entry.align_y = Some(align);
+        entry
+    }
+
+    /// Where the entry sits horizontally only: across a column, or within
+    /// its area in a grid or an overlay (a row ignores it). Combine with
+    /// [`align_y`](Self::align_y) for a caption at the left of its cell,
+    /// centred vertically.
+    fn align_x(self, align: Align) -> Entry<M> {
+        let mut entry = self.into_entry();
+        entry.align_x = Some(align);
+        entry
+    }
+
+    /// Where the entry sits vertically only: across a row or a wrap line, or
+    /// within its area in a grid or an overlay (a column ignores it).
+    fn align_y(self, align: Align) -> Entry<M> {
+        let mut entry = self.into_entry();
+        entry.align_y = Some(align);
+        entry
+    }
+
+    /// Exactly `width` wide and `height` tall, whichever axis of its parent
+    /// each is: both at once, where [`width`](Self::width) and
+    /// [`height`](Self::height) set one. The entry is never stretched past
+    /// either.
+    fn size(self, width: impl Into<Dip>, height: impl Into<Dip>) -> Entry<M> {
+        let mut entry = self.into_entry();
+        entry.size = [Some(width.into()), Some(height.into())];
         entry
     }
 

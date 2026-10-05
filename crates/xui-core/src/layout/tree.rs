@@ -307,37 +307,37 @@ fn align_span(start: i32, end: i32, extent: i32, align: Align) -> (i32, i32) {
     }
 }
 
-/// Narrows `area` on both axes to `size`, placed by `align`; `Stretch` keeps
-/// the whole area.
-fn align_both(area: Rect, size: Size, align: Align) -> Rect {
-    if align == Align::Stretch {
-        return area;
-    }
-    let (left, right) = align_span(area.left, area.right, size.width, align);
-    let (top, bottom) = align_span(area.top, area.bottom, size.height, align);
+/// Narrows `area` to `size`, placed by `x` horizontally and `y` vertically;
+/// `Stretch` keeps the whole extent on its axis.
+fn align_both(area: Rect, size: Size, (x, y): (Align, Align)) -> Rect {
+    let (left, right) = align_span(area.left, area.right, size.width, x);
+    let (top, bottom) = align_span(area.top, area.bottom, size.height, y);
     Rect::new(left, top, right, bottom)
 }
 
-/// `rect` with each axis narrowed to the item's caps, kept where `align`
-/// says (a stretched item keeps its start edge).
-fn clamp_to_caps<K: Copy>(item: &Item<K>, rect: Rect, align: Align, dpi: u32) -> Rect {
-    let align = if align == Align::Stretch {
-        Align::Start
-    } else {
-        align
+/// `rect` with each axis narrowed to the item's caps and exact size, kept
+/// where its alignment on that axis says (a stretched item keeps its start
+/// edge).
+fn clamp_to_caps<K: Copy>(item: &Item<K>, rect: Rect, (x, y): (Align, Align), dpi: u32) -> Rect {
+    let start = |align: Align| {
+        if align == Align::Stretch {
+            Align::Start
+        } else {
+            align
+        }
     };
     let mut rect = rect;
-    if let Some(max) = item.max_width {
+    if let Some(max) = item.max_size(0) {
         let max = max.to_px(dpi).value().max(0);
         if rect.width() > max {
-            let (left, right) = align_span(rect.left, rect.right, max, align);
+            let (left, right) = align_span(rect.left, rect.right, max, start(x));
             rect = Rect::new(left, rect.top, right, rect.bottom);
         }
     }
-    if let Some(max) = item.max_height {
+    if let Some(max) = item.max_size(1) {
         let max = max.to_px(dpi).value().max(0);
         if rect.height() > max {
-            let (top, bottom) = align_span(rect.top, rect.bottom, max, align);
+            let (top, bottom) = align_span(rect.top, rect.bottom, max, start(y));
             rect = Rect::new(rect.left, top, rect.right, bottom);
         }
     }

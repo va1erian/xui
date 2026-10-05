@@ -13,11 +13,13 @@
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
+use super::Placeable;
 use super::control::Control;
 use crate::Color;
 use crate::app::Ui;
 use crate::backend::{Canvas, Event, NodeKind, NodeSpec, Result};
-use crate::geometry::{Point, Rect};
+use crate::geometry::{Point, Rect, Size};
+use crate::layout::Constraints;
 use crate::message::{Key, MouseButton};
 use crate::theme::look::{self, backdrop};
 use crate::units::Dip;
@@ -218,6 +220,24 @@ impl<M: 'static> ColorPicker<M> {
     /// editor's selection).
     pub fn set_selected(&self, selected: bool) {
         self.control.set_selected(selected);
+    }
+}
+
+/// The natural side of one swatch cell.
+const CELL: Dip = Dip(32.0);
+
+impl<M: 'static> Placeable<M> for ColorPicker<M> {
+    fn id(&self) -> crate::backend::WidgetId {
+        ColorPicker::id(self)
+    }
+
+    /// One square cell per colour, in the picker's columns.
+    fn measure(&self, _ui: &Ui<M>, constraints: Constraints) -> Size {
+        let cell = CELL.to_px(constraints.dpi).value();
+        let columns = self.columns.get().max(1);
+        let rows = self.colors.len().div_ceil(columns);
+        let shown = columns.min(self.colors.len());
+        Size::new(cell * shown as i32, cell * rows as i32)
     }
 }
 

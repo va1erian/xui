@@ -1,10 +1,14 @@
 #![forbid(unsafe_code)]
 
-//! Builders for containers that hold layouts: [`group`], [`scroll`] and
-//! [`tabs`].
+//! Builders for containers that hold layouts: [`group`], [`scroll`],
+//! [`split`] and [`tabs`].
+
+use std::cell::Cell;
+use std::rc::Rc;
 
 use super::{Build, Entry, Handle, IntoEntry, Kind, Layout, build};
-use crate::widget::{GroupBox, ScrollView, Tabs};
+use crate::units::Dip;
+use crate::widget::{GroupBox, ScrollView, Split, Tabs};
 
 /// A titled frame with `content` laid out inside it. The frame and its
 /// content are one unit: [`bind`](GroupBuild::bind) the frame and hide it
@@ -70,6 +74,86 @@ impl<M: 'static> IntoEntry<M> for ScrollBuild<M> {
             .then_with(move |view, _| {
                 view.set_layout(content)?;
                 Ok(view)
+            })
+            .into_entry()
+    }
+}
+
+/// Two panes side by side with a draggable divider between them: `a` on the
+/// left, `b` on the right ([`stacked`](SplitBuild::stacked) puts `a` above).
+pub fn split<M: 'static>(a: Layout<M>, b: Layout<M>) -> SplitBuild<M> {
+    let stacked = Rc::new(Cell::new(false));
+    let vertical = Rc::clone(&stacked);
+    SplitBuild {
+        build: build(move |ui| {
+            if vertical.get() {
+                Split::column(ui, Default::default())
+            } else {
+                Split::row(ui, Default::default())
+            }
+        }),
+        stacked,
+        panes: (a, b),
+    }
+}
+
+/// The builder [`split`] returns.
+pub struct SplitBuild<M: 'static> {
+    build: Build<Split<M>, M>,
+    stacked: Rc<Cell<bool>>,
+    panes: (Layout<M>, Layout<M>),
+}
+
+impl<M: 'static> SplitBuild<M> {
+    /// Stacks the panes, the first above the second.
+    pub fn stacked(self) -> SplitBuild<M> {
+        self.stacked.set(true);
+        self
+    }
+
+    /// Starts with the first pane `extent` design units wide (or tall); the
+    /// divider centres without it.
+    pub fn position(mut self, extent: impl Into<Dip>) -> SplitBuild<M> {
+        let extent = extent.into();
+        self.build = self.build.then(move |split| {
+            split.set_position(extent);
+            split
+        });
+        self
+    }
+
+    /// Keeps the panes at least `a` and `b` design units.
+    pub fn min(mut self, a: impl Into<Dip>, b: impl Into<Dip>) -> SplitBuild<M> {
+        let (a, b) = (a.into(), b.into());
+        self.build = self.build.then(move |split| {
+            split.set_min(a, b);
+            split
+        });
+        self
+    }
+
+    /// Raises `f(extent)` when the user drags the divider.
+    pub fn on_moved(mut self, f: impl Fn(Dip) -> M + 'static) -> SplitBuild<M> {
+        self.build = self
+            .build
+            .then(move |split| split.on_moved(move |extent| Some(f(extent))));
+        self
+    }
+
+    /// Fills `handle` with the split when it is created.
+    pub fn bind(mut self, handle: &Handle<Split<M>>) -> SplitBuild<M> {
+        self.build = self.build.bind(handle);
+        self
+    }
+}
+
+impl<M: 'static> IntoEntry<M> for SplitBuild<M> {
+    fn into_entry(self) -> Entry<M> {
+        let (a, b) = self.panes;
+        self.build
+            .then_with(move |split, _| {
+                split.set_layouts(a, b)?;
+                Ok(split)
             })
             .into_entry()
     }

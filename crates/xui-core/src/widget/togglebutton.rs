@@ -198,6 +198,11 @@ impl<M: 'static> ToggleButton<M> {
         self.control.invalidate_layout();
     }
 
+    /// Whether the button draws an icon, for its natural size.
+    pub(super) fn has_icon(&self) -> bool {
+        self.icon.get().is_some()
+    }
+
     /// Shows `text` in a tooltip while the pointer rests on the button,
     /// replacing any earlier one; an empty `text` removes it.
     pub fn set_tooltip(&self, text: &str) -> Result<()> {

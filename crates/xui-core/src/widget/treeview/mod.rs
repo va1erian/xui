@@ -34,6 +34,7 @@ mod flatten;
 mod icon;
 mod model;
 mod paint;
+mod place;
 
 #[cfg(test)]
 mod tests;

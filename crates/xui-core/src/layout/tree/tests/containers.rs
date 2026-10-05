@@ -171,3 +171,31 @@ fn trace_reports_overlap_only_inside_disjoint_groups() {
     let trace = framed.trace(Rect::new(0, 0, 50, 50), 96, &leaf(&[(0, 50, 5)], &[]));
     assert!(trace.iter().all(|t| t.warnings.is_empty()), "{trace:?}");
 }
+
+#[test]
+fn a_grid_item_aligns_each_axis_on_its_own() {
+    use crate::layout::tree::Track;
+    let tree = Group::grid(vec![Track::Fill(1)])
+        .push(Item::leaf(0).align_x(Align::Start).align_y(Align::Center));
+    let placed = tree.compute(Rect::new(0, 0, 100, 40), 96, &leaf(&[(0, 30, 10)], &[]));
+    assert_eq!(placed[0].1.left, 0);
+    let tall = Group::grid(vec![Track::Fill(1)]).push(
+        Item::leaf(0)
+            .sized(Sizing::Fill(1))
+            .align_x(Align::Start)
+            .align_y(Align::Center),
+    );
+    let placed = tall.compute(Rect::new(0, 0, 100, 40), 96, &leaf(&[(0, 30, 10)], &[]));
+    assert_eq!(placed[0].1, Rect::new(0, 15, 30, 25));
+}
+
+#[test]
+fn an_item_takes_an_exact_width_and_height_at_once() {
+    let tree = Group::column().push(Item::leaf(0).size(Some(dip(40.0)), Some(dip(20.0))));
+    let placed = tree.compute(Rect::new(0, 0, 100, 100), 96, &leaf(&[(0, 5, 5)], &[]));
+    assert_eq!(placed[0].1, Rect::new(0, 0, 40, 20), "not stretched across");
+    assert_eq!(
+        tree.preferred_size(96, &leaf(&[(0, 5, 5)], &[])),
+        Size::new(40, 20)
+    );
+}

@@ -21,6 +21,7 @@ mod layout;
 mod model;
 mod open;
 mod paint;
+mod place;
 
 #[cfg(test)]
 mod tests;

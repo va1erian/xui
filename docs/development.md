@@ -142,8 +142,18 @@ runs on every backend. A widget:
    (`on_click`, `on_select`, …) — never a numeric control id.
 4. Paints only from `Theme` tokens, reading the live theme; owner-draw any part
    a backend leaves to the front layer.
-5. Implements `HasText` and/or `Properties` where they fit.
-6. Is exercised by the cross-backend gallery
+5. Implements `Placeable` so layouts can hold it: `measure(ui, constraints)`
+   returns its natural size from its content and the theme's design values
+   (never its current bounds, or a widget squeezed once stays small), reading
+   `constraints.max_width` when its height depends on its width; `placed`
+   re-lays any satellite node (a scrollbar) after the layout moves it, and
+   `layout_text` returns the text of a widget sized by its text. Add a
+   builder function in `arrange` (`radio_group(..)`, `toolbar()`) with
+   by-value message mapping (`.on_select(Msg::Pick)`), and a test that
+   mounts it in a layout. A setter that changes the natural size calls
+   `Control::invalidate_layout`.
+6. Implements `HasText` and/or `Properties` where they fit.
+7. Is exercised by the cross-backend gallery
    (`crates/xui/examples/widgets.rs`), gets a per-control demo under
    `crates/xui/examples/controls/`, and appears in the offscreen light/dark
    snapshot (`crates/xui-canvas/tests/widget_snapshots.rs`). Add a `proptest`

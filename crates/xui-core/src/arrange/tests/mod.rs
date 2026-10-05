@@ -1,8 +1,10 @@
 //! Mounting builder trees on a headless window.
 
+mod bars;
 mod containers;
 mod features;
 mod grid;
+mod views;
 
 use std::rc::Rc;
 

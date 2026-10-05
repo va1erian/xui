@@ -26,6 +26,7 @@
 //! ```
 
 mod layout;
+mod place;
 mod render;
 #[cfg(test)]
 mod tests;
@@ -262,6 +263,12 @@ impl<M: 'static> FlowText<M> {
     pub fn preferred_height(&self, width: Dip) -> Dip {
         let ui = self.control.ui();
         let dpi = ui.dpi();
+        let block = self.wrapped(ui, dpi, width.to_px(dpi).value());
+        Px(block.height.max(1)).to_dip(dpi)
+    }
+
+    /// The runs wrapped at `width` device pixels.
+    fn wrapped(&self, ui: &Ui<M>, dpi: u32, width: i32) -> Block {
         let runs = self.inner.runs.borrow();
         let spans: Vec<Span> = runs
             .iter()
@@ -273,8 +280,7 @@ impl<M: 'static> FlowText<M> {
             })
             .collect();
         let mut measure = |text: &str, style: &TextStyle| ui.measure_text(text, style, dpi);
-        let block = layout::layout(&spans, width.to_px(dpi).value(), i32::MAX, &mut measure);
-        Px(block.height.max(1)).to_dip(dpi)
+        layout::layout(&spans, width, i32::MAX, &mut measure)
     }
 
     /// The line's node identity.

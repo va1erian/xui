@@ -30,6 +30,8 @@ const FIELD_WIDTH: Dip = Dip(160.0);
 const BUTTON_PADDING: Dip = Dip(12.0);
 /// The narrowest a button gets, however short its label.
 const BUTTON_MIN_WIDTH: Dip = Dip(64.0);
+/// A button's icon plus the gap before its label.
+const ICON_LEAD: Dip = Dip(26.0);
 /// A check box's square plus the gap before its label.
 const CHECK_LEAD: Dip = Dip(24.0);
 /// The height of a progress bar.
@@ -171,9 +173,16 @@ macro_rules! labelled_button {
                 $widget::id(self)
             }
 
+            /// Its label plus padding (and the icon before it), at least
+            /// [`BUTTON_MIN_WIDTH`]; an icon-only button is square.
             fn measure(&self, ui: &Ui<M>, constraints: Constraints) -> Size {
-        let dpi = constraints.dpi;
-                let width = text_size(ui, &self.text(), dpi).width + 2 * px(BUTTON_PADDING, dpi);
+                let dpi = constraints.dpi;
+                let text = self.text();
+                if text.is_empty() && self.has_icon() {
+                    return row(px(CONTROL_HEIGHT, dpi), dpi);
+                }
+                let icon = if self.has_icon() { px(ICON_LEAD, dpi) } else { 0 };
+                let width = text_size(ui, &text, dpi).width + icon + 2 * px(BUTTON_PADDING, dpi);
                 row(width.max(px(BUTTON_MIN_WIDTH, dpi)), dpi)
             }
 

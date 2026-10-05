@@ -17,6 +17,7 @@ mod glyph;
 mod icon;
 mod items;
 mod paint;
+mod place;
 
 #[cfg(test)]
 mod tests;
@@ -298,6 +299,7 @@ impl<M: 'static> TopBar<M> {
             *slot = text.to_string();
         }
         self.control.invalidate();
+        self.control.invalidate_layout();
     }
 
     /// A label item's text.

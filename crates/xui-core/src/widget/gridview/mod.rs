@@ -26,6 +26,7 @@ mod events;
 mod layout;
 mod model;
 mod paint;
+mod place;
 mod state;
 
 #[cfg(test)]

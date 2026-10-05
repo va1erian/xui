@@ -10,10 +10,12 @@ use crate::theme::look;
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
+use super::Placeable;
 use super::control::Control;
 use crate::app::Ui;
 use crate::backend::{NodeKind, NodeSpec, Result, TextStyle, WidgetId};
-use crate::geometry::{Point, Rect};
+use crate::geometry::{Point, Rect, Size};
+use crate::layout::Constraints;
 use crate::property::{Properties, Property, Value};
 use crate::units::Dip;
 
@@ -173,6 +175,25 @@ impl<M: 'static> MaterialStatusBar<M> {
     /// editor's selection).
     pub fn set_selected(&self, selected: bool) {
         self.control.set_selected(selected);
+    }
+}
+
+/// The natural size of the bar: a status line under a window's content,
+/// usually stretched across it.
+const NATURAL_WIDTH: Dip = Dip(200.0);
+const NATURAL_HEIGHT: Dip = Dip(24.0);
+
+impl<M: 'static> Placeable<M> for MaterialStatusBar<M> {
+    fn id(&self) -> WidgetId {
+        MaterialStatusBar::id(self)
+    }
+
+    fn measure(&self, _ui: &Ui<M>, constraints: Constraints) -> Size {
+        let dpi = constraints.dpi;
+        Size::new(
+            NATURAL_WIDTH.to_px(dpi).value(),
+            NATURAL_HEIGHT.to_px(dpi).value(),
+        )
     }
 }
 

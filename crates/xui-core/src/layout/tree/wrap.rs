@@ -78,10 +78,10 @@ pub(super) fn place<K: Copy>(
         let line_top = top.min(inner.bottom);
         let bottom = (top + line.height).min(inner.bottom);
         for (item, size) in line.items {
-            let align = item.align.unwrap_or(group.align);
-            let (y0, y1) = align_span(line_top, bottom, size.height, align);
+            let aligns = item.aligns(group.align);
+            let (y0, y1) = align_span(line_top, bottom, size.height, aligns.1);
             let right = (left + size.width).min(inner.right);
-            let area = clamp_to_caps(item, Rect::new(left, y0, right, y1), align, dpi);
+            let area = clamp_to_caps(item, Rect::new(left, y0, right, y1), aligns, dpi);
             item.place(area, dpi, leaf, out);
             left += size.width + gap;
         }

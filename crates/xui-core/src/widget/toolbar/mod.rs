@@ -17,6 +17,7 @@ use crate::property::{Properties, Property, Value};
 
 mod layout;
 mod paint;
+mod place;
 mod strip;
 
 use layout::{Layout, Mode};

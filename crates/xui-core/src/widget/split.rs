@@ -7,6 +7,7 @@
 //! of the split: dragging it resizes both panes live, the arrow keys move it,
 //! and [`Split::on_moved`] maps a move to the app's message.
 
+mod place;
 #[cfg(test)]
 mod tests;
 
@@ -15,6 +16,7 @@ use std::rc::Rc;
 
 use super::control::Control;
 use crate::app::Ui;
+use crate::arrange::Mounted;
 use crate::backend::{Canvas, Cursor, Event, NodeKind, NodeSpec, Result, WidgetId};
 use crate::geometry::{Point, Rect};
 use crate::layout::{Stack, StackSlot};
@@ -23,6 +25,7 @@ use crate::property::{Properties, Property, Value};
 use crate::theme::Theme;
 use crate::theme::look::backdrop;
 use crate::units::{Dip, Px};
+use crate::widget::Panel;
 
 /// The divider's thickness.
 const DIVIDER: Dip = Dip(5.0);
@@ -57,6 +60,9 @@ struct Shared<M: 'static> {
 
 /// Two panes separated by a draggable divider.
 pub struct Split<M: 'static> {
+    /// The panel and mounted layout behind each pane filled with
+    /// [`Split::set_layouts`]; declared first so they go before the node.
+    layouts: RefCell<Vec<(Panel<M>, Mounted<M>)>>,
     control: Control<M>,
     _divider: Control<M>,
     scoped: Ui<M>,
@@ -120,6 +126,7 @@ impl<M: 'static> Split<M> {
             divider.on_events(move |event| divider_event(&shared, &ui, event));
         }
         Ok(Split {
+            layouts: RefCell::new(Vec::new()),
             control,
             _divider: divider,
             scoped,
