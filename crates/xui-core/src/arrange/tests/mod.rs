@@ -2,6 +2,7 @@
 
 mod containers;
 mod grid;
+mod views;
 
 use std::rc::Rc;
 

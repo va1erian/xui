@@ -5,16 +5,16 @@
 use super::{Entry, IntoEntry};
 
 /// Several children for [`Layout::children`](super::Layout::children): a
-/// tuple of up to twelve builders, layouts or entries, or a `Vec` of entries
-/// (for children made in a loop).
+/// tuple of up to twelve builders, layouts or entries, or a `Vec` of any one
+/// kind of them (for children made in a loop).
 pub trait IntoChildren<M: 'static> {
     /// Appends each child to `entries`, in order.
     fn push_into(self, entries: &mut Vec<Entry<M>>);
 }
 
-impl<M: 'static> IntoChildren<M> for Vec<Entry<M>> {
+impl<M: 'static, T: IntoEntry<M>> IntoChildren<M> for Vec<T> {
     fn push_into(self, entries: &mut Vec<Entry<M>>) {
-        entries.extend(self);
+        entries.extend(self.into_iter().map(IntoEntry::into_entry));
     }
 }
 

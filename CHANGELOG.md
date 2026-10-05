@@ -35,6 +35,15 @@
   `Constraints`, and `ListView::refresh_model` for live tables that keep their
   scroll position.
 
+- **More widgets in layouts.** `RadioGroup`, `TreeView`, `ColorPicker`,
+  `ColorPanel`, `Panel` and `ScrollView` implement `Placeable` with a natural
+  size from their content and the design tokens (a radio group stacks its
+  options under the node a layout places; a scroll view and a tree re-lay
+  their scrollbars when placed). New builders: `radio_group(&[..])`,
+  `tree_view().rows(..)`, `color_picker(&colors)`, `color_panel()` and
+  `panel(layout)` (`Panel::set_layout`); the prelude adds those widget types.
+  `Layout::children` takes a `Vec` of any builder, layout or entry type.
+
 - **Password fields.** `Edit::password(true)` masks a single-line field for a
   secret: it paints one bullet (U+2022) per character, with the caret,
   selection and clicks measured on the bullets; refuses copy and cut (paste and

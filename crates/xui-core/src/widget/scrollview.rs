@@ -10,6 +10,7 @@
 //! drag, the wheel and the arrow/Page/Home/End keys all scroll it, and
 //! [`ScrollView::on_scroll`] maps the offset to the app's message.
 
+mod place;
 #[cfg(test)]
 mod tests;
 mod view;

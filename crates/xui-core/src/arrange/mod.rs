@@ -30,6 +30,7 @@ mod containers;
 mod mount;
 #[cfg(test)]
 mod tests;
+mod views;
 mod widgets;
 
 use std::rc::Rc;
@@ -46,6 +47,7 @@ pub use build::{Build, Handle, build};
 pub use children::IntoChildren;
 pub use containers::{TabsBuild, group, tabs};
 pub use mount::Mounted;
+pub use views::{PanelBuild, color_panel, color_picker, panel, radio_group, tree_view};
 pub use widgets::{
     button, checkbox, combo_box, edit, hyperlink, label, list, multiline_edit, number_field,
     progress, separator, slider, status_bar, toggle_button,

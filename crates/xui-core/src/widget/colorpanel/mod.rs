@@ -302,8 +302,12 @@ impl<M: 'static> ColorPanel<M> {
     /// Moves/resizes the panel and re-lays its children out.
     pub fn set_bounds(&self, bounds: Rect) {
         self.control.set_bounds(bounds);
-        let local = Rect::from_size(bounds.size());
-        self.tabs.set_bounds(local);
+        self.arrange(bounds);
+    }
+
+    /// Re-lays the children for the panel's node at `bounds`.
+    fn arrange(&self, bounds: Rect) {
+        self.tabs.set_bounds(Rect::from_size(bounds.size()));
         let page = self.current_page();
         self.apply_full(page);
     }
@@ -361,6 +365,7 @@ impl<M: 'static> ColorPanel<M> {
     }
 }
 
+mod place;
 #[cfg(test)]
 mod test_support;
 
