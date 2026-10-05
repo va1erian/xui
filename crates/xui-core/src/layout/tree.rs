@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 
-//! A pure layout tree: nested rows, columns and grids of keyed leaves.
+//! A pure layout tree: nested rows, columns, grids, wraps, layers and
+//! absolute groups of keyed leaves.
 //!
 //! The tree knows nothing about widgets. A leaf is an opaque key `K`; what the
 //! layout needs to know about it (its natural size within some
@@ -11,196 +12,37 @@
 //! leftover pixels are shared with largest-remainder rounding and there are no
 //! gaps or overlaps.
 
+mod absolute;
 mod flow;
 mod grid;
+mod item;
+mod layered;
 #[cfg(test)]
 mod tests;
+mod trace;
 mod types;
+mod wrap;
 
+pub use item::Item;
+pub use trace::{GroupKind, TraceNode, Traced, Warning};
 pub use types::{Align, Constraints, Leaf, LeafFn, Sizing, Track};
 
 use super::{Insets, StackDirection};
 use crate::geometry::{Rect, Size};
 use crate::units::Dip;
 
-/// One entry of a [`Group`]: a leaf, a nested group, or a leaf that frames a
-/// nested group, with its sizing and placement.
-#[derive(Clone, Debug)]
-pub struct Item<K> {
-    content: Content<K>,
-    sizing: Sizing,
-    align: Option<Align>,
-    max_width: Option<Dip>,
-    max_height: Option<Dip>,
-    span: usize,
-}
-
-#[derive(Clone, Debug)]
-enum Content<K> {
-    Leaf(K),
-    Group(Group<K>),
-    Framed(K, Group<K>),
-}
-
-impl<K: Copy> Item<K> {
-    fn new(content: Content<K>) -> Item<K> {
-        Item {
-            content,
-            sizing: Sizing::Auto,
-            align: None,
-            max_width: None,
-            max_height: None,
-            span: 1,
-        }
-    }
-
-    /// A leaf keyed by `key`, at its natural size.
-    pub fn leaf(key: K) -> Item<K> {
-        Item::new(Content::Leaf(key))
-    }
-
-    /// A nested group, at its natural size.
-    pub fn group(group: Group<K>) -> Item<K> {
-        Item::new(Content::Group(group))
-    }
-
-    /// The leaf `key` with `group` laid out inside it, within the insets the
-    /// leaf reports as [`Leaf::content`].
-    pub fn framed(key: K, group: Group<K>) -> Item<K> {
-        Item::new(Content::Framed(key, group))
-    }
-
-    /// Sets how the item is sized.
-    pub fn sized(mut self, sizing: Sizing) -> Item<K> {
-        self.sizing = sizing;
-        self
-    }
-
-    /// The item's sizing.
-    pub fn sizing(&self) -> Sizing {
-        self.sizing
-    }
-
-    /// Places the item across its parent's cross axis (in a grid, within its
-    /// cell on both axes) instead of the parent's default.
-    pub fn align(mut self, align: Align) -> Item<K> {
-        self.align = Some(align);
-        self
-    }
-
-    /// Caps the item's width at `width` design units.
-    pub fn max_width(mut self, width: Dip) -> Item<K> {
-        self.max_width = Some(width);
-        self
-    }
-
-    /// Caps the item's height at `height` design units.
-    pub fn max_height(mut self, height: Dip) -> Item<K> {
-        self.max_height = Some(height);
-        self
-    }
-
-    /// In a grid, makes the item cover `columns` columns (at least one).
-    pub fn span(mut self, columns: usize) -> Item<K> {
-        self.span = columns.max(1);
-        self
-    }
-
-    fn is_visible(&self, leaf: LeafFn<'_, K>, dpi: u32) -> bool {
-        match &self.content {
-            Content::Leaf(key) | Content::Framed(key, _) => {
-                leaf(key, Constraints::unbounded(dpi)).visible
-            }
-            Content::Group(group) => group.items.iter().any(|item| item.is_visible(leaf, dpi)),
-        }
-    }
-
-    /// The content's natural size within `constraints`, before the item's
-    /// own sizing applies.
-    fn measure(&self, constraints: Constraints, leaf: LeafFn<'_, K>) -> Size {
-        match &self.content {
-            Content::Leaf(key) => leaf(key, constraints).natural,
-            Content::Group(group) => group.measure(constraints, leaf),
-            Content::Framed(key, group) => {
-                let frame = leaf(key, constraints);
-                let inner = group.measure(constraints.shrink(frame.content), leaf);
-                let px = |value: Dip| value.to_px(constraints.dpi).value();
-                let insets = frame.content;
-                Size::new(
-                    frame
-                        .natural
-                        .width
-                        .max(inner.width + px(insets.left) + px(insets.right)),
-                    frame
-                        .natural
-                        .height
-                        .max(inner.height + px(insets.top) + px(insets.bottom)),
-                )
-            }
-        }
-    }
-
-    /// The item's natural size within `constraints` as its parent lays it
-    /// along `direction`: the content's size with the sizing and the caps
-    /// applied. A fill item has no natural main extent of its own.
-    fn natural(
-        &self,
-        direction: StackDirection,
-        constraints: Constraints,
-        leaf: LeafFn<'_, K>,
-    ) -> Size {
-        let dpi = constraints.dpi;
-        let px = |value: Dip| value.to_px(dpi).value().max(0);
-        let content = self.measure(constraints, leaf);
-        let sized = match self.sizing {
-            Sizing::Width(value) => Size::new(px(value), content.height),
-            Sizing::Height(value) => Size::new(content.width, px(value)),
-            sizing => {
-                let main_extent = match sizing {
-                    Sizing::Fixed(value) => px(value),
-                    Sizing::Min(value) => main(direction, content).max(px(value)),
-                    Sizing::Fill(_) => 0,
-                    _ => main(direction, content),
-                };
-                with_main(direction, content, main_extent)
-            }
-        };
-        self.capped(sized, dpi)
-    }
-
-    /// `size` with the item's caps applied.
-    fn capped(&self, size: Size, dpi: u32) -> Size {
-        let cap = |value: i32, max: Option<Dip>| match max {
-            Some(max) => value.min(max.to_px(dpi).value().max(0)),
-            None => value,
-        };
-        Size::new(
-            cap(size.width, self.max_width),
-            cap(size.height, self.max_height),
-        )
-    }
-
-    fn place(&self, rect: Rect, dpi: u32, leaf: LeafFn<'_, K>, out: &mut Vec<(K, Rect)>) {
-        match &self.content {
-            Content::Leaf(key) => out.push((*key, rect)),
-            Content::Group(group) => group.place(rect, dpi, leaf, out),
-            Content::Framed(key, group) => {
-                out.push((*key, rect));
-                let insets = leaf(key, Constraints::unbounded(dpi)).content;
-                group.place(insets.apply(rect, dpi), dpi, leaf, out);
-            }
-        }
-    }
-}
-
 /// How a [`Group`] arranges its items.
 #[derive(Clone, Debug)]
 enum Arrangement {
     Stack(StackDirection),
     Grid(Vec<Track>),
+    Wrap,
+    Layered,
+    /// Free placement, with the size the positions were designed at.
+    Absolute(Option<(Dip, Dip)>),
 }
 
-/// A row, column or grid of [`Item`]s.
+/// A row, column, grid, wrap, layered or absolute group of [`Item`]s.
 #[derive(Clone, Debug)]
 pub struct Group<K> {
     arrangement: Arrangement,
@@ -234,6 +76,27 @@ impl<K: Copy> Group<K> {
         Group::new(Arrangement::Grid(columns))
     }
 
+    /// A group that places its items left to right at their natural sizes,
+    /// starting a new line when the next one does not fit: toolbars, chips,
+    /// tiles. A line is as tall as its tallest item.
+    pub const fn wrap() -> Group<K> {
+        Group::new(Arrangement::Wrap)
+    }
+
+    /// A group that layers its items over one another in its whole area, the
+    /// later above the earlier. Each item sits where its alignment puts it on
+    /// both axes.
+    pub const fn layered() -> Group<K> {
+        Group::new(Arrangement::Layered)
+    }
+
+    /// A group that places each item where [`Item::at`] says, following the
+    /// group's size through the item's [`Item::anchor`]. Items without a
+    /// position sit at the top-left corner at their natural size.
+    pub const fn absolute() -> Group<K> {
+        Group::new(Arrangement::Absolute(None))
+    }
+
     const fn new(arrangement: Arrangement) -> Group<K> {
         Group {
             arrangement,
@@ -245,8 +108,8 @@ impl<K: Copy> Group<K> {
         }
     }
 
-    /// The gap between adjacent items (in a grid, between rows and between
-    /// columns), in design units.
+    /// The gap between adjacent items (in a grid or a wrap, between rows and
+    /// between columns), in design units.
     pub fn spacing(mut self, spacing: Dip) -> Group<K> {
         self.spacing = spacing;
         self
@@ -258,18 +121,30 @@ impl<K: Copy> Group<K> {
         self
     }
 
-    /// Where items sit across the main axis (in a grid, within their cells)
-    /// unless they set their own [`Item::align`]. The default stretches them.
+    /// Where items sit across the main axis (in a grid or a layered group,
+    /// within their area on both axes; in a wrap, within their line) unless
+    /// they set their own [`Item::align`]. The default stretches them.
     pub fn align(mut self, align: Align) -> Group<K> {
         self.align = align;
         self
     }
 
-    /// Where a row's or column's items sit along the main axis when none of
-    /// them fills it. The default packs them at the start; `Stretch` is the
-    /// same as `Start`. A grid ignores it.
+    /// Where a row's, column's or wrap line's items sit along the main axis
+    /// when none of them fills it. The default packs them at the start;
+    /// `Stretch` is the same as `Start`. Other groups ignore it.
     pub fn justify(mut self, justify: Align) -> Group<K> {
         self.justify = justify;
+        self
+    }
+
+    /// For an absolute group, the inner size its positions were designed at:
+    /// the anchors move and stretch items by the difference between this and
+    /// the size the group is laid out at. Without it, the design size is the
+    /// smallest that holds every positioned item. Other groups ignore it.
+    pub fn design_size(mut self, width: Dip, height: Dip) -> Group<K> {
+        if let Arrangement::Absolute(size) = &mut self.arrangement {
+            *size = Some((width, height));
+        }
         self
     }
 
@@ -279,19 +154,35 @@ impl<K: Copy> Group<K> {
         self
     }
 
+    /// What kind of group this is.
+    pub fn kind(&self) -> GroupKind {
+        match self.arrangement {
+            Arrangement::Stack(StackDirection::Horizontal) => GroupKind::Row,
+            Arrangement::Stack(StackDirection::Vertical) => GroupKind::Column,
+            Arrangement::Grid(_) => GroupKind::Grid,
+            Arrangement::Wrap => GroupKind::Wrap,
+            Arrangement::Layered => GroupKind::Layered,
+            Arrangement::Absolute(_) => GroupKind::Absolute,
+        }
+    }
+
     /// Lays the tree out inside `rect`, returning one rectangle per visible
     /// leaf, in tree order.
     pub fn compute(&self, rect: Rect, dpi: u32, leaf: LeafFn<'_, K>) -> Vec<(K, Rect)> {
-        let mut out = Vec::new();
+        let mut out = Out::new(false);
         self.place(rect, dpi, leaf, &mut out);
-        out
+        out.leaves
     }
 
-    fn place(&self, rect: Rect, dpi: u32, leaf: LeafFn<'_, K>, out: &mut Vec<(K, Rect)>) {
-        match &self.arrangement {
+    fn place(&self, rect: Rect, dpi: u32, leaf: LeafFn<'_, K>, out: &mut Out<K>) {
+        out.group(self.kind(), rect);
+        out.nested(|out| match &self.arrangement {
             Arrangement::Stack(direction) => flow::place(self, *direction, rect, dpi, leaf, out),
             Arrangement::Grid(columns) => grid::place(self, columns, rect, dpi, leaf, out),
-        }
+            Arrangement::Wrap => wrap::place(self, rect, dpi, leaf, out),
+            Arrangement::Layered => layered::place(self, rect, dpi, leaf, out),
+            Arrangement::Absolute(design) => absolute::place(self, *design, rect, dpi, leaf, out),
+        });
     }
 
     /// The size the group's content wants, in device pixels at `dpi`, with no
@@ -301,11 +192,16 @@ impl<K: Copy> Group<K> {
         self.measure(Constraints::unbounded(dpi), leaf)
     }
 
-    /// The size the group's content wants within `constraints`.
-    fn measure(&self, constraints: Constraints, leaf: LeafFn<'_, K>) -> Size {
+    /// The size the group's content wants within `constraints`: with a width
+    /// bound, a wrap breaks its lines and a column measures wrapping leaves at
+    /// that width, so the height is the one the group needs at that width.
+    pub fn measure(&self, constraints: Constraints, leaf: LeafFn<'_, K>) -> Size {
         match &self.arrangement {
             Arrangement::Stack(direction) => flow::measure(self, *direction, constraints, leaf),
             Arrangement::Grid(columns) => grid::measure(self, columns, constraints, leaf),
+            Arrangement::Wrap => wrap::measure(self, constraints, leaf),
+            Arrangement::Layered => layered::measure(self, constraints, leaf),
+            Arrangement::Absolute(design) => absolute::measure(self, *design, constraints, leaf),
         }
     }
 
@@ -314,6 +210,60 @@ impl<K: Copy> Group<K> {
             .iter()
             .filter(|item| item.is_visible(leaf, dpi))
             .collect()
+    }
+
+    /// The device-pixel margins at `dpi`: left plus right, top plus bottom.
+    fn margin_size(&self, dpi: u32) -> Size {
+        let px = |value: Dip| value.to_px(dpi).value().max(0);
+        let m = self.margins;
+        Size::new(px(m.left) + px(m.right), px(m.top) + px(m.bottom))
+    }
+}
+
+/// What a layout pass produces: the leaves' rectangles and, for a
+/// [`Group::trace`], every node with its depth.
+pub(super) struct Out<K> {
+    leaves: Vec<(K, Rect)>,
+    trace: Option<Vec<Traced<K>>>,
+    depth: usize,
+}
+
+impl<K: Copy> Out<K> {
+    fn new(trace: bool) -> Out<K> {
+        Out {
+            leaves: Vec::new(),
+            trace: trace.then(Vec::new),
+            depth: 0,
+        }
+    }
+
+    /// Records a leaf placed at `rect`.
+    fn leaf(&mut self, key: K, rect: Rect) {
+        self.leaves.push((key, rect));
+        self.record(TraceNode::Leaf(key), rect);
+    }
+
+    /// Records a group laid out in `rect`.
+    fn group(&mut self, kind: GroupKind, rect: Rect) {
+        self.record(TraceNode::Group(kind), rect);
+    }
+
+    fn record(&mut self, node: TraceNode<K>, rect: Rect) {
+        if let Some(trace) = &mut self.trace {
+            trace.push(Traced {
+                depth: self.depth,
+                node,
+                rect,
+                warnings: Vec::new(),
+            });
+        }
+    }
+
+    /// Runs `f` one level deeper, for the content of the node just recorded.
+    fn nested(&mut self, f: impl FnOnce(&mut Out<K>)) {
+        self.depth += 1;
+        f(self);
+        self.depth -= 1;
     }
 }
 
@@ -355,6 +305,17 @@ fn align_span(start: i32, end: i32, extent: i32, align: Align) -> (i32, i32) {
         }
         Align::End => (end - extent, end),
     }
+}
+
+/// Narrows `area` on both axes to `size`, placed by `align`; `Stretch` keeps
+/// the whole area.
+fn align_both(area: Rect, size: Size, align: Align) -> Rect {
+    if align == Align::Stretch {
+        return area;
+    }
+    let (left, right) = align_span(area.left, area.right, size.width, align);
+    let (top, bottom) = align_span(area.top, area.bottom, size.height, align);
+    Rect::new(left, top, right, bottom)
 }
 
 /// `rect` with each axis narrowed to the item's caps, kept where `align`

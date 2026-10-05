@@ -28,6 +28,7 @@ impl Backend for HeadlessBackend {
     fn wake(&self, window: WindowId) {
         if let Some(w) = self.state.borrow_mut().windows.get_mut(&window.raw()) {
             w.wakes += 1;
+            w.pending_wakes += 1;
         }
     }
 
@@ -56,6 +57,7 @@ impl Backend for HeadlessBackend {
                 sink: None,
                 theme: Theme::light(),
                 wakes: 0,
+                pending_wakes: 0,
                 enabled: true,
             },
         );

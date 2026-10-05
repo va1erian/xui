@@ -148,20 +148,30 @@ Container widgets own their children and arrange them:
 - `Dialog`, `Menu`, `ComboBox` and `Tooltip` share the popup elevation helper.
 
 On top of that arithmetic, `xui_core::arrange` is how apps lay windows out:
-nest `row()`/`column()`/`grid()` layouts of widget **builders**, then
-`ui.root(layout)` creates the widgets and keeps them placed. The pieces:
+nest `row()`/`column()`/`grid()`/`wrap()`/`overlay()`/`stack()` layouts of
+widget **builders**, wrap a layout in `scroll(..)`, `group(title, ..)` or
+`tabs().page(..)`, then `ui.root(layout)` creates the widgets and keeps them
+placed. `absolute()` is the one container for free positions (entries at
+`.at(x, y, w, h)` with an `.anchor(..)`): the designer surface and forms
+imported from coordinates. The pieces:
 
 - `layout::Group`/`Item` are a pure tree (leaves are opaque keys) with rows,
-  columns and grids (`Track::Auto`/`Fixed`/`Fill` columns, spans), per-item
-  `Align` and max sizes, and framed items (a leaf with a group inside its
-  content insets). Leaves are measured through a callback with `Constraints`
-  (a column bounds its children's width, so wrapping content reports its
-  height for that width), so the tree is testable with no backend. A nested
-  group takes its natural size unless it is sized to fill.
+  columns, grids (`Track::Auto`/`Fixed`/`Fill` columns, spans), wraps,
+  layered groups and absolute groups, per-item `Align` and max sizes, and
+  framed items (a leaf with a group inside its content insets). Leaves are
+  measured through a callback with `Constraints` (a column bounds its
+  children's width, so wrapping content reports its height for that width),
+  so the tree is testable with no backend. A nested group takes its natural
+  size unless it is sized to fill. Rows, columns, grids and wraps keep their
+  items disjoint; layered and absolute groups overlap on purpose; no
+  container places an item outside itself (property-tested in
+  `xui-core/tests/layout_containers.rs`). `Group::trace` returns every node
+  with its rectangle and warnings.
 - `widget::Placeable` is the capability a layout needs from a widget: its
   node, `measure(ui, constraints)` from its text and the design tokens, the
-  `content_insets` of a frame (`GroupBox`), and a `placed` hook for satellite
-  nodes and containers (`Tabs` re-lays its pages there).
+  `content_insets` of a frame (`GroupBox`), a `placed` hook for satellite
+  nodes and containers (`Tabs` re-lays its pages there, `ScrollView` its
+  content), and the `layout_text` a report prints.
 - `arrange::Build` describes a widget; it is created at mount time with the
   `Ui` of the container the layout is mounted in, so builders take no `ui` and
   no `Rect`. `Handle<W>` is the app's typed reference to a widget it changes
@@ -170,14 +180,23 @@ nest `row()`/`column()`/`grid()` layouts of widget **builders**, then
 - `Ui::root` keeps the mounted layout for the window's lifetime (the runtime
   releases it when the window goes); `Ui::mount` returns a `Mounted` to drop
   for content that is replaced; `Ui::mount_in(container, layout)` places a
-  layout inside a container node. All re-flow on window resize, DPI change and
-  `Ui::set_visible`; a container's layout re-flows on its `Event::Resize`.
+  layout inside a container node. A frame and its content are one unit:
+  hiding a bound `group` collapses its content too.
 - `app(title)...run(make)` (and the umbrella's `xui::app`, which also picks the
   backend and handles `XUI_SNAPSHOT`) opens the window, applies the backend's
   `system_theme`, builds the app and honours `XUI_DEMO_AUTOCLOSE_MS`.
 
-A layout does not observe a text change; call `Ui::relayout()` after one that
-alters a widget's natural size.
+**Relayout is automatic.** Window resizes and DPI changes re-flow at once. A
+change that can alter a natural size (a widget's text, icon or title, its
+visibility, a list's items, the theme) only marks the window's layouts dirty
+(`Ui::invalidate_layout`, which custom widgets call too); the runtime runs one
+layout pass after it has handled the event that caused it, before the paint
+the change scheduled, and `Ui::capture` flushes it first. `Ui::relayout()`
+stays for reading new bounds within the same handler. `Ui::layout_report()`
+prints the trees, rectangles and warnings (clipping, zero size, truncated
+text, overlap in disjoint containers) for an agent or a test to read instead
+of a screenshot; `Snapshot::with_layout_overlay()` outlines the same
+rectangles on a headless capture.
 
 ## Units, colour, theme
 

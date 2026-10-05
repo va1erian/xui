@@ -177,6 +177,7 @@ impl<M: 'static> HasText for Hyperlink<M> {
     fn set_text(&self, text: &str) {
         *self.text.borrow_mut() = text.to_string();
         self.control.invalidate();
+        self.control.invalidate_layout();
     }
 }
 
