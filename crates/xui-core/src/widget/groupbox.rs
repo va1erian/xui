@@ -38,7 +38,7 @@ pub struct GroupBox<M: 'static> {
 
 impl<M: 'static> GroupBox<M> {
     /// Creates an empty frame titled `title` at `bounds`.
-    pub fn new(ui: &Ui<M>, bounds: Rect, title: &str) -> Result<GroupBox<M>> {
+    pub(crate) fn new(ui: &Ui<M>, bounds: Rect, title: &str) -> Result<GroupBox<M>> {
         let control = Control::new(ui, &NodeSpec::new(NodeKind::GroupBox, bounds).text(title))?;
         let state = Rc::new(RefCell::new(title.to_string()));
 

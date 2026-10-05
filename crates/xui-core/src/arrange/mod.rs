@@ -29,6 +29,7 @@
 //! )?;
 //! ```
 
+mod bars;
 mod build;
 mod children;
 mod containers;
@@ -51,16 +52,23 @@ use crate::units::Dip;
 use crate::widget::Placeable;
 
 pub use crate::layout::{Align, Anchor, Track};
+pub use bars::{
+    flow_text, grid_view, grid_view_with, icon_view, icon_view_with, material_status_bar, menu_bar,
+    text_toolbar, toolbar, top_bar,
+};
 pub use build::{Build, Handle, build};
 pub use children::IntoChildren;
-pub use containers::{GroupBuild, ScrollBuild, TabsBuild, group, scroll, tabs};
+pub use containers::{GroupBuild, ScrollBuild, SplitBuild, TabsBuild, group, scroll, split, tabs};
 pub use ext::LayoutExt;
 pub use layout::{Layout, absolute, column, grid, overlay, row, stack, wrap};
 pub use mount::Mounted;
-pub use views::{PanelBuild, color_panel, color_picker, panel, radio_group, tree_view};
+pub use views::{
+    PanelBuild, color_field, color_panel, color_picker, hue_slider, panel, radio_group, tree_view,
+    tree_view_with,
+};
 pub use widgets::{
     button, checkbox, combo_box, edit, hyperlink, label, list, multiline_edit, number_field,
-    progress, separator, slider, status_bar, toggle_button,
+    progress, separator, slider, status_bar, toggle_button, vertical_separator,
 };
 
 /// A widget of no size that soaks up leftover space, for pushing its siblings
@@ -94,7 +102,9 @@ enum Kind<M: 'static> {
 pub struct Entry<M: 'static> {
     kind: Kind<M>,
     sizing: Sizing,
-    align: Option<Align>,
+    align_x: Option<Align>,
+    align_y: Option<Align>,
+    size: [Option<Dip>; 2],
     max_width: Option<Dip>,
     max_height: Option<Dip>,
     span: usize,
@@ -107,7 +117,9 @@ impl<M: 'static> Entry<M> {
         Entry {
             kind,
             sizing: Sizing::Auto,
-            align: None,
+            align_x: None,
+            align_y: None,
+            size: [None, None],
             max_width: None,
             max_height: None,
             span: 1,

@@ -5,7 +5,8 @@
 use super::{Build, Entry, Handle, IntoEntry, Layout, build};
 use crate::Color;
 use crate::widget::{
-    ColorPanel, ColorPicker, NodeId, Panel, RadioGroup, TreeModel, TreeRow, TreeView,
+    ColorField, ColorPanel, ColorPicker, Hsv, HueSlider, NodeId, Panel, RadioGroup, TreeModel,
+    TreeRow, TreeView,
 };
 
 /// A column of radio options, one per entry of `labels`, the first selected.
@@ -35,6 +36,12 @@ impl<M: 'static> Build<RadioGroup<M>, M> {
 /// A tree; fill it with [`rows`](Build::rows) or [`model`](Build::model).
 pub fn tree_view<M: 'static>() -> Build<TreeView<M>, M> {
     build(|ui| TreeView::new(ui, Default::default(), &[]))
+}
+
+/// A virtual tree over `model`: its roots load now and a branch's children
+/// the first time it expands.
+pub fn tree_view_with<M: 'static>(model: impl TreeModel + 'static) -> Build<TreeView<M>, M> {
+    build(move |ui| TreeView::with_model(ui, Default::default(), model))
 }
 
 impl<M: 'static> Build<TreeView<M>, M> {
@@ -104,6 +111,30 @@ impl<M: 'static> Build<ColorPanel<M>, M> {
     /// Raises `f(color)` while the colour changes.
     pub fn on_change(self, f: impl Fn(Color) -> M + 'static) -> Build<ColorPanel<M>, M> {
         self.then(move |panel| panel.on_change(move |color| Some(f(color))))
+    }
+}
+
+/// A saturation/value field starting at `hsv`.
+pub fn color_field<M: 'static>(hsv: Hsv) -> Build<ColorField<M>, M> {
+    build(move |ui| ColorField::new(ui, Default::default(), hsv))
+}
+
+impl<M: 'static> Build<ColorField<M>, M> {
+    /// Raises `f(hsv)` while the user drags in the field.
+    pub fn on_change(self, f: impl Fn(Hsv) -> M + 'static) -> Build<ColorField<M>, M> {
+        self.then(move |field| field.on_change(move |hsv| Some(f(hsv))))
+    }
+}
+
+/// A hue strip starting at `hue` degrees.
+pub fn hue_slider<M: 'static>(hue: f32) -> Build<HueSlider<M>, M> {
+    build(move |ui| HueSlider::new(ui, Default::default(), hue))
+}
+
+impl<M: 'static> Build<HueSlider<M>, M> {
+    /// Raises `f(hue)` while the user drags the strip.
+    pub fn on_change(self, f: impl Fn(f32) -> M + 'static) -> Build<HueSlider<M>, M> {
+        self.then(move |slider| slider.on_change(move |hue| Some(f(hue))))
     }
 }
 

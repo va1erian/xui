@@ -103,6 +103,12 @@ fn natural_width(kind: &Kind, dpi: u32) -> i32 {
     }
 }
 
+/// The bar's natural width: every item at the width it claims before the
+/// leftover is shared.
+pub(super) fn bar_width(items: &[Item], dpi: u32) -> i32 {
+    items.iter().map(|item| fixed_width(item, dpi)).sum()
+}
+
 /// The width `item` claims before the leftover is shared: zero when it expands,
 /// so its natural width does not eat into the space meant to be distributed.
 fn fixed_width(item: &Item, dpi: u32) -> i32 {

@@ -4,58 +4,44 @@
 //! Run with:
 //!
 //! ```text
-//! cargo run -p xui --features canvas --example control_flowtext
+//! cargo run -p xui --example control_flowtext
 //! ```
 
-use xui_core::Dip;
-use xui_core::app::{App, Ui, run_app};
-use xui_core::backend::PlatformSpec;
-use xui_core::widget::{FlowText, HasText, Label, Run};
+use xui::prelude::*;
 
-#[path = "support.rs"]
-mod support;
-use support::{Layout, autoclose, backend};
-
+#[derive(Clone)]
 enum Msg {
     Link,
-    Quit,
 }
 
+#[derive(Default)]
 struct Demo {
-    result: Label<Msg>,
-    _flow: FlowText<Msg>,
+    result: Handle<Label<Msg>>,
 }
 
 impl App for Demo {
     type Msg = Msg;
 
-    fn update(&mut self, msg: Msg, ui: &mut Ui<Msg>) {
+    fn update(&mut self, msg: Msg, _ui: &mut Ui<Msg>) {
         match msg {
-            Msg::Link => self.result.set_text("Documentation link clicked"),
-            Msg::Quit => ui.quit(),
+            Msg::Link => self.result.get().set_text("Documentation link clicked"),
         }
     }
 }
 
-fn main() -> xui_core::backend::Result<()> {
-    run_app(
-        backend(),
-        PlatformSpec::new("FlowText demo").size(Dip(520.0), Dip(360.0)),
-        |ui| {
-            let l = Layout::new(ui.dpi());
-            let flow = FlowText::new(ui, l.rect(16.0, 16.0, 504.0, 80.0))
-                .unwrap()
-                .run(Run::normal("Read the "))
-                .run(Run::link("documentation").on_click(|| Some(Msg::Link)))
-                .separator(" · ")
-                .run(Run::weak("version 0.1"));
-            let result =
-                Label::new(ui, l.rect(16.0, 96.0, 504.0, 128.0), "No link clicked").unwrap();
-            autoclose(ui, || Msg::Quit);
-            Demo {
-                result,
-                _flow: flow,
-            }
-        },
-    )
+fn main() -> Result<()> {
+    xui::app("FlowText demo").size(520, 360).run(|ui| {
+        let demo = Demo::default();
+        ui.root(
+            column().padding(16).gap(16).children((
+                flow_text()
+                    .run(Run::normal("Read the "))
+                    .run(Run::link("documentation").on_click(|| Some(Msg::Link)))
+                    .separator(" · ")
+                    .run(Run::weak("version 0.1")),
+                label("No link clicked").bind(&demo.result),
+            )),
+        )?;
+        Ok(demo)
+    })
 }

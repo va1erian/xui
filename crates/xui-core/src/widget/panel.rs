@@ -31,14 +31,14 @@ pub struct Panel<M: 'static> {
 
 impl<M: 'static> Panel<M> {
     /// Creates a panel at `bounds`, drawn as a card: a section of its own.
-    pub fn new(ui: &Ui<M>, bounds: Rect) -> Result<Panel<M>> {
+    pub(crate) fn new(ui: &Ui<M>, bounds: Rect) -> Result<Panel<M>> {
         Panel::build(ui, bounds, true)
     }
 
     /// Creates a panel at `bounds` that draws nothing of its own: a
     /// container (a page, a group to show or hide) whose widgets sit on the
     /// window behind it.
-    pub fn plain(ui: &Ui<M>, bounds: Rect) -> Result<Panel<M>> {
+    pub(crate) fn plain(ui: &Ui<M>, bounds: Rect) -> Result<Panel<M>> {
         Panel::build(ui, bounds, false)
     }
 
@@ -85,11 +85,6 @@ impl<M: 'static> Panel<M> {
         self.control.id()
     }
 
-    /// Moves/resizes the panel (children keep their own coordinates).
-    pub fn set_bounds(&self, bounds: Rect) {
-        self.control.set_bounds(bounds);
-    }
-
     /// Shows or hides the panel and its children.
     pub fn set_visible(&self, visible: bool) {
         self.control.set_visible(visible);
@@ -125,10 +120,7 @@ impl<M: 'static> Placeable<M> for Panel<M> {
         self.layout
             .borrow()
             .as_ref()
-            .map_or(Size::new(0, 0), |layout| {
-                let _ = constraints;
-                layout.preferred_size()
-            })
+            .map_or(Size::new(0, 0), |layout| layout.measure(constraints))
     }
 
     fn placed(&self, _ui: &Ui<M>, _rect: Rect) {

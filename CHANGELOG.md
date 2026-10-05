@@ -4,6 +4,23 @@
 
 ### Breaking changes
 
+- **Widgets are built only through builders in layouts.** Every
+  `Widget::new(ui, Rect, ..)` rect constructor of the portable widgets
+  (`Button`, `Label`, `Edit`, `ListView::new`/`with_model`, `TreeView`,
+  `GridView`, `IconView`, `Panel::new`/`plain`, `Split::row`/`column`,
+  `Toolbar::new`/`empty`, `TopBar::new`, `Menu::bar`, `Separator::new`/
+  `vertical`, `ColorPanel`, `ColorPicker`, `ColorField`, `HueSlider`,
+  `RadioGroup`, `ScrollView`, `Tabs`, `GroupBox`, `FlowText`,
+  `MaterialStatusBar`, ...) is now crate-private, and the `::auto`
+  constructors are gone: use the `arrange` builders (`button("OK")`,
+  `list()`, `tree_view()`, `panel(layout)`, `split(a, b)`, `toolbar()`,
+  `menu_bar(..)`, ...) in a layout mounted with `Ui::root`/`mount`/`mount_in`,
+  or `absolute()` with `.at(x, y, w, h)` where free placement is the point.
+  `set_bounds` is gone from `Panel`, `ScrollView`, `Split`, `ColorPanel`,
+  `ColorField` and `HueSlider` (layouts place them); `Control::new` stays for
+  custom widgets, which implement `Placeable` and go in through
+  `build(|ui| ..)`. Dialogs, menus' `Menu::context`, `Tooltip::attach` and
+  `TaskDialog` keep their constructors.
 - **Layouts take builders, not widgets.** `arrange` layouts hold widget
   builders (`label("...")`, `button("...").on_click(Msg::X)`, `edit()`,
   `list()`, `group(title, layout)`, `tabs().page(..)`, or `build(|ui| ...)`
@@ -54,6 +71,20 @@
   text and overlap inside rows, columns, grids and wraps (from the pure
   `Group::trace`); `Ui::layout_rects()` and
   `Snapshot::with_layout_overlay()` outline them on a headless capture.
+- **Every widget placeable.** `Toolbar`, `TopBar`, a `Menu` bar, `Split`,
+  `GridView`, `FlowText` (height for width), `MaterialStatusBar`,
+  `ColorField` and `HueSlider` measure a natural size from their content, and
+  a button with an icon counts it (an icon-only one is square). Builders:
+  `toolbar()`, `top_bar()`, `menu_bar(|menus| ..)`, `grid_view(..)`,
+  `icon_view(..)`, `flow_text().run(..)`, `material_status_bar(..)`,
+  `color_field(..)`, `hue_slider(..)` and `split(a, b)` (two layouts with a
+  divider, `Split::set_layouts`). `development.md` makes `measure` a
+  required step for a new widget.
+- **Per-axis alignment and a fixed size.** `.align_x(..)`/`.align_y(..)`
+  place an entry on one axis (a caption left-aligned and vertically centred
+  in its grid cell), and `.size(w, h)` fixes both extents at once;
+  `Item::align_x`/`align_y`/`size` in the pure tree. A `fill` item in a grid
+  aligned within its row keeps its natural size instead of collapsing.
 - **Builder gaps.** A `group(..)` can be bound and hidden as one unit (its
   content hides with it), `children` takes tuples of up to 24, a widget
   shared through `Rc<W>` is `Placeable` (place it with

@@ -7,6 +7,7 @@
 //! of the split: dragging it resizes both panes live, the arrow keys move it,
 //! and [`Split::on_moved`] maps a move to the app's message.
 
+mod place;
 #[cfg(test)]
 mod tests;
 
@@ -15,6 +16,7 @@ use std::rc::Rc;
 
 use super::control::Control;
 use crate::app::Ui;
+use crate::arrange::Mounted;
 use crate::backend::{Canvas, Cursor, Event, NodeKind, NodeSpec, Result, WidgetId};
 use crate::geometry::{Point, Rect};
 use crate::layout::{Stack, StackSlot};
@@ -23,6 +25,7 @@ use crate::property::{Properties, Property, Value};
 use crate::theme::Theme;
 use crate::theme::look::backdrop;
 use crate::units::{Dip, Px};
+use crate::widget::Panel;
 
 /// The divider's thickness.
 const DIVIDER: Dip = Dip(5.0);
@@ -57,6 +60,9 @@ struct Shared<M: 'static> {
 
 /// Two panes separated by a draggable divider.
 pub struct Split<M: 'static> {
+    /// The panel and mounted layout behind each pane filled with
+    /// [`Split::set_layouts`]; declared first so they go before the node.
+    layouts: RefCell<Vec<(Panel<M>, Mounted<M>)>>,
     control: Control<M>,
     _divider: Control<M>,
     scoped: Ui<M>,
@@ -65,12 +71,12 @@ pub struct Split<M: 'static> {
 
 impl<M: 'static> Split<M> {
     /// A split whose panes sit side by side, at `bounds`.
-    pub fn row(ui: &Ui<M>, bounds: Rect) -> Result<Split<M>> {
+    pub(crate) fn row(ui: &Ui<M>, bounds: Rect) -> Result<Split<M>> {
         Split::new(ui, bounds, true)
     }
 
     /// A split whose panes are stacked, at `bounds`.
-    pub fn column(ui: &Ui<M>, bounds: Rect) -> Result<Split<M>> {
+    pub(crate) fn column(ui: &Ui<M>, bounds: Rect) -> Result<Split<M>> {
         Split::new(ui, bounds, false)
     }
 
@@ -120,6 +126,7 @@ impl<M: 'static> Split<M> {
             divider.on_events(move |event| divider_event(&shared, &ui, event));
         }
         Ok(Split {
+            layouts: RefCell::new(Vec::new()),
             control,
             _divider: divider,
             scoped,
@@ -179,12 +186,6 @@ impl<M: 'static> Split<M> {
     pub fn on_moved(self, f: impl Fn(Dip) -> Option<M> + 'static) -> Split<M> {
         *self.shared.on_moved.borrow_mut() = Some(Box::new(f));
         self
-    }
-
-    /// Moves/resizes the split and re-lays its panes out.
-    pub fn set_bounds(&self, bounds: Rect) {
-        self.control.set_bounds(bounds);
-        relayout(&self.scoped, &self.shared);
     }
 
     /// Re-lays the panes out from the split's current bounds.

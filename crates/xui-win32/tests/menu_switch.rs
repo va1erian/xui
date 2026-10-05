@@ -14,11 +14,12 @@ use windows::Win32::UI::WindowsAndMessaging::{
     EVENT_SYSTEM_FOREGROUND, PostMessageW, WINEVENT_OUTOFCONTEXT, WM_MOUSEMOVE,
 };
 
+use xui_core::Dip;
 use xui_core::app::{App, Ui};
+use xui_core::arrange::{Handle, LayoutExt, absolute, menu_bar};
 use xui_core::backend::{Backend, PlatformSpec};
 use xui_core::property::{Properties, Value};
 use xui_core::widget::{Menu, MenuId};
-use xui_core::{Dip, Rect};
 use xui_win32::{Hwnd, Win32Backend};
 
 /// The `OBJID_WINDOW` value, from `winuser.h`: a foreground event for a window
@@ -66,7 +67,7 @@ enum Msg {
 }
 
 struct SwitchApp {
-    menu: Menu<Msg>,
+    menu: Handle<Menu<Msg>>,
     bar: Hwnd,
     report: Rc<Cell<Report>>,
 }
@@ -77,7 +78,7 @@ impl App for SwitchApp {
     fn update(&mut self, msg: Msg, ui: &mut Ui<Msg>) {
         match msg {
             Msg::Open => {
-                self.menu.set_property("open", Value::Bool(true));
+                self.menu.get().set_property("open", Value::Bool(true));
             }
             Msg::Switch => {
                 // Move the pointer across the bar while the menu is open; the
@@ -160,21 +161,28 @@ fn switching_menus_keeps_the_host_active() {
                         WINEVENT_OUTOFCONTEXT,
                     )
                 };
-                let menu = Menu::bar(ui, Rect::new(0, 0, 260, 28))
-                    .expect("create the menu bar")
-                    .on_select(|_| None)
-                    .build(|m| {
-                        m.submenu(MenuId::new(0), "&File", |f| {
-                            f.item(MenuId::new(1), "&New");
-                        });
-                        m.submenu(MenuId::new(2), "&Edit", |e| {
-                            e.item(MenuId::new(3), "&Undo");
-                        });
-                        m.submenu(MenuId::new(4), "&View", |v| {
-                            v.item(MenuId::new(5), "&Zoom");
-                        });
-                    });
+                let menu = Handle::new();
+                ui.root(
+                    absolute().child(
+                        menu_bar(|m| {
+                            m.submenu(MenuId::new(0), "&File", |f| {
+                                f.item(MenuId::new(1), "&New");
+                            });
+                            m.submenu(MenuId::new(2), "&Edit", |e| {
+                                e.item(MenuId::new(3), "&Undo");
+                            });
+                            m.submenu(MenuId::new(4), "&View", |v| {
+                                v.item(MenuId::new(5), "&Zoom");
+                            });
+                        })
+                        .then(|bar| bar.on_select(|_| None))
+                        .bind(&menu)
+                        .at(0, 0, 260, 28),
+                    ),
+                )
+                .expect("create the menu bar");
                 let bar = menu
+                    .get()
                     .id()
                     .and_then(|id| backend.node_hwnd(id))
                     .expect("the bar has a window");

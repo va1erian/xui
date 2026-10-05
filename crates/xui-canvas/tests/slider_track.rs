@@ -22,11 +22,9 @@ use xui_core::Dip;
 use xui_core::app::{App, Ui, run_app};
 use xui_core::backend::{Backend, PlatformSpec};
 use xui_core::geometry::Rect;
-use xui_core::widget::Slider;
+use xui_core::prelude::{LayoutExt, absolute, slider};
 
-struct Demo {
-    _slider: Slider<()>,
-}
+struct Demo;
 
 impl App for Demo {
     type Msg = ();
@@ -46,11 +44,20 @@ fn render_slider(bounds: Rect, value: f64) -> RgbaImage {
         run,
         PlatformSpec::new("slider track regression").size(Dip(200.0), Dip(80.0)),
         move |ui| {
-            let slider = Slider::new(ui, bounds, 0.0, 100.0).unwrap();
-            slider.set_value(value);
+            let slider = slider(0.0, 100.0).then(move |slider| {
+                slider.set_value(value);
+                slider
+            });
+            ui.root(absolute().child(slider.at(
+                bounds.left,
+                bounds.top,
+                bounds.width(),
+                bounds.height(),
+            )))
+            .unwrap();
             let image = backend_for_make.render(ui.window()).expect("a render");
             *rendered_for_make.borrow_mut() = Some(image);
-            Demo { _slider: slider }
+            Demo
         },
     )
     .expect("the offscreen slider ran");

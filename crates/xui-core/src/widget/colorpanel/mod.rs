@@ -10,15 +10,16 @@
 //!
 //! ```no_run
 //! # use xui_core::app::Ui;
-//! # use xui_core::geometry::Rect;
-//! # use xui_core::widget::ColorPanel;
-//! # use xui_core::{Color, Dip};
-//! # let ui: Ui<()> = unimplemented!();
-//! let panel = ColorPanel::new(&ui, Rect::default())
-//!     .unwrap()
-//!     .with_color(Color::rgb(0xEB, 0x40, 0x34))
-//!     .on_change(|_color| None)
-//!     .on_commit(|_color| None);
+//! # use xui_core::arrange::{color_panel, column};
+//! # use xui_core::Color;
+//! # #[derive(Clone)] enum Msg { Pick(Color) }
+//! # let ui: Ui<Msg> = unimplemented!();
+//! ui.root(column().child(
+//!     color_panel()
+//!         .color(Color::rgb(0xEB, 0x40, 0x34))
+//!         .on_change(Msg::Pick),
+//! ))?;
+//! # Ok::<(), xui_core::BackendError>(())
 //! ```
 
 use std::cell::{Cell, RefCell};
@@ -72,7 +73,7 @@ pub struct ColorPanel<M: 'static> {
 
 impl<M: 'static> ColorPanel<M> {
     /// Creates a panel at `bounds`, initially black.
-    pub fn new(ui: &Ui<M>, bounds: Rect) -> Result<ColorPanel<M>> {
+    pub(crate) fn new(ui: &Ui<M>, bounds: Rect) -> Result<ColorPanel<M>> {
         let dpi = ui.dpi();
         let control = Control::new(ui, &NodeSpec::new(NodeKind::Container, bounds))?;
         {
@@ -297,12 +298,6 @@ impl<M: 'static> ColorPanel<M> {
     /// The panel's node identity.
     pub fn id(&self) -> WidgetId {
         self.control.id()
-    }
-
-    /// Moves/resizes the panel and re-lays its children out.
-    pub fn set_bounds(&self, bounds: Rect) {
-        self.control.set_bounds(bounds);
-        self.arrange(bounds);
     }
 
     /// Re-lays the children for the panel's node at `bounds`.

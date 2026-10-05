@@ -357,7 +357,7 @@ fn two_panels_keep_their_own_state_and_route_their_own_messages() {
 fn a_zero_sized_panel_and_field_do_not_panic() {
     let (_backend, core, ui) = setup();
     let panel = ColorPanel::new(&ui, Rect::default()).unwrap();
-    panel.set_bounds(Rect::default());
+    crate::widget::Placeable::placed(&panel, &ui, Rect::default());
     let field = ColorField::new(&ui, Rect::default(), Hsv::new(0.0, 0.5, 0.5)).unwrap();
     let log = Rc::new(RefCell::new(Vec::new()));
     let runtime = runtime(core, &log);

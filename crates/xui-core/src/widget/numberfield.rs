@@ -92,14 +92,14 @@ pub struct NumberField<M: 'static> {
     on_commit: MapperCell<M>,
 }
 impl<M: 'static> NumberField<M> {
-    /// Creates a number field with no bounds of its own, for a layout to place (see
-    /// [`crate::arrange`]); its size comes from [`Placeable`](super::Placeable).
-    pub fn auto(ui: &Ui<M>, min: f64, max: f64, step: f64) -> Result<NumberField<M>> {
-        NumberField::new(ui, Rect::default(), min, max, step)
-    }
-
     /// Creates a field for `min..=max` at its minimum; a non-positive `step` is `1`.
-    pub fn new(ui: &Ui<M>, bounds: Rect, min: f64, max: f64, step: f64) -> Result<NumberField<M>> {
+    pub(crate) fn new(
+        ui: &Ui<M>,
+        bounds: Rect,
+        min: f64,
+        max: f64,
+        step: f64,
+    ) -> Result<NumberField<M>> {
         let control = Control::new(ui, &NodeSpec::new(NodeKind::NumberField, bounds).tab_stop())?;
         ui.set_cursor(control.id(), Cursor::Text);
         let (min, max) = if min <= max { (min, max) } else { (max, min) };

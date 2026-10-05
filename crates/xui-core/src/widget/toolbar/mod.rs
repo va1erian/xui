@@ -17,6 +17,7 @@ use crate::property::{Properties, Property, Value};
 
 mod layout;
 mod paint;
+mod place;
 mod strip;
 
 use layout::{Layout, Mode};
@@ -85,7 +86,7 @@ impl<M: 'static> Toolbar<M> {
     ///
     /// Add icon items to an empty toolbar with [`Toolbar::empty`] and
     /// [`Toolbar::item`].
-    pub fn new(ui: &Ui<M>, bounds: Rect, items: &[&str]) -> Result<Toolbar<M>> {
+    pub(crate) fn new(ui: &Ui<M>, bounds: Rect, items: &[&str]) -> Result<Toolbar<M>> {
         let toolbar = Toolbar::empty(ui, bounds)?;
         {
             let mut slot = toolbar.state.entries.borrow_mut();
@@ -99,7 +100,7 @@ impl<M: 'static> Toolbar<M> {
 
     /// Creates an empty toolbar along `bounds`; add items with [`Toolbar::item`]
     /// and [`Toolbar::item_with_text`].
-    pub fn empty(ui: &Ui<M>, bounds: Rect) -> Result<Toolbar<M>> {
+    pub(crate) fn empty(ui: &Ui<M>, bounds: Rect) -> Result<Toolbar<M>> {
         let control = Control::new(ui, &NodeSpec::new(NodeKind::Toolbar, bounds).tab_stop())?;
         let state = Rc::new(State::new());
         let activated = Rc::new(Cell::new(-1i64));

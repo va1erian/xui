@@ -1,5 +1,6 @@
 //! Mounting builder trees on a headless window.
 
+mod bars;
 mod containers;
 mod features;
 mod grid;
@@ -224,7 +225,7 @@ fn mount_in_creates_the_widgets_inside_a_container_and_follows_its_resize() {
     );
     assert_eq!(backend.parent_of(inner.get().id()), Some(panel.id()));
 
-    panel.set_bounds(Rect::new(10, 10, 310, 210));
+    ui.apply_moves(&[(panel.id(), Rect::new(10, 10, 310, 210))]);
     backend.inject(
         window,
         panel.id(),

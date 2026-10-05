@@ -5,12 +5,10 @@ use xui_canvas::snapshot::{Snapshot, render_with};
 use xui_core::app::{App, Ui};
 use xui_core::backend::Event;
 use xui_core::message::{Key, Modifiers};
-use xui_core::widget::Edit;
+use xui_core::prelude::{LayoutExt, absolute, edit};
 use xui_core::{Dip, Rect, Theme};
 
-struct Field {
-    _edit: Edit<()>,
-}
+struct Field;
 
 impl App for Field {
     type Msg = ();
@@ -26,9 +24,13 @@ fn select_all_on_a_scrolled_field_highlights_up_to_its_right_edge() {
     let image = render_with(
         Snapshot::new(Dip(240.0), Dip(60.0)).theme(theme),
         move |ui| {
-            Ok(Field {
-                _edit: Edit::new(ui, FIELD, &long)?,
-            })
+            ui.root(absolute().child(edit().text(long).at(
+                FIELD.left,
+                FIELD.top,
+                FIELD.width(),
+                FIELD.height(),
+            )))?;
+            Ok(Field)
         },
         |stage| {
             // Focus the field, move to the end (scrolling it), then select all.

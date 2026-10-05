@@ -20,9 +20,9 @@ pub(super) fn place<K: Copy>(
         .with_width(inner.width())
         .with_height(inner.height());
     for item in group.visible_items(leaf, dpi) {
-        let align = item.align.unwrap_or(group.align);
+        let aligns = item.aligns(group.align);
         let size = item.own_size(StackDirection::Vertical, constraints, leaf);
-        let area = clamp_to_caps(item, align_both(inner, size, align), align, dpi);
+        let area = clamp_to_caps(item, align_both(inner, size, aligns), aligns, dpi);
         item.place(area, dpi, leaf, out);
     }
 }

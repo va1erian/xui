@@ -6,16 +6,14 @@
 //! eyeballing and asserts that the icon slot and text block painted, that the
 //! selection differs from an ordinary tile and that dark differs from light.
 
-use std::cell::Cell;
-use std::rc::Rc;
-
 use xui_canvas::snapshot::{Snapshot, render_with};
 use xui_core::app::{App, Ui};
-use xui_core::backend::{Event, WidgetId};
+use xui_core::backend::Event;
 use xui_core::icon::{IconRef, Lucide};
 use xui_core::image::Image;
+use xui_core::prelude::{Handle, LayoutExt, column, icon_view_with};
 use xui_core::widget::{IconModel, IconSize, IconView};
-use xui_core::{Dip, Rect, Theme};
+use xui_core::{Dip, Theme};
 
 const NAMES: [&str; 6] = [
     "Quarterly report with a very long name",
@@ -60,7 +58,7 @@ impl IconModel for Model {
     }
 }
 
-struct Demo(#[allow(dead_code)] IconView<()>);
+struct Demo;
 
 impl App for Demo {
     type Msg = ();
@@ -118,23 +116,26 @@ fn geom(size: IconSize) -> Geom {
 
 /// Renders one size and theme, focusing the view and selecting item 1.
 fn shoot(size: IconSize, label: &str, theme: Theme) -> Image {
-    let id = Rc::new(Cell::new(WidgetId::NONE));
-    let id_for_build = Rc::clone(&id);
+    let view: Handle<IconView<()>> = Handle::new();
+    let view_for_build = view.clone();
     render_with(
         Snapshot::new(Dip(700.0), Dip(260.0))
             .theme(theme)
             .title(format!("iconview {label}")),
         move |ui| {
-            let view = IconView::with_model(ui, Rect::new(0, 0, 700, 260), Model).expect("view");
-            view.set_icon_size(size);
-            view.select(Some(1));
-            id_for_build.set(view.id());
-            Ok(Demo(view))
+            let built = icon_view_with(Model)
+                .bind(&view_for_build)
+                .then(move |view| {
+                    view.set_icon_size(size);
+                    view.select(Some(1));
+                    view
+                });
+            ui.root(column().child(built.fill(1)))?;
+            Ok(Demo)
         },
         move |stage| {
-            let id = id.get();
-            if !id.is_none() {
-                stage.ui().focus(id);
+            if let Some(view) = view.try_get() {
+                stage.ui().focus(view.id());
                 stage.inject(Event::SetFocus);
             }
         },

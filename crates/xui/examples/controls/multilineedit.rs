@@ -7,58 +7,49 @@
 //! cargo run -p xui --features canvas --example control_multilineedit
 //! ```
 
-use xui_core::Dip;
-use xui_core::app::{App, Ui, run_app};
-use xui_core::backend::PlatformSpec;
-use xui_core::widget::{HasText, Label, MultilineEdit};
+use xui::prelude::*;
 
-#[path = "support.rs"]
-mod support;
-use support::{Layout, autoclose, backend};
-
+#[derive(Clone)]
 enum Msg {
     Text(String),
-    Quit,
 }
 
+#[derive(Default)]
 struct Demo {
-    result: Label<Msg>,
-    _edit: MultilineEdit<Msg>,
+    result: Handle<Label<Msg>>,
 }
 
 impl App for Demo {
     type Msg = Msg;
 
-    fn update(&mut self, msg: Msg, ui: &mut Ui<Msg>) {
+    fn update(&mut self, msg: Msg, _ui: &mut Ui<Msg>) {
         match msg {
             Msg::Text(text) => {
                 let lines = text.lines().count().max(1);
-                self.result.set_text(&format!(
+                self.result.get().set_text(&format!(
                     "{lines} lines, {} characters",
                     text.chars().count()
                 ));
             }
-            Msg::Quit => ui.quit(),
         }
     }
 }
 
-fn main() -> xui_core::backend::Result<()> {
-    run_app(
-        backend(),
-        PlatformSpec::new("MultilineEdit demo").size(Dip(520.0), Dip(360.0)),
-        |ui| {
-            let l = Layout::new(ui.dpi());
-            let result =
-                Label::new(ui, l.rect(16.0, 16.0, 504.0, 48.0), "1 line, 0 characters").unwrap();
-            let edit = MultilineEdit::new(ui, l.rect(16.0, 64.0, 504.0, 200.0), "Write notes…")
-                .unwrap()
-                .on_change(|text| Some(Msg::Text(text.to_string())));
-            autoclose(ui, || Msg::Quit);
-            Demo {
-                result,
-                _edit: edit,
-            }
-        },
-    )
+fn main() -> Result<()> {
+    xui::app("MultilineEdit demo").size(520, 360).run(|ui| {
+        let demo = Demo::default();
+        ui.root(
+            column().padding(16).gap(16).children((
+                label("1 line, 0 characters").bind(&demo.result),
+                multiline_edit()
+                    .then(|edit| {
+                        edit.set_text("Write notes…");
+                        edit
+                    })
+                    .on_change(Msg::Text)
+                    .height(136),
+            )),
+        )?;
+        Ok(demo)
+    })
 }

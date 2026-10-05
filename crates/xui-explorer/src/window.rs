@@ -18,10 +18,10 @@ use std::rc::Rc;
 pub use flash::FlashHandle;
 
 use xui_core::app::{App, Ui};
+use xui_core::arrange::{Handle, LayoutExt, column, icon_view_with, status_bar};
 use xui_core::backend::{BackendError, NodeKind, NodeSpec, TimerId};
 use xui_core::geometry::{Point, Rect};
 use xui_core::message::Key;
-use xui_core::units::Dip;
 use xui_core::widget::{
     Control, Dialog, IconView, Menu, MenuId, StatusBar, TaskDialog, TaskDialogAction,
 };
@@ -29,9 +29,6 @@ use xui_core::widget::{
 use crate::model::{Clock, Flash, Listing, SharedListing, summarize, title};
 use crate::platform::Kind;
 use crate::shell::Explorer;
-
-/// The status bar's design height.
-const STATUS_HEIGHT: Dip = Dip(24.0);
 
 /// How often the open-folder flash is checked, in milliseconds. Short enough
 /// that a folder reverts close to its two-second deadline.
@@ -76,8 +73,8 @@ pub struct ExplorerWindow {
     title: String,
     listing: Rc<Listing>,
     flash: Rc<Flash>,
-    view: Rc<IconView<Msg>>,
-    status: Rc<StatusBar<Msg>>,
+    view: Handle<IconView<Msg>>,
+    status: Handle<StatusBar<Msg>>,
     menu: Menu<Msg>,
     /// A zero-size container that owns the flash's repeating timer; dropping
     /// the control (on window close) stops the timer.
@@ -117,19 +114,25 @@ impl ExplorerWindow {
         let listing = Rc::new(Listing::load(explorer.platform(), &dir));
         let flash = Rc::new(Flash::with_clock(clock));
         let timer = Control::new(ui, &NodeSpec::new(NodeKind::Container, Rect::default()))?;
-        let (view_rect, status_rect) = layout(ui);
-        let view = Rc::new(
-            IconView::with_model(
-                ui,
-                view_rect,
-                SharedListing::with_flash(Rc::clone(&listing), Rc::clone(&flash)),
-            )?
-            .multi_select(true)
-            .on_selection(|_| Some(Msg::Selection))
-            .on_activate(|index| Some(Msg::Activate(index)))
-            .on_context(|item, at| Some(Msg::Context(item, at))),
-        );
-        let status = Rc::new(StatusBar::new(ui, status_rect, &[""])?);
+        let view = Handle::new();
+        let status = Handle::new();
+        ui.root(
+            column().children((
+                icon_view_with(SharedListing::with_flash(
+                    Rc::clone(&listing),
+                    Rc::clone(&flash),
+                ))
+                .then(|view: IconView<Msg>| {
+                    view.multi_select(true)
+                        .on_selection(|_| Some(Msg::Selection))
+                        .on_activate(|index| Some(Msg::Activate(index)))
+                        .on_context(|item, at| Some(Msg::Context(item, at)))
+                })
+                .bind(&view)
+                .fill(1),
+                status_bar(&[""]).bind(&status),
+            )),
+        )?;
         let menu = Menu::context(ui)
             .build(|scope| {
                 scope.item(MENU_OPEN, "Open");
@@ -176,30 +179,31 @@ impl ExplorerWindow {
     }
 
     /// The status bar, shared so a test can read its parts after the app is
-    /// built. The window owns the other reference.
+    /// built. The window's layout owns the other reference.
     pub fn status_bar(&self) -> Rc<StatusBar<Msg>> {
-        Rc::clone(&self.status)
+        self.status.get()
     }
 
     /// The icon view, shared so a test can read or set the selection after the
-    /// app is built. The window owns the other reference.
+    /// app is built. The window's layout owns the other reference.
     pub fn view_handle(&self) -> Rc<IconView<Msg>> {
-        Rc::clone(&self.view)
+        self.view.get()
     }
 
     /// Re-lists the folder, keeps the selection where the items still exist,
     /// drops any flash whose folder vanished, and updates the title and status
     /// bar.
     fn refresh(&mut self, ui: &mut Ui<Msg>) {
-        let selected_names = self.listing.names_of(&self.view.selection());
+        let selected_names = self.listing.names_of(&self.view.get().selection());
         let listing = Rc::new(Listing::load(self.explorer.platform(), &self.dir));
         self.listing = Rc::clone(&listing);
         self.prune_flash(&listing);
-        self.view.set_model(SharedListing::with_flash(
+        self.view.get().set_model(SharedListing::with_flash(
             Rc::clone(&listing),
             Rc::clone(&self.flash),
         ));
         self.view
+            .get()
             .set_selection(&listing.indices_of(&selected_names));
 
         self.title = title(&self.dir);
@@ -212,11 +216,11 @@ impl ExplorerWindow {
     /// read error when the folder could not be listed.
     fn update_status(&self) {
         match &self.listing.error {
-            Some(error) => self.status.set_parts(&[error]),
+            Some(error) => self.status.get().set_parts(&[error]),
             None => {
-                let parts = summarize(&self.listing.entries, &self.view.selection());
+                let parts = summarize(&self.listing.entries, &self.view.get().selection());
                 let refs: Vec<&str> = parts.iter().map(String::as_str).collect();
-                self.status.set_parts(&refs);
+                self.status.get().set_parts(&refs);
             }
         }
     }
@@ -235,12 +239,13 @@ impl ExplorerWindow {
                 // opening behaviour.
                 self.flash_name(&entry.name);
                 if !self.explorer.open_or_reuse(ui, path) {
-                    self.status.set_parts(&["already open"]);
+                    self.status.get().set_parts(&["already open"]);
                 }
             }
             Kind::File | Kind::Symlink => {
                 if let Err(error) = self.explorer.launcher().open(&path) {
                     self.status
+                        .get()
                         .set_parts(&[&format!("Cannot open {}: {error}", entry.display)]);
                 }
             }
@@ -259,7 +264,7 @@ impl ExplorerWindow {
         // The right click may have changed the selection (XP selects the
         // unselected tile under the pointer), so refresh the status line.
         self.update_status();
-        let bounds = ui.bounds(self.view.id());
+        let bounds = ui.bounds(self.view.get().id());
         self.menu
             .show_context(bounds.left + at.x, bounds.top + at.y);
     }
@@ -328,17 +333,6 @@ impl App for ExplorerWindow {
             Msg::FlashTick => self.flash_tick(),
         }
     }
-}
-
-/// The icon view's and status bar's rectangles, in device pixels.
-fn layout(ui: &Ui<Msg>) -> (Rect, Rect) {
-    let client = ui.client_rect();
-    let status_height = STATUS_HEIGHT.to_px(ui.dpi()).value();
-    let status_top = (client.bottom - status_height).max(client.top);
-    (
-        Rect::new(client.left, client.top, client.right, status_top),
-        Rect::new(client.left, status_top, client.right, client.bottom),
-    )
 }
 
 #[cfg(test)]

@@ -17,6 +17,7 @@ mod glyph;
 mod icon;
 mod items;
 mod paint;
+mod place;
 
 #[cfg(test)]
 mod tests;
@@ -62,7 +63,7 @@ pub struct TopBar<M: 'static> {
 
 impl<M: 'static> TopBar<M> {
     /// Creates an empty top bar along `bounds`; add items with the builders.
-    pub fn new(ui: &Ui<M>, bounds: Rect) -> Result<TopBar<M>> {
+    pub(crate) fn new(ui: &Ui<M>, bounds: Rect) -> Result<TopBar<M>> {
         let control = Control::new(ui, &NodeSpec::new(NodeKind::Toolbar, bounds))?;
         let items = Rc::new(RefCell::new(Vec::new()));
         let hover = Rc::new(Cell::new(None));
@@ -298,6 +299,7 @@ impl<M: 'static> TopBar<M> {
             *slot = text.to_string();
         }
         self.control.invalidate();
+        self.control.invalidate_layout();
     }
 
     /// A label item's text.

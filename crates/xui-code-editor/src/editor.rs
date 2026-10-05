@@ -685,14 +685,13 @@ mod tests {
         use std::rc::Rc;
 
         use xui_canvas::snapshot::{Snapshot, render_with};
-        use xui_core::geometry::Rect;
+        use xui_core::arrange::{Handle, LayoutExt, absolute, build, panel};
         use xui_core::units::Dip;
-        use xui_core::widget::Panel;
         use xui_core::{App, Color};
 
         use crate::metrics::{CELL_PROBE, Metrics};
 
-        struct Empty(#[allow(dead_code)] Panel<()>);
+        struct Empty;
 
         impl App for Empty {
             type Msg = ();
@@ -712,7 +711,7 @@ mod tests {
         let panel_origin = (30, 20);
         let editor_origin = (60, 50);
 
-        let editor: Rc<RefCell<Option<crate::Editor<()>>>> = Rc::new(RefCell::new(None));
+        let editor: Rc<RefCell<Option<Rc<crate::Editor<()>>>>> = Rc::new(RefCell::new(None));
         let target = Rc::new(Cell::new((0, 0)));
         let expected = Rc::new(Cell::new(0));
         let result = Rc::new(Cell::new(usize::MAX));
@@ -724,13 +723,27 @@ mod tests {
                 let expected = Rc::clone(&expected);
                 let text = text.clone();
                 move |ui| {
-                    let panel =
-                        Panel::new(ui, Rect::new(panel_origin.0, panel_origin.1, 480, 380))?;
-                    let scoped = ui.with_parent(panel.id());
-                    let widget = crate::Editor::new(
-                        &scoped,
-                        Rect::new(editor_origin.0, editor_origin.1, 400, 300),
+                    // The offsets are what is tested, so both sit at exact
+                    // points (the snapshot runs at 96 DPI: a DIP is a pixel).
+                    let handle = Handle::new();
+                    ui.root(
+                        absolute().child(
+                            panel(
+                                absolute().child(
+                                    build(|ui| crate::Editor::new(ui, Default::default()))
+                                        .bind(&handle)
+                                        .at(editor_origin.0, editor_origin.1, 340, 250),
+                                ),
+                            )
+                            .at(
+                                panel_origin.0,
+                                panel_origin.1,
+                                450,
+                                360,
+                            ),
+                        ),
                     )?;
+                    let widget = handle.get();
                     widget.set_text(&text);
 
                     let options = crate::Options::default();
@@ -756,7 +769,7 @@ mod tests {
                     ));
                     expected.set(widget.state.borrow().buffer.line_start(line) + col);
                     *editor.borrow_mut() = Some(widget);
-                    Ok(Empty(panel))
+                    Ok(Empty)
                 }
             },
             {

@@ -104,9 +104,13 @@ pub(super) fn place<K: Copy>(
         justify(&mut areas, inner, direction, group.justify);
     }
     for (item, area) in visible.iter().zip(areas) {
-        let align = item.align.unwrap_or(group.align);
-        let area = cross_place(item, area, direction, align, dpi, leaf);
-        let area = clamp_to_caps(item, area, align, dpi);
+        let aligns = item.aligns(group.align);
+        let across = match direction {
+            StackDirection::Horizontal => aligns.1,
+            StackDirection::Vertical => aligns.0,
+        };
+        let area = cross_place(item, area, direction, across, dpi, leaf);
+        let area = clamp_to_caps(item, area, aligns, dpi);
         item.place(area, dpi, leaf, out);
     }
 }

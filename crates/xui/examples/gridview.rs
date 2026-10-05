@@ -8,15 +8,13 @@
 //! ```
 //!
 //! `XUI_LIST_THEME=dark` starts on the dark palette and `XUI_DEMO_AUTOCLOSE_MS`
-//! makes it quit itself, for headless smoke runs.
+//! makes it quit itself, for headless smoke runs; `XUI_SNAPSHOT=<dir>` saves a
+//! light and a dark screenshot instead.
 
-use std::cell::Cell;
-use std::rc::Rc;
-
-use xui_core::app::{App, Ui, run_app};
-use xui_core::backend::{PlatformSpec, TextStyle};
-use xui_core::widget::{GridModel, GridView, StatusBar, Tile, TileSize};
-use xui_core::{Dip, Image, Rect, Theme};
+use xui::prelude::*;
+use xui_core::Image;
+use xui_core::backend::{Canvas, TextStyle};
+use xui_core::widget::{GridModel, Tile, TilePaint, TileSize};
 
 /// One album; the caption is pre-formatted so the model can borrow it.
 struct Album {
@@ -41,29 +39,30 @@ impl GridModel for Library {
     }
 }
 
+#[derive(Clone)]
 enum Msg {
     Select(usize),
     Activate(usize),
-    Autoclose,
 }
 
+#[derive(Default)]
 struct AppState {
-    grid: GridView<Msg>,
-    status: StatusBar<Msg>,
+    grid: Handle<GridView<Msg>>,
+    status: Handle<StatusBar<Msg>>,
 }
 
 impl App for AppState {
     type Msg = Msg;
 
-    fn update(&mut self, msg: Msg, ui: &mut Ui<Msg>) {
+    fn update(&mut self, msg: Msg, _ui: &mut Ui<Msg>) {
+        let status = self.status.get();
         match msg {
             Msg::Select(index) => {
-                let total = self.grid.len();
-                self.status.set_text(0, &format!("{total} albums"));
-                self.status.set_text(1, &format!("Album {}", index + 1));
+                let total = self.grid.get().len();
+                status.set_text(0, &format!("{total} albums"));
+                status.set_text(1, &format!("Album {}", index + 1));
             }
-            Msg::Activate(index) => self.status.set_text(1, &format!("Play {index}")),
-            Msg::Autoclose => ui.quit(),
+            Msg::Activate(index) => status.set_text(1, &format!("Play {index}")),
         }
     }
 }
@@ -94,6 +93,19 @@ fn art(count: usize) -> Vec<Image> {
         .collect()
 }
 
+/// Draws a tile: its art above a one-line caption.
+fn paint_tile(canvas: &mut dyn Canvas, paint: &TilePaint<'_>) {
+    let dpi = paint.dpi;
+    let inner = Dip(6.0).to_px(dpi).value();
+    let caption = Dip(20.0).to_px(dpi).value();
+    let (art, text) = paint.rect.shrink(inner).split_bottom(caption);
+    if let Some(image) = paint.tile.image {
+        canvas.draw_image(image, art);
+    }
+    let style = TextStyle::new(paint.theme.text, Dip(11.0)).middle();
+    canvas.draw_text(paint.tile.label, text, &style);
+}
+
 fn albums(count: usize) -> Vec<Album> {
     (0..count)
         .map(|index| Album {
@@ -102,81 +114,35 @@ fn albums(count: usize) -> Vec<Album> {
         .collect()
 }
 
-// Only the backend choice and the headless hook are used here.
-#[allow(dead_code)]
-#[path = "controls/support.rs"]
-mod support;
-use support::{backend, snapshot_hook};
-
-fn main() {
-    let _ = run_app(
-        backend(),
-        PlatformSpec::new("xui gridview").size(Dip(760.0), Dip(520.0)),
-        |ui| {
-            let dpi = ui.dpi();
-            let p = move |value: f32| Dip(value).to_px(dpi).value();
-            let grid_rect = Rect::new(p(12.0), p(12.0), p(748.0), p(452.0));
-
-            let library = Library {
-                albums: albums(10_000),
-                art: art(12),
-            };
-            let grid = GridView::with_model(ui, grid_rect, library)
-                .unwrap()
-                .tile_size(TileSize::new(Dip(148.0), Dip(168.0)).gap(Dip(12.0)))
-                .on_select(|index| Some(Msg::Select(index)))
-                .on_activate(|index| Some(Msg::Activate(index)))
-                .on_paint_tile(|canvas, paint| {
-                    let dpi = paint.dpi;
-                    let inner = Dip(6.0).to_px(dpi).value();
-                    let caption = Dip(20.0).to_px(dpi).value();
-                    let rect = paint.rect;
-                    let art = Rect::new(
-                        rect.left + inner,
-                        rect.top + inner,
-                        rect.right - inner,
-                        rect.bottom - inner - caption,
-                    );
-                    if let Some(image) = paint.tile.image {
-                        canvas.draw_image(image, art);
-                    }
-                    let text = Rect::new(
-                        rect.left + inner,
-                        art.bottom,
-                        rect.right - inner,
-                        rect.bottom - inner,
-                    );
-                    let style = TextStyle::new(paint.theme.text, Dip(11.0)).middle();
-                    canvas.draw_text(paint.tile.label, text, &style);
-                });
-
-            let status = StatusBar::new(
-                ui,
-                Rect::new(p(12.0), p(460.0), p(748.0), p(492.0)),
-                &["Ready", "Album 1"],
-            )
-            .unwrap();
-
-            snapshot_hook(ui);
-            let autoclose = Rc::new(Cell::new(None));
-            if let Ok(millis) = std::env::var("XUI_DEMO_AUTOCLOSE_MS") {
-                let _ = millis
-                    .parse::<u32>()
-                    .map(|ms| autoclose.set(Some(ui.set_timer(ms))));
-            }
-            let autoclose_for_timer = Rc::clone(&autoclose);
-            ui.on_timer(move |fired| {
-                (autoclose_for_timer.get() == Some(fired)).then_some(Msg::Autoclose)
-            });
-
-            if std::env::var("XUI_LIST_THEME").as_deref() == Ok("dark") {
-                ui.set_theme(Theme::dark());
-                // Re-composite now, so a backend that only stores the theme
-                // presents the dark frame instead of the first light one.
-                ui.invalidate(grid.id());
-            }
-
-            AppState { grid, status }
-        },
-    );
+fn main() -> Result<()> {
+    xui::app("xui gridview").size(760, 520).run(|ui| {
+        let library = Library {
+            albums: albums(10_000),
+            art: art(12),
+        };
+        let app = AppState::default();
+        ui.root(
+            column().padding(12).gap(8).children((
+                grid_view_with(library)
+                    .on_select(Msg::Select)
+                    .on_activate(Msg::Activate)
+                    .then(|grid| {
+                        grid.tile_size(TileSize::new(Dip(148.0), Dip(168.0)).gap(Dip(12.0)))
+                            .on_paint_tile(paint_tile)
+                    })
+                    .bind(&app.grid)
+                    .fill(1),
+                status_bar(&["Ready", "Album 1"])
+                    .bind(&app.status)
+                    .height(32),
+            )),
+        )?;
+        if std::env::var("XUI_LIST_THEME").as_deref() == Ok("dark") {
+            ui.set_theme(Theme::dark());
+            // Re-composite now, so a backend that only stores the theme
+            // presents the dark frame instead of the first light one.
+            ui.invalidate(app.grid.get().id());
+        }
+        Ok(app)
+    })
 }

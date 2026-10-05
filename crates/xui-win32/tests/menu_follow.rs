@@ -12,6 +12,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
 };
 
 use xui_core::app::{App, Ui};
+use xui_core::arrange::{Handle, LayoutExt, absolute, menu_bar};
 use xui_core::backend::{Backend, PlatformSpec};
 use xui_core::property::{Properties, Value};
 use xui_core::widget::{Menu, MenuId};
@@ -37,7 +38,7 @@ enum Msg {
 }
 
 struct FollowApp {
-    menu: Menu<Msg>,
+    menu: Handle<Menu<Msg>>,
     owner: Hwnd,
     popup: Hwnd,
     report: Rc<Cell<Report>>,
@@ -49,7 +50,7 @@ impl App for FollowApp {
     fn update(&mut self, msg: Msg, ui: &mut Ui<Msg>) {
         match msg {
             Msg::Open => {
-                self.menu.set_property("open", Value::Bool(true));
+                self.menu.get().set_property("open", Value::Bool(true));
             }
             Msg::Move => {
                 let before_host = window_rect(self.owner);
@@ -136,15 +137,22 @@ fn the_popup_follows_a_moved_host() {
                     .native_window()
                     .map(|handle| Hwnd::from_raw(handle.raw()))
                     .expect("the Win32 backend exposes the host handle");
-                let menu = Menu::bar(ui, Rect::new(0, 0, 260, 28))
-                    .expect("create the menu bar")
-                    .on_select(|_| None)
-                    .build(|m| {
-                        m.submenu(MenuId::new(0), "&File", |f| {
-                            f.item(MenuId::new(1), "&New");
-                        });
-                    });
+                let menu = Handle::new();
+                ui.root(
+                    absolute().child(
+                        menu_bar(|m| {
+                            m.submenu(MenuId::new(0), "&File", |f| {
+                                f.item(MenuId::new(1), "&New");
+                            });
+                        })
+                        .then(|bar| bar.on_select(|_| None))
+                        .bind(&menu)
+                        .at(0, 0, 260, 28),
+                    ),
+                )
+                .expect("create the menu bar");
                 let popup = menu
+                    .get()
                     .popup_id(0)
                     .and_then(|id| backend_for_make.node_hwnd(id))
                     .expect("the pool created a popup");

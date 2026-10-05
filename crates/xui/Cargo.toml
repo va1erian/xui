@@ -31,6 +31,7 @@ xui-rich-text = { path = "../xui-rich-text", optional = true }
 
 [[example]]
 name = "widgets"
+path = "examples/widgets/main.rs"
 required-features = ["canvas"]
 
 [[example]]

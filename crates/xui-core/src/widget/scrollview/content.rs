@@ -12,6 +12,10 @@ use crate::layout::Constraints;
 use crate::units::Dip;
 use crate::widget::Placeable;
 
+/// The natural width of a scroll view of rows; the rows stretch to whatever
+/// it gets.
+const NATURAL_WIDTH: Dip = Dip(240.0);
+
 impl<M: 'static> ScrollView<M> {
     /// Replaces the view's content with `layout`: its widgets are created
     /// inside the view, measured at the view's width and scrolled as one.
@@ -75,10 +79,6 @@ pub(super) fn relayout<M>(ui: &Ui<M>, s: &Shared<M>, bounds: Rect) -> bool {
     true
 }
 
-/// The natural width of a scroll view of rows; the rows stretch to whatever
-/// width it gets.
-const NATURAL_WIDTH: Dip = Dip(240.0);
-
 impl<M: 'static> Placeable<M> for ScrollView<M> {
     fn id(&self) -> WidgetId {
         ScrollView::id(self)
@@ -101,8 +101,6 @@ impl<M: 'static> Placeable<M> for ScrollView<M> {
                     .iter()
                     .map(|row| row.height.to_px(dpi).value().max(0))
                     .sum();
-                // Not its current bounds: a view squeezed once would then
-                // report that width for ever.
                 Size::new(NATURAL_WIDTH.to_px(dpi).value(), height)
             }
         }

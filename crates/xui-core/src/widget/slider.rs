@@ -33,14 +33,8 @@ pub struct Slider<M: 'static> {
 }
 
 impl<M: 'static> Slider<M> {
-    /// Creates a slider with no bounds of its own, for a layout to place (see
-    /// [`crate::arrange`]); its size comes from [`Placeable`](super::Placeable).
-    pub fn auto(ui: &Ui<M>, min: f64, max: f64) -> Result<Slider<M>> {
-        Slider::new(ui, Rect::default(), min, max)
-    }
-
     /// Creates a slider for `min..=max`, at its minimum, at `bounds`.
-    pub fn new(ui: &Ui<M>, bounds: Rect, min: f64, max: f64) -> Result<Slider<M>> {
+    pub(crate) fn new(ui: &Ui<M>, bounds: Rect, min: f64, max: f64) -> Result<Slider<M>> {
         let control = Control::new(ui, &NodeSpec::new(NodeKind::Slider, bounds).tab_stop())?;
         let (min, max) = if min <= max { (min, max) } else { (max, min) };
         let value = Rc::new(Cell::new(min));

@@ -186,8 +186,14 @@ impl<M: 'static> Layout<M> {
             }
             .sized(entry.sizing)
             .span(entry.span);
-            if let Some(align) = entry.align {
-                item = item.align(align);
+            if let Some(align) = entry.align_x {
+                item = item.align_x(align);
+            }
+            if let Some(align) = entry.align_y {
+                item = item.align_y(align);
+            }
+            if entry.size != [None, None] {
+                item = item.size(entry.size[0], entry.size[1]);
             }
             if let Some(width) = entry.max_width {
                 item = item.max_width(width);
