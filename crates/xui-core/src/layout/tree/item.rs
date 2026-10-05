@@ -2,7 +2,7 @@
 
 //! [`Item`]: one entry of a [`Group`] with its sizing and placement.
 
-use super::{Constraints, Group, LeafFn, Out, Sizing, main, with_main};
+use super::{Align, Constraints, Group, LeafFn, Out, Sizing, main, with_main};
 use crate::geometry::{Rect, Size};
 use crate::layout::{Anchor, StackDirection};
 use crate::units::Dip;
@@ -13,7 +13,10 @@ use crate::units::Dip;
 pub struct Item<K> {
     pub(super) content: Content<K>,
     pub(super) sizing: Sizing,
-    pub(super) align: Option<super::Align>,
+    pub(super) align_x: Option<Align>,
+    pub(super) align_y: Option<Align>,
+    /// An exact width and height, either optional.
+    pub(super) size: [Option<Dip>; 2],
     pub(super) max_width: Option<Dip>,
     pub(super) max_height: Option<Dip>,
     pub(super) span: usize,
@@ -33,7 +36,9 @@ impl<K: Copy> Item<K> {
         Item {
             content,
             sizing: Sizing::Auto,
-            align: None,
+            align_x: None,
+            align_y: None,
+            size: [None, None],
             max_width: None,
             max_height: None,
             span: 1,
@@ -71,9 +76,41 @@ impl<K: Copy> Item<K> {
 
     /// Places the item across its parent's main axis (in a grid or a layered
     /// group, within its area on both axes) instead of the parent's default.
-    pub fn align(mut self, align: super::Align) -> Item<K> {
-        self.align = Some(align);
+    pub fn align(mut self, align: Align) -> Item<K> {
+        self.align_x = Some(align);
+        self.align_y = Some(align);
         self
+    }
+
+    /// Places the item horizontally only: across a column, or within its
+    /// area in a grid or a layered group. A row ignores it.
+    pub fn align_x(mut self, align: Align) -> Item<K> {
+        self.align_x = Some(align);
+        self
+    }
+
+    /// Places the item vertically only: across a row or a wrap line, or
+    /// within its area in a grid or a layered group. A column ignores it.
+    pub fn align_y(mut self, align: Align) -> Item<K> {
+        self.align_y = Some(align);
+        self
+    }
+
+    /// Makes the item exactly `width` wide and `height` tall (either may be
+    /// `None`), on whichever axis of its parent: its natural size there, and
+    /// never stretched past it.
+    pub fn size(mut self, width: Option<Dip>, height: Option<Dip>) -> Item<K> {
+        self.size = [width, height];
+        self
+    }
+
+    /// The item's horizontal and vertical alignment, `default` where it sets
+    /// none.
+    pub(super) fn aligns(&self, default: Align) -> (Align, Align) {
+        (
+            self.align_x.unwrap_or(default),
+            self.align_y.unwrap_or(default),
+        )
     }
 
     /// Caps the item's width at `width` design units.
@@ -122,6 +159,15 @@ impl<K: Copy> Item<K> {
     /// The content's natural size within `constraints`, before the item's
     /// own sizing applies.
     pub(super) fn measure(&self, constraints: Constraints, leaf: LeafFn<'_, K>) -> Size {
+        let px = |value: Dip| value.to_px(constraints.dpi).value().max(0);
+        let content = self.content_size(constraints, leaf);
+        Size::new(
+            self.size[0].map_or(content.width, px),
+            self.size[1].map_or(content.height, px),
+        )
+    }
+
+    fn content_size(&self, constraints: Constraints, leaf: LeafFn<'_, K>) -> Size {
         match &self.content {
             Content::Leaf(key) => leaf(key, constraints).natural,
             Content::Group(group) => group.measure(constraints, leaf),
@@ -195,9 +241,18 @@ impl<K: Copy> Item<K> {
             None => value,
         };
         Size::new(
-            cap(size.width, self.max_width),
-            cap(size.height, self.max_height),
+            cap(size.width, self.max_size(0)),
+            cap(size.height, self.max_size(1)),
         )
+    }
+
+    /// The tighter of the cap and the exact size on `axis` (0 is the width).
+    pub(super) fn max_size(&self, axis: usize) -> Option<Dip> {
+        let max = [self.max_width, self.max_height][axis];
+        match (max, self.size[axis]) {
+            (Some(a), Some(b)) => Some(if a.0 < b.0 { a } else { b }),
+            (a, b) => a.or(b),
+        }
     }
 
     pub(super) fn place(&self, rect: Rect, dpi: u32, leaf: LeafFn<'_, K>, out: &mut Out<K>) {

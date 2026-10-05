@@ -24,14 +24,8 @@ pub struct ProgressBar<M: 'static> {
 }
 
 impl<M: 'static> ProgressBar<M> {
-    /// Creates a progress bar with no bounds of its own, for a layout to place (see
-    /// [`crate::arrange`]); its size comes from [`Placeable`](super::Placeable).
-    pub fn auto(ui: &Ui<M>, max: i32) -> Result<ProgressBar<M>> {
-        ProgressBar::new(ui, Rect::default(), max)
-    }
-
     /// Creates an empty bar with the range `0..=max` at `bounds`.
-    pub fn new(ui: &Ui<M>, bounds: Rect, max: i32) -> Result<ProgressBar<M>> {
+    pub(crate) fn new(ui: &Ui<M>, bounds: Rect, max: i32) -> Result<ProgressBar<M>> {
         let control = Control::new(ui, &NodeSpec::new(NodeKind::ProgressBar, bounds))?;
         let value = Rc::new(Cell::new(0));
         let max = Rc::new(Cell::new(max.max(1)));

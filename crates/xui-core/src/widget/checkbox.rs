@@ -34,14 +34,8 @@ pub struct CheckBox<M: 'static> {
 }
 
 impl<M: 'static> CheckBox<M> {
-    /// Creates a check box with no bounds of its own, for a layout to place (see
-    /// [`crate::arrange`]); its size comes from [`Placeable`](super::Placeable).
-    pub fn auto(ui: &Ui<M>, text: &str) -> Result<CheckBox<M>> {
-        CheckBox::new(ui, Rect::default(), text)
-    }
-
     /// Creates a check box labelled `text`, unchecked, at `bounds`.
-    pub fn new(ui: &Ui<M>, bounds: Rect, text: &str) -> Result<CheckBox<M>> {
+    pub(crate) fn new(ui: &Ui<M>, bounds: Rect, text: &str) -> Result<CheckBox<M>> {
         let control = Control::new(
             ui,
             &NodeSpec::new(NodeKind::CheckBox, bounds)

@@ -31,15 +31,8 @@ pub struct StatusBar<M: 'static> {
 }
 
 impl<M: 'static> StatusBar<M> {
-    /// Creates a bar with no bounds of its own, for a layout to place (see
-    /// [`crate::arrange`]); its size comes from
-    /// [`Placeable`](super::Placeable).
-    pub fn auto(ui: &Ui<M>, parts: &[&str]) -> Result<StatusBar<M>> {
-        StatusBar::new(ui, Rect::default(), parts)
-    }
-
     /// Creates a bar with `parts`, laid out left-to-right across `bounds`.
-    pub fn new(ui: &Ui<M>, bounds: Rect, parts: &[&str]) -> Result<StatusBar<M>> {
+    pub(crate) fn new(ui: &Ui<M>, bounds: Rect, parts: &[&str]) -> Result<StatusBar<M>> {
         let control = Control::new(ui, &NodeSpec::new(NodeKind::StatusBar, bounds))?;
         let state: Rc<RefCell<Vec<String>>> = Rc::new(RefCell::new(
             parts.iter().map(|part| part.to_string()).collect(),

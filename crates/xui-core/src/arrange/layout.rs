@@ -141,7 +141,8 @@ impl<M: 'static> Layout<M> {
     }
 
     /// Appends several children at once: a tuple of builders and layouts, or
-    /// a `Vec` of entries.
+    /// a `Vec` of any one kind of them (an empty one needs its element type
+    /// named, `Vec::<Entry<_>>::new()`).
     pub fn children(mut self, children: impl IntoChildren<M>) -> Layout<M> {
         children.push_into(&mut self.entries);
         self
@@ -185,8 +186,14 @@ impl<M: 'static> Layout<M> {
             }
             .sized(entry.sizing)
             .span(entry.span);
-            if let Some(align) = entry.align {
-                item = item.align(align);
+            if let Some(align) = entry.align_x {
+                item = item.align_x(align);
+            }
+            if let Some(align) = entry.align_y {
+                item = item.align_y(align);
+            }
+            if entry.size != [None, None] {
+                item = item.size(entry.size[0], entry.size[1]);
             }
             if let Some(width) = entry.max_width {
                 item = item.max_width(width);

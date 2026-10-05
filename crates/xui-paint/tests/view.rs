@@ -7,12 +7,11 @@ use std::rc::Rc;
 use xui_canvas::snapshot::{Snapshot, Stage, render_with};
 use xui_core::Dip;
 use xui_core::backend::Event;
-use xui_core::geometry::Rect;
 use xui_core::image::Image;
 use xui_core::message::{Modifiers, MouseButton};
 use xui_paint::model::Tool;
 use xui_paint::storage::MemoryStorage;
-use xui_paint::view::{Observer, PaintApp, layout};
+use xui_paint::view::{Layout, Observer, PaintApp};
 
 const RED: [u8; 4] = [255, 0, 0, 255];
 const BLUE: [u8; 4] = [0, 0, 255, 255];
@@ -33,9 +32,16 @@ fn strip(index: i32) -> (i32, i32) {
     (index * CELL + CELL / 2, CELL / 2 + 1)
 }
 
+/// Where the app's layout placed its parts.
+fn areas(stage: &Stage<'_, xui_paint::Msg>, observer: &Rc<RefCell<Observer>>) -> Layout {
+    let parts = observer.borrow().parts.expect("the app is built");
+    let areas = parts.layout(stage.ui());
+    assert_eq!(stage.dpi(), DPI);
+    areas
+}
+
 /// The cell centre for palette colour `index`.
-fn swatch(index: i32) -> (i32, i32) {
-    let areas = layout(Rect::new(0, 0, WIDTH, HEIGHT), DPI, true);
+fn swatch(areas: &Layout, index: i32) -> (i32, i32) {
     (
         PALETTE_CELL + index * PALETTE_CELL + PALETTE_CELL / 2,
         areas.palette.top + PALETTE_CELL / 2,
@@ -108,7 +114,7 @@ fn is(bitmap: &Image, x: u32, y: u32, color: [u8; 4]) -> bool {
 #[test]
 fn a_canvas_drag_paints_pixels_and_reports_state() {
     let image = session(|stage, observer| {
-        let areas = layout(Rect::new(0, 0, WIDTH, HEIGHT), DPI, true);
+        let areas = areas(stage, observer);
         let y = areas.canvas.top + 50;
         assert_eq!(observer.borrow().status[0], "--", "no cursor at rest");
         drag(stage, (100, y), (200, y + 40), MouseButton::Left);
@@ -128,12 +134,12 @@ fn a_canvas_drag_paints_pixels_and_reports_state() {
 #[test]
 fn toolbar_and_palette_changes_take_effect() {
     let image = session(|stage, observer| {
-        let areas = layout(Rect::new(0, 0, WIDTH, HEIGHT), DPI, true);
+        let areas = areas(stage, observer);
         let tool = strip(3); // Line
         click(stage, tool.0, tool.1, MouseButton::Left);
         let size = strip(12); // 16 px
         click(stage, size.0, size.1, MouseButton::Left);
-        let red = swatch(3);
+        let red = swatch(&areas, 3);
         click(stage, red.0, red.1, MouseButton::Left);
 
         {
@@ -169,7 +175,7 @@ fn toolbar_and_palette_changes_take_effect() {
 #[test]
 fn undo_and_redo_buttons_work() {
     let image = session(|stage, observer| {
-        let areas = layout(Rect::new(0, 0, WIDTH, HEIGHT), DPI, true);
+        let areas = areas(stage, observer);
         let y = areas.canvas.top + 40;
         drag(stage, (100, y), (200, y), MouseButton::Left);
         assert!(observer.borrow().can_undo);
@@ -190,11 +196,11 @@ fn undo_and_redo_buttons_work() {
 #[test]
 fn the_right_button_paints_the_secondary_colour() {
     let image = session(|stage, observer| {
-        let blue = swatch(10);
+        let blue = swatch(&areas(stage, observer), 10);
         click(stage, blue.0, blue.1, MouseButton::Right);
         assert_eq!(observer.borrow().secondary, BLUE);
 
-        let areas = layout(Rect::new(0, 0, WIDTH, HEIGHT), DPI, true);
+        let areas = areas(stage, observer);
         let y = areas.canvas.top + 40;
         drag(stage, (100, y), (200, y), MouseButton::Right);
         assert_eq!(observer.borrow().primary, BLACK, "the primary is unchanged");
@@ -207,7 +213,7 @@ fn fill_then_clear_then_new() {
     let image = session(|stage, observer| {
         let fill = strip(6);
         click(stage, fill.0, fill.1, MouseButton::Left);
-        let areas = layout(Rect::new(0, 0, WIDTH, HEIGHT), DPI, true);
+        let areas = areas(stage, observer);
         // Inside the 320x240 bitmap, not merely inside the 800-wide viewport.
         click(stage, 200, areas.canvas.top + 100, MouseButton::Left);
         assert!(observer.borrow().can_undo);
@@ -227,7 +233,7 @@ fn fill_then_clear_then_new() {
 #[test]
 fn a_mouse_up_outside_the_widget_ends_the_drag() {
     let image = session(|stage, observer| {
-        let areas = layout(Rect::new(0, 0, WIDTH, HEIGHT), DPI, true);
+        let areas = areas(stage, observer);
         let y = areas.canvas.top + 40;
         inject(stage, down(100, y, MouseButton::Left));
         inject(
@@ -250,7 +256,7 @@ fn a_mouse_up_outside_the_widget_ends_the_drag() {
 #[test]
 fn a_second_button_mid_drag_does_not_stick() {
     session(|stage, observer| {
-        let areas = layout(Rect::new(0, 0, WIDTH, HEIGHT), DPI, true);
+        let areas = areas(stage, observer);
         let y = areas.canvas.top + 40;
         inject(stage, down(100, y, MouseButton::Left));
         inject(
@@ -272,7 +278,7 @@ fn a_second_button_mid_drag_does_not_stick() {
 #[test]
 fn a_mouse_leave_mid_drag_does_not_cancel_it() {
     session(|stage, observer| {
-        let areas = layout(Rect::new(0, 0, WIDTH, HEIGHT), DPI, true);
+        let areas = areas(stage, observer);
         let y = areas.canvas.top + 40;
         inject(stage, down(100, y, MouseButton::Left));
         inject(
@@ -297,7 +303,7 @@ fn a_mouse_leave_mid_drag_does_not_cancel_it() {
 #[test]
 fn losing_focus_cancels_an_in_progress_drag() {
     session(|stage, observer| {
-        let areas = layout(Rect::new(0, 0, WIDTH, HEIGHT), DPI, true);
+        let areas = areas(stage, observer);
         let y = areas.canvas.top + 40;
         drag(stage, (100, y), (150, y), MouseButton::Left);
         // A fresh drag, then focus is lost.
@@ -319,7 +325,7 @@ fn losing_focus_cancels_an_in_progress_drag() {
 #[test]
 fn hovering_the_canvas_updates_the_status_bar() {
     session(|stage, observer| {
-        let areas = layout(Rect::new(0, 0, WIDTH, HEIGHT), DPI, true);
+        let areas = areas(stage, observer);
         inject(
             stage,
             Event::MouseMove {

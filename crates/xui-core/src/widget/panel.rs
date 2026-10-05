@@ -2,12 +2,17 @@
 
 //! [`Panel`]: a container that owns a group of child widgets.
 
+use std::cell::RefCell;
 use std::rc::Rc;
 
+use super::Placeable;
 use super::control::Control;
 use crate::app::Ui;
+use crate::arrange::{Layout, Mounted};
 use crate::backend::{NodeKind, NodeSpec, Result, WidgetId};
 use crate::geometry::Rect;
+use crate::geometry::Size;
+use crate::layout::Constraints;
 use crate::property::{Properties, Property, Value};
 use crate::theme::look;
 
@@ -17,20 +22,23 @@ use crate::theme::look;
 /// clipped to its bounds and destroyed with it. The app positions them (or a
 /// layout does) in the panel's own coordinates.
 pub struct Panel<M: 'static> {
+    /// A layout set with [`Panel::set_layout`]; declared first so its widgets
+    /// go before the panel's node.
+    layout: RefCell<Option<Mounted<M>>>,
     control: Control<M>,
     scoped: Ui<M>,
 }
 
 impl<M: 'static> Panel<M> {
     /// Creates a panel at `bounds`, drawn as a card: a section of its own.
-    pub fn new(ui: &Ui<M>, bounds: Rect) -> Result<Panel<M>> {
+    pub(crate) fn new(ui: &Ui<M>, bounds: Rect) -> Result<Panel<M>> {
         Panel::build(ui, bounds, true)
     }
 
     /// Creates a panel at `bounds` that draws nothing of its own: a
     /// container (a page, a group to show or hide) whose widgets sit on the
     /// window behind it.
-    pub fn plain(ui: &Ui<M>, bounds: Rect) -> Result<Panel<M>> {
+    pub(crate) fn plain(ui: &Ui<M>, bounds: Rect) -> Result<Panel<M>> {
         Panel::build(ui, bounds, false)
     }
 
@@ -53,7 +61,11 @@ impl<M: 'static> Panel<M> {
             }
         }));
 
-        Ok(Panel { control, scoped })
+        Ok(Panel {
+            layout: RefCell::new(None),
+            control,
+            scoped,
+        })
     }
 
     /// The handle widgets built inside this panel parent to.
@@ -73,11 +85,6 @@ impl<M: 'static> Panel<M> {
         self.control.id()
     }
 
-    /// Moves/resizes the panel (children keep their own coordinates).
-    pub fn set_bounds(&self, bounds: Rect) {
-        self.control.set_bounds(bounds);
-    }
-
     /// Shows or hides the panel and its children.
     pub fn set_visible(&self, visible: bool) {
         self.control.set_visible(visible);
@@ -92,6 +99,34 @@ impl<M: 'static> Panel<M> {
     /// editor's selection).
     pub fn set_selected(&self, selected: bool) {
         self.control.set_selected(selected);
+    }
+
+    /// Replaces the panel's content with `layout`, created inside the panel
+    /// and kept placed in it as it resizes.
+    pub fn set_layout(&self, layout: Layout<M>) -> Result<()> {
+        let mounted = self.control.ui().mount_in(self.id(), layout)?;
+        self.layout.replace(Some(mounted));
+        Ok(())
+    }
+}
+
+impl<M: 'static> Placeable<M> for Panel<M> {
+    fn id(&self) -> WidgetId {
+        Panel::id(self)
+    }
+
+    /// Its layout's natural size, or nothing for a panel without one.
+    fn measure(&self, _ui: &Ui<M>, constraints: Constraints) -> Size {
+        self.layout
+            .borrow()
+            .as_ref()
+            .map_or(Size::new(0, 0), |layout| layout.measure(constraints))
+    }
+
+    fn placed(&self, _ui: &Ui<M>, _rect: Rect) {
+        if let Some(layout) = self.layout.borrow().as_ref() {
+            layout.relayout();
+        }
     }
 }
 

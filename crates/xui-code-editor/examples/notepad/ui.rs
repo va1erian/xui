@@ -10,13 +10,12 @@ use xui_code_editor::{Editor, FontConfig, Options};
 use xui_core::Dip;
 use xui_core::app::Ui;
 use xui_core::arrange::{
-    Handle, Layout, LayoutExt, build as build_with, button, checkbox, column, edit, label, row,
-    status_bar,
+    Build, Handle, Layout, LayoutExt, build as build_with, button, checkbox, column, edit, label,
+    menu_bar, row, status_bar,
 };
-use xui_core::backend::{Result, WidgetId};
-use xui_core::geometry::{Rect, Size};
-use xui_core::layout::Constraints;
-use xui_core::widget::{Dialog, FileDialog, Menu, MenuId, Placeable};
+use xui_core::backend::Result;
+use xui_core::geometry::Rect;
+use xui_core::widget::{Dialog, FileDialog, Menu, MenuId};
 
 use crate::app::{FindBar, Msg, Notepad};
 
@@ -61,34 +60,6 @@ fn menu_msg(id: MenuId) -> Option<Msg> {
     })
 }
 
-/// A menu bar as a layout entry: it has a fixed design height and fills the
-/// window's width.
-struct MenuPane<M: 'static>(Menu<M>);
-
-impl<M: 'static> Placeable<M> for MenuPane<M> {
-    fn id(&self) -> WidgetId {
-        self.0.id().expect("a menu bar owns a node")
-    }
-
-    fn measure(&self, _ui: &Ui<M>, constraints: Constraints) -> Size {
-        let dpi = constraints.dpi;
-        Size::new(0, MENU_HEIGHT.to_px(dpi).value())
-    }
-}
-
-/// The editor as a layout entry: it takes all the leftover space.
-struct EditorPane<M: 'static>(Rc<Editor<M>>);
-
-impl<M: 'static> Placeable<M> for EditorPane<M> {
-    fn id(&self) -> WidgetId {
-        self.0.id()
-    }
-
-    fn measure(&self, _ui: &Ui<M>, _constraints: Constraints) -> Size {
-        Size::new(0, 0)
-    }
-}
-
 /// Builds the app's widgets and mounts the layout.
 pub fn build(ui: &Ui<Msg>) -> Result<Notepad> {
     let editor_pane = Handle::new();
@@ -125,14 +96,14 @@ pub fn build(ui: &Ui<Msg>) -> Result<Notepad> {
     }
 
     ui.root(column().children((
-        build_with(menu_bar).height(MENU_HEIGHT),
+        menus().height(MENU_HEIGHT),
         find_row(&find_bar).fixed(FIND_HEIGHT),
         build_with(editor).bind(&editor_pane).fill(1),
         status_bar(&["Ln 1, Col 1", "Sel 0", "LF", "Saved"]).bind(&status),
     )))?;
     find_bar.set_visible(ui, false);
 
-    let editor = Rc::clone(&editor_pane.get().0);
+    let editor = editor_pane.get();
     editor.focus();
 
     Ok(Notepad {
@@ -153,7 +124,7 @@ pub fn build(ui: &Ui<Msg>) -> Result<Notepad> {
 
 /// Creates the editor: a monospace grid, since the default UI font is
 /// proportional and would space the glyphs apart.
-fn editor(ui: &Ui<Msg>) -> Result<EditorPane<Msg>> {
+fn editor(ui: &Ui<Msg>) -> Result<Editor<Msg>> {
     let options = Options {
         font: FontConfig {
             family: Some("monospace".to_owned()),
@@ -161,39 +132,37 @@ fn editor(ui: &Ui<Msg>) -> Result<EditorPane<Msg>> {
         },
         ..Options::default()
     };
-    let editor =
-        Editor::with_options(ui, Rect::default(), options)?.on_change(|_text| Some(Msg::Edited));
-    Ok(EditorPane(Rc::new(editor)))
+    Ok(Editor::with_options(ui, Rect::default(), options)?.on_change(|_text| Some(Msg::Edited)))
 }
 
-/// Creates the File and Edit menu bar.
-fn menu_bar(ui: &Ui<Msg>) -> Result<MenuPane<Msg>> {
-    let menu = Menu::bar(ui, Rect::default())?
-        .on_select(menu_msg)
-        .build(|bar| {
-            bar.submenu(MenuId::new(100), "&File", |file| {
-                file.item(NEW, "&New");
-                file.item(OPEN, "&Open...");
-                file.separator();
-                file.item(SAVE, "&Save");
-                file.item(SAVE_AS, "Save &As...");
-                file.separator();
-                file.item(QUIT, "&Quit");
-            });
-            bar.submenu(MenuId::new(200), "&Edit", |edit| {
-                edit.item(UNDO, "&Undo");
-                edit.item(REDO, "&Redo");
-                edit.separator();
-                edit.item(CUT, "Cu&t");
-                edit.item(COPY, "&Copy");
-                edit.item(PASTE, "&Paste");
-                edit.item(SELECT_ALL, "Select &All");
-                edit.separator();
-                edit.item(FIND, "&Find...");
-                edit.item(REPLACE, "&Replace...");
-            });
+/// The File and Edit menu bar.
+fn menus() -> Build<Menu<Msg>, Msg> {
+    menu_bar(|bar| {
+        bar.submenu(MenuId::new(100), "&File", |file| {
+            file.item(NEW, "&New");
+            file.item(OPEN, "&Open...");
+            file.separator();
+            file.item(SAVE, "&Save");
+            file.item(SAVE_AS, "Save &As...");
+            file.separator();
+            file.item(QUIT, "&Quit");
         });
-    Ok(MenuPane(menu))
+        bar.submenu(MenuId::new(200), "&Edit", |edit| {
+            edit.item(UNDO, "&Undo");
+            edit.item(REDO, "&Redo");
+            edit.separator();
+            edit.item(CUT, "Cu&t");
+            edit.item(COPY, "&Copy");
+            edit.item(PASTE, "&Paste");
+            edit.item(SELECT_ALL, "Select &All");
+            edit.separator();
+            edit.item(FIND, "&Find...");
+            edit.item(REPLACE, "&Replace...");
+        });
+    })
+    // Not every id is a command (the submenus have ids too), so the mapping is
+    // partial and goes through the widget's own `on_select`.
+    .then(|menu| menu.on_select(menu_msg))
 }
 
 /// The find/replace bar's widgets, wired to their messages and bound to
@@ -227,14 +196,14 @@ fn find_row(bar: &FindBar) -> Layout<Msg> {
 /// A file dialog's cancel handler: it closes the dialog state and gives the
 /// editor its focus back.
 fn refocus(
-    editor: &Handle<EditorPane<Msg>>,
+    editor: &Handle<Editor<Msg>>,
     dialog_open: &Rc<Cell<bool>>,
 ) -> impl Fn() -> Option<Msg> + 'static {
     let editor = editor.clone();
     let dialog_open = Rc::clone(dialog_open);
     move || {
         dialog_open.set(false);
-        editor.get().0.focus();
+        editor.get().focus();
         None
     }
 }

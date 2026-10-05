@@ -49,14 +49,8 @@ mod behavior;
 use behavior::{field_event, paint_field, paint_popup, popup_event, popup_rect};
 
 impl<M: 'static> ComboBox<M> {
-    /// Creates a combo box with no bounds of its own, for a layout to place (see
-    /// [`crate::arrange`]); its size comes from [`Placeable`](super::Placeable).
-    pub fn auto(ui: &Ui<M>, items: &[&str]) -> Result<ComboBox<M>> {
-        ComboBox::new(ui, Rect::default(), items)
-    }
-
     /// Creates a combo box over `items` at `bounds`, the first item selected.
-    pub fn new(ui: &Ui<M>, bounds: Rect, items: &[&str]) -> Result<ComboBox<M>> {
+    pub(crate) fn new(ui: &Ui<M>, bounds: Rect, items: &[&str]) -> Result<ComboBox<M>> {
         let shared = Rc::new(Shared {
             items: items.iter().map(|i| i.to_string()).collect(),
             icons: RefCell::new(vec![None; items.len()]),

@@ -26,6 +26,7 @@ mod events;
 mod layout;
 mod model;
 mod paint;
+mod place;
 mod state;
 
 #[cfg(test)]
@@ -62,7 +63,7 @@ pub struct GridView<M: 'static> {
 impl<M: 'static> GridView<M> {
     /// Creates a virtual grid backed by `model` at `bounds`, with the first
     /// tile selected (or no selection when empty).
-    pub fn with_model(
+    pub(crate) fn with_model(
         ui: &Ui<M>,
         bounds: Rect,
         model: impl GridModel + 'static,
@@ -71,7 +72,7 @@ impl<M: 'static> GridView<M> {
     }
 
     /// Creates a grid of plain labels backed by `items`, with the first selected.
-    pub fn new(ui: &Ui<M>, bounds: Rect, items: &[&str]) -> Result<GridView<M>> {
+    pub(crate) fn new(ui: &Ui<M>, bounds: Rect, items: &[&str]) -> Result<GridView<M>> {
         let model: Vec<String> = items.iter().map(|item| item.to_string()).collect();
         Self::build(ui, bounds, Rc::new(model))
     }

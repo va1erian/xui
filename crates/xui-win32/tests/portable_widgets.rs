@@ -15,15 +15,17 @@ use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use xui_core::app::{App, Ui, run_app};
-use xui_core::backend::{Backend, PlatformSpec};
-use xui_core::widget::{
-    Button, CheckBox, ComboBox, Edit, GroupBox, HasText, Hyperlink, Label, ListView, Panel,
-    ProgressBar, RadioGroup, Separator, Slider, StatusBar, ToggleButton, Toolbar, TreeRow,
-    TreeView,
+use xui_core::arrange::{
+    Handle, LayoutExt, button, checkbox, column, combo_box, edit, group, hyperlink, label, list,
+    panel, progress, radio_group, row, separator, slider, status_bar, text_toolbar, toggle_button,
+    tree_view,
 };
-use xui_core::{Color, Dip, Rect, Theme, TimerId, WidgetId};
+use xui_core::backend::{Backend, PlatformSpec};
+use xui_core::widget::{Button, ComboBox, Edit, HasText, Label, ListView, Slider, TreeRow};
+use xui_core::{Color, Dip, Theme, TimerId, WidgetId};
 use xui_win32::Win32Backend;
 
+#[derive(Clone)]
 enum Msg {
     Clicked,
     Capture,
@@ -39,25 +41,8 @@ struct WidgetsApp {
     capture_at: Rc<Cell<Option<TimerId>>>,
     timed_out: Rc<Cell<bool>>,
     expected: Color,
-    // Kept alive: each owns its node and destroys it on drop.
-    _label: Label<Msg>,
-    edit: Edit<Msg>,
-    button: Button<Msg>,
-    _check: CheckBox<Msg>,
-    _bar: ProgressBar<Msg>,
-    _slider: Slider<Msg>,
-    _radios: RadioGroup<Msg>,
-    _group: GroupBox<Msg>,
-    _combo: ComboBox<Msg>,
-    _list: ListView<Msg>,
-    _link: Hyperlink<Msg>,
-    _sep: Separator<Msg>,
-    _toolbar: Toolbar<Msg>,
-    _status: StatusBar<Msg>,
-    _toggle: ToggleButton<Msg>,
-    _tree: TreeView<Msg>,
-    _panel: Panel<Msg>,
-    _inside: Label<Msg>,
+    edit: Handle<Edit<Msg>>,
+    button: Handle<Button<Msg>>,
 }
 
 impl App for WidgetsApp {
@@ -78,12 +63,12 @@ impl App for WidgetsApp {
             Msg::Capture => {
                 // Programmatic set_text must reach the native control and read
                 // back consistently.
-                self.edit.set_text("set by code");
-                let shown = self.edit.text();
-                let native = self.backend.text(self.edit.id());
+                self.edit.get().set_text("set by code");
+                let shown = self.edit.get().text();
+                let native = self.backend.text(self.edit.get().id());
                 self.text.replace(Some(format!("{shown}|{native}")));
                 let expected = [self.expected.r, self.expected.g, self.expected.b];
-                if let Some(node) = self.backend.node_hwnd(self.button.id())
+                if let Some(node) = self.backend.node_hwnd(self.button.get().id())
                     && let Some(rect) = common::screen_rect(node)
                     && let Some(image) = common::capture_screen(rect)
                     // Only sample when the button actually painted; a
@@ -158,67 +143,97 @@ fn run(theme: Theme, file: &str) {
             PlatformSpec::new("xui portable widgets").size(Dip(720.0), Dip(600.0)),
             move |ui| {
                 ui.set_theme(theme);
-                let label = Label::new(ui, Rect::new(20, 16, 320, 48), "Portable Label").unwrap();
-                // A form editor's selection outline.
-                label.set_selected(true);
-                let edit = Edit::new(ui, Rect::new(20, 60, 320, 92), "")
-                    .unwrap()
-                    .on_change(|_| None);
+                let (edit_handle, button_handle) = (Handle::new(), Handle::new());
+                ui.root(
+                    column()
+                        .padding(20)
+                        .gap(8)
+                        .child(
+                            row()
+                                .gap(20)
+                                .child(
+                                    column()
+                                        .gap(8)
+                                        // A form editor's selection outline.
+                                        .child(label("Portable Label").then(|label: Label<Msg>| {
+                                            label.set_selected(true);
+                                            label
+                                        }))
+                                        .child(
+                                            edit()
+                                                .then(|edit: Edit<Msg>| edit.on_change(|_| None))
+                                                .bind(&edit_handle),
+                                        )
+                                        .child(
+                                            button("Click me")
+                                                .on_click(Msg::Clicked)
+                                                .bind(&button_handle)
+                                                .size(140, 36),
+                                        )
+                                        .child(checkbox("Enabled").checked(true))
+                                        .child(progress(100).value(60))
+                                        .child(slider(0.0, 100.0).then(|slider: Slider<Msg>| {
+                                            slider.set_value(40.0);
+                                            slider
+                                        }))
+                                        .child(radio_group(&["Low", "Medium", "High"]).selected(1))
+                                        .child(hyperlink("See docs"))
+                                        .child(
+                                            panel(column().padding(12).child(label("In a panel")))
+                                                .height(80),
+                                        )
+                                        .width(300),
+                                )
+                                .child(
+                                    column()
+                                        .gap(8)
+                                        .child(group("Group", column()).height(140))
+                                        .child(
+                                            combo_box(&["Alpha", "Beta", "Gamma"])
+                                                .then(|combo: ComboBox<Msg>| {
+                                                    combo.select(1);
+                                                    combo
+                                                })
+                                                .width(180),
+                                        )
+                                        .child(
+                                            list()
+                                                .then(|list: ListView<Msg>| {
+                                                    list.set_model(
+                                                        ["Inbox", "Sent", "Drafts", "Archive"]
+                                                            .map(String::from)
+                                                            .to_vec(),
+                                                    );
+                                                    list.select(Some(1));
+                                                    list
+                                                })
+                                                .height(104),
+                                        )
+                                        .child(toggle_button("Bold").checked(true).width(120))
+                                        .child(
+                                            tree_view()
+                                                .rows(vec![
+                                                    TreeRow::new("Inbox", 0)
+                                                        .expandable(true)
+                                                        .expanded(true),
+                                                    TreeRow::new("Work", 1),
+                                                    TreeRow::new("Home", 1),
+                                                    TreeRow::new("Archive", 0).expandable(true),
+                                                ])
+                                                .height(80),
+                                        )
+                                        .width(360),
+                                ),
+                        )
+                        .child(separator())
+                        .child(text_toolbar(&["New", "Open", "Save"]))
+                        .child(status_bar(&["Ready", "3 items"])),
+                )
+                .unwrap();
+                let edit = edit_handle.get();
                 let edit_id = edit.id();
                 edit.focus();
-                let button = Button::new(ui, Rect::new(20, 108, 160, 144), "Click me")
-                    .unwrap()
-                    .on_click(|| Some(Msg::Clicked));
-                let button_id: WidgetId = button.id();
-                let check = CheckBox::new(ui, Rect::new(20, 156, 320, 184), "Enabled").unwrap();
-                check.set_checked(true);
-                let bar = ProgressBar::new(ui, Rect::new(20, 196, 320, 204), 100).unwrap();
-                bar.set_value(60);
-                let slider = Slider::new(ui, Rect::new(20, 216, 320, 244), 0.0, 100.0).unwrap();
-                slider.set_value(40.0);
-                let radios =
-                    RadioGroup::new(ui, Rect::new(20, 252, 320, 336), &["Low", "Medium", "High"])
-                        .unwrap();
-                radios.select(1);
-                let group = GroupBox::new(ui, Rect::new(340, 16, 620, 180), "Group").unwrap();
-                let combo = ComboBox::new(
-                    ui,
-                    Rect::new(340, 200, 520, 228),
-                    &["Alpha", "Beta", "Gamma"],
-                )
-                .unwrap();
-                combo.select(1);
-                let list = ListView::new(
-                    ui,
-                    Rect::new(340, 240, 620, 344),
-                    &["Inbox", "Sent", "Drafts", "Archive"],
-                )
-                .unwrap();
-                list.select(Some(1));
-                let link = Hyperlink::new(ui, Rect::new(20, 352, 320, 380), "See docs").unwrap();
-                let sep = Separator::new(ui, Rect::new(20, 392, 620, 394)).unwrap();
-                let toggle = ToggleButton::new(ui, Rect::new(340, 356, 460, 384), "Bold").unwrap();
-                toggle.set_checked(true);
-                let toolbar =
-                    Toolbar::new(ui, Rect::new(20, 410, 620, 442), &["New", "Open", "Save"])
-                        .unwrap();
-                let status =
-                    StatusBar::new(ui, Rect::new(20, 452, 620, 476), &["Ready", "3 items"])
-                        .unwrap();
-                let tree = TreeView::new(
-                    ui,
-                    Rect::new(340, 392, 700, 472),
-                    &[
-                        TreeRow::new("Inbox", 0).expandable(true).expanded(true),
-                        TreeRow::new("Work", 1),
-                        TreeRow::new("Home", 1),
-                        TreeRow::new("Archive", 0).expandable(true),
-                    ],
-                )
-                .unwrap();
-                let panel = Panel::new(ui, Rect::new(20, 486, 340, 566)).unwrap();
-                let inside =
-                    Label::new(panel.ui(), Rect::new(12, 12, 300, 40), "In a panel").unwrap();
+                let button_id: WidgetId = button_handle.get().id();
                 let window = backend.window_hwnd(ui.window()).expect("window handle");
 
                 // A worker types into the field and then clicks the button with
@@ -265,24 +280,8 @@ fn run(theme: Theme, file: &str) {
                     text,
                     capture_at,
                     timed_out: Rc::clone(&timed_out),
-                    _label: label,
-                    edit,
-                    button,
-                    _check: check,
-                    _bar: bar,
-                    _slider: slider,
-                    _radios: radios,
-                    _group: group,
-                    _combo: combo,
-                    _list: list,
-                    _link: link,
-                    _sep: sep,
-                    _toolbar: toolbar,
-                    _status: status,
-                    _toggle: toggle,
-                    _tree: tree,
-                    _panel: panel,
-                    _inside: inside,
+                    edit: edit_handle,
+                    button: button_handle,
                     expected,
                 }
             },

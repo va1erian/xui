@@ -48,14 +48,8 @@ pub struct ToggleButton<M: 'static> {
 }
 
 impl<M: 'static> ToggleButton<M> {
-    /// Creates a toggle button with no bounds of its own, for a layout to place (see
-    /// [`crate::arrange`]); its size comes from [`Placeable`](super::Placeable).
-    pub fn auto(ui: &Ui<M>, text: &str) -> Result<ToggleButton<M>> {
-        ToggleButton::new(ui, Rect::default(), text)
-    }
-
     /// Creates a toggle button labelled `text`, unchecked, at `bounds`.
-    pub fn new(ui: &Ui<M>, bounds: Rect, text: &str) -> Result<ToggleButton<M>> {
+    pub(crate) fn new(ui: &Ui<M>, bounds: Rect, text: &str) -> Result<ToggleButton<M>> {
         let spec = NodeSpec::new(NodeKind::Button, bounds)
             .text(text)
             .tab_stop();
@@ -196,6 +190,11 @@ impl<M: 'static> ToggleButton<M> {
         self.icon.set(icon.map(Into::into));
         self.control.invalidate();
         self.control.invalidate_layout();
+    }
+
+    /// Whether the button draws an icon, for its natural size.
+    pub(super) fn has_icon(&self) -> bool {
+        self.icon.get().is_some()
     }
 
     /// Shows `text` in a tooltip while the pointer rests on the button,

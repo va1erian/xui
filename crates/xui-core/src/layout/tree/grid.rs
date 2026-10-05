@@ -189,28 +189,29 @@ pub(super) fn place<K: Copy>(
         let (left, right) = span_rect(cell);
         let row = ys[cell.row];
         let area = Rect::new(left, row.top, right, row.bottom);
-        let align = cell.item.align.unwrap_or(group.align);
-        let area = align_in_cell(cell.item, area, align, dpi, leaf);
-        let area = clamp_to_caps(cell.item, area, align, dpi);
+        let aligns = cell.item.aligns(group.align);
+        let area = align_in_cell(cell.item, area, aligns, dpi, leaf);
+        let area = clamp_to_caps(cell.item, area, aligns, dpi);
         cell.item.place(area, dpi, leaf, out);
     }
 }
 
-/// Narrows `area` on both axes to the item's natural size, placed by `align`;
-/// a stretched item keeps the whole cell.
+/// Narrows `area` on each axis to the item's natural size, placed by its
+/// alignment on that axis; a stretched axis keeps the whole cell.
 fn align_in_cell<K: Copy>(
     item: &Item<K>,
     area: Rect,
-    align: Align,
+    aligns: (Align, Align),
     dpi: u32,
     leaf: LeafFn<'_, K>,
 ) -> Rect {
-    if align == Align::Stretch {
+    if aligns == (Align::Stretch, Align::Stretch) {
         return area;
     }
     let constraints = Constraints::unbounded(dpi).with_width(area.width());
-    let natural = item.natural(StackDirection::Vertical, constraints, leaf);
-    align_both(area, natural, align)
+    // A fill item's own size: its fill sizes the row, not the item.
+    let natural = item.own_size(StackDirection::Vertical, constraints, leaf);
+    align_both(area, natural, aligns)
 }
 
 /// The grid's natural size within `constraints`: the margins plus the

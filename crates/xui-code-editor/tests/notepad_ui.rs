@@ -8,15 +8,16 @@ use std::path::PathBuf;
 use std::rc::Rc;
 
 use xui_canvas::OffscreenBackend;
-use xui_canvas::snapshot::{Snapshot, render};
+use xui_canvas::snapshot::{Snapshot, try_render};
 use xui_code_editor::find::Query;
 use xui_code_editor::search::{self, SearchState};
 use xui_code_editor::{Editor, FontConfig, Options};
 use xui_core::app::{App, Ui, run_app};
+use xui_core::arrange::{Handle, LayoutExt, build, button, checkbox, column, edit, label, row};
 use xui_core::backend::PlatformSpec;
 use xui_core::geometry::Rect;
+use xui_core::layout::Insets;
 use xui_core::units::Dip;
-use xui_core::widget::{Button, CheckBox, Edit, Label};
 use xui_core::{Theme, dip};
 
 /// A plain app for the offscreen editor tests.
@@ -128,27 +129,9 @@ fn find_next_wraps_around_the_buffer() {
     });
 }
 
-/// The rendered app: the editor with a find/replace bar above it.
-struct NotepadApp {
-    _editor: Editor<()>,
-    _query: Edit<()>,
-    _replacement: Edit<()>,
-    _status: Label<()>,
-    _next: Button<()>,
-    _replace: Button<()>,
-    _case: CheckBox<()>,
-}
-
-impl App for NotepadApp {
-    type Msg = ();
-    fn update(&mut self, _msg: (), _ui: &mut Ui<()>) {}
-}
-
-/// Renders the editor plus find bar in one theme.
+/// Renders the editor with a find/replace bar above it, in one theme.
 fn render_notepad(theme: Theme) -> xui_core::Image {
-    render(Snapshot::new(Dip(720.0), Dip(320.0)).theme(theme), |ui| {
-        let dpi = ui.dpi();
-        let p = |value: f32| dip(value).to_px(dpi).value();
+    try_render(Snapshot::new(Dip(720.0), Dip(320.0)).theme(theme), |ui| {
         let options = Options {
             font: FontConfig {
                 family: Some("monospace".to_owned()),
@@ -156,33 +139,32 @@ fn render_notepad(theme: Theme) -> xui_core::Image {
             },
             ..Options::default()
         };
-        let editor =
-            Editor::with_options(ui, Rect::new(p(0.0), p(44.0), p(720.0), p(320.0)), options)
-                .expect("editor");
-        editor.set_text("fn main() {\n    let answer = 42;\n}\n");
-        NotepadApp {
-            _editor: editor,
-            _query: Edit::new(ui, Rect::new(p(8.0), p(8.0), p(200.0), p(40.0)), "answer")
-                .expect("query"),
-            _replacement: Edit::new(ui, Rect::new(p(206.0), p(8.0), p(380.0), p(40.0)), "x")
-                .expect("replacement"),
-            _status: Label::new(ui, Rect::new(p(386.0), p(8.0), p(460.0), p(40.0)), "1 of 1")
-                .expect("status"),
-            _next: Button::new(ui, Rect::new(p(466.0), p(8.0), p(530.0), p(40.0)), "Next")
-                .expect("next"),
-            _replace: Button::new(
-                ui,
-                Rect::new(p(536.0), p(8.0), p(620.0), p(40.0)),
-                "Replace all",
-            )
-            .expect("replace"),
-            _case: CheckBox::new(
-                ui,
-                Rect::new(p(626.0), p(8.0), p(716.0), p(40.0)),
-                "Match case",
-            )
-            .expect("case"),
-        }
+        let editor = Handle::new();
+        ui.root(
+            column().children((
+                row()
+                    .gap(6)
+                    .padding(Insets::new(dip(8.0), dip(8.0), dip(4.0), dip(4.0)))
+                    .children((
+                        edit().text("answer").size(192, 32),
+                        edit().text("x").size(174, 32),
+                        label("1 of 1").size(74, 32),
+                        button("Next").size(64, 32),
+                        button("Replace all").size(84, 32),
+                        checkbox("Match case").size(90, 32),
+                    )),
+                build(move |ui| Editor::with_options(ui, Rect::default(), options))
+                    .bind(&editor)
+                    .fill(1),
+            )),
+        )?;
+        editor.get().set_text(
+            "fn main() {
+    let answer = 42;
+}
+",
+        );
+        Ok(Empty)
     })
     .expect("render")
 }

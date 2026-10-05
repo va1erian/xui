@@ -21,12 +21,12 @@ use std::time::{Duration, Instant};
 
 use xui_canvas::WinitBackend;
 use xui_canvas::snapshot::{Snapshot, Stage, render_with};
-use xui_core::Dip;
 use xui_core::app::{App, Ui, run_app};
+use xui_core::arrange::{LayoutExt, column, label, row};
 use xui_core::backend::{Backend, PlatformSpec, Result};
 use xui_core::geometry::Rect;
 use xui_core::image::Image;
-use xui_core::widget::Label;
+use xui_core::{Dip, Insets};
 use xui_litehtml::{HtmlView, HtmlViewEvent};
 use xui_netsurf::{NetSurfView, NetSurfViewEvent};
 
@@ -48,7 +48,6 @@ enum Msg {
 struct Compare {
     html: HtmlView<Msg>,
     netsurf: NetSurfView<Msg>,
-    _captions: [Label<Msg>; 2],
     state: Rc<Cell<Panes>>,
 }
 
@@ -96,13 +95,6 @@ fn build(ui: &Ui<Msg>, html: String, url: &str, state: Rc<Cell<Panes>>) -> Resul
     let left = Rect::new(client.left, client.top, mid - GAP / 2, client.bottom);
     let right = Rect::new(mid + GAP / 2, client.top, client.right, client.bottom);
     let below = |r: Rect| Rect::new(r.left, r.top + caption, r.right, r.bottom);
-    let label = |r: Rect, text| {
-        Label::new(
-            ui,
-            Rect::new(r.left + 6, r.top + 4, r.right, r.top + caption),
-            text,
-        )
-    };
     let html = HtmlView::new(
         ui,
         below(left),
@@ -116,10 +108,21 @@ fn build(ui: &Ui<Msg>, html: String, url: &str, state: Rc<Cell<Panes>>) -> Resul
         },
     )?;
     let netsurf = NetSurfView::new(ui, below(right), url, || Msg::NetSurfNews)?;
+    // The captions sit 6 units into their pane, so the gap between them is
+    // the panes' gap plus that indent.
+    ui.root(
+        column()
+            .padding(Insets::new(Dip(6.0), Dip(4.0), Dip(0.0), Dip(0.0)))
+            .child(
+                row()
+                    .gap(GAP + 6)
+                    .children((label("litehtml").fill(1), label("NetSurf").fill(1)))
+                    .height(CAPTION - 4),
+            ),
+    )?;
     Ok(Compare {
         html,
         netsurf,
-        _captions: [label(left, "litehtml")?, label(right, "NetSurf")?],
         state,
     })
 }

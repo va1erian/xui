@@ -62,52 +62,44 @@ snapshots and tests. Dark mode is first-class on every backend.
 
 ## Quick start
 
-An app depends on `xui-core` plus the backend it wants, builds an `App`, and
-hands a backend to `run_app`:
+An app depends on `xui` (the umbrella crate, which picks a backend), builds an
+`App`, and describes its window as a layout of widget builders:
 
 ```rust
-use std::rc::Rc;
+use xui::prelude::*;
 
-use xui_core::app::{App, Ui, run_app};
-use xui_core::backend::{Backend, PlatformSpec};
-use xui_core::widget::{Button, Label};
-use xui_core::{Dip, Rect};
-
+#[derive(Clone)]
 enum Msg {
     Bump,
 }
 
 struct Counter {
-    label: Label<Msg>,
+    label: Handle<Label<Msg>>,
     count: i32,
 }
 
 impl App for Counter {
     type Msg = Msg;
 
-    fn update(&mut self, msg: Msg, ui: &mut Ui<Msg>) {
+    fn update(&mut self, msg: Msg, _ui: &mut Ui<Msg>) {
         match msg {
             Msg::Bump => {
                 self.count += 1;
-                self.label.set_text(&format!("{} clicks", self.count));
+                self.label.get().set_text(&format!("{} clicks", self.count));
             }
         }
     }
 }
 
-fn main() -> xui_core::backend::Result<()> {
-    let backend: Rc<dyn Backend> = Rc::new(xui_canvas::WinitBackend::new());
-    run_app(
-        backend,
-        PlatformSpec::new("Counter").size(Dip(320.0), Dip(160.0)),
-        |ui| {
-            let label = Label::new(ui, Rect::new(16, 16, 304, 48), "0 clicks").unwrap();
-            let button = Button::new(ui, Rect::new(16, 64, 304, 104), "Click me")
-                .unwrap()
-                .on_click(|| Some(Msg::Bump));
-            Counter { label, count: 0 }
-        },
-    )
+fn main() -> Result<()> {
+    xui::app("Counter").size(320, 160).run(|ui| {
+        let clicks = Handle::new();
+        ui.root(column().padding(16).gap(8).children((
+            label("0 clicks").bind(&clicks),
+            button("Click me").on_click(Msg::Bump),
+        )))?;
+        Ok(Counter { label: clicks, count: 0 })
+    })
 }
 ```
 

@@ -136,15 +136,16 @@ returns the value the child passed to `Ui::close_with_result`.
 `Stack`/`StackSlot` (tile a row or column, largest-remainder rounding). Every
 value is resolved to device pixels once, from `Dip` through the window's DPI.
 
-Below the declarative layer, a widget is placed by a `Rect` in device pixels;
-apps describe layouts instead (the rect constructors are being retired).
+Below the declarative layer, a widget's node is placed by a `Rect` in device
+pixels; only layouts (and, inside `xui-core`, composite widgets) do that. The
+rect constructors are crate-private, so apps describe layouts.
 Container widgets own their children and arrange them:
 
-- `Panel` scopes child creation through `panel.ui()`; the caller (or a `Stack`)
-  positions them in the panel's own coordinates.
-- `Split` lays two `WidgetId` panes out with a draggable divider.
-- `Tabs` docks a strip and shows only the selected page's children.
-- `ScrollView` stacks registered rows, clips descendants and scrolls.
+- `Panel` holds a layout in its own coordinates (`panel(layout)`).
+- `Split` lays two pane layouts out with a draggable divider (`split(a, b)`).
+- `Tabs` docks a strip and shows only the selected page's layout.
+- `ScrollView` measures its layout at its width, clips descendants and
+  scrolls (`scroll(layout)`).
 - `Dialog`, `Menu`, `ComboBox` and `Tooltip` share the popup elevation helper.
 
 On top of that arithmetic, `xui_core::arrange` is how apps lay windows out:

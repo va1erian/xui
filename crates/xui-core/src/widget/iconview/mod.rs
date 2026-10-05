@@ -97,14 +97,14 @@ pub struct IconView<M: 'static> {
 impl<M: 'static> IconView<M> {
     /// Creates a view of plain names at `bounds`, with the first item selected
     /// (or no selection when empty). Each name is a one-line tile.
-    pub fn new(ui: &Ui<M>, bounds: Rect, items: &[&str]) -> Result<IconView<M>> {
+    pub(crate) fn new(ui: &Ui<M>, bounds: Rect, items: &[&str]) -> Result<IconView<M>> {
         let model: Vec<String> = items.iter().map(|item| item.to_string()).collect();
         Self::build(ui, bounds, Rc::new(model))
     }
 
     /// Creates a view backed by `model` at `bounds`. The model can be replaced
     /// later with [`set_model`](IconView::set_model).
-    pub fn with_model(
+    pub(crate) fn with_model(
         ui: &Ui<M>,
         bounds: Rect,
         model: impl IconModel + 'static,

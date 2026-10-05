@@ -64,7 +64,7 @@ impl ExplorerWindow {
         if self.flash.flash(name) {
             self.start_flash_timer();
         }
-        self.view.invalidate();
+        self.view.get().invalidate();
     }
 
     /// Drops expired flashes and any whose folder is no longer a directory in
@@ -87,7 +87,7 @@ impl ExplorerWindow {
         if self.flash.prune() == 0 {
             self.stop_flash_timer();
         }
-        self.view.invalidate();
+        self.view.get().invalidate();
     }
 
     /// Starts the repeating tick, unless one is already running. The `ticking`

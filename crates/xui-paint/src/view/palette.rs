@@ -11,9 +11,10 @@ use std::rc::Rc;
 
 use xui_core::app::Ui;
 use xui_core::backend::{Canvas, Event, NodeKind, NodeSpec, Result, WidgetId};
-use xui_core::geometry::{Point, Rect};
+use xui_core::geometry::{Point, Rect, Size};
+use xui_core::layout::Constraints;
 use xui_core::message::MouseButton;
-use xui_core::widget::Control;
+use xui_core::widget::{Control, Placeable};
 
 use super::{Msg, color_of};
 use crate::model::{Pixel, Side};
@@ -70,10 +71,13 @@ pub struct Palette {
 }
 
 impl Palette {
-    /// Creates a palette at `bounds`.
-    pub fn new(ui: &Ui<Msg>, bounds: Rect) -> Result<Palette> {
-        let control = Control::new(ui, &NodeSpec::new(NodeKind::Custom, bounds).tab_stop())?;
-        let bounds_cell = Rc::new(Cell::new(bounds));
+    /// Creates a palette, for a layout to place.
+    pub fn new(ui: &Ui<Msg>) -> Result<Palette> {
+        let control = Control::new(
+            ui,
+            &NodeSpec::new(NodeKind::Custom, Rect::default()).tab_stop(),
+        )?;
+        let bounds_cell = Rc::new(Cell::new(Rect::default()));
         let dpi = Rc::new(Cell::new(ui.dpi()));
         let primary = Rc::new(Cell::new(PALETTE[0]));
         let secondary = Rc::new(Cell::new(PALETTE[15]));
@@ -171,15 +175,33 @@ impl Palette {
         color_rect(self.bounds.get(), self.dpi.get(), index)
     }
 
-    /// Moves/resizes the palette.
-    pub fn set_bounds(&self, bounds: Rect) {
-        self.bounds.set(bounds);
-        self.control.set_bounds(bounds);
-    }
-
     /// Shows or hides the palette.
     pub fn set_visible(&self, visible: bool) {
         self.control.set_visible(visible);
+    }
+}
+
+/// The swap swatch and the colours sit in one row of cells when there is room,
+/// and wrap into more rows (growing taller) when the layout gives less.
+impl Placeable<Msg> for Palette {
+    fn id(&self) -> WidgetId {
+        self.control.id()
+    }
+
+    fn measure(&self, _ui: &Ui<Msg>, constraints: Constraints) -> Size {
+        let dpi = constraints.dpi;
+        let natural = (PALETTE.len() as i32 + 1) * cell_px(dpi);
+        let width = constraints
+            .max_width
+            .map_or(natural, |max| natural.min(max));
+        Size::new(width, preferred_height(PALETTE.len(), width, dpi))
+    }
+
+    /// The painter and hit tests work in window pixels, so they follow the
+    /// node's placement and the window's DPI.
+    fn placed(&self, ui: &Ui<Msg>, rect: Rect) {
+        self.bounds.set(rect);
+        self.dpi.set(ui.dpi());
     }
 }
 

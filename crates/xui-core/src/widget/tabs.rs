@@ -67,7 +67,7 @@ pub struct Tabs<M: 'static> {
 
 impl<M: 'static> Tabs<M> {
     /// Creates an empty tabs container at `bounds`.
-    pub fn new(ui: &Ui<M>, bounds: Rect) -> Result<Tabs<M>> {
+    pub(crate) fn new(ui: &Ui<M>, bounds: Rect) -> Result<Tabs<M>> {
         let control = Control::new(ui, &NodeSpec::new(NodeKind::Tabs, bounds))?;
         let scoped = ui.with_parent(control.id());
         let strip = Control::new(
@@ -209,7 +209,7 @@ impl<M: 'static> Tabs<M> {
     }
 
     /// Moves/resizes the container and re-lays the pages out.
-    pub fn set_bounds(&self, bounds: Rect) {
+    pub(crate) fn set_bounds(&self, bounds: Rect) {
         self.control.set_bounds(bounds);
         relayout(&self.scoped, &self.shared);
     }

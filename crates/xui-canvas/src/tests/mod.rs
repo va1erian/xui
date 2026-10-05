@@ -6,7 +6,6 @@ use xui_core::app::{App, Ui, run_app};
 use xui_core::backend::{Backend, NodeKind, NodeSpec, ParentRef, PlatformSpec};
 use xui_core::geometry::{Point, Rect};
 use xui_core::image::Image;
-use xui_core::widget::{Button, CheckBox, Label, ProgressBar, Slider};
 use xui_core::{
     Canvas, Color, Corner, Dash, Dip, GradientStop, LinearGradient, RadialGradient, Rgba, Stroke,
     TextStyle,

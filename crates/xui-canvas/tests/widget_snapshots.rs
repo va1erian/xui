@@ -14,20 +14,9 @@ use std::rc::Rc;
 use xui_canvas::{OffscreenBackend, RgbaImage};
 use xui_core::app::{App, Ui, run_app};
 use xui_core::backend::{Backend, PlatformSpec};
-use xui_core::geometry::Rect;
 use xui_core::image::Image;
-use xui_core::widget::{
-    Button, CheckBox, ColorPanel, ColorPicker, ComboBox, Dialog, Edit, FlowText, Glyph, GridView,
-    GroupBox, Hyperlink, IconView, Label, ListView, MaterialStatusBar, Menu, MenuId, MultilineEdit,
-    NumberField, Panel, ProgressBar, RadioGroup, Run, ScrollView, Separator, Slider, Split,
-    StatusBar, Tabs, ToggleButton, Toolbar, Tooltip, TopBar, TopBarId, TreeRow, TreeView,
-};
-use xui_core::{Color, Dip, Theme};
-
-fn rect(left: i32, top: i32, right: i32, bottom: i32) -> Rect {
-    Rect::new(left, top, right, bottom)
-}
-
+use xui_core::prelude::*;
+use xui_core::widget::{Dialog, Glyph, Tooltip};
 /// A 16x16 two-tone artwork icon built in memory, so the gallery exercises an
 /// `Image` row icon (and the backend's decoded-image cache) beside the glyphs.
 fn art_image() -> Image {
@@ -57,92 +46,52 @@ impl App for Gallery {
     fn update(&mut self, _msg: (), _ui: &mut Ui<()>) {}
 }
 
-/// Builds one of every portable widget, laid out so none overlaps another.
-fn build(ui: &Ui<()>) -> Vec<Box<dyn Any>> {
-    // Seeded with the first widget so the collection is not built up by
-    // `Vec::new()` followed only by pushes.
-    let mut keep: Vec<Box<dyn Any>> = vec![Box::new(
-        Label::new(ui, rect(16, 12, 380, 40), "xui widgets").unwrap(),
-    )];
-    keep.push(Box::new(
-        Edit::new(ui, rect(16, 48, 380, 76), "type here").unwrap(),
-    ));
-    keep.push(Box::new(
-        NumberField::new(ui, rect(16, 84, 380, 112), 0.0, 100.0, 5.0).unwrap(),
-    ));
-    keep.push(Box::new(
-        CheckBox::new(ui, rect(16, 120, 150, 148), "Enabled").unwrap(),
-    ));
-    keep.push(Box::new(
-        ToggleButton::new(ui, rect(160, 120, 380, 148), "Bold").unwrap(),
-    ));
-    keep.push(Box::new(
-        RadioGroup::new(ui, rect(16, 156, 380, 240), &["Small", "Medium", "Large"]).unwrap(),
-    ));
-    keep.push(Box::new(
-        ComboBox::new(ui, rect(16, 248, 380, 276), &["Alpha", "Beta", "Gamma"]).unwrap(),
-    ));
-    keep.push(Box::new(
-        Slider::new(ui, rect(16, 284, 380, 312), 0.0, 100.0).unwrap(),
-    ));
-    keep.push(Box::new(
-        ProgressBar::new(ui, rect(16, 320, 380, 328), 100).unwrap(),
-    ));
-    let link = Hyperlink::new(ui, rect(16, 336, 380, 364), "Open docs").unwrap();
-    keep.push(Box::new(
-        Tooltip::attach(ui, link.id(), "A tooltip").unwrap(),
-    ));
-    keep.push(Box::new(link));
-    keep.push(Box::new(
-        Button::new(ui, rect(16, 458, 380, 486), "A button").unwrap(),
-    ));
-    // A page title, a section caption and the default action.
-    keep.push(Box::new(
-        Label::new(ui, rect(16, 660, 380, 696), "Page title")
-            .unwrap()
-            .title(),
-    ));
-    keep.push(Box::new(
-        Label::new(ui, rect(16, 704, 380, 722), "Section caption")
-            .unwrap()
-            .caption(),
-    ));
-    keep.push(Box::new(
-        Button::new(ui, rect(16, 732, 160, 764), "Apply")
-            .unwrap()
-            .primary(),
-    ));
-    keep.push(Box::new(
-        FlowText::new(ui, rect(16, 500, 760, 544))
-            .unwrap()
+/// The form controls, top to bottom; `link` gets the hyperlink, for its
+/// tooltip.
+fn controls(link: &Handle<Hyperlink<()>>) -> Layout<()> {
+    column().gap(8).children((
+        label("xui widgets"),
+        edit().text("type here"),
+        number_field(0.0, 100.0, 5.0),
+        row().gap(10).children((
+            checkbox("Enabled").width(134),
+            toggle_button("Bold").fill(1),
+        )),
+        radio_group(&["Small", "Medium", "Large"]),
+        combo_box(&["Alpha", "Beta", "Gamma"]),
+        slider(0.0, 100.0),
+        progress(100).height(8),
+        hyperlink("Open docs").bind(link),
+        top_bar().then(|bar| {
+            let seek_id = TopBarId::new(4);
+            bar.icon(TopBarId::new(1), Glyph::Menu)
+                .icon(TopBarId::new(5), Glyph::Play)
+                .icon(TopBarId::new(6), Glyph::Previous)
+                .icon(TopBarId::new(7), Glyph::Next)
+                .toggle(TopBarId::new(2), Glyph::Star)
+                .toggle(TopBarId::new(8), Glyph::Repeat)
+                .toggle(TopBarId::new(9), Glyph::Shuffle)
+                .label(TopBarId::new(3), "xui")
+                .slider(seek_id, 0.0, 100.0)
+                .expand(seek_id)
+        }),
+        button("A button"),
+        flow_text()
             .run(Run::normal("Flow text with a "))
             .run(Run::link("link"))
             .separator(" · ")
             .run(Run::weak("and a weak run")),
-    ));
+        // A page title, a section caption and the default action.
+        label("Page title").title(),
+        label("Section caption").caption(),
+        button("Apply").primary().align(Align::Start),
+    ))
+}
 
-    // Menus: a bar plus a context menu (the popup itself is hidden until shown).
-    keep.push(Box::new(
-        Menu::bar(ui, rect(400, 12, 764, 40))
-            .unwrap()
-            .build(|menu| {
-                menu.item(MenuId::new(1), "&Open");
-                menu.separator();
-                menu.check(MenuId::new(2), "Auto &save", true);
-            }),
-    ));
-    keep.push(Box::new(Menu::context(ui).build(|menu| {
-        menu.item(MenuId::new(10), "Cu&t");
-        menu.item(MenuId::new(11), "&Copy");
-    })));
-
-    keep.push(Box::new(
-        ListView::new(ui, rect(400, 48, 764, 160), &["Inbox", "Sent", "Drafts"]).unwrap(),
-    ));
-    let tree = TreeView::new(
-        ui,
-        rect(400, 168, 764, 264),
-        &[
+/// The menu bar, the item views and the framed editors.
+fn views() -> Layout<()> {
+    let tree = tree_view()
+        .rows(vec![
             TreeRow::new("Inbox", 0)
                 .expandable(true)
                 .expanded(true)
@@ -152,137 +101,123 @@ fn build(ui: &Ui<()>) -> Vec<Box<dyn Any>> {
             TreeRow::new("Archive", 0)
                 .expandable(true)
                 .icon(Glyph::History),
-        ],
-    )
-    .unwrap();
-    // Select a nested row so the selection-aware indent guide is exercised.
-    tree.select(Some(1));
-    keep.push(Box::new(tree));
-    keep.push(Box::new(
-        GridView::with_model(
-            ui,
-            rect(1040, 48, 1280, 240),
-            vec!["A".to_string(), "B".to_string(), "C".to_string()],
+        ])
+        // Select a nested row so the selection-aware indent guide is exercised.
+        .then(|tree| {
+            tree.select(Some(1));
+            tree
+        });
+    column().gap(8).children((
+        menu_bar(|menu| {
+            menu.item(MenuId::new(1), "&Open");
+            menu.separator();
+            menu.check(MenuId::new(2), "Auto &save", true);
+        }),
+        list()
+            .then(|list| {
+                list.set_model(vec![
+                    "Inbox".to_string(),
+                    "Sent".to_string(),
+                    "Drafts".to_string(),
+                ]);
+                list
+            })
+            .height(112),
+        tree.height(96),
+        group("Group", column().child(checkbox("Inside the group"))),
+        multiline_edit()
+            .then(|notes| {
+                notes.set_text("Notes…");
+                notes
+            })
+            .height(64),
+        panel(column().padding(12).child(label("In a panel"))).height(68),
+        text_toolbar(&["New", "Open", "Save"]),
+    ))
+}
+
+/// The containers, each holding labels of its own.
+fn containers() -> Layout<()> {
+    let rows: Vec<_> = (1..=4)
+        .map(|row| label(format!("Row {row}")).fixed(40))
+        .collect();
+    column().gap(12).children((
+        scroll(column().children(rows)).height(184),
+        tabs()
+            .page("General", column().child(label("General")))
+            .page("Advanced", column().child(label("Advanced")))
+            .height(176),
+        split(
+            column().child(label("Left")),
+            column().child(label("Right")),
         )
-        .unwrap(),
-    ));
-    keep.push(Box::new(
-        IconView::new(
-            ui,
-            rect(1040, 148, 1280, 300),
-            &["Documents", "Pictures", "Music", "Videos"],
-        )
-        .unwrap(),
-    ));
+        .height(168),
+    ))
+}
 
-    keep.push(Box::new(
-        GroupBox::new(ui, rect(400, 276, 764, 356), "Group").unwrap(),
-    ));
-    keep.push(Box::new(
-        CheckBox::new(ui, rect(416, 312, 748, 340), "Inside the group").unwrap(),
-    ));
-    keep.push(Box::new(
-        MultilineEdit::new(ui, rect(400, 364, 764, 428), "Notes…").unwrap(),
-    ));
-
-    // A panel owns the label created through its scoped `ui()`.
-    let panel = Panel::new(ui, rect(400, 436, 764, 504)).unwrap();
-    keep.push(Box::new(
-        Label::new(panel.ui(), rect(12, 12, 300, 40), "In a panel").unwrap(),
-    ));
-    keep.push(Box::new(panel));
-
-    keep.push(Box::new(
-        Toolbar::new(ui, rect(400, 512, 764, 544), &["New", "Open", "Save"]).unwrap(),
-    ));
-
-    let new_id = TopBarId::new(1);
-    let star_id = TopBarId::new(2);
-    let seek_id = TopBarId::new(4);
-    keep.push(Box::new(
-        TopBar::new(ui, rect(16, 396, 380, 424))
-            .unwrap()
-            .icon(new_id, Glyph::Menu)
-            .icon(TopBarId::new(5), Glyph::Play)
-            .icon(TopBarId::new(6), Glyph::Previous)
-            .icon(TopBarId::new(7), Glyph::Next)
-            .toggle(star_id, Glyph::Star)
-            .toggle(TopBarId::new(8), Glyph::Repeat)
-            .toggle(TopBarId::new(9), Glyph::Shuffle)
-            .label(TopBarId::new(3), "xui")
-            .slider(seek_id, 0.0, 100.0)
-            .expand(seek_id),
-    ));
-
-    // Containers: the children are created through the container's `ui()` and
-    // registered with it, then all of them are kept alive.
-    let scroll = ScrollView::new(ui, rect(788, 48, 1024, 232)).unwrap();
-    for row in 1..=4 {
-        let label = Label::new(scroll.ui(), rect(0, 0, 10, 10), &format!("Row {row}")).unwrap();
-        scroll.add(label.id(), Dip(40.0));
-        keep.push(Box::new(label));
-    }
-    keep.push(Box::new(scroll));
-
-    let tabs = Tabs::new(ui, rect(788, 244, 1024, 420)).unwrap();
-    let general = Label::new(tabs.ui(), rect(0, 0, 10, 10), "General").unwrap();
-    let advanced = Label::new(tabs.ui(), rect(0, 0, 10, 10), "Advanced").unwrap();
-    // `page` consumes the handle, so rebind as the builder is chained.
-    let tabs = tabs
-        .page("General", &[general.id()])
-        .page("Advanced", &[advanced.id()]);
-    keep.push(Box::new(general));
-    keep.push(Box::new(advanced));
-    keep.push(Box::new(tabs));
-
-    let split = Split::row(ui, rect(788, 432, 1024, 600)).unwrap();
-    let pane_a = Label::new(split.ui(), rect(0, 0, 10, 10), "Left").unwrap();
-    let pane_b = Label::new(split.ui(), rect(0, 0, 10, 10), "Right").unwrap();
-    split.pane_a(&[pane_a.id()]);
-    split.pane_b(&[pane_b.id()]);
-    keep.push(Box::new(pane_a));
-    keep.push(Box::new(pane_b));
-    keep.push(Box::new(split));
-
+/// The tile views and the colour choosers.
+fn colors() -> Layout<()> {
     let palette = [
         Color::hex(0x00_78_D4),
         Color::hex(0x00_B2_94),
         Color::hex(0xE8_11_23),
     ];
-    keep.push(Box::new(
-        ColorPicker::new(ui, rect(1040, 260, 1280, 340), &palette)
-            .unwrap()
-            .columns(3),
-    ));
-    // The tabbed colour panel, one instance on each tab.
-    keep.push(Box::new(
-        ColorPanel::new(ui, rect(1040, 350, 1260, 650))
-            .unwrap()
-            .with_color(Color::hex(0xEB_40_34)),
-    ));
-    let full = ColorPanel::new(ui, rect(1266, 350, 1486, 650))
-        .unwrap()
-        .with_color(Color::hex(0x00_78_D4));
-    full.select_tab(1);
-    keep.push(Box::new(full));
-    keep.push(Box::new(
-        Dialog::confirm(ui, "Save changes?", "Your edits will be lost otherwise.").unwrap(),
-    ));
+    column().gap(10).children((
+        grid_view(&["A", "B", "C"]).height(90),
+        icon_view(&["Documents", "Pictures", "Music", "Videos"]).height(150),
+        color_picker(&palette).columns(3).height(80),
+        // The tabbed colour panel, on its first tab.
+        color_panel().color(Color::hex(0xEB_40_34)).height(300),
+    ))
+}
 
-    keep.push(Box::new(
-        Separator::new(ui, rect(16, 552, 1024, 554)).unwrap(),
-    ));
-    keep.push(Box::new(
-        StatusBar::new(ui, rect(16, 560, 1024, 584), &["Ready", ""]).unwrap(),
-    ));
-    keep.push(Box::new(
-        MaterialStatusBar::new(ui, rect(16, 588, 1024, 612), &["Native", "light"]).unwrap(),
-    ));
-    keep.push(Box::new(
-        Label::new(ui, rect(16, 620, 1024, 644), "events appear here").unwrap(),
-    ));
+/// Builds one of every portable widget, laid out so none overlaps another,
+/// and returns the ones no layout holds.
+fn build(ui: &Ui<()>) -> Vec<Box<dyn Any>> {
+    let link = Handle::new();
+    ui.root(
+        column().padding(16).gap(8).children((
+            row()
+                .gap(16)
+                .children((
+                    controls(&link).width(360),
+                    views().width(360),
+                    containers().fill(1),
+                    colors().width(240),
+                    // The tabbed colour panel again, on its second tab.
+                    column()
+                        .child(
+                            color_panel()
+                                .color(Color::hex(0x00_78_D4))
+                                .then(|full| {
+                                    full.select_tab(1);
+                                    full
+                                })
+                                .height(300),
+                        )
+                        .width(220),
+                ))
+                .fill(1),
+            separator(),
+            status_bar(&["Ready", ""]),
+            material_status_bar(&["Native", "light"]),
+            label("events appear here"),
+        )),
+    )
+    .unwrap();
 
-    keep
+    // A tooltip, a context menu (hidden until shown) and a dialog (closed)
+    // belong to the window, not to a layout.
+    vec![
+        Box::new(Tooltip::attach(ui, link.get().id(), "A tooltip").unwrap()),
+        Box::new(Menu::context(ui).build(|menu| {
+            menu.item(MenuId::new(10), "Cu&t");
+            menu.item(MenuId::new(11), "&Copy");
+        })),
+        Box::new(
+            Dialog::confirm(ui, "Save changes?", "Your edits will be lost otherwise.").unwrap(),
+        ),
+    ]
 }
 
 /// Writes a PNG snapshot under `target/ui/`.

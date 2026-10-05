@@ -6,25 +6,26 @@ use std::cell::Cell;
 use std::rc::Rc;
 
 use xui_core::app::{App, Ui};
+use xui_core::arrange::{Handle, LayoutExt, absolute, button, checkbox, edit, label};
 use xui_core::backend::BackendError;
-use xui_core::widget::{Button, CheckBox, Dialog, Edit, HasText, Label};
-use xui_core::{Dip, Rect, Theme};
+use xui_core::widget::{Dialog, Edit, HasText, Label};
+use xui_core::{Dip, Theme};
 
 use super::session::capture_on;
 use super::{Snapshot, SnapshotError, render, render_with, try_render};
 use crate::OffscreenBackend;
 
+#[derive(Clone)]
 enum Msg {
     Text(&'static str),
     Toggled,
     Clicked,
 }
 
-/// Keeps the widgets alive and records what reached `update`.
+/// Records what reached `update`.
 struct Demo {
-    label: Label<Msg>,
+    label: Handle<Label<Msg>>,
     seen: Rc<Cell<u32>>,
-    _widgets: (Button<Msg>, CheckBox<Msg>, Edit<Msg>),
 }
 
 impl App for Demo {
@@ -33,7 +34,7 @@ impl App for Demo {
     fn update(&mut self, msg: Msg, _ui: &mut Ui<Msg>) {
         self.seen.set(self.seen.get() + 1);
         match msg {
-            Msg::Text(text) => self.label.set_text(text),
+            Msg::Text(text) => self.label.get().set_text(text),
             Msg::Toggled | Msg::Clicked => {}
         }
     }
@@ -42,7 +43,6 @@ impl App for Demo {
 /// A content button with an optional modal dialog over it.
 struct Modal {
     seen: Rc<Cell<u32>>,
-    _button: Button<Msg>,
     _dialog: Dialog<Msg>,
 }
 
@@ -59,15 +59,13 @@ impl App for Modal {
 /// A button that fills the top of a 320x200 window, with the dialog centred
 /// over it and clear of the pixels the scrim tests sample.
 fn build_modal(ui: &mut Ui<Msg>, seen: Rc<Cell<u32>>, open: bool) -> Result<Modal, BackendError> {
-    let button =
-        Button::new(ui, Rect::new(0, 0, 320, 96), "Behind")?.on_click(|| Some(Msg::Clicked));
+    ui.root(absolute().child(button("Behind").on_click(Msg::Clicked).at(0, 0, 320, 96)))?;
     let dialog = Dialog::message(ui, "Saved", "Your changes were saved.")?;
     if open {
         dialog.open();
     }
     Ok(Modal {
         seen,
-        _button: button,
         _dialog: dialog,
     })
 }
@@ -78,17 +76,19 @@ fn brightness(pixel: [u8; 4]) -> u32 {
 }
 
 fn build(ui: &mut Ui<Msg>, seen: Rc<Cell<u32>>) -> Result<Demo, BackendError> {
-    let button = Button::new(ui, Rect::new(20, 20, 160, 52), "Push")?;
-    let check =
-        CheckBox::new(ui, Rect::new(20, 64, 200, 92), "Enabled")?.on_toggle(|_| Some(Msg::Toggled));
-    let edit = Edit::new(ui, Rect::new(20, 104, 300, 136), "hello")?;
-    edit.focus();
-    let label = Label::new(ui, Rect::new(20, 148, 300, 176), "start")?;
-    Ok(Demo {
-        label,
-        seen,
-        _widgets: (button, check, edit),
-    })
+    let (field, text): (Handle<Edit<Msg>>, Handle<Label<Msg>>) = (Handle::new(), Handle::new());
+    ui.root(
+        absolute().children((
+            button("Push").at(20, 20, 140, 32),
+            checkbox("Enabled")
+                .on_toggle(|_| Msg::Toggled)
+                .at(20, 64, 180, 28),
+            edit().text("hello").bind(&field).at(20, 104, 280, 32),
+            label("start").bind(&text).at(20, 148, 280, 28),
+        )),
+    )?;
+    field.get().focus();
+    Ok(Demo { label: text, seen })
 }
 
 fn snapshot() -> Snapshot {

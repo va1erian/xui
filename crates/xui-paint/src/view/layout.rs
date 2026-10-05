@@ -1,12 +1,13 @@
 #![forbid(unsafe_code)]
 
-//! The app layout and the state mirror a host or test can read.
+//! The strip's items, where the app's parts were placed, and the state mirror a
+//! host or test can read.
 
+use xui_core::app::Ui;
+use xui_core::backend::WidgetId;
 use xui_core::geometry::Rect;
-use xui_core::units::Dip;
 
-use super::palette;
-use super::toolbar::{self, StripItem};
+use super::toolbar::StripItem;
 use crate::model::{Pixel, SIZES, Tool};
 
 /// The tool, size and action cells, in order. Save/Open are included only when
@@ -25,12 +26,6 @@ pub(super) fn strip_items(io: bool) -> Vec<StripItem> {
     }
     items
 }
-
-/// The design height of the status bar.
-const STATUS_HEIGHT: Dip = Dip(24.0);
-
-/// The palette has this many fixed colours.
-const PALETTE_COUNT: usize = 16;
 
 // xui gap: G12 — the runtime owns the app and there is no public handle to it
 // after `render_with`, so a test reads this mirror instead.
@@ -61,6 +56,8 @@ pub struct Observer {
     pub dragging: bool,
     /// The four status-bar parts.
     pub status: [String; 4],
+    /// The app's widget nodes, set once the app is built.
+    pub parts: Option<Parts>,
 }
 
 impl Default for Observer {
@@ -75,12 +72,40 @@ impl Default for Observer {
             cursor: None,
             dragging: false,
             status: Default::default(),
+            parts: None,
         }
     }
 }
 
-/// The device-pixel rectangles the app lays its widgets out in, derived from
-/// the window's client rect and DPI.
+/// The app's widget nodes, so a host or test can find where the layout put
+/// them.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Parts {
+    /// The tool strip.
+    pub toolbar: WidgetId,
+    /// The drawing canvas.
+    pub canvas: WidgetId,
+    /// The colour palette.
+    pub palette: WidgetId,
+    /// The status bar.
+    pub status: WidgetId,
+}
+
+impl Parts {
+    /// Where the window's layout has placed each part, in device pixels.
+    pub fn layout<M: 'static>(&self, ui: &Ui<M>) -> Layout {
+        Layout {
+            toolbar: ui.bounds(self.toolbar),
+            canvas: ui.bounds(self.canvas),
+            palette: ui.bounds(self.palette),
+            status: ui.bounds(self.status),
+        }
+    }
+}
+
+/// The device-pixel rectangles the app's widgets are placed in: the tool
+/// strip across the top, the canvas filling the middle, then the palette and
+/// the status bar at the bottom.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Layout {
     /// The tool strip across the top.
@@ -91,38 +116,4 @@ pub struct Layout {
     pub palette: Rect,
     /// The status bar at the bottom.
     pub status: Rect,
-}
-
-/// Computes the app layout for a `client` rect at `dpi`. `io` is whether the
-/// storage is available, which determines whether Save/Open cells take space.
-pub fn layout(client: Rect, dpi: u32, io: bool) -> Layout {
-    let tool_height = toolbar::preferred_height(strip_items(io).len(), client.width(), dpi);
-    let palette_height = palette::preferred_height(PALETTE_COUNT, client.width(), dpi);
-    let status_height = STATUS_HEIGHT.to_px(dpi).value().max(1);
-    let canvas_bottom =
-        (client.bottom - palette_height - status_height).max(client.top + tool_height + 1);
-    let palette_top = canvas_bottom;
-    let palette_bottom = palette_top + palette_height;
-    let status_top = palette_bottom;
-    Layout {
-        toolbar: Rect::new(
-            client.left,
-            client.top,
-            client.right,
-            client.top + tool_height,
-        ),
-        canvas: Rect::new(
-            client.left,
-            client.top + tool_height,
-            client.right,
-            canvas_bottom,
-        ),
-        palette: Rect::new(client.left, palette_top, client.right, palette_bottom),
-        status: Rect::new(
-            client.left,
-            status_top,
-            client.right,
-            status_top + status_height,
-        ),
-    }
 }

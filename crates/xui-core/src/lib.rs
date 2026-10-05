@@ -71,7 +71,10 @@ pub mod prelude {
     pub use crate::arrange::*;
     pub use crate::backend::Result;
     pub use crate::widget::{
-        Button, CheckBox, ComboBox, Edit, Fill, GroupBox, HasText, Hyperlink, Label, ListView,
-        MultilineEdit, NumberField, ProgressBar, Separator, Slider, StatusBar, Tabs, ToggleButton,
+        Button, CheckBox, ColorField, ColorPanel, ColorPicker, ComboBox, Edit, Fill, FlowText,
+        GridView, GroupBox, HasText, Hsv, HueSlider, Hyperlink, IconView, Label, ListView,
+        MaterialStatusBar, Menu, MenuId, MenuScope, MultilineEdit, NodeId, NumberField, Panel,
+        ProgressBar, RadioGroup, Run, ScrollView, Separator, Slider, Split, StatusBar, Tabs,
+        ToggleButton, Toolbar, TopBar, TopBarId, TreeRow, TreeView,
     };
 }

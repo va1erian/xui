@@ -178,15 +178,14 @@ UI changes in xui attach a light and a dark screenshot ([AGENTS.md](../AGENTS.md
 Headless images are enough for portable widgets. For the whole gallery run
 `scripts/snapshots.ps1` (Windows) or `scripts/snapshots.sh`: every
 `control_*` example and the larger demos (`widgets`, `listview`, `gridview`,
-`top_bar`, `layout`) are rendered into `target/snapshots/` as
+`top_bar`, `layout`, `containers`, `absolute`) are rendered into `target/snapshots/` as
 `<example>-light.png` and `<example>-dark.png`. CI runs the same script and
 uploads the folder as the `snapshots` artifact of every PR. Drag the images
 that show your change into the PR description.
 
-A demo joins the gallery through the `support` module of the examples
-(`crates/xui/examples/controls/support.rs`): `XUI_SNAPSHOT=<dir>` saves the
-light and dark images and exits, and `XUI_BACKEND=offscreen` runs headless
-without saving. `xui_canvas::snapshot::Gallery` parses the variables. With
+A demo joins the gallery by starting with `xui::app(..).run(..)`:
+`XUI_SNAPSHOT=<dir>` saves the light and dark images and exits, and
+`XUI_BACKEND=offscreen` runs headless without saving. `xui_canvas::snapshot::Gallery` parses the variables. With
 neither set, a demo behaves exactly as before.
 
 ## Headless versus real windows

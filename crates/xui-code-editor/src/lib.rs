@@ -71,6 +71,7 @@ pub mod markers;
 mod metrics;
 pub mod options;
 mod paint;
+mod place;
 pub mod platform;
 pub mod search;
 mod state;

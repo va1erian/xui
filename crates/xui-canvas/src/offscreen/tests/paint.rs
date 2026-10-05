@@ -192,10 +192,9 @@ fn an_unhidden_child_under_a_visible_parent_still_paints() {
 
 #[test]
 fn a_scroll_view_clips_overflowing_content_light_and_dark() {
-    struct Scroll {
-        _view: ScrollView<u32>,
-        _labels: Vec<Label<u32>>,
-    }
+    use xui_core::arrange::{LayoutExt, absolute, column, label, scroll};
+
+    struct Scroll;
 
     impl App for Scroll {
         type Msg = u32;
@@ -215,20 +214,16 @@ fn a_scroll_view_clips_overflowing_content_light_and_dark() {
             PlatformSpec::new("scroll view").size(Dip(180.0), Dip(120.0)),
             |ui| {
                 ui.set_theme(if dark { Theme::dark() } else { Theme::light() });
-                let view = ScrollView::new(ui, Rect::new(12, 12, 128, 84)).unwrap();
-                let mut labels = Vec::new();
-                for text in ["alpha", "beta", "gamma", "delta", "epsilon"] {
-                    let label = Label::new(view.ui(), Rect::new(0, 0, 10, 10), text).unwrap();
-                    view.add(label.id(), Dip(28.0));
-                    labels.push(label);
-                }
+                let labels: Vec<_> = ["alpha", "beta", "gamma", "delta", "epsilon"]
+                    .into_iter()
+                    .map(|text| label(text).fixed(28))
+                    .collect();
+                ui.root(absolute().child(scroll(column().children(labels)).at(12, 12, 116, 72)))
+                    .unwrap();
                 let image = backend.render(ui.window()).expect("a rendered window");
                 save(name, &image);
                 rendered = Some(image);
-                Scroll {
-                    _view: view,
-                    _labels: labels,
-                }
+                Scroll
             },
         );
 
@@ -239,11 +234,9 @@ fn a_scroll_view_clips_overflowing_content_light_and_dark() {
 
 #[test]
 fn an_edit_paints_at_high_dpi_on_both_themes() {
-    use xui_core::widget::Edit;
+    use xui_core::arrange::{LayoutExt, column, edit};
 
-    struct Field {
-        _edit: Edit<()>,
-    }
+    struct Field;
     impl App for Field {
         type Msg = ();
         fn update(&mut self, _msg: (), _ui: &mut Ui<()>) {}
@@ -261,10 +254,10 @@ fn an_edit_paints_at_high_dpi_on_both_themes() {
                 |ui| {
                     let theme = if dark { Theme::dark() } else { Theme::light() };
                     ui.set_theme(theme);
-                    let scale = dpi as f32 / 96.0;
-                    let bounds =
-                        Rect::new(8, 8, (200.0 * scale) as i32 - 8, (40.0 * scale) as i32 - 8);
-                    let edit = Edit::new(ui, bounds, "hello").unwrap();
+                    // 8 px from each edge, whatever the DPI.
+                    let inset = 8.0 * 96.0 / dpi as f32;
+                    ui.root(column().padding(inset).child(edit().text("hello").fill(1)))
+                        .unwrap();
                     let image = backend.render(ui.window()).expect("a rendered window");
                     let bg = [
                         theme.input_background.r,
@@ -277,7 +270,7 @@ fn an_edit_paints_at_high_dpi_on_both_themes() {
                         .0
                         .iter()
                         .any(|pixel| pixel[..3] != bg);
-                    Field { _edit: edit }
+                    Field
                 },
             );
 

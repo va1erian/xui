@@ -15,7 +15,7 @@
 //!   [`Backend`](xui_core::backend::Backend) and nothing else.
 //! - [`model`] is pure logic (sorting, summaries, properties, size and time
 //!   formatting, path helpers) with no widgets and no I/O.
-//! - [`window`] is the per-window [`App`](xui_core::app::App): it owns the
+//! - [`window`] is the per-window [`App`](xui_core::app::App): it lays out the
 //!   [`IconView`](xui_core::widget::IconView) and [`StatusBar`](xui_core::widget::StatusBar)
 //!   and reacts to them through messages.
 //! - [`shell`] is the shared state: the platform, the launcher and the window

@@ -5,10 +5,12 @@
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
+use super::Placeable;
 use super::control::Control;
 use crate::app::Ui;
 use crate::backend::{Event, NodeKind, NodeSpec, Result, TextStyle, WidgetId};
-use crate::geometry::{Point, Rect};
+use crate::geometry::{Point, Rect, Size};
+use crate::layout::Constraints;
 use crate::message::{Key, MouseButton};
 use crate::property::{Properties, Property, Value};
 use crate::theme::look::{self, backdrop};
@@ -37,7 +39,7 @@ pub struct RadioGroup<M: 'static> {
 impl<M: 'static> RadioGroup<M> {
     /// Creates a group of `labels`, the first selected, laid out top-to-bottom
     /// from `bounds` (each option is [`ROW`] tall).
-    pub fn new(ui: &Ui<M>, bounds: Rect, labels: &[&str]) -> Result<RadioGroup<M>> {
+    pub(crate) fn new(ui: &Ui<M>, bounds: Rect, labels: &[&str]) -> Result<RadioGroup<M>> {
         let selected = Rc::new(Cell::new(0usize));
         let selected_flag = Rc::new(Cell::new(false));
         let enabled = Rc::new(Cell::new(true));
@@ -221,6 +223,47 @@ impl<M: 'static> RadioGroup<M> {
         for option in &self.options {
             option.set_selected(selected);
         }
+    }
+}
+
+/// A layout places the group by its first option and the group stacks the
+/// rest under it, one [`ROW`] each.
+impl<M: 'static> Placeable<M> for RadioGroup<M> {
+    fn id(&self) -> WidgetId {
+        self.options.first().map_or(WidgetId::NONE, Control::id)
+    }
+
+    fn measure(&self, ui: &Ui<M>, constraints: Constraints) -> Size {
+        let dpi = constraints.dpi;
+        let style = TextStyle::new(ui.theme().text, TEXT_SIZE);
+        let lead = 2 * RADIUS.to_px(dpi).value() + GAP.to_px(dpi).value();
+        let widest = self
+            .options
+            .iter()
+            .map(|option| ui.measure_text(&option.text(), &style, dpi).width)
+            .max()
+            .unwrap_or(0);
+        Size::new(
+            lead + widest,
+            ROW.to_px(dpi).value() * self.options.len() as i32,
+        )
+    }
+
+    fn placed(&self, ui: &Ui<M>, rect: Rect) {
+        let row = ROW.to_px(ui.dpi()).value();
+        let moves: Vec<(WidgetId, Rect)> = self
+            .options
+            .iter()
+            .enumerate()
+            .map(|(index, option)| {
+                let top = rect.top + row * index as i32;
+                (
+                    option.id(),
+                    Rect::new(rect.left, top, rect.right, top + row),
+                )
+            })
+            .collect();
+        ui.apply_moves(&moves);
     }
 }
 

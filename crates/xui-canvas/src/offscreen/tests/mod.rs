@@ -9,7 +9,6 @@ use xui_core::backend::{
     Backend, Event, NodeKind, NodeSpec, Painter, ParentRef, PlatformSpec, WidgetId,
 };
 use xui_core::message::{Modifiers, MouseButton};
-use xui_core::widget::{Label, ScrollView};
 use xui_core::{Color, Dip, Rect, Theme};
 
 use super::OffscreenBackend;

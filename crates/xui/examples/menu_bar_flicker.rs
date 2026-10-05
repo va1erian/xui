@@ -14,85 +14,73 @@
 //!
 //! Then slide the pointer a few pixels along the `File`/`Edit`/`View` titles:
 //! the open drop-down vanishes and reappears for each move.
+//! `XUI_SNAPSHOT=<dir>` saves a light and a dark screenshot instead.
 
-use xui_core::Dip;
-use xui_core::app::{App, Ui, run_app};
-use xui_core::backend::PlatformSpec;
-use xui_core::widget::{HasText, Label, Menu, MenuId};
+use xui::prelude::*;
 use xui_core::{Properties, Value};
 
-#[path = "controls/support.rs"]
-mod support;
-use support::{Layout, autoclose, backend};
+const NEW: MenuId = MenuId::new(1);
+const OPEN: MenuId = MenuId::new(2);
+const UNDO: MenuId = MenuId::new(10);
+const ZOOM: MenuId = MenuId::new(20);
 
+#[derive(Clone)]
 enum Msg {
     Command(&'static str),
-    Quit,
 }
 
 struct Demo {
-    result: Label<Msg>,
-    _menu: Menu<Msg>,
+    result: Handle<Label<Msg>>,
 }
 
 impl App for Demo {
     type Msg = Msg;
 
-    fn update(&mut self, msg: Msg, ui: &mut Ui<Msg>) {
+    fn update(&mut self, msg: Msg, _ui: &mut Ui<Msg>) {
         match msg {
-            Msg::Command(name) => self.result.set_text(&format!("Command: {name}")),
-            Msg::Quit => ui.quit(),
+            Msg::Command(name) => self.result.get().set_text(&format!("Command: {name}")),
         }
     }
 }
 
-fn main() -> xui_core::backend::Result<()> {
-    run_app(
-        backend(),
-        PlatformSpec::new("Menu bar flicker repro").size(Dip(520.0), Dip(240.0)),
-        |ui| {
-            let l = Layout::new(ui.dpi());
-            let new_id = MenuId::new(1);
-            let open_id = MenuId::new(2);
-            let undo_id = MenuId::new(10);
-            let zoom_id = MenuId::new(20);
-            let menu = Menu::bar(ui, l.rect(16.0, 16.0, 504.0, 48.0))
-                .unwrap()
-                .on_select(move |id| {
-                    Some(Msg::Command(match id {
-                        id if id == new_id => "New",
-                        id if id == open_id => "Open",
-                        id if id == undo_id => "Undo",
-                        id if id == zoom_id => "Zoom",
-                        _ => "Other",
-                    }))
-                })
-                .build(|m| {
+fn main() -> Result<()> {
+    xui::app("Menu bar flicker repro").size(520, 240).run(|ui| {
+        let demo = Demo {
+            result: Handle::new(),
+        };
+        let menu: Handle<Menu<Msg>> = Handle::new();
+        ui.root(
+            column().padding(16).gap(24).children((
+                menu_bar(|m| {
                     m.submenu(MenuId::new(0), "&File", |f| {
-                        f.item(new_id, "&New");
-                        f.item(open_id, "&Open");
+                        f.item(NEW, "&New");
+                        f.item(OPEN, "&Open");
                     });
                     m.submenu(MenuId::new(3), "&Edit", |e| {
-                        e.item(undo_id, "&Undo");
+                        e.item(UNDO, "&Undo");
                     });
                     m.submenu(MenuId::new(4), "&View", |v| {
-                        v.item(zoom_id, "&Zoom");
+                        v.item(ZOOM, "&Zoom");
                     });
-                });
-            // Open `File` up front: then moving the pointer along the bar
-            // flickers the drop-down without a click.
-            let _ = menu.set_property("open", Value::Bool(true));
-            let result = Label::new(
-                ui,
-                l.rect(16.0, 72.0, 504.0, 200.0),
-                "Move the pointer along the bar with a menu open: the popup flickers.",
-            )
-            .unwrap();
-            autoclose(ui, || Msg::Quit);
-            Demo {
-                result,
-                _menu: menu,
-            }
-        },
-    )
+                })
+                .on_select(|id| {
+                    Msg::Command(match id {
+                        NEW => "New",
+                        OPEN => "Open",
+                        UNDO => "Undo",
+                        ZOOM => "Zoom",
+                        _ => "Other",
+                    })
+                })
+                .bind(&menu)
+                .height(32),
+                label("Move the pointer along the bar with a menu open: the popup flickers.")
+                    .bind(&demo.result),
+            )),
+        )?;
+        // Open `File` up front: then moving the pointer along the bar
+        // flickers the drop-down without a click.
+        menu.get().set_property("open", Value::Bool(true));
+        Ok(demo)
+    })
 }

@@ -20,9 +20,10 @@ use std::rc::Rc;
 use std::time::Instant;
 
 use xui_core::app::{App, Ui};
+use xui_core::arrange::{Handle, LayoutExt, absolute, list};
 use xui_core::backend::{Backend, PlatformSpec};
 use xui_core::widget::{Fill, ListView};
-use xui_core::{Dip, Rect, Theme};
+use xui_core::{Dip, Theme};
 use xui_win32::Win32Backend;
 
 /// Rows in the model: enough that only a slice is visible and the rest is
@@ -37,7 +38,7 @@ enum Msg {
 
 struct Bench {
     backend: Rc<Win32Backend>,
-    list: ListView<Msg>,
+    list: Handle<ListView<Msg>>,
     per_paint_ms: Rc<Cell<f64>>,
 }
 
@@ -46,13 +47,13 @@ impl App for Bench {
 
     fn update(&mut self, msg: Msg, ui: &mut Ui<Msg>) {
         let Msg::Bench = msg;
-        let Some(hwnd) = self.backend.node_hwnd(self.list.id()) else {
+        let Some(hwnd) = self.backend.node_hwnd(self.list.get().id()) else {
             ui.quit();
             return;
         };
         let start = Instant::now();
         for _ in 0..PAINTS {
-            self.backend.invalidate(self.list.id());
+            self.backend.invalidate(self.list.get().id());
             // SAFETY: a synchronous paint of the list's own live node window on
             // the UI thread; the handler is re-entrancy-safe.
             unsafe {
@@ -96,16 +97,27 @@ fn listview_paint_latency() {
                     ]
                 })
                 .collect();
-            let list = ListView::with_model(ui, Rect::new(12, 12, 708, 400), model)
-                .unwrap()
-                .column("Title", Fill)
-                .column("Artist", Dip(140.0))
-                .column("Album", Dip(140.0))
-                .column_right("Year", Dip(56.0));
+            let handle = Handle::new();
+            ui.root(
+                absolute().child(
+                    list()
+                        .column("Title", Fill)
+                        .column("Artist", Dip(140.0))
+                        .column("Album", Dip(140.0))
+                        .column_right("Year", Dip(56.0))
+                        .then(|view: ListView<Msg>| {
+                            view.set_model(model);
+                            view
+                        })
+                        .bind(&handle)
+                        .at(12, 12, 696, 388),
+                ),
+            )
+            .unwrap();
             ui.emit(Msg::Bench);
             Bench {
                 backend,
-                list,
+                list: handle,
                 per_paint_ms,
             }
         })

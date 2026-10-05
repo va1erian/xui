@@ -7,62 +7,48 @@
 //! cargo run -p xui --features canvas --example control_materialstatusbar
 //! ```
 
-use xui_core::Dip;
-use xui_core::app::{App, Ui, run_app};
-use xui_core::backend::PlatformSpec;
-use xui_core::widget::{Button, MaterialStatusBar};
+use xui::prelude::*;
 
-#[path = "support.rs"]
-mod support;
-use support::{Layout, autoclose, backend};
-
+#[derive(Clone)]
 enum Msg {
     Notify,
-    Quit,
 }
 
+#[derive(Default)]
 struct Demo {
-    status: MaterialStatusBar<Msg>,
+    status: Handle<MaterialStatusBar<Msg>>,
     notifications: u32,
-    _button: Button<Msg>,
 }
 
 impl App for Demo {
     type Msg = Msg;
 
-    fn update(&mut self, msg: Msg, ui: &mut Ui<Msg>) {
+    fn update(&mut self, msg: Msg, _ui: &mut Ui<Msg>) {
         match msg {
             Msg::Notify => {
                 self.notifications += 1;
                 self.status
+                    .get()
                     .set_text(1, &format!("{} notifications", self.notifications));
             }
-            Msg::Quit => ui.quit(),
         }
     }
 }
 
-fn main() -> xui_core::backend::Result<()> {
-    run_app(
-        backend(),
-        PlatformSpec::new("MaterialStatusBar demo").size(Dip(520.0), Dip(360.0)),
-        |ui| {
-            let l = Layout::new(ui.dpi());
-            let status = MaterialStatusBar::new(
-                ui,
-                l.rect(16.0, 16.0, 504.0, 60.0),
-                &["Native", "No notifications"],
-            )
-            .unwrap();
-            let button = Button::new(ui, l.rect(16.0, 80.0, 256.0, 120.0), "Notify")
-                .unwrap()
-                .on_click(|| Some(Msg::Notify));
-            autoclose(ui, || Msg::Quit);
-            Demo {
-                status,
-                notifications: 0,
-                _button: button,
-            }
-        },
-    )
+fn main() -> Result<()> {
+    xui::app("MaterialStatusBar demo").size(520, 360).run(|ui| {
+        let demo = Demo::default();
+        ui.root(
+            column().padding(16).gap(16).children((
+                material_status_bar(&["Native", "No notifications"])
+                    .bind(&demo.status)
+                    .height(44),
+                button("Notify")
+                    .on_click(Msg::Notify)
+                    .width(240)
+                    .align(Align::Start),
+            )),
+        )?;
+        Ok(demo)
+    })
 }

@@ -9,7 +9,12 @@ use crate::arrange::Layout;
 use crate::backend::{Result, WidgetId};
 use crate::geometry::{Rect, Size};
 use crate::layout::Constraints;
+use crate::units::Dip;
 use crate::widget::Placeable;
+
+/// The natural width of a scroll view of rows; the rows stretch to whatever
+/// it gets.
+const NATURAL_WIDTH: Dip = Dip(240.0);
 
 impl<M: 'static> ScrollView<M> {
     /// Replaces the view's content with `layout`: its widgets are created
@@ -81,7 +86,7 @@ impl<M: 'static> Placeable<M> for ScrollView<M> {
 
     /// A layout content's natural size, or the rows' total height; give the
     /// view `fill` or a fixed height for it to scroll.
-    fn measure(&self, ui: &Ui<M>, constraints: Constraints) -> Size {
+    fn measure(&self, _ui: &Ui<M>, constraints: Constraints) -> Size {
         let dpi = constraints.dpi;
         match self.shared.layout.borrow().as_ref() {
             Some(content) => content.measure(Constraints {
@@ -96,7 +101,7 @@ impl<M: 'static> Placeable<M> for ScrollView<M> {
                     .iter()
                     .map(|row| row.height.to_px(dpi).value().max(0))
                     .sum();
-                Size::new(ui.bounds(self.id()).width(), height)
+                Size::new(NATURAL_WIDTH.to_px(dpi).value(), height)
             }
         }
     }
