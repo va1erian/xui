@@ -215,6 +215,10 @@ fn align_in_cell<K: Copy>(
 
 /// The grid's natural size within `constraints`: the margins plus the
 /// columns' natural widths and the rows' natural heights, with the gaps.
+///
+/// Each row is measured at the widths its cells will get: with a width bound,
+/// the columns are split as [`place`] splits them; without one, a cell over a
+/// `Fill` column has no width bound (its width is not known yet).
 pub(super) fn measure<K: Copy>(
     group: &Group<K>,
     columns: &[Track],
@@ -225,20 +229,37 @@ pub(super) fn measure<K: Copy>(
     let visible = group.visible_items(leaf, dpi);
     let cells = cells(&visible, columns.len());
     let naturals = column_naturals(&cells, columns, dpi, leaf);
-    let width = |cell: &Cell<'_, K>| {
-        Some(
-            naturals[cell.column..cell.column + cell.span]
-                .iter()
-                .sum::<i32>(),
+    let px = |value: Dip| value.to_px(dpi).value().max(0);
+    let gap = px(group.spacing);
+    let margins = group.margins;
+    let xs = constraints.max_width.map(|max| {
+        let inner = (max - px(margins.left) - px(margins.right)).max(0);
+        stack(
+            StackDirection::Horizontal,
+            group.spacing,
+            &column_slots(columns, &naturals),
         )
+        .split(Rect::new(0, 0, inner, 1), dpi)
+    });
+    let width = |cell: &Cell<'_, K>| {
+        let last = cell.column + cell.span - 1;
+        match &xs {
+            Some(xs) => Some(xs[last].right - xs[cell.column].left),
+            None if columns[cell.column..=last]
+                .iter()
+                .any(|track| matches!(track, Track::Fill(_))) =>
+            {
+                None
+            }
+            None => Some(
+                naturals[cell.column..=last].iter().sum::<i32>() + gap * (cell.span as i32 - 1),
+            ),
+        }
     };
     let rows: Vec<i32> = row_slots(&cells, &width, dpi, leaf)
         .into_iter()
         .map(fixed_px)
         .collect();
-    let px = |value: Dip| value.to_px(dpi).value().max(0);
-    let gap = px(group.spacing);
-    let margins = group.margins;
     let along = |sizes: &[i32]| -> i32 {
         sizes.iter().sum::<i32>() + gap * (sizes.len().saturating_sub(1) as i32)
     };

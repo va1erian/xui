@@ -209,3 +209,24 @@ fn a_column_measures_its_leaves_at_its_own_width() {
     assert_eq!(placed[0].1, Rect::new(0, 0, 100, 10));
     assert_eq!(placed[1].1, Rect::new(0, 10, 100, 15));
 }
+
+#[test]
+fn a_nested_grid_measures_its_fill_column_at_the_width_it_will_get() {
+    // Leaf 1 wraps: its height is 1000 / the width it is given.
+    let wrapping = |key: &u32, constraints: Constraints| match key {
+        1 => {
+            let width = constraints.max_width.unwrap_or(1000).max(1);
+            Leaf::new(Size::new(width.min(1000), 1000 / width))
+        }
+        _ => Leaf::new(Size::new(50, 2)),
+    };
+    let grid = Group::grid(vec![Track::Auto, Track::Fill(1)])
+        .push(Item::leaf(0))
+        .push(Item::leaf(1));
+    assert_eq!(grid.preferred_size(96, &wrapping), Size::new(50, 2));
+
+    let tree = Group::column().push(Item::group(grid)).push(Item::leaf(2));
+    let placed = tree.compute(Rect::new(0, 0, 300, 100), 96, &wrapping);
+    assert_eq!(placed[1].1, Rect::new(50, 0, 300, 4), "250 wide, so 4 tall");
+    assert_eq!(placed[2].1.top, 4, "the column reserved the same height");
+}

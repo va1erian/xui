@@ -50,7 +50,8 @@ fn tab_pages_lay_out_inside_the_container_and_switch() {
     // The page panel fills the area under the 32-dip strip; the button is
     // placed in the panel's own coordinates.
     assert_eq!(bounds(&ui, &first), Rect::new(4, 4, 396, 264));
-    assert!(ui.is_visible(first.get().id()) || container.get().selected() == 0);
+    assert_eq!(container.get().selected(), 0);
+    assert!(ui.is_visible(first.get().id()));
 
     container.get().select(1);
     assert_eq!(bounds(&ui, &second), Rect::new(0, 0, 400, 28));

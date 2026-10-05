@@ -1,12 +1,13 @@
 //! [`app`]: a window on the right backend in one call, with headless
 //! screenshots for free.
 
+use std::cell::RefCell;
 use std::rc::Rc;
 
 use xui_canvas::snapshot::{Gallery, SnapshotError};
 use xui_canvas::{OffscreenBackend, WinitBackend};
 use xui_core::app::{App, Ui};
-use xui_core::backend::{Backend, PlatformSpec, Result};
+use xui_core::backend::{Backend, BackendError, PlatformSpec, Result};
 use xui_core::{Dip, Theme};
 
 /// Starts describing an app window titled `title`, on the backend
@@ -81,13 +82,16 @@ impl Launch {
             }
             None => (default_backend(), None),
         };
+        let failed: Rc<RefCell<Option<BackendError>>> = Rc::default();
+        let failure = Rc::clone(&failed);
         self.inner.backend(backend).run(move |ui| {
             let app = make(ui)?;
             if let Some(offscreen) = offscreen {
-                save_snapshots(&offscreen, ui, gallery);
+                save_snapshots(&offscreen, ui, gallery, failure);
             }
             Ok(app)
-        })
+        })?;
+        failed.take().map_or(Ok(()), Err)
     }
 }
 
@@ -105,8 +109,14 @@ pub fn default_backend() -> Rc<dyn Backend> {
 }
 
 /// Arranges for the offscreen run to save a light and a dark screenshot named
-/// after the executable once the app is built, then end.
-fn save_snapshots<M: 'static>(backend: &OffscreenBackend, ui: &Ui<M>, gallery: Gallery) {
+/// after the executable once the app is built, then end. A capture or save
+/// that fails is kept in `failed` for [`Launch::run`] to return.
+fn save_snapshots<M: 'static>(
+    backend: &OffscreenBackend,
+    ui: &Ui<M>,
+    gallery: Gallery,
+    failed: Rc<RefCell<Option<BackendError>>>,
+) {
     if gallery.dir().is_none() {
         return;
     }
@@ -123,8 +133,9 @@ fn save_snapshots<M: 'static>(backend: &OffscreenBackend, ui: &Ui<M>, gallery: G
                 .map_err(SnapshotError::from)
                 .and_then(|image| gallery.save(&name, variant, &image));
             if let Err(error) = saved {
-                eprintln!("{name}-{variant}: {error}");
-                std::process::exit(1);
+                *failed.borrow_mut() =
+                    Some(BackendError::Other(format!("{name}-{variant}: {error}")));
+                return;
             }
         }
     });
