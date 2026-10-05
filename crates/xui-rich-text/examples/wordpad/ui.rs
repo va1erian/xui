@@ -10,11 +10,11 @@ use xui_core::Dip;
 use xui_core::app::Ui;
 use xui_core::arrange::{
     Build, Entry, Handle, Layout, LayoutExt, build as create, button, column, combo_box, row,
-    spacer, status_bar, toggle_button,
+    spacer, status_bar, toggle_button, toolbar,
 };
-use xui_core::backend::{Result, WidgetId};
-use xui_core::geometry::{Rect, Size};
-use xui_core::layout::{Constraints, Insets};
+use xui_core::backend::Result;
+use xui_core::geometry::Rect;
+use xui_core::layout::Insets;
 use xui_core::widget::{
     ComboBox, Dialog, FileDialog, Lucide, Placeable, ToggleButton, Toolbar, Tooltip,
 };
@@ -43,19 +43,6 @@ const TOOLBAR_HEIGHT: Dip = Dip(36.0);
 const FORMAT_HEIGHT: Dip = Dip(34.0);
 /// The width of an icon-only button in the formatting and table rows.
 pub const ICON_WIDTH: Dip = Dip(32.0);
-
-/// The toolbar as a layout entry.
-struct ToolbarPane(Toolbar<Msg>);
-
-impl Placeable<Msg> for ToolbarPane {
-    fn id(&self) -> WidgetId {
-        self.0.id()
-    }
-
-    fn measure(&self, _ui: &Ui<Msg>, _constraints: Constraints) -> Size {
-        Size::new(0, 0)
-    }
-}
 
 /// The tooltips naming the icon-only buttons, attached as each is created.
 pub type Tips = Rc<RefCell<Vec<Tooltip<Msg>>>>;
@@ -264,8 +251,8 @@ fn push(tips: &Tips, (icon, tip): (Lucide, &'static str), msg: fn() -> Msg) -> E
 }
 
 /// The command toolbar.
-fn commands(ui: &Ui<Msg>) -> Result<ToolbarPane> {
-    let toolbar = Toolbar::empty(ui, Rect::default())?
+fn commands() -> Build<Toolbar<Msg>, Msg> {
+    toolbar()
         .item_with_text(Lucide::FilePlus, "New (Ctrl+N)", "New")
         .item_with_text(Lucide::FolderOpen, "Open (Ctrl+O)", "Open")
         .item_with_text(Lucide::Save, "Save (Ctrl+S)", "Save")
@@ -280,19 +267,16 @@ fn commands(ui: &Ui<Msg>) -> Result<ToolbarPane> {
             "Page break (Ctrl+Enter)",
             "Page break",
         )
-        .on_click(|index| {
-            Some(match index {
-                0 => Msg::New,
-                1 => Msg::Open,
-                2 => Msg::Save,
-                3 => Msg::Export,
-                4 => Msg::Undo,
-                5 => Msg::Redo,
-                6 => Msg::InsertImage,
-                _ => Msg::PageBreak,
-            })
-        });
-    Ok(ToolbarPane(toolbar))
+        .on_click(|index| match index {
+            0 => Msg::New,
+            1 => Msg::Open,
+            2 => Msg::Save,
+            3 => Msg::Export,
+            4 => Msg::Undo,
+            5 => Msg::Redo,
+            6 => Msg::InsertImage,
+            _ => Msg::PageBreak,
+        })
 }
 
 /// The rich-text editor, in page view.
@@ -312,7 +296,7 @@ pub fn build(ui: &Ui<Msg>) -> Result<Wordpad> {
     let editor = Handle::new();
     let status = Handle::new();
     ui.root(column().children((
-        create(commands).height(TOOLBAR_HEIGHT),
+        commands().height(TOOLBAR_HEIGHT),
         tools.row().fixed(FORMAT_HEIGHT),
         table.row().fixed(FORMAT_HEIGHT),
         create(new_editor).bind(&editor).fill(1),

@@ -8,16 +8,14 @@
 //! ```
 //!
 //! `XUI_LIST_THEME=dark` starts on the dark palette and
-//! `XUI_DEMO_AUTOCLOSE_MS` makes it quit itself, for headless smoke runs.
+//! `XUI_DEMO_AUTOCLOSE_MS` makes it quit itself, for headless smoke runs;
+//! `XUI_SNAPSHOT=<dir>` saves a light and a dark screenshot instead.
 
-use std::cell::Cell;
 use std::rc::Rc;
 
-use xui_core::app::{App, Ui, run_app};
-use xui_core::backend::PlatformSpec;
+use xui::prelude::*;
 use xui_core::icon::{IconRef, Lucide};
-use xui_core::widget::{Fill, ListModel, ListView, SortDirection, StatusBar};
-use xui_core::{Dip, Point, Rect, Theme};
+use xui_core::widget::{ListModel, SortDirection};
 
 /// One row of mock data; the numeric columns are pre-formatted so the
 /// model's accessors can borrow `&str`.
@@ -61,18 +59,18 @@ impl ListModel for TrackModel {
     }
 }
 
+#[derive(Clone)]
 enum Msg {
     Select(Vec<usize>),
     Play(usize),
     Context(usize, Point),
     Sort(usize),
     Resize(usize, Dip),
-    Autoclose,
 }
 
 struct Library {
-    list: ListView<Msg>,
-    status: StatusBar<Msg>,
+    list: Handle<ListView<Msg>>,
+    status: Handle<StatusBar<Msg>>,
     tracks: Rc<Vec<Track>>,
     order: Vec<usize>,
     sort: Option<(usize, bool)>,
@@ -94,7 +92,7 @@ impl Library {
         if let Some((sorted, _)) = self.sort
             && sorted != column
         {
-            self.list.clear_sort_indicator(sorted);
+            self.list.get().clear_sort_indicator(sorted);
         }
         let tracks = Rc::clone(&self.tracks);
         let key = |&row: &usize| &tracks[row];
@@ -108,7 +106,7 @@ impl Library {
             self.order.reverse();
         }
         self.sort = Some((column, ascending));
-        self.list.set_sort_indicator(
+        self.list.get().set_sort_indicator(
             column,
             if ascending {
                 SortDirection::Ascending
@@ -116,30 +114,25 @@ impl Library {
                 SortDirection::Descending
             },
         );
-        self.list.set_model(self.model());
+        self.list.get().set_model(self.model());
     }
 }
 
 impl App for Library {
     type Msg = Msg;
 
-    fn update(&mut self, msg: Msg, ui: &mut Ui<Msg>) {
-        match msg {
-            Msg::Select(rows) => self.status.set_text(1, &format!("{} selected", rows.len())),
-            Msg::Play(row) => self.status.set_text(1, &format!("Play row {row}")),
-            Msg::Context(row, at) => self
-                .status
-                .set_text(1, &format!("Context row {row} at {},{}", at.x, at.y)),
+    fn update(&mut self, msg: Msg, _ui: &mut Ui<Msg>) {
+        let note = match msg {
+            Msg::Select(rows) => format!("{} selected", rows.len()),
+            Msg::Play(row) => format!("Play row {row}"),
+            Msg::Context(row, at) => format!("Context row {row} at {},{}", at.x, at.y),
             Msg::Sort(column) => {
                 self.sort_by(column);
-                self.status
-                    .set_text(1, &format!("Sorted by column {column}"));
+                format!("Sorted by column {column}")
             }
-            Msg::Resize(column, width) => self
-                .status
-                .set_text(1, &format!("Column {column} is now {}px", width.value())),
-            Msg::Autoclose => ui.quit(),
-        }
+            Msg::Resize(column, width) => format!("Column {column} is now {}px", width.value()),
+        };
+        self.status.get().set_text(1, &note);
     }
 }
 
@@ -154,74 +147,48 @@ fn tracks(count: usize) -> Vec<Track> {
         .collect()
 }
 
-// Only the backend choice and the headless hook are used here.
-#[allow(dead_code)]
-#[path = "controls/support.rs"]
-mod support;
-use support::{backend, snapshot_hook};
-
-fn main() {
-    let _ = run_app(
-        backend(),
-        PlatformSpec::new("xui listview").size(Dip(720.0), Dip(460.0)),
-        |ui| {
-            let dpi = ui.dpi();
-            let p = move |value: f32| Dip(value).to_px(dpi).value();
-            let list_rect = Rect::new(p(12.0), p(12.0), p(708.0), p(400.0));
-
-            let tracks = Rc::new(tracks(5000));
-            let order: Vec<usize> = (0..tracks.len()).collect();
-            let list = ListView::with_model(
-                ui,
-                list_rect,
-                TrackModel {
-                    tracks: Rc::clone(&tracks),
-                    order: order.clone(),
-                },
-            )
-            .unwrap()
-            .column("Title", Fill)
-            .column("Artist", Dip(140.0))
-            .column("Album", Dip(140.0))
-            .column_right("Year", Dip(56.0))
-            .multi_select(true)
-            .on_selection(|rows| Some(Msg::Select(rows.to_vec())))
-            .on_activate(|row| Some(Msg::Play(row)))
-            .on_context(|row, at| Some(Msg::Context(row, at)))
-            .on_sort(|column| Some(Msg::Sort(column)))
-            .on_resize(|column, width| Some(Msg::Resize(column, width)));
-            list.set_selection(&[1, 2, 3]);
-
-            let status = StatusBar::new(
-                ui,
-                Rect::new(p(12.0), p(408.0), p(708.0), p(440.0)),
-                &["Ready", "3 selected"],
-            )
-            .unwrap();
-
-            snapshot_hook(ui);
-            let autoclose = Rc::new(Cell::new(None));
-            if let Ok(millis) = std::env::var("XUI_DEMO_AUTOCLOSE_MS") {
-                let _ = millis
-                    .parse::<u32>()
-                    .map(|ms| autoclose.set(Some(ui.set_timer(ms))));
-            }
-            let autoclose_for_timer = Rc::clone(&autoclose);
-            ui.on_timer(move |fired| {
-                (autoclose_for_timer.get() == Some(fired)).then_some(Msg::Autoclose)
-            });
-
-            if std::env::var("XUI_LIST_THEME").as_deref() == Ok("dark") {
-                ui.set_theme(Theme::dark());
-            }
-
-            Library {
-                list,
-                status,
-                tracks,
-                order,
-                sort: None,
-            }
-        },
-    );
+fn main() -> Result<()> {
+    xui::app("xui listview").size(720, 460).run(|ui| {
+        let tracks = Rc::new(tracks(5000));
+        let order: Vec<usize> = (0..tracks.len()).collect();
+        let model = TrackModel {
+            tracks: Rc::clone(&tracks),
+            order: order.clone(),
+        };
+        let library = Library {
+            list: Handle::new(),
+            status: Handle::new(),
+            tracks,
+            order,
+            sort: None,
+        };
+        ui.root(
+            column().padding(12).gap(8).children((
+                list()
+                    .column("Title", Fill)
+                    .column("Artist", 140)
+                    .column("Album", 140)
+                    .column_right("Year", 56)
+                    .on_activate(Msg::Play)
+                    .then(move |list| {
+                        list.set_model(model);
+                        list.multi_select(true)
+                            .on_selection(|rows| Some(Msg::Select(rows.to_vec())))
+                            .on_context(|row, at| Some(Msg::Context(row, at)))
+                            .on_sort(|column| Some(Msg::Sort(column)))
+                            .on_resize(|column, width| Some(Msg::Resize(column, width)))
+                    })
+                    .bind(&library.list)
+                    .fill(1),
+                status_bar(&["Ready", "3 selected"])
+                    .bind(&library.status)
+                    .height(32),
+            )),
+        )?;
+        library.list.get().set_selection(&[1, 2, 3]);
+        if std::env::var("XUI_LIST_THEME").as_deref() == Ok("dark") {
+            ui.set_theme(Theme::dark());
+        }
+        Ok(library)
+    })
 }

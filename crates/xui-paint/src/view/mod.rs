@@ -11,7 +11,7 @@ mod toolbar;
 
 pub use app::PaintApp;
 pub use canvas::{CanvasMsg, PaintCanvas};
-pub use layout::{Layout, Observer, layout};
+pub use layout::{Layout, Observer, Parts};
 pub use palette::Palette;
 pub use toolbar::{StripItem, ToolStrip};
 

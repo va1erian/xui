@@ -17,7 +17,7 @@ impl ExplorerWindow {
     /// Opens the delete confirmation for the current selection, naming what
     /// will go. Does nothing when the selection is empty.
     pub(super) fn begin_delete(&mut self, ui: &mut Ui<Msg>) {
-        let selection = self.view.selection();
+        let selection = self.view.get().selection();
         if selection.is_empty() {
             return;
         }
@@ -97,6 +97,7 @@ impl ExplorerWindow {
             .refresh_windows_showing(&self.dir, ui.window());
         if !failures.is_empty() {
             self.status
+                .get()
                 .set_parts(&[&format!("Could not delete: {}", failures.join("; "))]);
         }
     }
@@ -104,7 +105,7 @@ impl ExplorerWindow {
     /// Shows the first selected item's properties. A folder reports its direct
     /// entry count, never a recursive size.
     pub(super) fn show_properties(&mut self, ui: &mut Ui<Msg>) {
-        let Some(index) = self.view.selection().first().copied() else {
+        let Some(index) = self.view.get().selection().first().copied() else {
             return;
         };
         let Some(entry) = self.listing.entries.get(index).cloned() else {
@@ -115,6 +116,7 @@ impl ExplorerWindow {
             Ok(meta) => meta,
             Err(error) => {
                 self.status
+                    .get()
                     .set_parts(&[&format!("Cannot read {}: {error}", entry.display)]);
                 return;
             }

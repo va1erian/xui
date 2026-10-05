@@ -4,6 +4,23 @@
 
 ### Breaking changes
 
+- **Widgets are built only through builders in layouts.** Every
+  `Widget::new(ui, Rect, ..)` rect constructor of the portable widgets
+  (`Button`, `Label`, `Edit`, `ListView::new`/`with_model`, `TreeView`,
+  `GridView`, `IconView`, `Panel::new`/`plain`, `Split::row`/`column`,
+  `Toolbar::new`/`empty`, `TopBar::new`, `Menu::bar`, `Separator::new`/
+  `vertical`, `ColorPanel`, `ColorPicker`, `ColorField`, `HueSlider`,
+  `RadioGroup`, `ScrollView`, `Tabs`, `GroupBox`, `FlowText`,
+  `MaterialStatusBar`, ...) is now crate-private, and the `::auto`
+  constructors are gone: use the `arrange` builders (`button("OK")`,
+  `list()`, `tree_view()`, `panel(layout)`, `split(a, b)`, `toolbar()`,
+  `menu_bar(..)`, ...) in a layout mounted with `Ui::root`/`mount`/`mount_in`,
+  or `absolute()` with `.at(x, y, w, h)` where free placement is the point.
+  `set_bounds` is gone from `Panel`, `ScrollView`, `Split`, `ColorPanel`,
+  `ColorField` and `HueSlider` (layouts place them); `Control::new` stays for
+  custom widgets, which implement `Placeable` and go in through
+  `build(|ui| ..)`. Dialogs, menus' `Menu::context`, `Tooltip::attach` and
+  `TaskDialog` keep their constructors.
 - **Layouts take builders, not widgets.** `arrange` layouts hold widget
   builders (`label("...")`, `button("...").on_click(Msg::X)`, `edit()`,
   `list()`, `group(title, layout)`, `tabs().page(..)`, or `build(|ui| ...)`

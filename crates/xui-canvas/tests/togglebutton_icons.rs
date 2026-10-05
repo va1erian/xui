@@ -12,10 +12,10 @@ use xui_canvas::snapshot::{Snapshot, render};
 use xui_core::app::{App, Ui};
 use xui_core::icon::Lucide;
 use xui_core::image::Image;
-use xui_core::widget::ToggleButton;
-use xui_core::{Color, Dip, Rect, Theme};
+use xui_core::prelude::{LayoutExt, absolute, toggle_button};
+use xui_core::{Color, Dip, Theme};
 
-struct Demo(#[allow(dead_code)] Vec<ToggleButton<()>>);
+struct Demo;
 
 impl App for Demo {
     type Msg = ();
@@ -34,23 +34,23 @@ const BOXES: [(i32, i32, i32, i32); 4] = [
 
 /// Renders the four buttons in `theme` at `dpi`.
 fn shot(theme: Theme, dpi: u32) -> Image {
-    let s = move |dip: i32| dip * dpi as i32 / 96;
     render(
         Snapshot::new(Dip(216.0), Dip(80.0)).theme(theme).dpi(dpi),
-        move |ui| {
+        |ui| {
             let make = |(x, y, w, h): (i32, i32, i32, i32), text: &str, checked: bool| {
-                let button = ToggleButton::new(ui, Rect::new(s(x), s(y), s(x + w), s(y + h)), text)
-                    .expect("a toggle button")
-                    .icon(Lucide::Bold);
-                button.set_checked(checked);
-                button
+                toggle_button(text)
+                    .icon(Lucide::Bold)
+                    .checked(checked)
+                    .at(x, y, w, h)
             };
-            Demo(vec![
+            ui.root(absolute().children((
                 make(BOXES[0], "", false),
                 make(BOXES[1], "", true),
                 make(BOXES[2], "Bold", false),
                 make(BOXES[3], "Bold", true),
-            ])
+            )))
+            .expect("the toggle buttons");
+            Demo
         },
     )
     .expect("a snapshot")

@@ -81,7 +81,7 @@ pub struct ScrollView<M: 'static> {
 
 impl<M: 'static> ScrollView<M> {
     /// Creates a scroll view at `bounds`.
-    pub fn new(ui: &Ui<M>, bounds: Rect) -> Result<ScrollView<M>> {
+    pub(crate) fn new(ui: &Ui<M>, bounds: Rect) -> Result<ScrollView<M>> {
         let control = Control::new(ui, &NodeSpec::new(NodeKind::ScrollView, bounds).tab_stop())?;
         let scoped = ui.with_parent(control.id());
         let bar_node = Control::new(
@@ -172,12 +172,6 @@ impl<M: 'static> ScrollView<M> {
     pub fn on_scroll(self, f: impl Fn(Px) -> Option<M> + 'static) -> ScrollView<M> {
         *self.shared.on_scroll.borrow_mut() = Some(Box::new(f));
         self
-    }
-
-    /// Moves/resizes the view and re-lays its content out.
-    pub fn set_bounds(&self, bounds: Rect) {
-        self.control.set_bounds(bounds);
-        relayout(&self.scoped, &self.shared);
     }
 
     /// Re-lays the content out from the view's current bounds.

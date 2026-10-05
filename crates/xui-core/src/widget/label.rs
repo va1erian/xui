@@ -60,14 +60,8 @@ pub struct Label<M: 'static> {
 }
 
 impl<M: 'static> Label<M> {
-    /// Creates a label with no bounds of its own, for a layout to place (see
-    /// [`crate::arrange`]); its size comes from [`Placeable`](super::Placeable).
-    pub fn auto(ui: &Ui<M>, text: &str) -> Result<Label<M>> {
-        Label::new(ui, Rect::default(), text)
-    }
-
     /// Creates a label showing `text` at `bounds`.
-    pub fn new(ui: &Ui<M>, bounds: Rect, text: &str) -> Result<Label<M>> {
+    pub(crate) fn new(ui: &Ui<M>, bounds: Rect, text: &str) -> Result<Label<M>> {
         let control = Control::new(ui, &NodeSpec::new(NodeKind::Label, bounds).text(text))?;
         let state = Rc::new(RefCell::new(text.to_string()));
         let theme = ui.theme_handle();

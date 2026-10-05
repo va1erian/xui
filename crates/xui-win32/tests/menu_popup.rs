@@ -18,6 +18,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
 };
 
 use xui_core::app::{App, Ui};
+use xui_core::arrange::{Handle, LayoutExt, absolute, menu_bar};
 use xui_core::backend::{Backend, NodeKind, NodeSpec, PlatformSpec};
 use xui_core::property::{Properties, Value};
 use xui_core::widget::{Menu, MenuId};
@@ -53,7 +54,7 @@ enum Msg {
 
 struct PopupApp {
     backend: Rc<Win32Backend>,
-    menu: Menu<Msg>,
+    menu: Handle<Menu<Msg>>,
     popup: WidgetId,
     overlay: WidgetId,
     owner: Hwnd,
@@ -69,7 +70,7 @@ impl App for PopupApp {
                 // Public portable API: `("open", true)` opens the first bar
                 // menu, the same path a title click takes. A short timer
                 // checks once the top-level popup has been composed.
-                self.menu.set_property("open", Value::Bool(true));
+                self.menu.get().set_property("open", Value::Bool(true));
             }
             Msg::Check => {
                 let mut checks = Checks::default();
@@ -125,17 +126,23 @@ fn a_bar_menu_popup_floats_above_a_later_node() {
                     .native_window()
                     .map(|handle| Hwnd::from_raw(handle.raw()))
                     .expect("the Win32 backend exposes the host handle");
-                let menu = Menu::bar(ui, Rect::new(0, 0, 260, 28))
-                    .expect("create the menu bar")
-                    .on_select(|_| None)
-                    .build(|m| {
-                        m.submenu(MenuId::new(0), "&File", |f| {
-                            f.item(MenuId::new(1), "&New");
-                            f.item(MenuId::new(2), "&Open");
-                            f.item(MenuId::new(3), "&Save");
-                        });
-                    });
-                let popup = menu.popup_id(0).expect("a popup node");
+                let menu = Handle::new();
+                ui.root(
+                    absolute().child(
+                        menu_bar(|m| {
+                            m.submenu(MenuId::new(0), "&File", |f| {
+                                f.item(MenuId::new(1), "&New");
+                                f.item(MenuId::new(2), "&Open");
+                                f.item(MenuId::new(3), "&Save");
+                            });
+                        })
+                        .then(|bar| bar.on_select(|_| None))
+                        .bind(&menu)
+                        .at(0, 0, 260, 28),
+                    ),
+                )
+                .expect("create the menu bar");
+                let popup = menu.get().popup_id(0).expect("a popup node");
                 // Created after the menu's pooled popups, directly under the
                 // dropdown: a later sibling a child popup could be clipped by.
                 let overlay = ui

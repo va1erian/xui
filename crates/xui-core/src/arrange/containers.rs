@@ -7,7 +7,7 @@ use std::cell::Cell;
 use std::rc::Rc;
 
 use super::{Build, Entry, Handle, IntoEntry, Kind, Layout, build};
-use crate::units::Dip;
+use crate::units::{Dip, Px};
 use crate::widget::{GroupBox, ScrollView, Split, Tabs};
 
 /// A titled frame with `content` laid out inside it. The frame and its
@@ -60,6 +60,14 @@ pub struct ScrollBuild<M: 'static> {
 }
 
 impl<M: 'static> ScrollBuild<M> {
+    /// Raises `f(offset)` whenever the view scrolls.
+    pub fn on_scroll(mut self, f: impl Fn(Px) -> M + 'static) -> ScrollBuild<M> {
+        self.build = self
+            .build
+            .then(move |view| view.on_scroll(move |offset| Some(f(offset))));
+        self
+    }
+
     /// Fills `handle` with the scroll view when it is created.
     pub fn bind(mut self, handle: &Handle<ScrollView<M>>) -> ScrollBuild<M> {
         self.build = self.build.bind(handle);

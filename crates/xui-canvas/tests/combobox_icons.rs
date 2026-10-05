@@ -6,10 +6,10 @@ use xui_canvas::snapshot::{Snapshot, render_with};
 use xui_core::app::{App, Ui};
 use xui_core::icon::Lucide;
 use xui_core::image::Image;
-use xui_core::widget::ComboBox;
-use xui_core::{Color, Dip, Rect, Theme};
+use xui_core::prelude::{LayoutExt, absolute, combo_box};
+use xui_core::{Color, Dip, Theme};
 
-struct Demo(#[allow(dead_code)] ComboBox<()>);
+struct Demo;
 
 impl App for Demo {
     type Msg = ();
@@ -69,16 +69,16 @@ fn shot(theme: Theme, dpi: u32, selected: usize, open: bool, enabled: bool) -> I
     render_with(
         Snapshot::new(Dip(200.0), Dip(140.0)).theme(theme).dpi(dpi),
         move |ui| {
-            let combo = ComboBox::new(
-                ui,
-                Rect::new(0, 0, scale(160), scale(28)),
-                &["one", " ", "three"],
-            )?
-            .item_icon(0, Lucide::CircleDot)
-            .item_icon(2, Lucide::TriangleAlert);
-            combo.select(selected);
-            combo.set_enabled(enabled);
-            Ok(Demo(combo))
+            let combo = combo_box(&["one", " ", "three"]).then(move |combo| {
+                let combo = combo
+                    .item_icon(0, Lucide::CircleDot)
+                    .item_icon(2, Lucide::TriangleAlert);
+                combo.select(selected);
+                combo.set_enabled(enabled);
+                combo
+            });
+            ui.root(absolute().child(combo.at(0, 0, 160, 28)))?;
+            Ok(Demo)
         },
         move |stage| {
             if open {

@@ -8,16 +8,9 @@
 //! cargo run -p xui --features canvas --example control_iconview
 //! ```
 
-use xui_core::Dip;
-use xui_core::app::{App, Ui, run_app};
-use xui_core::backend::PlatformSpec;
-use xui_core::geometry::Point;
-use xui_core::icon::{IconRef, Lucide};
-use xui_core::widget::{Button, HasText, IconModel, IconSize, IconView, Label};
-
-#[path = "support.rs"]
-mod support;
-use support::{Layout, autoclose, backend};
+use xui::icon::{IconRef, Lucide};
+use xui::prelude::*;
+use xui::widget::{IconModel, IconSize};
 
 const NAMES: [&str; 6] = [
     "Reports",
@@ -68,69 +61,63 @@ impl IconModel for Model {
     }
 }
 
+#[derive(Clone)]
 enum Msg {
     Select(usize),
     Activate(usize),
     Context(Option<usize>, Point),
     Size(IconSize),
-    Quit,
 }
 
+#[derive(Default)]
 struct Demo {
-    result: Label<Msg>,
-    view: IconView<Msg>,
-    _buttons: [Button<Msg>; 3],
+    result: Handle<Label<Msg>>,
+    view: Handle<IconView<Msg>>,
 }
 
 impl App for Demo {
     type Msg = Msg;
 
-    fn update(&mut self, msg: Msg, ui: &mut Ui<Msg>) {
+    fn update(&mut self, msg: Msg, _ui: &mut Ui<Msg>) {
+        let result = self.result.get();
         match msg {
-            Msg::Select(index) => self.result.set_text(&format!("Selected tile {index}")),
-            Msg::Activate(index) => self.result.set_text(&format!("Activated tile {index}")),
-            Msg::Context(item, at) => self.result.set_text(&format!(
+            Msg::Select(index) => result.set_text(&format!("Selected tile {index}")),
+            Msg::Activate(index) => result.set_text(&format!("Activated tile {index}")),
+            Msg::Context(item, at) => result.set_text(&format!(
                 "Context on tile {} at {}, {}",
                 item.map_or(-1, |item| item as i32),
                 at.x,
                 at.y
             )),
             Msg::Size(size) => {
-                self.view.set_icon_size(size);
-                self.result.set_text(&format!("Icon size: {size:?}"));
+                self.view.get().set_icon_size(size);
+                result.set_text(&format!("Icon size: {size:?}"));
             }
-            Msg::Quit => ui.quit(),
         }
     }
 }
 
-fn main() -> xui_core::backend::Result<()> {
-    run_app(
-        backend(),
-        PlatformSpec::new("IconView demo").size(Dip(640.0), Dip(440.0)),
-        |ui| {
-            let l = Layout::new(ui.dpi());
-            let result = Label::new(ui, l.rect(16.0, 16.0, 624.0, 44.0), "No click yet").unwrap();
-            let view = IconView::with_model(ui, l.rect(16.0, 52.0, 624.0, 360.0), Model)
-                .unwrap()
-                .on_select(|index| Some(Msg::Select(index)))
-                .on_activate(|index| Some(Msg::Activate(index)))
-                .on_context(|item, at| Some(Msg::Context(item, at)));
-            let small = Button::new(ui, l.rect(16.0, 372.0, 204.0, 404.0), "Small")
-                .unwrap()
-                .on_click(|| Some(Msg::Size(IconSize::Small)));
-            let medium = Button::new(ui, l.rect(212.0, 372.0, 400.0, 404.0), "Medium")
-                .unwrap()
-                .on_click(|| Some(Msg::Size(IconSize::Medium)));
-            let large = Button::new(ui, l.rect(408.0, 372.0, 596.0, 404.0), "Large")
-                .unwrap()
-                .on_click(|| Some(Msg::Size(IconSize::Large)));
-            autoclose(ui, || Msg::Quit);
-            Demo {
-                result,
-                view,
-                _buttons: [small, medium, large],
-            }
-        },
-    )
+fn main() -> Result<()> {
+    xui::app("IconView demo").size(640, 440).run(|ui| {
+        let demo = Demo::default();
+        ui.root(
+            column().padding(16).gap(8).children((
+                label("No click yet").bind(&demo.result),
+                icon_view_with(Model)
+                    .on_select(Msg::Select)
+                    .on_activate(Msg::Activate)
+                    .then(|view| view.on_context(|item, at| Some(Msg::Context(item, at))))
+                    .bind(&demo.view)
+                    .fill(1),
+                row().gap(8).children((
+                    button("Small").on_click(Msg::Size(IconSize::Small)).fill(1),
+                    button("Medium")
+                        .on_click(Msg::Size(IconSize::Medium))
+                        .fill(1),
+                    button("Large").on_click(Msg::Size(IconSize::Large)).fill(1),
+                )),
+            )),
+        )?;
+        Ok(demo)
+    })
 }

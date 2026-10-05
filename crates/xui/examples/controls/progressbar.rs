@@ -7,59 +7,49 @@
 //! cargo run -p xui --features canvas --example control_progressbar
 //! ```
 
-use xui_core::Dip;
-use xui_core::app::{App, Ui, run_app};
-use xui_core::backend::PlatformSpec;
-use xui_core::widget::{HasText, Label, ProgressBar, Slider};
+use xui::prelude::*;
 
-#[path = "support.rs"]
-mod support;
-use support::{Layout, autoclose, backend};
-
+#[derive(Clone)]
 enum Msg {
     Value(f64),
-    Quit,
 }
 
+#[derive(Default)]
 struct Demo {
-    result: Label<Msg>,
-    bar: ProgressBar<Msg>,
-    _slider: Slider<Msg>,
+    result: Handle<Label<Msg>>,
+    bar: Handle<ProgressBar<Msg>>,
 }
 
 impl App for Demo {
     type Msg = Msg;
 
-    fn update(&mut self, msg: Msg, ui: &mut Ui<Msg>) {
+    fn update(&mut self, msg: Msg, _ui: &mut Ui<Msg>) {
         match msg {
             Msg::Value(value) => {
-                self.bar.set_value(value as i32);
-                self.result.set_text(&format!("Progress: {value:.0}%"));
+                self.bar.get().set_value(value as i32);
+                self.result
+                    .get()
+                    .set_text(&format!("Progress: {value:.0}%"));
             }
-            Msg::Quit => ui.quit(),
         }
     }
 }
 
-fn main() -> xui_core::backend::Result<()> {
-    run_app(
-        backend(),
-        PlatformSpec::new("ProgressBar demo").size(Dip(520.0), Dip(360.0)),
-        |ui| {
-            let l = Layout::new(ui.dpi());
-            let result = Label::new(ui, l.rect(16.0, 16.0, 504.0, 48.0), "Progress: 40%").unwrap();
-            let bar = ProgressBar::new(ui, l.rect(16.0, 64.0, 504.0, 80.0), 100).unwrap();
-            bar.set_value(40);
-            let slider = Slider::new(ui, l.rect(16.0, 96.0, 504.0, 136.0), 0.0, 100.0)
-                .unwrap()
-                .on_change(|value| Some(Msg::Value(value)));
-            slider.set_value(40.0);
-            autoclose(ui, || Msg::Quit);
-            Demo {
-                result,
-                bar,
-                _slider: slider,
-            }
-        },
-    )
+fn main() -> Result<()> {
+    xui::app("ProgressBar demo").size(520, 360).run(|ui| {
+        let demo = Demo::default();
+        ui.root(
+            column().padding(16).gap(16).children((
+                label("Progress: 40%").bind(&demo.result),
+                progress(100).value(40).bind(&demo.bar),
+                slider(0.0, 100.0)
+                    .then(|slider| {
+                        slider.set_value(40.0);
+                        slider
+                    })
+                    .on_change(Msg::Value),
+            )),
+        )?;
+        Ok(demo)
+    })
 }

@@ -38,6 +38,12 @@ pub fn tree_view<M: 'static>() -> Build<TreeView<M>, M> {
     build(|ui| TreeView::new(ui, Default::default(), &[]))
 }
 
+/// A virtual tree over `model`: its roots load now and a branch's children
+/// the first time it expands.
+pub fn tree_view_with<M: 'static>(model: impl TreeModel + 'static) -> Build<TreeView<M>, M> {
+    build(move |ui| TreeView::with_model(ui, Default::default(), model))
+}
+
 impl<M: 'static> Build<TreeView<M>, M> {
     /// Shows `rows`, a flattened tree (each row carries its depth).
     pub fn rows(self, rows: impl Into<Vec<TreeRow>>) -> Build<TreeView<M>, M> {

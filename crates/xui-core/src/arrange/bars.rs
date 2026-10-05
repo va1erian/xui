@@ -9,8 +9,8 @@
 use super::{Build, build};
 use crate::icon::IconRef;
 use crate::widget::{
-    FlowText, GridView, IconView, MaterialStatusBar, Menu, MenuId, MenuScope, Run, Toolbar, TopBar,
-    TopBarId,
+    FlowText, GridModel, GridView, IconModel, IconView, MaterialStatusBar, Menu, MenuId, MenuScope,
+    Run, Toolbar, TopBar, TopBarId,
 };
 
 /// Owned copies of `items`, for a constructor that runs at mount time.
@@ -45,6 +45,11 @@ pub fn grid_view<M: 'static>(items: &[&str]) -> Build<GridView<M>, M> {
     })
 }
 
+/// A grid of tiles from `model`, painted on demand for any number of them.
+pub fn grid_view_with<M: 'static>(model: impl GridModel + 'static) -> Build<GridView<M>, M> {
+    build(move |ui| GridView::with_model(ui, Default::default(), model))
+}
+
 index_events!(GridView);
 
 /// A view of named icons, like a file browser's.
@@ -56,7 +61,22 @@ pub fn icon_view<M: 'static>(items: &[&str]) -> Build<IconView<M>, M> {
     })
 }
 
+/// A view of icons from `model`, loaded on demand for any number of them.
+pub fn icon_view_with<M: 'static>(model: impl IconModel + 'static) -> Build<IconView<M>, M> {
+    build(move |ui| IconView::with_model(ui, Default::default(), model))
+}
+
 index_events!(IconView);
+
+/// A strip of text buttons, one per entry of `labels`, each as wide as its
+/// label.
+pub fn text_toolbar<M: 'static>(labels: &[&str]) -> Build<Toolbar<M>, M> {
+    let labels = owned(labels);
+    build(move |ui| {
+        let labels: Vec<&str> = labels.iter().map(String::as_str).collect();
+        Toolbar::new(ui, Default::default(), &labels)
+    })
+}
 
 /// An empty strip of buttons; add them with [`item`](Build::item).
 pub fn toolbar<M: 'static>() -> Build<Toolbar<M>, M> {
@@ -128,6 +148,12 @@ impl<M: 'static> Build<Menu<M>, M> {
     /// Raises `f(id)` when command `id` is chosen.
     pub fn on_select(self, f: impl Fn(MenuId) -> M + 'static) -> Build<Menu<M>, M> {
         self.then(move |menu| menu.on_select(move |id| Some(f(id))))
+    }
+
+    /// Maps a chosen command through `f`, which may raise nothing (a
+    /// submenu's id, say).
+    pub fn on_select_with(self, f: impl Fn(MenuId) -> Option<M> + 'static) -> Build<Menu<M>, M> {
+        self.then(move |menu| menu.on_select(f))
     }
 
     /// Raises `f(id, checked)` when check item `id` flips.

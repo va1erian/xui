@@ -7,14 +7,8 @@
 //! cargo run -p xui --features canvas --example control_icon
 //! ```
 
-use xui_core::Dip;
-use xui_core::app::{App, Ui, run_app};
-use xui_core::backend::PlatformSpec;
-use xui_core::widget::{Button, HasText, Icon, Label};
-
-#[path = "support.rs"]
-mod support;
-use support::{Layout, autoclose, backend};
+use xui::prelude::*;
+use xui::widget::Icon;
 
 const ICONS: [Icon; 8] = [
     Icon::Plus,
@@ -40,49 +34,37 @@ fn name(icon: Icon) -> &'static str {
     }
 }
 
+#[derive(Clone)]
 enum Msg {
     Pick(Icon),
-    Quit,
 }
 
+#[derive(Default)]
 struct Demo {
-    result: Label<Msg>,
-    _buttons: Vec<Button<Msg>>,
+    result: Handle<Label<Msg>>,
 }
 
 impl App for Demo {
     type Msg = Msg;
 
-    fn update(&mut self, msg: Msg, ui: &mut Ui<Msg>) {
+    fn update(&mut self, msg: Msg, _ui: &mut Ui<Msg>) {
         match msg {
-            Msg::Pick(icon) => self.result.set_text(&format!("Icon: {}", name(icon))),
-            Msg::Quit => ui.quit(),
+            Msg::Pick(icon) => self.result.get().set_text(&format!("Icon: {}", name(icon))),
         }
     }
 }
 
-fn main() -> xui_core::backend::Result<()> {
-    run_app(
-        backend(),
-        PlatformSpec::new("Icon demo").size(Dip(520.0), Dip(360.0)),
-        |ui| {
-            let l = Layout::new(ui.dpi());
-            let mut buttons = Vec::new();
-            for (index, icon) in ICONS.into_iter().enumerate() {
-                let left = 16.0 + index as f32 * 62.0;
-                let button = Button::new(ui, l.rect(left, 16.0, left + 54.0, 72.0), "")
-                    .unwrap()
-                    .icon(icon)
-                    .on_click(move || Some(Msg::Pick(icon)));
-                buttons.push(button);
-            }
-            let result =
-                Label::new(ui, l.rect(16.0, 88.0, 504.0, 120.0), "No icon pressed").unwrap();
-            autoclose(ui, || Msg::Quit);
-            Demo {
-                result,
-                _buttons: buttons,
-            }
-        },
-    )
+fn main() -> Result<()> {
+    xui::app("Icon demo").size(520, 360).run(|ui| {
+        let demo = Demo::default();
+        let buttons: Vec<_> = ICONS
+            .into_iter()
+            .map(|icon| button("").icon(icon).on_click(Msg::Pick(icon)).size(54, 56))
+            .collect();
+        ui.root(column().padding(16).gap(16).children((
+            row().gap(8).children(buttons),
+            label("No icon pressed").bind(&demo.result),
+        )))?;
+        Ok(demo)
+    })
 }

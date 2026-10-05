@@ -36,14 +36,8 @@ pub struct Hyperlink<M: 'static> {
 }
 
 impl<M: 'static> Hyperlink<M> {
-    /// Creates a hyperlink with no bounds of its own, for a layout to place (see
-    /// [`crate::arrange`]); its size comes from [`Placeable`](super::Placeable).
-    pub fn auto(ui: &Ui<M>, text: &str) -> Result<Hyperlink<M>> {
-        Hyperlink::new(ui, Rect::default(), text)
-    }
-
     /// Creates a link labelled `text` at `bounds`.
-    pub fn new(ui: &Ui<M>, bounds: Rect, text: &str) -> Result<Hyperlink<M>> {
+    pub(crate) fn new(ui: &Ui<M>, bounds: Rect, text: &str) -> Result<Hyperlink<M>> {
         let control = Control::new(ui, &NodeSpec::new(NodeKind::Label, bounds).text(text))?;
         ui.set_cursor(control.id(), Cursor::Hand);
         let state = Rc::new(RefCell::new(text.to_string()));

@@ -2,8 +2,8 @@
 //! was placed (and thus resized) by a parent through `apply_moves` after the
 //! model was installed (va1erian/xui#158, via emusic#466).
 //!
-//! The list is built at `Rect::default()` and then placed, exactly as a caller
-//! that owns the layout does. Rendering the window and reading the scrollbar
+//! The list is built at `Rect::default()` and then placed by the layout that
+//! owns it. Rendering the window and reading the scrollbar
 //! pixel rows catches the thumb geometry the real backend would present.
 
 use std::cell::RefCell;
@@ -13,8 +13,9 @@ use xui_canvas::{OffscreenBackend, RgbaImage};
 use xui_core::app::{App, Ui, run_app};
 use xui_core::backend::{Backend, Event, PlatformSpec};
 use xui_core::message::Modifiers;
-use xui_core::widget::{Fill, ListView};
-use xui_core::{Dip, Rect, Theme};
+use xui_core::prelude::{LayoutExt, column, list};
+use xui_core::widget::Fill;
+use xui_core::{Dip, Theme};
 
 struct TestApp;
 
@@ -51,12 +52,20 @@ fn a_parent_placed_list_keeps_its_thumb_tracking_the_offset() {
         PlatformSpec::new("scrollbar").size(Dip(240.0), Dip(200.0)),
         move |ui| {
             let rows: Vec<String> = (0..400).map(|index| format!("row {index}")).collect();
-            // Built somewhere else (an empty default rect), then placed by the
-            // owner, as emusic's view does.
-            let list = ListView::with_model(ui, Rect::default(), rows)
-                .unwrap()
-                .column("Name", Fill);
-            ui.apply_moves(&[(list.id(), Rect::new(0, 0, 240, 200))]);
+            // Built with an empty default rect and its model, then placed by
+            // the layout that owns it.
+            ui.root(
+                column().child(
+                    list()
+                        .column("Name", Fill)
+                        .then(move |list| {
+                            list.set_model(rows);
+                            list
+                        })
+                        .fill(1),
+                ),
+            )
+            .unwrap();
             let window = ui.window();
 
             let before = backend_for_make.render(window).expect("a render");

@@ -7,12 +7,11 @@ use xui_canvas::snapshot::{Snapshot, try_render};
 use xui_core::app::{App, Ui};
 use xui_core::icon::Lucide;
 use xui_core::image::Image;
+use xui_core::prelude::{Build, LayoutExt, column, toolbar};
 use xui_core::widget::Toolbar;
-use xui_core::{Dip, Rect, Theme};
+use xui_core::{Dip, Theme};
 
-struct Host {
-    _toolbar: Toolbar<()>,
-}
+struct Host;
 
 impl App for Host {
     type Msg = ();
@@ -21,8 +20,8 @@ impl App for Host {
 }
 
 /// New, Open, Save, Save All | Undo, Redo | Cut, Copy, Paste | Run, End.
-fn lazyrad_toolbar(ui: &Ui<()>, width: i32, height: i32) -> xui_core::backend::Result<Toolbar<()>> {
-    Ok(Toolbar::empty(ui, Rect::new(0, 0, width, height))?
+fn lazyrad_toolbar() -> Build<Toolbar<()>, ()> {
+    toolbar()
         .item(Lucide::FilePlus, "New")
         .item(Lucide::FolderOpen, "Open")
         .item(Lucide::Save, "Save")
@@ -36,16 +35,15 @@ fn lazyrad_toolbar(ui: &Ui<()>, width: i32, height: i32) -> xui_core::backend::R
         .item(Lucide::ClipboardPaste, "Paste")
         .separator()
         .item_with_text(Lucide::Play, "Run", "Run")
-        .item_with_text(Lucide::Square, "End", "End"))
+        .item_with_text(Lucide::Square, "End", "End")
 }
 
 fn render(theme: Theme, dpi: u32) -> Image {
-    let scale = dpi as f32 / 96.0;
     try_render(
         Snapshot::new(Dip(720.0), Dip(40.0)).theme(theme).dpi(dpi),
         |ui| {
-            lazyrad_toolbar(ui, (720.0 * scale) as i32, (40.0 * scale) as i32)
-                .map(|_toolbar| Host { _toolbar })
+            ui.root(column().child(lazyrad_toolbar().fill(1)))?;
+            Ok(Host)
         },
     )
     .expect("render")

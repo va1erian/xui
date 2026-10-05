@@ -43,7 +43,7 @@ pub struct MaterialStatusBar<M: 'static> {
 
 impl<M: 'static> MaterialStatusBar<M> {
     /// Creates a bar with `parts`, laid out left-to-right across `bounds`.
-    pub fn new(ui: &Ui<M>, bounds: Rect, parts: &[&str]) -> Result<MaterialStatusBar<M>> {
+    pub(crate) fn new(ui: &Ui<M>, bounds: Rect, parts: &[&str]) -> Result<MaterialStatusBar<M>> {
         let control = Control::new(ui, &NodeSpec::new(NodeKind::StatusBar, bounds))?;
         let parts: Rc<RefCell<Vec<String>>> = Rc::new(RefCell::new(
             parts.iter().map(|part| part.to_string()).collect(),
