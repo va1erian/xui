@@ -82,12 +82,18 @@ impl<M: 'static> State<M> {
                 if id.is_none() {
                     continue;
                 }
-                moves.push((id, rect));
+                // A re-flow mostly leaves widgets where they are: moving one
+                // in place would still cost the backend a lookup and a repaint.
+                if self.ui.bounds(id) != rect {
+                    moves.push((id, rect));
+                }
                 after.push((key, rect));
             }
             self.collapse(&shown);
             // One batch for the whole tree, so a relayout does not flicker.
-            self.ui.apply_moves(&moves);
+            if !moves.is_empty() {
+                self.ui.apply_moves(&moves);
+            }
             // Satellite nodes (a list's scrollbar) follow once the primary
             // nodes are placed, so they read the new bounds.
             for (key, rect) in after {

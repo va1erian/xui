@@ -28,6 +28,7 @@ mod geometry;
 mod image_cache;
 mod offscreen;
 mod paint;
+mod region;
 pub mod snapshot;
 mod text;
 mod text_layout;
@@ -47,6 +48,7 @@ pub use canvas::SkiaCanvas;
 #[cfg(feature = "winit-backend")]
 pub use gl::{GlError, GlSurface, GlWidget};
 pub use offscreen::OffscreenBackend;
+pub use region::Region;
 pub use text::{add_font, measure as measure_text, set_default_family, set_default_font};
 
 /// The OpenGL binding a [`GlWidget`] draws with.
@@ -88,6 +90,8 @@ impl RgbaImage {
 pub struct Surface {
     pixmap: Pixmap,
     images: image_cache::ImageCache,
+    /// The pixels of the last [`Surface::paint_region`], kept for the next.
+    scratch: Vec<u8>,
 }
 
 impl Surface {
@@ -98,6 +102,7 @@ impl Surface {
         Surface {
             pixmap,
             images: image_cache::ImageCache::new(),
+            scratch: Vec::new(),
         }
     }
 
@@ -179,6 +184,8 @@ pub(crate) fn to_skia_rgba(color: xui_core::backend::Rgba) -> tiny_skia::Color {
 mod clip_tests;
 #[cfg(test)]
 mod path_tests;
+#[cfg(test)]
+mod region_tests;
 #[cfg(test)]
 mod styled_tests;
 #[cfg(test)]

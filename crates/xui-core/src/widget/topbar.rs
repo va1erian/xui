@@ -289,17 +289,23 @@ impl<M: 'static> TopBar<M> {
 
     /// Replaces a label item's text.
     pub fn set_text(&self, id: TopBarId, text: &str) {
-        if let Some(item) = self
+        let changed = if let Some(item) = self
             .items
             .borrow_mut()
             .iter_mut()
             .find(|item| item.id == id)
             && let Kind::Label(slot) = &mut item.kind
+            && slot != text
         {
             *slot = text.to_string();
+            true
+        } else {
+            false
+        };
+        if changed {
+            self.control.invalidate();
+            self.control.invalidate_layout();
         }
-        self.control.invalidate();
-        self.control.invalidate_layout();
     }
 
     /// A label item's text.

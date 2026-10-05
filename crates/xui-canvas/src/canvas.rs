@@ -41,6 +41,10 @@ pub struct SkiaCanvas<'a> {
     clips: Vec<Clip>,
     mask: Option<Mask>,
     saved: Vec<(f32, f32, f32)>,
+    /// The surface position of the pixmap's top-left pixel: `(0, 0)` over a
+    /// whole surface, the region's corner over a [`Region`](crate::Region)'s
+    /// scratch pixmap. Painters keep drawing in surface coordinates.
+    pub(crate) origin: (i32, i32),
     /// Painted over its ancestors' pixels ([`Canvas::composites_parents`]).
     pub(crate) over_parents: bool,
 }
@@ -63,6 +67,7 @@ impl<'a> SkiaCanvas<'a> {
             clips: Vec::new(),
             mask: None,
             saved: Vec::new(),
+            origin: (0, 0),
             over_parents: false,
         }
     }
@@ -258,8 +263,8 @@ impl Canvas for SkiaCanvas<'_> {
     }
 
     fn draw_text(&mut self, text: &str, rect: Rect, style: &TextStyle) {
-        let rect = self.map_rect(rect);
-        let clip = self.clips.last().map(Clip::bounds);
+        let rect = self.to_pixmap(self.map_rect(rect));
+        let clip = self.clip_bounds();
         let dpi = self.dpi;
         crate::text::draw(
             self.pixmap,
@@ -285,8 +290,10 @@ impl Canvas for SkiaCanvas<'_> {
         else {
             return;
         };
+        let (ox, oy) = self.origin;
         let origin = self.point(origin);
-        let clip = self.clips.last().map(Clip::bounds);
+        let origin = Point::new(origin.x - ox, origin.y - oy);
+        let clip = self.clip_bounds();
         crate::text_layout::draw_layout(
             self.pixmap,
             cosmic,
@@ -328,6 +335,7 @@ impl Canvas for SkiaCanvas<'_> {
             && dest.width() as u32 == pixmap.width()
             && dest.height() as u32 == pixmap.height()
         {
+            let (dest, visible) = (self.to_pixmap(dest), self.to_pixmap(visible));
             blit::unscaled(self.pixmap, pixmap, uploaded.opaque, dest, visible);
             return;
         }
@@ -335,14 +343,9 @@ impl Canvas for SkiaCanvas<'_> {
         // rectangle; the filled source is only the visible slice of that map.
         let scale_x = dest.width() as f32 / image.width() as f32;
         let scale_y = dest.height() as f32 / image.height() as f32;
-        let transform = Transform::from_row(
-            scale_x,
-            0.0,
-            0.0,
-            scale_y,
-            dest.left as f32,
-            dest.top as f32,
-        );
+        let at = self.to_pixmap(dest);
+        let transform =
+            Transform::from_row(scale_x, 0.0, 0.0, scale_y, at.left as f32, at.top as f32);
         let source = sk_rect(Rect::new(
             ((visible.left - dest.left) as f32 / scale_x).round() as i32,
             ((visible.top - dest.top) as f32 / scale_y).round() as i32,

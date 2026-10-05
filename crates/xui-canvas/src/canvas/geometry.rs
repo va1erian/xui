@@ -72,6 +72,27 @@ impl SkiaCanvas<'_> {
             .map_or(mapped, |clip| intersect(mapped, clip.bounds()))
     }
 
+    /// The transform from surface to pixmap coordinates, applied by tiny-skia
+    /// after a shape is built and stroked: shapes are computed in surface
+    /// coordinates whatever the pixmap, so a [`Region`](crate::Region)'s
+    /// scratch pixmap rasterises exactly the outline a whole-surface paint
+    /// does, shifted by whole pixels.
+    pub(super) fn shift(&self) -> Transform {
+        let (ox, oy) = self.origin;
+        Transform::from_translate(-ox as f32, -oy as f32)
+    }
+
+    /// `rect` (surface coordinates) in pixmap coordinates.
+    pub(super) fn to_pixmap(&self, rect: Rect) -> Rect {
+        rect.offset(-self.origin.0, -self.origin.1)
+    }
+
+    /// The innermost clip's bounds in pixmap coordinates, for the text
+    /// painters, which write pixels directly.
+    pub(super) fn clip_bounds(&self) -> Option<Rect> {
+        self.clips.last().map(|clip| self.to_pixmap(clip.bounds()))
+    }
+
     pub(super) fn corners(&self, corners: [Corner; 4]) -> [Corner; 4] {
         corners.map(|corner| Corner::new(corner.x * self.scale, corner.y * self.scale))
     }
@@ -84,7 +105,7 @@ impl SkiaCanvas<'_> {
         mask.invert();
         for clip in &self.clips {
             if let Some(path) = clip.path() {
-                mask.intersect_path(&path, FILL_RULE, true, Transform::identity());
+                mask.intersect_path(&path, FILL_RULE, true, self.shift());
             }
         }
         Some(mask)
@@ -111,12 +132,13 @@ impl SkiaCanvas<'_> {
     }
 
     /// Fills `path`, whose coordinates are already in device space (the
-    /// transform is applied by [`SkiaCanvas::rect`]/[`SkiaCanvas::point`]).
+    /// transform is applied by [`SkiaCanvas::rect`]/[`SkiaCanvas::point`]),
+    /// shifted onto the pixmap by [`SkiaCanvas::shift`].
     pub(super) fn fill(&mut self, path: &Path, shader: Shader<'static>) {
         let paint = paint(shader);
         let mask = self.mask.as_ref();
         self.pixmap
-            .fill_path(path, &paint, FILL_RULE, Transform::identity(), mask);
+            .fill_path(path, &paint, FILL_RULE, self.shift(), mask);
     }
 
     pub(super) fn stroke(&mut self, path: &Path, color: tiny_skia::Color, stroke: &Stroke) {
@@ -124,7 +146,7 @@ impl SkiaCanvas<'_> {
         let stroke = skia_stroke(stroke, self.scale);
         let mask = self.mask.as_ref();
         self.pixmap
-            .stroke_path(path, &paint, &stroke, Transform::identity(), mask);
+            .stroke_path(path, &paint, &stroke, self.shift(), mask);
     }
 
     /// The ellipse path at `center` with radii `radius_x`/`radius_y`, culled

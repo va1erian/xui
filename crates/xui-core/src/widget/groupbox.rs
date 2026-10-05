@@ -110,6 +110,9 @@ impl<M: 'static> GroupBox<M> {
 
     /// Replaces the frame's title.
     pub fn set_title(&self, title: &str) {
+        if *self.title.borrow() == title {
+            return;
+        }
         *self.title.borrow_mut() = title.to_string();
         self.control.invalidate();
         self.control.invalidate_layout();
