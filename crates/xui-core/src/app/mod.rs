@@ -70,6 +70,11 @@ type DisplayMapper<M> = Box<dyn Fn() -> Option<M>>;
 /// A DPI change mapped to an optional app message, with the new dots-per-inch
 /// and the backend's suggested window bounds in device pixels.
 type DpiMapper<M> = Box<dyn Fn(u32, Rect) -> Option<M>>;
+/// The layout passes [`Core::flush_layout`] runs before deferring the rest.
+const LAYOUT_PASSES: usize = 4;
+/// The deferred layout passes it schedules in a row before giving up.
+const LAYOUT_RETRIES: u8 = 3;
+
 /// A mounted layout, as the window it lives in sees it.
 pub(crate) trait LayoutHook {
     /// Lays the layout out again (a layout its container drives does
@@ -111,6 +116,9 @@ pub(crate) struct Core<M> {
     /// Set by a change that may alter a widget's natural size (its text, its
     /// visibility, the theme); [`Core::flush_layout`] clears it.
     layout_dirty: Cell<bool>,
+    /// Deferred layout passes scheduled in a row by [`Core::flush_layout`]
+    /// for layouts that would not settle; reset once they do.
+    layout_retries: Cell<u8>,
     /// A value a modal child closes with (see [`Ui::close_with_result`]). The
     /// opener reads it after the child's loop returns; `Any` erases its type
     /// until then.
@@ -142,6 +150,7 @@ impl<M> Core<M> {
             layout_hooks: RefCell::new(Vec::new()),
             next_layout_hook: Cell::new(0),
             layout_dirty: Cell::new(false),
+            layout_retries: Cell::new(0),
             result: RefCell::new(None),
             retained: RefCell::new(Vec::new()),
         })
@@ -298,13 +307,23 @@ impl<M> Core<M> {
 
     /// Runs the layout pass a change asked for, if any. A pass may itself
     /// change visibility (a scroll bar appearing), so it repeats while that
-    /// happens, a few times at most.
+    /// happens, a few times at most. A layout still dirty after that (a
+    /// widget whose `placed` keeps changing its own size) gets one deferred
+    /// pass through a wake rather than being left stale until the next
+    /// input, up to [`LAYOUT_RETRIES`] in a row so it cannot spin forever.
     pub(crate) fn flush_layout(&self) {
-        for _ in 0..4 {
+        for _ in 0..LAYOUT_PASSES {
             if !self.layout_dirty.get() {
+                self.layout_retries.set(0);
                 return;
             }
             self.run_layout_hooks();
+        }
+        if !self.layout_dirty.get() {
+            self.layout_retries.set(0);
+        } else if self.layout_retries.get() < LAYOUT_RETRIES {
+            self.layout_retries.set(self.layout_retries.get() + 1);
+            self.backend.wake(self.window);
         }
     }
 
