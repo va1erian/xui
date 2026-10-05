@@ -42,3 +42,34 @@ fn setting_the_text_a_widget_already_shows_changes_nothing() {
     assert_eq!(backend.invalidations(), repaints, "no repaint");
     assert_eq!(backend.move_calls(), moves, "no re-flow moved anything");
 }
+
+#[test]
+fn every_text_setter_ignores_the_text_already_shown() {
+    use crate::geometry::Rect;
+    use crate::widget::{CheckBox, GroupBox, Hyperlink, ToggleButton, TopBar, TopBarId};
+
+    let (backend, _window, ui, _runtime) = setup();
+    let at = Rect::new(0, 0, 100, 30);
+    let check = CheckBox::new(&ui, at, "Check").unwrap();
+    let link = Hyperlink::new(&ui, at, "Link").unwrap();
+    let toggle = ToggleButton::new(&ui, at, "Toggle").unwrap();
+    let frame = GroupBox::new(&ui, at, "Frame").unwrap();
+    let status = TopBarId::new(1);
+    let bar = TopBar::new(&ui, at).unwrap().label(status, "Status");
+
+    let repaints = backend.invalidations();
+    check.set_text("Check");
+    link.set_text("Link");
+    toggle.set_text("Toggle");
+    frame.set_title("Frame");
+    bar.set_text(status, "Status");
+    assert_eq!(backend.invalidations(), repaints, "nothing changed");
+
+    check.set_text("Checked");
+    link.set_text("Linked");
+    toggle.set_text("Toggled");
+    frame.set_title("Framed");
+    bar.set_text(status, "Busy");
+    assert_eq!(backend.invalidations(), repaints + 5, "one repaint each");
+    assert_eq!(bar.text(status).as_deref(), Some("Busy"));
+}
