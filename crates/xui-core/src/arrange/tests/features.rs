@@ -164,6 +164,31 @@ fn hiding_a_group_hides_its_content_and_frees_its_space() {
 }
 
 #[test]
+fn a_widget_the_app_hides_inside_a_hidden_group_stays_hidden() {
+    let (backend, window, ui, _runtime) = setup();
+    let frame = Handle::<GroupBox<u32>>::new();
+    let inside = Handle::<Button<u32>>::new();
+    let _mounted = ui
+        .mount(
+            column().child(
+                group("Options", column().child(button("inside").bind(&inside))).bind(&frame),
+            ),
+        )
+        .unwrap();
+    let shown = || backend.node(inside.get().id()).unwrap().3;
+
+    ui.set_visible(frame.get().id(), false);
+    settle(&backend, window);
+    ui.set_visible(inside.get().id(), false);
+    settle(&backend, window);
+    assert!(!shown(), "the app hid it while its frame was collapsed");
+
+    ui.set_visible(frame.get().id(), true);
+    settle(&backend, window);
+    assert!(!shown(), "showing the frame does not override the app");
+}
+
+#[test]
 fn a_widget_shared_through_an_rc_is_placed() {
     let (_backend, _window, ui, _runtime) = setup();
     let shared = Rc::new(Button::new(&ui, Rect::default(), "shared").unwrap());
@@ -262,4 +287,17 @@ fn button_builders_set_an_icon_and_a_tooltip() {
         )
         .unwrap();
     assert_eq!(save.get().text(), "Save");
+}
+
+#[test]
+fn the_layout_report_warns_of_a_check_box_too_narrow_for_its_text() {
+    let (_backend, _window, ui, _runtime) = setup();
+    ui.root(column().child(crate::arrange::checkbox("A long check box caption").width(40)))
+        .unwrap();
+    let report = ui.layout_report();
+    assert!(
+        report.contains("CheckBox \"A long check box caption\""),
+        "{report}"
+    );
+    assert!(report.contains("! text truncated"), "{report}");
 }

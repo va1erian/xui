@@ -197,6 +197,10 @@ impl<M: 'static> Placeable<M> for CheckBox<M> {
             dpi,
         )
     }
+
+    fn layout_text(&self) -> Option<String> {
+        Some(self.text())
+    }
 }
 
 /// Implements [`Placeable`] for a field with no content to size it.

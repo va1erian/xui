@@ -107,10 +107,15 @@ impl<M: 'static> State<M> {
             if id.is_none() {
                 continue;
             }
-            let hide = !shown[key] && self.ui.is_visible(id);
+            // Read once: the app's own choice, which the layout never overrides.
+            let wanted = self.ui.is_visible(id);
+            let hide = !shown[key] && wanted;
             if hide != collapsed[key] {
                 collapsed[key] = hide;
-                self.ui.show_node(id, !hide);
+                // Show again only what the layout hid and the app still shows.
+                if hide || wanted {
+                    self.ui.show_node(id, !hide);
+                }
             }
         }
     }
