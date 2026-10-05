@@ -53,16 +53,18 @@ Pages that fill the window, a status bar under them, and a periodic message.
 fn main() -> Result<()> {
     xui::app("Cookbook").size(640, 420).run(|ui| {
         let app = Cookbook::default();
-        ui.root(column().children((
-            tabs()
-                .page("Form", form(&app))
-                .page("Master/detail", master_detail(&app))
-                .page("List", editable_list(&app))
-                .page("Settings", settings())
-                .page("Live", live(&app))
-                .fill(1),
-            status_bar(&["Ready"]).bind(&app.status),
-        )))?;
+        ui.root(
+            column().children((
+                tabs()
+                    .page("Form", form(&app))
+                    .page("Master/detail", master_detail(&app))
+                    .page("List", editable_list(&app))
+                    .page("Settings", settings())
+                    .page("Live", live(&app))
+                    .fill(1),
+                status_bar(&["Ready"]).bind(&app.status),
+            )),
+        )?;
         ui.every(500, Msg::Tick);
         Ok(app)
     })
