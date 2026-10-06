@@ -205,6 +205,13 @@ struct box {
 	css_computed_style *style;
 
 	/**
+	 * How opaque this box draws, 0 to 1: its element's opacity times
+	 * every ancestor element's (nsx). Negative for boxes that draw with
+	 * whatever opacity is current (anonymous and implied boxes).
+	 */
+	float opacity;
+
+	/**
 	 *  value of id attribute (or name for anchors)
 	 */
 	lwc_string *id;

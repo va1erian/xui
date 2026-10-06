@@ -1228,8 +1228,57 @@ static bool html_redraw_box_children(const html_content *html, struct box *box,
  * x, y, clip_[xy][01] are in target coordinates.
  */
 
+static bool html_redraw_box_opaque(const html_content *html,
+		struct box *box, int x_parent, int y_parent,
+		const struct rect *clip, const float scale,
+		colour current_background_color,
+		const struct redraw_context *ctx);
+
+/** The opacity the plotter was last given (nsx). */
+static float html_redraw_opacity = 1;
+
+/**
+ * Recursively draw a box at its opacity (nsx).
+ *
+ * A box with opacity 0 draws nothing, nor do its descendants, all of
+ * which have opacity 0 too. Otherwise the plotter is given the box's
+ * opacity, the product of its element's and every ancestor's, for as
+ * long as the box draws, and the previous one after.
+ *
+ * Parameters as html_redraw_box_opaque().
+ */
 bool html_redraw_box(const html_content *html, struct box *box,
 		int x_parent, int y_parent,
+		const struct rect *clip, const float scale,
+		colour current_background_color,
+		const struct redraw_context *ctx)
+{
+	float before = html_redraw_opacity;
+	bool ok;
+
+	if (box->opacity == 0)
+		return true;
+	if (box->opacity < 0 || box->opacity == before ||
+	    ctx->plot->set_opacity == NULL)
+		return html_redraw_box_opaque(html, box, x_parent, y_parent,
+				clip, scale, current_background_color, ctx);
+
+	html_redraw_opacity = box->opacity;
+	if (ctx->plot->set_opacity(ctx, box->opacity) != NSERROR_OK)
+		return false;
+	ok = html_redraw_box_opaque(html, box, x_parent, y_parent, clip,
+			scale, current_background_color, ctx);
+	html_redraw_opacity = before;
+	return ctx->plot->set_opacity(ctx, before) == NSERROR_OK && ok;
+}
+
+/**
+ * Recursively draw a box, at the opacity the plotter was given.
+ *
+ * Parameters as html_redraw_box().
+ */
+static bool html_redraw_box_opaque(const html_content *html,
+		struct box *box, int x_parent, int y_parent,
 		const struct rect *clip, const float scale,
 		colour current_background_color,
 		const struct redraw_context *ctx)

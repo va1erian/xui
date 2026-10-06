@@ -72,6 +72,8 @@ pub(crate) struct Registry {
     images: Vec<Arc<Image>>,
     /// Per bitmap: the generation its slot holds, and the slot's key.
     image_keys: HashMap<usize, (u32, ImageKey)>,
+    /// Per bitmap drawn translucent, and alpha: as `image_keys`.
+    faded_keys: HashMap<(usize, u8), (u32, ImageKey)>,
 }
 
 impl Registry {
@@ -125,6 +127,52 @@ impl Registry {
         }
         k
     }
+
+    /// The key of `px`'s pixels with their alpha scaled by `alpha`, for a
+    /// bitmap in a translucent box. Each alpha a bitmap is drawn at holds a
+    /// slot, replaced like `image`'s when the bitmap changes.
+    fn faded_image(&mut self, px: &BitmapPixels<'_>, alpha: u8) -> ImageKey {
+        let base = self.image(px);
+        let old = self.faded_keys.get(&(px.id, alpha)).copied();
+        if let Some((generation, k)) = old
+            && generation == px.generation
+        {
+            return k;
+        }
+        let src = &self.images[base as usize];
+        let mut rgba = src.rgba.clone();
+        for a in rgba.iter_mut().skip(3).step_by(4) {
+            *a = scale_alpha(*a, alpha);
+        }
+        self.images.push(Arc::new(Image {
+            width: src.width,
+            height: src.height,
+            rgba,
+        }));
+        let k = (self.images.len() - 1) as ImageKey;
+        self.faded_keys.insert((px.id, alpha), (px.generation, k));
+        if let Some((_, stale)) = old {
+            self.images[stale as usize] = Arc::new(Image {
+                width: 0,
+                height: 0,
+                rgba: Vec::new(),
+            });
+        }
+        k
+    }
+}
+
+/// `a` scaled by `by`, both 0..=255, rounded.
+fn scale_alpha(a: u8, by: u8) -> u8 {
+    ((u16::from(a) * u16::from(by) + 127) / 255) as u8
+}
+
+/// `c` with its alpha scaled by `by`.
+fn fade(c: Rgba, by: u8) -> Rgba {
+    Rgba {
+        a: scale_alpha(c.a, by),
+        ..c
+    }
 }
 
 /// Collects one redraw's plot calls.
@@ -133,6 +181,9 @@ pub(crate) struct Recorder<'a> {
     registry: &'a mut Registry,
     cmds: Vec<Cmd>,
     clipped: bool,
+    /// The alpha everything drawn now is scaled by: the CSS opacity of the
+    /// box NetSurf is drawing (`set_opacity`).
+    alpha: u8,
 }
 
 impl<'a> Recorder<'a> {
@@ -142,6 +193,22 @@ impl<'a> Recorder<'a> {
             registry,
             cmds: Vec::new(),
             clipped: false,
+            alpha: u8::MAX,
+        }
+    }
+
+    /// Scales the alpha of what is drawn from now on by `opacity`, 0 to 1
+    /// (absolute, not relative to the previous call).
+    pub(crate) fn set_opacity(&mut self, opacity: f32) {
+        self.alpha = (opacity.clamp(0.0, 1.0) * 255.0).round() as u8;
+    }
+
+    /// `s` at the current opacity.
+    fn faded(&self, s: &Style) -> Style {
+        Style {
+            fill: fade(s.fill, self.alpha),
+            stroke: fade(s.stroke, self.alpha),
+            ..*s
         }
     }
 
@@ -171,6 +238,7 @@ impl<'a> Recorder<'a> {
     }
 
     pub(crate) fn rect(&mut self, r: Rect, s: &Style) {
+        let s = &self.faded(s);
         if s.fill_kind != PlotKind::None && s.fill.a > 0 {
             self.cmds.push(Cmd::Rect {
                 rect: r,
@@ -186,12 +254,21 @@ impl<'a> Recorder<'a> {
                 (r.left, r.bottom, r.left, r.top),
             ];
             for (x0, y0, x1, y1) in corners {
-                self.line(Point::new(x0, y0), Point::new(x1, y1), s);
+                self.stroke(Point::new(x0, y0), Point::new(x1, y1), s);
             }
         }
     }
 
     pub(crate) fn line(&mut self, a: Point, b: Point, s: &Style) {
+        let s = &self.faded(s);
+        self.stroke(a, b, s);
+    }
+
+    /// A line in an already faded style.
+    fn stroke(&mut self, a: Point, b: Point, s: &Style) {
+        if s.stroke.a == 0 {
+            return;
+        }
         let dash = match s.stroke_kind {
             PlotKind::None => return,
             PlotKind::Solid => Dash::Solid,
@@ -207,6 +284,7 @@ impl<'a> Recorder<'a> {
     }
 
     pub(crate) fn disc(&mut self, center: Point, radius: f32, s: &Style) {
+        let s = &self.faded(s);
         let fill = if s.fill_kind == PlotKind::None {
             Rgba::TRANSPARENT
         } else {
@@ -226,6 +304,7 @@ impl<'a> Recorder<'a> {
     }
 
     pub(crate) fn polygon(&mut self, points: Vec<Point>, s: &Style) {
+        let s = &self.faded(s);
         if s.fill_kind != PlotKind::None && points.len() >= 3 {
             self.cmds.push(Cmd::Polygon {
                 points,
@@ -236,10 +315,19 @@ impl<'a> Recorder<'a> {
 
     /// A bitmap scaled into `dest`, tiled across `area` when it repeats.
     pub(crate) fn bitmap(&mut self, px: &BitmapPixels<'_>, dest: Rect, repeat: (bool, bool)) {
-        if px.width == 0 || px.height == 0 || dest.width() <= 0.0 || dest.height() <= 0.0 {
+        if px.width == 0
+            || px.height == 0
+            || dest.width() <= 0.0
+            || dest.height() <= 0.0
+            || self.alpha == 0
+        {
             return;
         }
-        let image = self.registry.image(px);
+        let image = if self.alpha == u8::MAX {
+            self.registry.image(px)
+        } else {
+            self.registry.faded_image(px, self.alpha)
+        };
         if !repeat.0 && !repeat.1 {
             self.cmds.push(Cmd::Image { image, rect: dest });
             return;
@@ -270,7 +358,8 @@ impl<'a> Recorder<'a> {
 
     /// A text run whose baseline is at `y`.
     pub(crate) fn text(&mut self, font: &FontReq, x: f32, y: f32, text: &str, color: Rgba) {
-        if text.is_empty() {
+        let color = fade(color, self.alpha);
+        if text.is_empty() || color.a == 0 {
             return;
         }
         let key = self.registry.font(font);
@@ -341,5 +430,37 @@ mod tests {
         // The old frame's pixels are released; only the live one is held.
         assert_eq!(registry.images[first as usize].width, 0);
         assert_eq!(registry.images[second as usize].rgba.len(), 16);
+    }
+
+    #[test]
+    fn opacity_scales_alpha() {
+        assert_eq!(scale_alpha(255, 128), 128);
+        assert_eq!(scale_alpha(200, 255), 200);
+        assert_eq!(scale_alpha(255, 0), 0);
+        assert_eq!(fade(Rgba::rgb(1, 2, 3), 64), Rgba::with_alpha(1, 2, 3, 64));
+    }
+
+    #[test]
+    fn a_faded_bitmap_scales_only_alpha() {
+        let rgba = [10u8, 20, 30, 255, 40, 50, 60, 100];
+        let px = BitmapPixels {
+            id: 3,
+            generation: 1,
+            width: 2,
+            height: 1,
+            stride: 8,
+            rgba: &rgba,
+        };
+        let mut registry = Registry::default();
+        let k = registry.faded_image(&px, 128);
+        assert_eq!(registry.faded_image(&px, 128), k);
+        assert_eq!(
+            registry.images[k as usize].rgba,
+            vec![10, 20, 30, 128, 40, 50, 60, 50]
+        );
+        // The opaque pixels stay untouched in their own slot.
+        let opaque = registry.image(&px);
+        assert_ne!(opaque, k);
+        assert_eq!(registry.images[opaque as usize].rgba, rgba.to_vec());
     }
 }

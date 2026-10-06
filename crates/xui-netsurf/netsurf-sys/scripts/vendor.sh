@@ -6,7 +6,8 @@
 # utils/ without the JavaScript engine, the four built-in style sheets, and
 # every licence. The upstream test suites are left out on purpose: their
 # fuzzer-named fixtures (`id:000023,...`) cannot be checked out on Windows.
-# Run regen.sh after moving a pin.
+# Then the changes nsx makes to NetSurf, patches/*.patch, are applied in
+# order (opacity, inline generated text). Run regen.sh after moving a pin.
 set -eu
 
 . "$(dirname "$0")/upstream.sh"
@@ -43,6 +44,11 @@ pins | while read -r repo rev; do
 			include src bindings
 	fi
 	find "$vendor/$repo" -name Makefile -delete
+done
+
+for p in "$here"/patches/*.patch; do
+	[ -e "$p" ] || continue
+	patch -d "$vendor" -p1 --forward --quiet < "$p"
 done
 
 echo "vendored into $vendor"

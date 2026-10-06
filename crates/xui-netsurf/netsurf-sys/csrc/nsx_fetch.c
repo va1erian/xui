@@ -31,6 +31,7 @@
 /* What NetSurf will take: the formats it renders, then anything. */
 #define NSX_ACCEPT "Accept: text/html,application/xhtml+xml," \
 	"application/xml;q=0.9,image/png,image/jpeg,image/gif,image/bmp," \
+	"image/svg+xml," \
 	"*/*;q=0.8"
 
 struct nsx_fetch {

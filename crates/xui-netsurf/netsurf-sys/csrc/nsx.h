@@ -108,13 +108,16 @@ typedef struct nsx_host {
 	void (*fetch_start)(void *ctx, const nsx_request *request);
 	/* NetSurf no longer wants fetch `id`: the host stops answering it. */
 	void (*fetch_abort)(void *ctx, uint64_t id);
-	/* PNG and JPEG images. image_size reads the size from the header: 1
-	 * and the size, or 0 for data the host cannot or will not decode. */
+	/* PNG, JPEG and SVG images. image_size reads the size from the
+	 * header: 1, the size the page lays the image out at and the size of
+	 * the bitmap it decodes into (larger for an SVG, so it stays sharp
+	 * when scaled up), or 0 for data the host cannot or will not decode. */
 	int (*image_size)(void *ctx, const uint8_t *data, size_t len,
-			int *width, int *height);
+			int *width, int *height, int *raster_width,
+			int *raster_height);
 	/* Decodes into `pixels` (width * height * 4 bytes, rows of RGBA with
-	 * straight alpha); 1 on success, setting *opaque when every pixel's
-	 * alpha is 255. */
+	 * straight alpha) at the raster size image_size gave; 1 on success,
+	 * setting *opaque when every pixel's alpha is 255. */
 	int (*image_decode)(void *ctx, const uint8_t *data, size_t len,
 			uint8_t *pixels, int width, int height, int *opaque);
 	/* The status line text NetSurf wants shown for `win` (the link under
@@ -158,6 +161,9 @@ typedef struct nsx_sink {
 	/* `y` is the baseline. */
 	void (*text)(void *rec, const nsx_font *f, int x, int y,
 			const char *s, size_t len, uint32_t colour);
+	/* Scales the alpha of what is drawn next by `opacity` (0 to 1, not
+	 * relative to the last call). */
+	void (*opacity)(void *rec, float opacity);
 } nsx_sink;
 
 /* Mouse actions for nsx_window_mouse. */

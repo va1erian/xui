@@ -1,4 +1,4 @@
-//! The host callbacks behind NetSurf's PNG and JPEG handlers. The decoders
+//! The host callbacks behind NetSurf's PNG, JPEG and SVG handler. The decoders
 //! are safe Rust, but a panic must not unwind into C, so each call stops one
 //! and reports "no image".
 
@@ -23,19 +23,22 @@ pub(super) unsafe extern "C" fn host_image_size(
     len: usize,
     width: *mut c_int,
     height: *mut c_int,
+    raster_width: *mut c_int,
+    raster_height: *mut c_int,
 ) -> c_int {
     // SAFETY: NetSurf passes the content's source data, `len` bytes long.
     let data = unsafe { bytes(data, len) };
-    let size = catch_unwind(|| image::size(data)).ok().flatten();
-    let Some((w, h)) =
-        size.and_then(|(w, h)| Some((c_int::try_from(w).ok()?, c_int::try_from(h).ok()?)))
-    else {
+    let sizes = catch_unwind(|| image::sizes(data)).ok().flatten();
+    let int = |(w, h): (u32, u32)| Some((c_int::try_from(w).ok()?, c_int::try_from(h).ok()?));
+    let Some(((w, h), (rw, rh))) = sizes.and_then(|(l, r)| Some((int(l)?, int(r)?))) else {
         return 0;
     };
     // SAFETY: NetSurf passes writable out pointers.
     unsafe {
         *width = w;
         *height = h;
+        *raster_width = rw;
+        *raster_height = rh;
     }
     1
 }
