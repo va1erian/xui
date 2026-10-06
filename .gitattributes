@@ -1,1 +1,2 @@
 crates/xui-netsurf/netsurf-sys/vendor/** -text
+crates/xui-netsurf/netsurf-sys/patches/** -text

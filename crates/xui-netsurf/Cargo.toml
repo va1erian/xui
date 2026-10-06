@@ -24,6 +24,10 @@ log = "0.4"
 # Rust, so nothing more to cross-compile).
 png = "0.17"
 zune-jpeg = "0.5"
+# SVG images (`src/svg.rs`), used under the MIT side of their MIT/Apache-2.0
+# licences (tiny-skia is BSD-3-Clause), so the crate stays GPLv2-compatible.
+# No default features: no text (system fonts), no raster images inside an SVG.
+resvg = { version = "0.45", default-features = false }
 
 [dev-dependencies]
 xui-canvas = { path = "../xui-canvas" }

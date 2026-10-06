@@ -133,3 +133,8 @@ pub(super) unsafe extern "C" fn sink_text(
     // SAFETY: called within `Window::redraw`.
     unsafe { recorder(rec) }.text(&req, x as f32, y as f32, &s, argb(colour));
 }
+
+pub(super) unsafe extern "C" fn sink_opacity(rec: *mut c_void, opacity: f32) {
+    // SAFETY: called within `Window::redraw`.
+    unsafe { recorder(rec) }.set_opacity(opacity);
+}

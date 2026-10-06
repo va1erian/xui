@@ -25,12 +25,15 @@ cargo test --workspace
 `netsurf-sys` compiles NetSurf's core and its libraries (libcss, libdom,
 libhubbub, libparserutils, libwapcaplet, libnsutils, libnsgif, libnsbmp) with
 the `cc` crate; it needs a C compiler and nothing else (zlib comes from
-`libz-sys`, built from source). There is no curl, OpenSSL, libpng or libjpeg:
-the network and the PNG and JPEG decoders are Rust (below). The NetSurf sources are vendored
+`libz-sys`, built from source). There is no curl, OpenSSL, libpng, libjpeg or
+libsvgtiny: the network and the PNG, JPEG and SVG decoders are Rust (below). The NetSurf sources are vendored
 in `netsurf-sys/vendor/`, pruned to what the build compiles (no upstream test
 suites, whose fuzzer-named files cannot be checked out on Windows), from the
 commits in `netsurf-sys/scripts/revisions`; `netsurf-sys/scripts/vendor.sh`
-refreshes them. The C the libraries generate at build time is checked in under
+refreshes them and applies `netsurf-sys/patches/` (what nsx changes in
+NetSurf: CSS `opacity` and the text of inline `::before`/`::after`; refresh
+the patch with `git diff --relative=crates/xui-netsurf/netsurf-sys/vendor`
+after editing `vendor/`). The C the libraries generate at build time is checked in under
 `netsurf-sys/generated/`; `netsurf-sys/scripts/regen.sh` remakes it after a
 pin moves. So far it is built and tested on Linux only.
 
@@ -98,10 +101,12 @@ error page.
 | `netsurf-sys/csrc/nsx_*.c` | Scheduler, window, plotter and bitmap glue |
 | `netsurf-sys/csrc/nsx_fetch.c`, `nsx_post.c` | The `http(s):` fetcher over the host's `Fetcher`, form bodies |
 | `netsurf-sys/csrc/nsx_download.c` | NetSurf's download table, reported to the host by id |
-| `netsurf-sys/csrc/nsx_image.c` | PNG and JPEG content handlers, decoded by the host |
+| `netsurf-sys/csrc/nsx_image.c` | The PNG, JPEG and SVG content handler, decoded by the host |
+| `netsurf-sys/patches/` | nsx's changes to the vendored NetSurf (opacity, inline generated text) |
 | `src/fetch.rs` | The public `Fetcher` API and the fetches in flight |
 | `src/download.rs` | The public `Downloader` API and the downloads under way |
 | `src/image.rs` | PNG (`png`) and JPEG (`zune-jpeg`) decoding, capped at 16 megapixels |
+| `src/svg.rs` | SVG (`resvg`, no text, nothing loaded from outside), drawn at 2x its size |
 | `src/engine.rs` | The one engine thread (NetSurf's core is global) |
 | `src/fonts.rs` | Text measuring for NetSurf's layout, over xui's shaper |
 | `src/families.rs` | CSS font families sorted into the host's sans, serif and mono families (`set_font_families`) |
@@ -109,6 +114,7 @@ error page.
 | `src/sys/` | The only `unsafe`: calls into C and the C callbacks |
 | `tests/fetch.rs` | A fake server: redirects, images, a 404, failures, cookies, a form POST |
 | `tests/browser.rs` | Status text, a `mailto:` link, downloads (started, asked for, cancelled), Stop |
+| `tests/render.rs` | Pixels: `opacity`, SVG pictures, inline `::after` text, spacing |
 | `src/view.rs`, `src/widget/` | `NetSurfView`, a custom-painted node |
 | `examples/compare/` | Both engines side by side |
 
@@ -116,12 +122,15 @@ error page.
 
 Works: HTML and CSS 2.1 layout, flexbox, floats, tables, form controls
 (drawn by NetSurf), link clicks, typing into fields and submitting forms
-(GET and POST), GIF, BMP, PNG and JPEG images, `http:` and `https:` through
+(GET and POST), `opacity` (per box, not composited as a group), the text of
+inline `::before`/`::after` (strings and `attr()`), GIF, BMP, PNG, JPEG and
+SVG images (SVG text is not drawn), `http:` and `https:` through
 the application's `Fetcher` (redirects, cookies kept in memory), `file:`,
 `data:`, `about:` and `resource:` URLs, any DPI. The nsx C glue compiles
 for `x86_64-linux-musl` with `zig cc`.
 
-Not yet: WebP, SVG and PNG-in-ICO images, animated PNG (the first frame
+Not yet: CSS grid, `var()` and `mask-image`, counters and quotes in
+`content`, WebP and PNG-in-ICO images, animated PNG (the first frame
 shows), HTTP authentication (a `401` shows the server's page), certificate
 details and TLS error pages (the fetcher's `fail` message is shown instead),
 a persistent cookie jar, a disc cache, JavaScript (NetSurf's is Duktape, off

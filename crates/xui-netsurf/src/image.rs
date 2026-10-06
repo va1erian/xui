@@ -1,8 +1,10 @@
 #![forbid(unsafe_code)]
 
-//! PNG and JPEG decoding for NetSurf's image handlers (`csrc/nsx_image.c`):
-//! the header first, for the size NetSurf lays the page out with, then the
-//! pixels when the image is first drawn, straight into NetSurf's bitmap.
+//! PNG, JPEG and SVG decoding for NetSurf's image handler
+//! (`csrc/nsx_image.c`): the header first, for the size NetSurf lays the page
+//! out with, then the pixels when the image is first drawn, straight into
+//! NetSurf's bitmap. An SVG's bitmap is larger than its layout size
+//! ([`crate::svg`]), so it stays sharp at 2x.
 //!
 //! Image data comes from the network, so both steps refuse more than
 //! [`MAX_PIXELS`] and treat every decoder error as "no image"; the `sys`
@@ -13,6 +15,8 @@ use zune_jpeg::JpegDecoder;
 use zune_jpeg::zune_core::bytestream::ZCursor;
 use zune_jpeg::zune_core::colorspace::ColorSpace;
 use zune_jpeg::zune_core::options::DecoderOptions;
+
+use crate::svg;
 
 /// The most pixels one image may have: 16 megapixels, a 64 MiB bitmap (LazyOS guests
 /// have 1 GiB by default).
@@ -25,6 +29,7 @@ const PNG_SIGNATURE: &[u8] = &[0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A];
 enum Format {
     Png,
     Jpeg,
+    Svg,
 }
 
 /// The format by signature: servers mislabel images often enough that the
@@ -34,6 +39,8 @@ fn format(data: &[u8]) -> Option<Format> {
         Some(Format::Png)
     } else if data.starts_with(&[0xFF, 0xD8, 0xFF]) {
         Some(Format::Jpeg)
+    } else if svg::sniff(data) {
+        Some(Format::Svg)
     } else {
         None
     }
@@ -58,7 +65,7 @@ fn jpeg_decoder(data: &[u8]) -> JpegDecoder<ZCursor<&[u8]>> {
     JpegDecoder::new_with_options(ZCursor::new(data), options)
 }
 
-/// The image's size from its header, if it is a PNG or JPEG within
+/// The image's size from its header, if it is a PNG, JPEG or SVG within
 /// [`MAX_PIXELS`].
 pub(crate) fn size(data: &[u8]) -> Option<(u32, u32)> {
     let (width, height) = match format(data)? {
@@ -73,16 +80,28 @@ pub(crate) fn size(data: &[u8]) -> Option<(u32, u32)> {
             let (w, h) = decoder.dimensions()?;
             (u32::try_from(w).ok()?, u32::try_from(h).ok()?)
         }
+        Format::Svg => svg::size(data)?,
     };
     within_limit(width, height).then_some((width, height))
 }
 
+/// The image's size and the size of the bitmap it decodes into, which is
+/// larger for an SVG.
+pub(crate) fn sizes(data: &[u8]) -> Option<((u32, u32), (u32, u32))> {
+    let layout = size(data)?;
+    let raster = match format(data)? {
+        Format::Svg => svg::raster_size(layout),
+        Format::Png | Format::Jpeg => layout,
+    };
+    Some((layout, raster))
+}
+
 /// Decodes `data` into `out`: `width * height` RGBA pixels with straight
-/// alpha. The size must be what [`size`] said. Returns whether every pixel
-/// is opaque, or `None` when the data does not decode.
+/// alpha. The size must be the bitmap size [`sizes`] said. Returns whether
+/// every pixel is opaque, or `None` when the data does not decode.
 pub(crate) fn decode(data: &[u8], width: u32, height: u32, out: &mut [u8]) -> Option<bool> {
     let expected = usize::try_from(u64::from(width) * u64::from(height) * 4).ok()?;
-    if !within_limit(width, height) || out.len() != expected || size(data)? != (width, height) {
+    if !within_limit(width, height) || out.len() != expected || sizes(data)?.1 != (width, height) {
         return None;
     }
     match format(data)? {
@@ -91,6 +110,7 @@ pub(crate) fn decode(data: &[u8], width: u32, height: u32, out: &mut [u8]) -> Op
             jpeg_decoder(data).decode_into(out).ok()?;
             Some(true)
         }
+        Format::Svg => svg::decode(data, width, height, out),
     }
 }
 
@@ -231,6 +251,18 @@ pub(crate) mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn an_svg_decodes_at_twice_its_size() {
+        let data = br#"<svg xmlns="http://www.w3.org/2000/svg" width="3" height="2"><rect width="3" height="2" fill="lime"/></svg>"#;
+        assert_eq!(sizes(data), Some(((3, 2), (6, 4))));
+        let mut out = vec![0; 6 * 4 * 4];
+        assert_eq!(decode(data, 6, 4, &mut out), Some(true));
+        assert_eq!(&out[..4], &[0, 255, 0, 255]);
+        // Only the bitmap size is accepted.
+        let mut small = vec![0; 3 * 2 * 4];
+        assert_eq!(decode(data, 3, 2, &mut small), None);
     }
 
     #[test]

@@ -153,6 +153,8 @@ pub struct nsx_host {
         len: usize,
         width: *mut c_int,
         height: *mut c_int,
+        raster_width: *mut c_int,
+        raster_height: *mut c_int,
     ) -> c_int,
     pub image_decode: unsafe extern "C" fn(
         ctx: *mut c_void,
@@ -238,6 +240,7 @@ pub struct nsx_sink {
         len: usize,
         colour: u32,
     ),
+    pub opacity: unsafe extern "C" fn(rec: *mut c_void, opacity: f32),
 }
 
 /// An opaque NetSurf browser window.

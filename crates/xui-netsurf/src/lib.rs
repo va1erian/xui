@@ -37,6 +37,7 @@ mod fonts;
 mod image;
 mod pointer;
 mod record;
+mod svg;
 mod sys;
 mod view;
 mod widget;
