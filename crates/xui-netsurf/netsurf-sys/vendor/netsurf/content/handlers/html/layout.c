@@ -549,6 +549,13 @@ layout_minmax_line(struct box *first,
 						&fixed, &frac);
 			if (0 < fixed)
 				max += fixed;
+			/* A space right after the opening tag (nsx). */
+			if (b->space != 0 && b->next) {
+				if (b->space == UNKNOWN_WIDTH)
+					font_func->width(&fstyle, " ", 1,
+							&b->space);
+				max += b->space;
+			}
 			*line_has_height = true;
 			/* \todo  update min width, consider fractional extra */
 		} else if (b->type == BOX_INLINE_END) {
@@ -2864,6 +2871,14 @@ layout_line(struct box *first,
 			if (!b->text) {
 				b->width = 0;
 				space_after = 0;
+				/* An inline's opening box holds the space of
+				 * `<b> bold</b>` or `<span> </span>` (nsx). */
+				if (b->type == BOX_INLINE && b->space != 0) {
+					if (b->space == UNKNOWN_WIDTH)
+						font_func->width(&fstyle, " ", 1,
+								&b->space);
+					space_after = b->space;
+				}
 				continue;
 			}
 
@@ -3044,7 +3059,8 @@ layout_line(struct box *first,
 			if (b->object || b->flags & REPLACE_DIM ||
 					b->flags & IFRAME)
 				space_after = 0;
-			else if (b->text || b->type == BOX_INLINE_END) {
+			else if (b->text || b->type == BOX_INLINE_END ||
+					b->type == BOX_INLINE) {
 				if (b->space == UNKNOWN_WIDTH) {
 					font_plot_style_from_css(
 							&content->unit_len_ctx,

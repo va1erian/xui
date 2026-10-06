@@ -1,7 +1,8 @@
 //! What Wikipedia needs drawn (va1erian/lazyos#632): CSS `opacity`, SVG
 //! pictures (`<img>` and `background-image`), the text of inline
-//! `::after` pseudo-elements, and spacing around a no-break space and an
-//! italic run. Each page is a `data:` URL loaded into an offscreen
+//! `::after` pseudo-elements, and the spaces Wikipedia's markup puts at the
+//! edge of an inline element (`11<span> </span>days`, a `<link>` in the
+//! body before ` (AD)`). Each page is a `data:` URL loaded into an offscreen
 //! `NetSurfView` and judged by its pixels.
 
 use std::cell::RefCell;
@@ -300,5 +301,35 @@ fn a_space_after_an_italic_run_stays() {
         gaps(&image, 5, 35, 3),
         2,
         "the space after the italic run is lost"
+    );
+}
+
+#[test]
+fn a_space_at_the_start_of_an_inline_element_stays() {
+    // Wikipedia writes "11 days" as `11<span typeof="mw:Entity"> </span>days`.
+    let alone = line_extent(r#"11<span typeof="mw:Entity"> </span>days"#);
+    let plain = line_extent("11 days");
+    assert!(alone.1.abs_diff(plain.1) <= 1, "{alone:?} vs {plain:?}");
+    let leading = line_extent("11<b> days</b>");
+    let before = line_extent("11 <b>days</b>");
+    assert!(
+        leading.1.abs_diff(before.1) <= 1,
+        "{leading:?} vs {before:?}"
+    );
+}
+
+#[test]
+fn a_link_element_in_the_body_takes_no_space() {
+    // Wikipedia's category marker between an italic run and " (AD)".
+    let image = render(&format!(
+        r#"<!DOCTYPE html><html><head>{PAGE_STYLE}<style>p {{ margin: 0; position: absolute; left: 10px; top: 10px }}
+a {{ text-decoration: none }}</style></head>
+<body><p>and <span title="Latin"><i lang="la"><a href="/x">Anno Domini</a></i></span><link rel="mw:PageProp/Category" href="./Category:Latin"/> (AD)</p></body></html>"#
+    ));
+    // Three gaps between four words: and | Anno | Domini | (AD).
+    assert_eq!(
+        gaps(&image, 5, 35, 3),
+        3,
+        "a space is lost around the link element"
     );
 }
