@@ -78,8 +78,11 @@ error page.
 
 - `StatusChanged(text)`: NetSurf's status line, the link under the pointer or
   the load's progress (`Fetching`, `Processing`, `Done (0.3s)`).
-- `LaunchUrl(url)`: a link NetSurf has no fetcher for (`mailto:`), for the
-  application to hand to the system.
+- `LaunchUrl { url, by_user }`: a link NetSurf has no fetcher for
+  (`mailto:`), for the application to hand to the system. `by_user` is false
+  when no click, key or `navigate` asked for it (a page's meta refresh or
+  script), so an application can refuse to start another program for a page
+  on its own.
 - Downloads: a response NetSurf cannot show (an archive, a PDF, a
   `Content-Disposition: attachment`) or a `NetSurfView::download(url)` is
   offered to the `Downloader` set with `set_downloader`, whose `DownloadSink`

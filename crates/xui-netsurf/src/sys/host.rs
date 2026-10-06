@@ -183,15 +183,21 @@ pub(super) unsafe extern "C" fn host_launch_url(
 ) {
     // SAFETY: a NUL-terminated URL from NetSurf.
     let url = unsafe { std::ffi::CStr::from_ptr(url) }.to_string_lossy();
+    // A window is named only while NetSurf handles that window's input or
+    // the app's navigate; anything else (a refresh, a script, a redirect
+    // finishing later) asked without the user, so the app may refuse it.
     if w.is_null() {
         // SAFETY: `ctx` is the engine.
         let last = unsafe { engine(ctx) }.last_window.borrow().clone();
         match last {
-            Some(view) => view.send(crate::engine::Output::Launch(url.into_owned())),
+            Some(view) => view.send(crate::engine::Output::Launch {
+                url: url.into_owned(),
+                by_user: false,
+            }),
             None => log::info!("xui-netsurf: no window to launch {url} from"),
         }
     } else {
         // SAFETY: the active window's handle, live for the host call.
-        unsafe { win(w) }.launch(&url);
+        unsafe { win(w) }.launch(&url, true);
     }
 }

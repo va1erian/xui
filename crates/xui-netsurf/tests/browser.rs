@@ -64,6 +64,12 @@ impl Fetcher for FakeServer {
                 &archive(),
             ),
             "http://example.test/page.html" => send(responder, &[html], b"<p>a page</p>"),
+            // Sends the window elsewhere with no click.
+            "http://example.test/refresh" => send(
+                responder,
+                &[html],
+                b"<meta http-equiv=\"refresh\" content=\"0; url=mailto:auto@example.test\"><p>wait</p>",
+            ),
             // Never finishes: for Stop and Cancel.
             "http://example.test/slow" | "http://example.test/slow.bin" => {
                 let kind = if request.url.ends_with(".bin") {
@@ -172,10 +178,15 @@ impl App for Page {
 }
 
 /// Opens `url` offscreen and runs `step` until it returns true; the events.
+/// One test's browser at a time: a launch nobody clicked for names no
+/// window, so the engine sends it to the newest one, which must be ours.
+static SERIAL: Mutex<()> = Mutex::new(());
+
 fn run(
     url: &'static str,
     step: impl Fn(&Stage<'_, Msg>, &[NetSurfViewEvent]) -> bool + 'static,
 ) -> Vec<NetSurfViewEvent> {
+    let _serial = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
     install();
     let events = Rc::new(RefCell::new(Vec::new()));
     let done = Rc::new(RefCell::new(false));
@@ -251,17 +262,40 @@ fn a_mailto_link_is_handed_back() {
     let events = run("http://example.test/", |stage, events| {
         let launched = events
             .iter()
-            .any(|e| matches!(e, NetSurfViewEvent::LaunchUrl(_)));
+            .any(|e| matches!(e, NetSurfViewEvent::LaunchUrl { .. }));
         if loaded(events) && !launched {
             stage.click(20, 70);
         }
         launched
     });
-    let url = events.iter().find_map(|e| match e {
-        NetSurfViewEvent::LaunchUrl(url) => Some(url.clone()),
-        _ => None,
+    assert_eq!(
+        launches(&events),
+        [("mailto:someone@example.test".to_string(), true)]
+    );
+}
+
+#[test]
+fn a_launch_no_one_clicked_for_is_marked() {
+    let events = run("http://example.test/refresh", |_, events| {
+        events
+            .iter()
+            .any(|e| matches!(e, NetSurfViewEvent::LaunchUrl { .. }))
     });
-    assert_eq!(url.as_deref(), Some("mailto:someone@example.test"));
+    assert_eq!(
+        launches(&events),
+        [("mailto:auto@example.test".to_string(), false)]
+    );
+}
+
+/// Every `LaunchUrl` (URL, by the user).
+fn launches(events: &[NetSurfViewEvent]) -> Vec<(String, bool)> {
+    events
+        .iter()
+        .filter_map(|e| match e {
+            NetSurfViewEvent::LaunchUrl { url, by_user } => Some((url.clone(), *by_user)),
+            _ => None,
+        })
+        .collect()
 }
 
 #[test]
