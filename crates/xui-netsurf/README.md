@@ -31,8 +31,9 @@ in `netsurf-sys/vendor/`, pruned to what the build compiles (no upstream test
 suites, whose fuzzer-named files cannot be checked out on Windows), from the
 commits in `netsurf-sys/scripts/revisions`; `netsurf-sys/scripts/vendor.sh`
 refreshes them and applies `netsurf-sys/patches/` (what nsx changes in
-NetSurf: CSS `opacity` and the text of inline `::before`/`::after`; refresh
-the patch with `git diff --relative=crates/xui-netsurf/netsurf-sys/vendor`
+NetSurf: CSS `opacity`, the text of inline `::before`/`::after`, a space
+after an inline element's opening tag, `display: none` for `<link>`,
+`<meta>` and HTML's other hidden elements; refresh the patch with `git diff --relative=crates/xui-netsurf/netsurf-sys/vendor`
 after editing `vendor/`). The C the libraries generate at build time is checked in under
 `netsurf-sys/generated/`; `netsurf-sys/scripts/regen.sh` remakes it after a
 pin moves. So far it is built and tested on Linux only.
@@ -102,7 +103,7 @@ error page.
 | `netsurf-sys/csrc/nsx_fetch.c`, `nsx_post.c` | The `http(s):` fetcher over the host's `Fetcher`, form bodies |
 | `netsurf-sys/csrc/nsx_download.c` | NetSurf's download table, reported to the host by id |
 | `netsurf-sys/csrc/nsx_image.c` | The PNG, JPEG and SVG content handler, decoded by the host |
-| `netsurf-sys/patches/` | nsx's changes to the vendored NetSurf (opacity, inline generated text) |
+| `netsurf-sys/patches/` | nsx's changes to the vendored NetSurf (opacity, inline generated text, inline spaces, hidden elements) |
 | `src/fetch.rs` | The public `Fetcher` API and the fetches in flight |
 | `src/download.rs` | The public `Downloader` API and the downloads under way |
 | `src/image.rs` | PNG (`png`) and JPEG (`zune-jpeg`) decoding, capped at 16 megapixels |

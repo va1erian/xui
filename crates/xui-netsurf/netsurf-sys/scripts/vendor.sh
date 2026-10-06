@@ -7,7 +7,8 @@
 # every licence. The upstream test suites are left out on purpose: their
 # fuzzer-named fixtures (`id:000023,...`) cannot be checked out on Windows.
 # Then the changes nsx makes to NetSurf, patches/*.patch, are applied in
-# order (opacity, inline generated text). Run regen.sh after moving a pin.
+# order (opacity, inline generated text, inline spaces, hidden elements).
+# Run regen.sh after moving a pin.
 set -eu
 
 . "$(dirname "$0")/upstream.sh"

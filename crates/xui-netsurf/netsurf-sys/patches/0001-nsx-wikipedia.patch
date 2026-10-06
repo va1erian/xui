@@ -429,6 +429,49 @@ index d5e8b7b..04d1f69 100644
  	box->x = box->y = 0;
  	box->width = UNKNOWN_WIDTH;
  	box->height = 0;
+diff --git a/netsurf/content/handlers/html/layout.c b/netsurf/content/handlers/html/layout.c
+index d3b6d8f..107b889 100644
+--- a/netsurf/content/handlers/html/layout.c
++++ b/netsurf/content/handlers/html/layout.c
+@@ -549,6 +549,13 @@ layout_minmax_line(struct box *first,
+ 						&fixed, &frac);
+ 			if (0 < fixed)
+ 				max += fixed;
++			/* A space right after the opening tag (nsx). */
++			if (b->space != 0 && b->next) {
++				if (b->space == UNKNOWN_WIDTH)
++					font_func->width(&fstyle, " ", 1,
++							&b->space);
++				max += b->space;
++			}
+ 			*line_has_height = true;
+ 			/* \todo  update min width, consider fractional extra */
+ 		} else if (b->type == BOX_INLINE_END) {
+@@ -2864,6 +2871,14 @@ layout_line(struct box *first,
+ 			if (!b->text) {
+ 				b->width = 0;
+ 				space_after = 0;
++				/* An inline's opening box holds the space of
++				 * `<b> bold</b>` or `<span> </span>` (nsx). */
++				if (b->type == BOX_INLINE && b->space != 0) {
++					if (b->space == UNKNOWN_WIDTH)
++						font_func->width(&fstyle, " ", 1,
++								&b->space);
++					space_after = b->space;
++				}
+ 				continue;
+ 			}
+ 
+@@ -3044,7 +3059,8 @@ layout_line(struct box *first,
+ 			if (b->object || b->flags & REPLACE_DIM ||
+ 					b->flags & IFRAME)
+ 				space_after = 0;
+-			else if (b->text || b->type == BOX_INLINE_END) {
++			else if (b->text || b->type == BOX_INLINE_END ||
++					b->type == BOX_INLINE) {
+ 				if (b->space == UNKNOWN_WIDTH) {
+ 					font_plot_style_from_css(
+ 							&content->unit_len_ctx,
 diff --git a/netsurf/content/handlers/html/redraw.c b/netsurf/content/handlers/html/redraw.c
 index f770699..66468ec 100644
 --- a/netsurf/content/handlers/html/redraw.c
@@ -523,3 +566,17 @@ index b481d46..a75bf68 100644
  	/* flags */
  	/**
  	 * flag to enable knockout rendering.
+diff --git a/netsurf/resources/default.css b/netsurf/resources/default.css
+index fa47c76..62624f5 100644
+--- a/netsurf/resources/default.css
++++ b/netsurf/resources/default.css
+@@ -142,6 +142,9 @@ textarea[disabled] { background-color: #ddd; color: #333; }
+ fieldset { display: block; border: thin solid #888; margin: 1.12em 0; }
+ 
+ noembed, script, style, title { display: none; }
++/* nsx: the rest of HTML's hidden elements (Wikipedia puts <link> and
++   <meta> in the body). */
++base, basefont, datalist, link, meta, param, rp, template { display: none; }
+ 
+ /* HTML5 elements */
+ article, aside, figcaption, figure, footer, header, main, nav, section {
