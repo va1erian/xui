@@ -112,8 +112,12 @@ pub(crate) enum Output {
     },
     /// The status line text (the link under the pointer, load progress).
     Status(String),
-    /// A link NetSurf cannot follow itself (`mailto:`, say).
-    Launch(String),
+    /// A link NetSurf cannot follow itself (`mailto:`, say), and whether
+    /// the user's own click or key (or the app's navigate) asked for it.
+    Launch {
+        url: String,
+        by_user: bool,
+    },
     Download(DownloadNews),
 }
 
@@ -209,8 +213,11 @@ impl WinState {
         }
     }
 
-    pub(crate) fn launch(&self, url: &str) {
-        self.send(Output::Launch(url.to_string()));
+    pub(crate) fn launch(&self, url: &str, by_user: bool) {
+        self.send(Output::Launch {
+            url: url.to_string(),
+            by_user,
+        });
     }
 }
 

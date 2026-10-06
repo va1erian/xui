@@ -139,7 +139,9 @@ impl NetSurfWidget {
                         .set((cursor != self.cursor.get()).then_some(cursor));
                 }
                 Ok(Output::Status(text)) => events.push(NetSurfViewEvent::StatusChanged(text)),
-                Ok(Output::Launch(url)) => events.push(NetSurfViewEvent::LaunchUrl(url)),
+                Ok(Output::Launch { url, by_user }) => {
+                    events.push(NetSurfViewEvent::LaunchUrl { url, by_user })
+                }
                 Ok(Output::Download(news)) => events.push(download_event(news)),
                 Ok(Output::FetchFailed { url, message }) => {
                     events.push(NetSurfViewEvent::FetchFailed { url, message });

@@ -46,7 +46,16 @@ pub enum NetSurfViewEvent {
     StatusChanged(String),
     /// A link to a URL NetSurf cannot open itself (`mailto:`, or a scheme
     /// with no fetcher), for the application to hand to the system.
-    LaunchUrl(String),
+    /// `by_user` is false when no click, key or [`NetSurfView::navigate`]
+    /// asked for it (a page's refresh or script): an application should not
+    /// open another program for those without asking. NetSurf does not say
+    /// which window such a launch came from; it goes to the newest window.
+    LaunchUrl {
+        /// The URL to hand on.
+        url: String,
+        /// Whether the user's click or key, or the app, asked for it.
+        by_user: bool,
+    },
     /// A download started; its bytes go to the
     /// [`Downloader`](crate::Downloader)'s sink.
     DownloadStarted(DownloadInfo),
