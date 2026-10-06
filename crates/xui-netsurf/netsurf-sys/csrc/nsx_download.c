@@ -128,8 +128,11 @@ void nsx_download_cancel(uint64_t id)
 	for (struct gui_download_window *dw = downloads; dw != NULL;
 			dw = dw->next) {
 		if (dw->id == id && dw->stopped == NULL) {
+			/* Marked first: the abort may call dl_error, which must
+			 * not finish (and free) the download under us. */
+			dw->stopped = "Cancelled";
 			download_context_abort(dw->ctx);
-			finish(dw, "Cancelled");
+			finish(dw, dw->stopped);
 			return;
 		}
 	}
