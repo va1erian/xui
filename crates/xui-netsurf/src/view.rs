@@ -14,6 +14,7 @@ use xui_core::geometry::Rect;
 use xui_core::widget::Control;
 use xui_litehtml::TextSystem;
 
+use crate::download::{DownloadId, DownloadInfo};
 use crate::engine::{self, Command, Wake};
 use crate::widget::NetSurfWidget;
 
@@ -38,6 +39,31 @@ pub enum NetSurfViewEvent {
         url: String,
         /// Why.
         message: String,
+    },
+    /// The status line text NetSurf wants shown: the link under the
+    /// pointer, or how the load is going ("Fetching", "Processing"...).
+    /// Empty when there is nothing to say.
+    StatusChanged(String),
+    /// A link to a URL NetSurf cannot open itself (`mailto:`, or a scheme
+    /// with no fetcher), for the application to hand to the system.
+    LaunchUrl(String),
+    /// A download started; its bytes go to the
+    /// [`Downloader`](crate::Downloader)'s sink.
+    DownloadStarted(DownloadInfo),
+    /// `received` bytes of a download have arrived (reported every so
+    /// often, and once more at its end).
+    DownloadProgress {
+        /// The download.
+        id: DownloadId,
+        /// Bytes so far.
+        received: u64,
+    },
+    /// A download ended: `error` is `None` when every byte arrived.
+    DownloadFinished {
+        /// The download.
+        id: DownloadId,
+        /// Why it did not complete.
+        error: Option<String>,
     },
 }
 
@@ -150,6 +176,27 @@ impl<M: Send + 'static> NetSurfView<M> {
             id: self.widget.id(),
             url: url.to_string(),
         });
+    }
+
+    /// Stops loading the page (what has arrived stays on show).
+    pub fn stop(&self) {
+        self.widget.send(Command::Stop {
+            id: self.widget.id(),
+        });
+    }
+
+    /// Downloads `url` instead of showing it; the download is offered to the
+    /// [`Downloader`](crate::Downloader) like one NetSurf starts itself.
+    pub fn download(&self, url: &str) {
+        self.widget.send(Command::Download {
+            id: self.widget.id(),
+            url: url.to_string(),
+        });
+    }
+
+    /// Stops download `id`; it ends with an error.
+    pub fn cancel_download(&self, id: DownloadId) {
+        self.widget.send(Command::CancelDownload { id: id.0 });
     }
 
     /// Whether a page has been drawn and nothing is still loading.

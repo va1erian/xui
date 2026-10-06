@@ -19,6 +19,7 @@ use std::time::Duration;
 use xui_core::backend::TextShaper;
 use xui_litehtml::DisplayList;
 
+use crate::download::{DownloadNews, Downloads};
 use crate::fetch::{self, FetchEvent, Fetches};
 use crate::fonts::Fonts;
 use crate::record::{Recorder, Registry};
@@ -67,6 +68,17 @@ pub(crate) enum Command {
         id: u64,
         key: u32,
     },
+    Stop {
+        id: u64,
+    },
+    Download {
+        id: u64,
+        url: String,
+    },
+    /// Stops a download (by its own id, not a view's).
+    CancelDownload {
+        id: u64,
+    },
     Close {
         id: u64,
     },
@@ -94,7 +106,30 @@ pub(crate) enum Output {
     /// NetSurf's `gui_pointer_shape` for the page under the pointer.
     Pointer(i32),
     Failed(String),
-    FetchFailed { url: String, message: String },
+    FetchFailed {
+        url: String,
+        message: String,
+    },
+    /// The status line text (the link under the pointer, load progress).
+    Status(String),
+    /// A link NetSurf cannot follow itself (`mailto:`, say).
+    Launch(String),
+    Download(DownloadNews),
+}
+
+/// Sends a view its outputs and wakes its UI thread.
+#[derive(Clone)]
+pub(crate) struct Reporter {
+    out: Sender<Output>,
+    wake: Wake,
+}
+
+impl Reporter {
+    pub(crate) fn send(&self, output: Output) {
+        if self.out.send(output).is_ok() {
+            (self.wake)();
+        }
+    }
 }
 
 /// Per-window state the NetSurf callbacks update (through `&self`: they
@@ -108,15 +143,19 @@ pub(crate) struct WinState {
     /// The URL NetSurf last reported, without its fragment.
     url: RefCell<String>,
     registry: RefCell<Registry>,
-    out: Sender<Output>,
-    wake: Wake,
+    /// The status text last sent, so a pointer moving over one link sends it
+    /// once.
+    status: RefCell<String>,
+    reporter: Reporter,
 }
 
 impl WinState {
     fn send(&self, output: Output) {
-        if self.out.send(output).is_ok() {
-            (self.wake)();
-        }
+        self.reporter.send(output);
+    }
+
+    pub(crate) fn reporter(&self) -> Reporter {
+        self.reporter.clone()
     }
 
     pub(crate) fn invalidate(&self) {
@@ -162,6 +201,17 @@ impl WinState {
         *self.url.borrow_mut() = defragment(url).to_string();
         self.send(Output::Url(url.to_string()));
     }
+
+    pub(crate) fn status(&self, text: &str) {
+        if *self.status.borrow() != text {
+            *self.status.borrow_mut() = text.to_string();
+            self.send(Output::Status(text.to_string()));
+        }
+    }
+
+    pub(crate) fn launch(&self, url: &str) {
+        self.send(Output::Launch(url.to_string()));
+    }
 }
 
 /// What the NetSurf host callbacks reach: the text measurer and the
@@ -169,6 +219,10 @@ impl WinState {
 pub(crate) struct Engine {
     pub(crate) fonts: Fonts,
     pub(crate) fetches: Fetches,
+    pub(crate) downloads: Downloads,
+    /// The window opened last, told about a URL to launch that NetSurf
+    /// raised outside any window's call.
+    pub(crate) last_window: RefCell<Option<Reporter>>,
     /// Whether NetSurf hands `http(s):` to the host fetcher yet.
     fetcher_registered: Cell<bool>,
 }
@@ -220,6 +274,8 @@ fn run(shaper: Arc<dyn TextShaper>, rx: Receiver<Command>, fetch_tx: Sender<Comm
     let engine: &'static Engine = Box::leak(Box::new(Engine {
         fonts: Fonts::new(shaper),
         fetches: Fetches::new(fetch_tx),
+        downloads: Downloads::default(),
+        last_window: RefCell::new(None),
         fetcher_registered: Cell::new(false),
     }));
     if let Err(e) = sys::init(engine) {
@@ -286,9 +342,10 @@ fn handle(engine: &Engine, windows: &mut HashMap<u64, Window>, cmd: Command) {
                 loading: Cell::new(false),
                 url: RefCell::default(),
                 registry: RefCell::default(),
-                out,
-                wake,
+                status: RefCell::default(),
+                reporter: Reporter { out, wake },
             });
+            *engine.last_window.borrow_mut() = Some(state.reporter());
             match sys::Window::open(&state, &url) {
                 Some(handle) => {
                     windows.insert(id, Window { handle, state });
@@ -321,6 +378,20 @@ fn handle(engine: &Engine, windows: &mut HashMap<u64, Window>, cmd: Command) {
                 w.handle.key(key);
             }
         }
+        Command::Stop { id } => {
+            if let Some(w) = windows.get(&id) {
+                w.handle.stop();
+            }
+        }
+        Command::Download { id, url } => {
+            if let Some(w) = windows.get(&id)
+                && !w.handle.download(&url)
+            {
+                w.state
+                    .send(Output::Status(format!("cannot download {url}")));
+            }
+        }
+        Command::CancelDownload { id } => sys::cancel_download(id),
         Command::Close { id } => {
             if let Some(w) = windows.remove(&id) {
                 w.handle.destroy();

@@ -163,6 +163,25 @@ pub struct nsx_host {
         height: c_int,
         opaque: *mut c_int,
     ) -> c_int,
+    /// The status line text NetSurf wants shown for a window.
+    pub win_status: unsafe extern "C" fn(ctx: *mut c_void, win: *mut c_void, text: *const c_char),
+    /// A URL NetSurf cannot fetch, for the system; `win` may be null.
+    pub launch_url: unsafe extern "C" fn(ctx: *mut c_void, win: *mut c_void, url: *const c_char),
+    /// A download starts; 1 accepts it.
+    pub dl_start: unsafe extern "C" fn(
+        ctx: *mut c_void,
+        win: *mut c_void,
+        id: u64,
+        url: *const c_char,
+        filename: *const c_char,
+        mime: *const c_char,
+        total: u64,
+    ) -> c_int,
+    /// A download's next bytes; 1 to go on.
+    pub dl_data:
+        unsafe extern "C" fn(ctx: *mut c_void, id: u64, data: *const u8, len: usize) -> c_int,
+    /// A download ended; `error` is null when it completed.
+    pub dl_end: unsafe extern "C" fn(ctx: *mut c_void, id: u64, error: *const c_char),
 }
 
 /// Where one redraw's drawing goes (`nsx_sink` in `nsx.h`).
@@ -237,6 +256,12 @@ unsafe extern "C" {
     pub fn nsx_window_reformat(gw: *mut gui_window);
     pub fn nsx_window_extent(gw: *mut gui_window, width: *mut c_int, height: *mut c_int) -> c_int;
     pub fn nsx_window_ready(gw: *mut gui_window) -> c_int;
+    /// Stops the window's load.
+    pub fn nsx_window_stop(gw: *mut gui_window);
+    /// Downloads `url` for the window; 0 on success.
+    pub fn nsx_window_download(gw: *mut gui_window, url: *const c_char) -> c_int;
+    /// Stops download `id`.
+    pub fn nsx_download_cancel(id: u64);
     pub fn nsx_window_redraw(
         gw: *mut gui_window,
         x0: c_int,

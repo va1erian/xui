@@ -45,6 +45,14 @@
 
 ### Additions
 
+- **xui-netsurf: what a browser needs from the view.** `NetSurfView` reports
+  NetSurf's status line (`StatusChanged`: the link under the pointer, load
+  progress) and links it cannot follow (`LaunchUrl`, e.g. `mailto:`), can
+  `stop` a load, and downloads what NetSurf cannot show, or what
+  `download(url)` asks for, through a host `Downloader` (`set_downloader`)
+  with `DownloadStarted`/`DownloadProgress`/`DownloadFinished` events and
+  `cancel_download`.
+
 - **`Cursor::Busy`** is the busy (wait) pointer: `winit`'s `Wait` and Win32's
   `IDC_WAIT`. `Cursor` has no `#[non_exhaustive]`, so a backend that matches it
   exhaustively needs the new arm. `xui-netsurf` now maps NetSurf's pointer

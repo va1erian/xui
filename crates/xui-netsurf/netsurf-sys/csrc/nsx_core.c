@@ -12,6 +12,7 @@
 #include "utils/errors.h"
 #include "utils/messages.h"
 #include "utils/nsoption.h"
+#include "utils/nsurl.h"
 #include "netsurf/browser.h"
 #include "netsurf/fetch.h"
 #include "netsurf/misc.h"
@@ -121,10 +122,15 @@ int nsx_poll(void)
 
 /* ---- misc and fetch tables ------------------------------------------- */
 
+/* The window whose host call is running: a URL NetSurf cannot fetch is
+ * launched from inside one (a followed link or a navigation). */
+void *nsx_active_win;
+
 static nserror nsx_launch_url(struct nsurl *url)
 {
-	(void)url;
-	return NSERROR_NOT_IMPLEMENTED;
+	nsx_host_v->launch_url(nsx_host_v->ctx, nsx_active_win,
+			nsurl_access(url));
+	return NSERROR_OK;
 }
 
 static struct gui_misc_table misc_table = {
@@ -196,6 +202,7 @@ int nsx_init(const nsx_host *host, const uint8_t *messages, size_t len)
 	table.misc = &misc_table;
 	table.window = nsx_window_table;
 	table.fetch = &fetch_table;
+	table.download = nsx_download_table;
 	table.bitmap = nsx_bitmap_table;
 	table.layout = nsx_layout_table;
 	nsx_host_v = host;
