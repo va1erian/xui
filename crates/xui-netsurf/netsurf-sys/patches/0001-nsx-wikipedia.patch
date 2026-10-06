@@ -17,7 +17,7 @@ index df2b99d..7f09bb3 100644
  	 *  value of id attribute (or name for anchors)
  	 */
 diff --git a/netsurf/content/handlers/html/box_construct.c b/netsurf/content/handlers/html/box_construct.c
-index 559d207..420b7d9 100644
+index 559d207..fcdf10f 100644
 --- a/netsurf/content/handlers/html/box_construct.c
 +++ b/netsurf/content/handlers/html/box_construct.c
 @@ -83,6 +83,8 @@ struct box_construct_props {
@@ -47,12 +47,39 @@ index 559d207..420b7d9 100644
  				props->href = parent_box->href;
  				props->target = parent_box->target;
  				props->title = parent_box->title;
-@@ -298,31 +304,200 @@ box_get_style(html_content *c,
+@@ -298,31 +304,227 @@ box_get_style(html_content *c,
  }
  
  
 +static void
 +box_text_transform(char *s, unsigned int len, enum css_text_transform_e tt);
++
++
++/**
++ * Give \a b the collapsed space that follows it.
++ *
++ * The layout counts a space on an inline's opening box too (nsx), so an
++ * opening box gets none when a box before it on the line already has one
++ * with only other opening and closing boxes, which are zero width, in
++ * between: `foo <b> bar</b>` and `a <span> </span>b` keep one space.
++ *
++ * \param b  box the space follows
++ */
++static void box_space_after(struct box *b)
++{
++	struct box *prev;
++
++	if (b->type == BOX_INLINE) {
++		for (prev = b->prev; prev != NULL; prev = prev->prev) {
++			if (prev->space != 0)
++				return;
++			if (prev->type != BOX_INLINE &&
++			    prev->type != BOX_INLINE_END)
++				break;
++		}
++	}
++	b->space = UNKNOWN_WIDTH;
++}
 +
 +
 +/**
@@ -178,7 +205,7 @@ index 559d207..420b7d9 100644
 +		 * the box before it, or after the text itself. */
 +		if (start[0] == ' ') {
 +			if (container->last != NULL)
-+				container->last->space = UNKNOWN_WIDTH;
++				box_space_after(container->last);
 +			start++;
 +			length--;
 +		}
@@ -259,7 +286,7 @@ index 559d207..420b7d9 100644
  	/* To determine if an element has a pseudo element, we select
  	 * for it and test to see if the returned style's content
  	 * property is set to normal. */
-@@ -333,8 +508,40 @@ box_construct_generate(dom_node *n,
+@@ -333,8 +535,40 @@ box_construct_generate(dom_node *n,
  		return;
  	}
  
@@ -301,7 +328,7 @@ index 559d207..420b7d9 100644
  	if (computed_display == CSS_DISPLAY_BLOCK ||
  			computed_display == CSS_DISPLAY_TABLE) {
  		/* currently only support block level boxes */
-@@ -349,6 +556,7 @@ box_construct_generate(dom_node *n,
+@@ -349,6 +583,7 @@ box_construct_generate(dom_node *n,
  		/* set box type from computed display */
  		gen->type = box_map[ns_computed_display(
  				style, box_is_root(n))];
@@ -309,7 +336,7 @@ index 559d207..420b7d9 100644
  
  		box_add_child(box, gen);
  	}
-@@ -380,6 +588,7 @@ box_construct_marker(struct box *box,
+@@ -380,6 +615,7 @@ box_construct_marker(struct box *box,
  		return false;
  
  	marker->type = BOX_BLOCK;
@@ -317,7 +344,7 @@ index 559d207..420b7d9 100644
  
  	list_style_type = css_computed_list_style_type(box->style);
  
-@@ -541,6 +750,8 @@ box_construct_element(struct box_construct_ctx *ctx, bool *convert_children)
+@@ -541,6 +777,8 @@ box_construct_element(struct box_construct_ctx *ctx, bool *convert_children)
  	if (box == NULL)
  		return false;
  
@@ -326,7 +353,7 @@ index 559d207..420b7d9 100644
  	/* If this is the root box, add it to the context */
  	if (props.node_is_root)
  		ctx->root_box = box;
-@@ -620,10 +831,12 @@ box_construct_element(struct box_construct_ctx *ctx, bool *convert_children)
+@@ -620,10 +858,12 @@ box_construct_element(struct box_construct_ctx *ctx, bool *convert_children)
  		return false;
  	}
  
@@ -341,7 +368,7 @@ index 559d207..420b7d9 100644
  	}
  
  	if (box->type == BOX_NONE || (ns_computed_display(box->style,
-@@ -720,6 +933,12 @@ box_construct_element(struct box_construct_ctx *ctx, bool *convert_children)
+@@ -720,6 +960,12 @@ box_construct_element(struct box_construct_ctx *ctx, bool *convert_children)
  		assert(props.inline_container != NULL);
  
  		box_add_child(props.inline_container, box);
@@ -354,7 +381,7 @@ index 559d207..420b7d9 100644
  	} else {
  		if (ns_computed_display(box->style, props.node_is_root) ==
  				CSS_DISPLAY_LIST_ITEM) {
-@@ -791,7 +1010,14 @@ static void box_construct_element_after(dom_node *n, html_content *content)
+@@ -791,7 +1037,14 @@ static void box_construct_element_after(dom_node *n, html_content *content)
  
  		if (has_children == false ||
  				(box->flags & CONVERT_CHILDREN) == 0) {
@@ -370,7 +397,7 @@ index 559d207..420b7d9 100644
  			return;
  		}
  
-@@ -808,12 +1034,20 @@ static void box_construct_element_after(dom_node *n, html_content *content)
+@@ -808,12 +1061,20 @@ static void box_construct_element_after(dom_node *n, html_content *content)
  					props.inline_container);
  		}
  
@@ -391,7 +418,7 @@ index 559d207..420b7d9 100644
  
  			assert(props.inline_container != NULL);
  
-@@ -825,7 +1059,8 @@ static void box_construct_element_after(dom_node *n, html_content *content)
+@@ -825,7 +1086,8 @@ static void box_construct_element_after(dom_node *n, html_content *content)
  	} else if (!(box->flags & IS_REPLACED)) {
  		/* Handle the :after pseudo element */
  		box_construct_generate(n, content, box,
@@ -401,7 +428,17 @@ index 559d207..420b7d9 100644
  	}
  }
  
-@@ -1063,6 +1298,7 @@ static bool box_construct_text(struct box_construct_ctx *ctx)
+@@ -1026,8 +1288,7 @@ static bool box_construct_text(struct box_construct_ctx *ctx)
+ 			if (props.inline_container != NULL) {
+ 				assert(props.inline_container->last != NULL);
+ 
+-				props.inline_container->last->space =
+-						UNKNOWN_WIDTH;
++				box_space_after(props.inline_container->last);
+ 			}
+ 
+ 			free(text);
+@@ -1063,6 +1324,7 @@ static bool box_construct_text(struct box_construct_ctx *ctx)
  		}
  
  		box->type = BOX_TEXT;
@@ -409,7 +446,16 @@ index 559d207..420b7d9 100644
  
  		box->text = talloc_strdup(ctx->bctx, text);
  		free(text);
-@@ -1182,6 +1418,7 @@ static bool box_construct_text(struct box_construct_ctx *ctx)
+@@ -1091,7 +1353,7 @@ static bool box_construct_text(struct box_construct_ctx *ctx)
+ 			memmove(box->text, &box->text[1], box->length);
+ 
+ 			if (box->prev != NULL)
+-				box->prev->space = UNKNOWN_WIDTH;
++				box_space_after(box->prev);
+ 		}
+ 	} else {
+ 		/* white-space: pre */
+@@ -1182,6 +1444,7 @@ static bool box_construct_text(struct box_construct_ctx *ctx)
  			}
  
  			box->type = BOX_TEXT;

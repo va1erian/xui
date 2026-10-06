@@ -309,6 +309,33 @@ box_text_transform(char *s, unsigned int len, enum css_text_transform_e tt);
 
 
 /**
+ * Give \a b the collapsed space that follows it.
+ *
+ * The layout counts a space on an inline's opening box too (nsx), so an
+ * opening box gets none when a box before it on the line already has one
+ * with only other opening and closing boxes, which are zero width, in
+ * between: `foo <b> bar</b>` and `a <span> </span>b` keep one space.
+ *
+ * \param b  box the space follows
+ */
+static void box_space_after(struct box *b)
+{
+	struct box *prev;
+
+	if (b->type == BOX_INLINE) {
+		for (prev = b->prev; prev != NULL; prev = prev->prev) {
+			if (prev->space != 0)
+				return;
+			if (prev->type != BOX_INLINE &&
+			    prev->type != BOX_INLINE_END)
+				break;
+		}
+	}
+	b->space = UNKNOWN_WIDTH;
+}
+
+
+/**
  * The opacity a box with \a style draws with when its parent element's box
  * draws with \a parent (nsx).
  *
@@ -431,7 +458,7 @@ box_construct_generate_text(dom_node *n,
 		 * the box before it, or after the text itself. */
 		if (start[0] == ' ') {
 			if (container->last != NULL)
-				container->last->space = UNKNOWN_WIDTH;
+				box_space_after(container->last);
 			start++;
 			length--;
 		}
@@ -1261,8 +1288,7 @@ static bool box_construct_text(struct box_construct_ctx *ctx)
 			if (props.inline_container != NULL) {
 				assert(props.inline_container->last != NULL);
 
-				props.inline_container->last->space =
-						UNKNOWN_WIDTH;
+				box_space_after(props.inline_container->last);
 			}
 
 			free(text);
@@ -1327,7 +1353,7 @@ static bool box_construct_text(struct box_construct_ctx *ctx)
 			memmove(box->text, &box->text[1], box->length);
 
 			if (box->prev != NULL)
-				box->prev->space = UNKNOWN_WIDTH;
+				box_space_after(box->prev);
 		}
 	} else {
 		/* white-space: pre */

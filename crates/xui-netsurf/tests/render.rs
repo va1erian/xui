@@ -316,6 +316,11 @@ fn a_space_at_the_start_of_an_inline_element_stays() {
         leading.1.abs_diff(before.1) <= 1,
         "{leading:?} vs {before:?}"
     );
+    // A space on both sides of the opening tag collapses to one.
+    let both = line_extent("11 <b> days</b>");
+    assert!(both.1.abs_diff(before.1) <= 1, "{both:?} vs {before:?}");
+    let empty = line_extent("11 <span> </span>days");
+    assert!(empty.1.abs_diff(plain.1) <= 1, "{empty:?} vs {plain:?}");
 }
 
 #[test]
