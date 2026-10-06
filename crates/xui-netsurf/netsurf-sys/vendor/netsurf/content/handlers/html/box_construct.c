@@ -311,10 +311,11 @@ box_text_transform(char *s, unsigned int len, enum css_text_transform_e tt);
 /**
  * Give \a b the collapsed space that follows it.
  *
- * The layout counts a space on an inline's opening box too (nsx), so an
- * opening box gets none when a box before it on the line already has one
- * with only other opening and closing boxes, which are zero width, in
- * between: `foo <b> bar</b>` and `a <span> </span>b` keep one space.
+ * The layout counts a space on an inline's opening and closing boxes
+ * (nsx), so such a box gets none when a box before it on the line already
+ * has one with only other opening and closing boxes, which are zero width,
+ * in between: `foo <b> bar</b>`, `a <span> </span>b` and
+ * `a <span> </span> b` keep one space.
  *
  * \param b  box the space follows
  */
@@ -322,7 +323,7 @@ static void box_space_after(struct box *b)
 {
 	struct box *prev;
 
-	if (b->type == BOX_INLINE) {
+	if (b->type == BOX_INLINE || b->type == BOX_INLINE_END) {
 		for (prev = b->prev; prev != NULL; prev = prev->prev) {
 			if (prev->space != 0)
 				return;
