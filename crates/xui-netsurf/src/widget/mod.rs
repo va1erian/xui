@@ -15,6 +15,7 @@ use xui_core::theme::Theme;
 use xui_core::widget::scrollbar::{self, Orientation, Scroll, THICKNESS, ThumbState};
 use xui_litehtml::{Painter, Rect, TextSystem};
 
+use crate::download::DownloadNews;
 use crate::engine::{Command, Frame, Output};
 use crate::pointer::cursor_for;
 use crate::view::NetSurfViewEvent;
@@ -137,6 +138,9 @@ impl NetSurfWidget {
                     self.pending_cursor
                         .set((cursor != self.cursor.get()).then_some(cursor));
                 }
+                Ok(Output::Status(text)) => events.push(NetSurfViewEvent::StatusChanged(text)),
+                Ok(Output::Launch(url)) => events.push(NetSurfViewEvent::LaunchUrl(url)),
+                Ok(Output::Download(news)) => events.push(download_event(news)),
                 Ok(Output::FetchFailed { url, message }) => {
                     events.push(NetSurfViewEvent::FetchFailed { url, message });
                 }
@@ -227,6 +231,17 @@ impl NetSurfWidget {
             theme,
             ThumbState::Normal,
         );
+    }
+}
+
+/// A download's news as the view reports it.
+fn download_event(news: DownloadNews) -> NetSurfViewEvent {
+    match news {
+        DownloadNews::Started(info) => NetSurfViewEvent::DownloadStarted(info),
+        DownloadNews::Progress { id, received } => {
+            NetSurfViewEvent::DownloadProgress { id, received }
+        }
+        DownloadNews::Finished { id, error } => NetSurfViewEvent::DownloadFinished { id, error },
     }
 }
 

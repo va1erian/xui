@@ -20,18 +20,22 @@ use crate::engine::{Engine, MouseAction, WinState};
 use crate::record::Recorder;
 
 mod convert;
+mod download;
 mod fetch;
 mod host;
 mod image;
 mod sink;
 
+pub(crate) use download::cancel_download;
+use download::{host_dl_data, host_dl_end, host_dl_start};
 pub(crate) use fetch::{deliver, register_fetcher};
 use fetch::{host_fetch_abort, host_fetch_start};
 use image::{host_image_decode, host_image_size};
 
 use host::{
-    host_resource, host_text_position, host_text_split, host_text_width, host_win_event,
-    host_win_invalidate, host_win_pointer, host_win_size, host_win_title, host_win_url,
+    host_launch_url, host_resource, host_text_position, host_text_split, host_text_width,
+    host_win_event, host_win_invalidate, host_win_pointer, host_win_size, host_win_status,
+    host_win_title, host_win_url,
 };
 use sink::{sink_bitmap, sink_clip, sink_disc, sink_line, sink_polygon, sink_rect, sink_text};
 
@@ -69,6 +73,11 @@ pub(crate) fn init(engine: &'static Engine) -> Result<(), String> {
             fetch_abort: host_fetch_abort,
             image_size: host_image_size,
             image_decode: host_image_decode,
+            win_status: host_win_status,
+            launch_url: host_launch_url,
+            dl_start: host_dl_start,
+            dl_data: host_dl_data,
+            dl_end: host_dl_end,
         })
     });
     // SAFETY: the table and the message bytes are 'static; this is the
@@ -108,6 +117,19 @@ impl Window {
         };
         // SAFETY: `self.0` is a live window; the URL lives for the call.
         unsafe { ns::nsx_window_navigate(self.0, url.as_ptr()) == 0 }
+    }
+
+    pub(crate) fn stop(&self) {
+        // SAFETY: `self.0` is a live window.
+        unsafe { ns::nsx_window_stop(self.0) }
+    }
+
+    pub(crate) fn download(&self, url: &str) -> bool {
+        let Ok(url) = CString::new(url) else {
+            return false;
+        };
+        // SAFETY: `self.0` is a live window; the URL lives for the call.
+        unsafe { ns::nsx_window_download(self.0, url.as_ptr()) == 0 }
     }
 
     pub(crate) fn reformat(&self) {

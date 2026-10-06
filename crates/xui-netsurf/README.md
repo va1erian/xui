@@ -72,6 +72,21 @@ thread wakes for them; NetSurf aborts a request it no longer needs
 reports `NetSurfViewEvent::FetchFailed { url, message }` and NetSurf shows its
 error page.
 
+## A browser around the view
+
+`NetSurfView` reports what a browser's chrome shows and does:
+
+- `StatusChanged(text)`: NetSurf's status line, the link under the pointer or
+  the load's progress (`Fetching`, `Processing`, `Done (0.3s)`).
+- `LaunchUrl(url)`: a link NetSurf has no fetcher for (`mailto:`), for the
+  application to hand to the system.
+- Downloads: a response NetSurf cannot show (an archive, a PDF, a
+  `Content-Disposition: attachment`) or a `NetSurfView::download(url)` is
+  offered to the `Downloader` set with `set_downloader`, whose `DownloadSink`
+  takes the bytes on the engine thread; the view reports `DownloadStarted`,
+  `DownloadProgress` and `DownloadFinished`, and `cancel_download` stops one.
+- `NetSurfView::stop` stops a load.
+
 ## Layout
 
 | Path | What |
@@ -79,8 +94,10 @@ error page.
 | `netsurf-sys/csrc/nsx.h` | The flat C interface over NetSurf's frontend tables |
 | `netsurf-sys/csrc/nsx_*.c` | Scheduler, window, plotter and bitmap glue |
 | `netsurf-sys/csrc/nsx_fetch.c`, `nsx_post.c` | The `http(s):` fetcher over the host's `Fetcher`, form bodies |
+| `netsurf-sys/csrc/nsx_download.c` | NetSurf's download table, reported to the host by id |
 | `netsurf-sys/csrc/nsx_image.c` | PNG and JPEG content handlers, decoded by the host |
 | `src/fetch.rs` | The public `Fetcher` API and the fetches in flight |
+| `src/download.rs` | The public `Downloader` API and the downloads under way |
 | `src/image.rs` | PNG (`png`) and JPEG (`zune-jpeg`) decoding, capped at 16 megapixels |
 | `src/engine.rs` | The one engine thread (NetSurf's core is global) |
 | `src/fonts.rs` | Text measuring for NetSurf's layout, over xui's shaper |
@@ -88,6 +105,7 @@ error page.
 | `src/record.rs` | Plotter calls into an `xui-litehtml` display list |
 | `src/sys/` | The only `unsafe`: calls into C and the C callbacks |
 | `tests/fetch.rs` | A fake server: redirects, images, a 404, failures, cookies, a form POST |
+| `tests/browser.rs` | Status text, a `mailto:` link, downloads (started, asked for, cancelled), Stop |
 | `src/view.rs`, `src/widget/` | `NetSurfView`, a custom-painted node |
 | `examples/compare/` | Both engines side by side |
 

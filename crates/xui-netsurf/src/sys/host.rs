@@ -139,11 +139,7 @@ pub(super) unsafe extern "C" fn host_win_size(
     }
 }
 
-pub(super) unsafe extern "C" fn host_win_pointer(
-    _ctx: *mut c_void,
-    w: *mut c_void,
-    shape: c_int,
-) {
+pub(super) unsafe extern "C" fn host_win_pointer(_ctx: *mut c_void, w: *mut c_void, shape: c_int) {
     // SAFETY: NetSurf only reports for live windows.
     unsafe { win(w) }.pointer(shape);
 }
@@ -166,5 +162,36 @@ pub(super) unsafe extern "C" fn host_resource(
             1
         }
         None => 0,
+    }
+}
+
+pub(super) unsafe extern "C" fn host_win_status(
+    _ctx: *mut c_void,
+    w: *mut c_void,
+    text: *const c_char,
+) {
+    // SAFETY: a NUL-terminated text from NetSurf, for a live window.
+    let text = unsafe { std::ffi::CStr::from_ptr(text) }.to_string_lossy();
+    // SAFETY: NetSurf only reports for live windows.
+    unsafe { win(w) }.status(&text);
+}
+
+pub(super) unsafe extern "C" fn host_launch_url(
+    ctx: *mut c_void,
+    w: *mut c_void,
+    url: *const c_char,
+) {
+    // SAFETY: a NUL-terminated URL from NetSurf.
+    let url = unsafe { std::ffi::CStr::from_ptr(url) }.to_string_lossy();
+    if w.is_null() {
+        // SAFETY: `ctx` is the engine.
+        let last = unsafe { engine(ctx) }.last_window.borrow().clone();
+        match last {
+            Some(view) => view.send(crate::engine::Output::Launch(url.into_owned())),
+            None => log::info!("xui-netsurf: no window to launch {url} from"),
+        }
+    } else {
+        // SAFETY: the active window's handle, live for the host call.
+        unsafe { win(w) }.launch(&url);
     }
 }

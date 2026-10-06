@@ -29,6 +29,7 @@
 
 #![warn(missing_docs)]
 
+mod download;
 mod engine;
 mod families;
 mod fetch;
@@ -40,6 +41,7 @@ mod sys;
 mod view;
 mod widget;
 
+pub use crate::download::{DownloadId, DownloadInfo, DownloadSink, Downloader, set_downloader};
 pub use crate::families::{FontFamilies, set_font_families};
 pub use crate::fetch::{FetchMethod, FetchRequest, FetchResponder, Fetcher, set_fetcher};
 pub use crate::view::{NetSurfView, NetSurfViewEvent};

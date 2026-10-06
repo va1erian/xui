@@ -16,6 +16,13 @@
 extern const nsx_host *nsx_host_v;
 
 extern struct gui_window_table *nsx_window_table;
+extern struct gui_download_table *nsx_download_table;
+
+/* The host handle of the window a host call is acting on, while it runs. */
+extern void *nsx_active_win;
+
+/* The host handle of a window (NULL for none or one being destroyed). */
+void *nsx_window_host(struct gui_window *gw);
 extern struct gui_bitmap_table *nsx_bitmap_table;
 extern struct gui_layout_table *nsx_layout_table;
 extern const struct plotter_table nsx_plotters;

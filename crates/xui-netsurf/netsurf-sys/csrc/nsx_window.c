@@ -112,6 +112,14 @@ static void gw_set_pointer(struct gui_window *gw, enum gui_pointer_shape shape)
 	}
 }
 
+static void gw_set_status(struct gui_window *gw, const char *text)
+{
+	if (gw->win != NULL) {
+		nsx_host_v->win_status(nsx_host_v->ctx, gw->win,
+				text != NULL ? text : "");
+	}
+}
+
 static struct gui_window_table window_table = {
 	.create = gw_create,
 	.destroy = gw_destroy,
@@ -123,11 +131,17 @@ static struct gui_window_table window_table = {
 	.set_title = gw_set_title,
 	.set_url = gw_set_url,
 	.set_pointer = gw_set_pointer,
+	.set_status = gw_set_status,
 };
 
 struct gui_window_table *nsx_window_table = &window_table;
 
 /* ---- host calls ------------------------------------------------------ */
+
+void *nsx_window_host(struct gui_window *gw)
+{
+	return gw != NULL ? gw->win : NULL;
+}
 
 struct gui_window *nsx_window_create(void *win, const char *url)
 {
@@ -157,8 +171,10 @@ int nsx_window_navigate(struct gui_window *gw, const char *url)
 	if (nsurl_create(url, &nurl) != NSERROR_OK) {
 		return -1;
 	}
+	nsx_active_win = gw->win;
 	err = browser_window_navigate(gw->bw, nurl, NULL, BW_NAVIGATE_HISTORY,
 			NULL, NULL, NULL);
+	nsx_active_win = NULL;
 	nsurl_unref(nurl);
 	return err == NSERROR_OK ? 0 : -1;
 }
@@ -208,6 +224,7 @@ int nsx_window_redraw(struct gui_window *gw, int x0, int y0, int x1, int y1,
 
 void nsx_window_mouse(struct gui_window *gw, int action, int x, int y)
 {
+	nsx_active_win = gw->win;
 	switch (action) {
 	case NSX_MOUSE_PRESS:
 		browser_window_mouse_click(gw->bw, BROWSER_MOUSE_PRESS_1, x, y);
@@ -222,9 +239,34 @@ void nsx_window_mouse(struct gui_window *gw, int action, int x, int y)
 		browser_window_mouse_track(gw->bw, BROWSER_MOUSE_HOVER, x, y);
 		break;
 	}
+	nsx_active_win = NULL;
 }
 
 int nsx_window_key(struct gui_window *gw, uint32_t key)
 {
-	return browser_window_key_press(gw->bw, key) ? 1 : 0;
+	int used;
+
+	nsx_active_win = gw->win;
+	used = browser_window_key_press(gw->bw, key) ? 1 : 0;
+	nsx_active_win = NULL;
+	return used;
+}
+
+void nsx_window_stop(struct gui_window *gw)
+{
+	browser_window_stop(gw->bw);
+}
+
+int nsx_window_download(struct gui_window *gw, const char *url)
+{
+	nsurl *nurl;
+	nserror err;
+
+	if (nsurl_create(url, &nurl) != NSERROR_OK) {
+		return -1;
+	}
+	err = browser_window_navigate(gw->bw, nurl, NULL, BW_NAVIGATE_DOWNLOAD,
+			NULL, NULL, NULL);
+	nsurl_unref(nurl);
+	return err == NSERROR_OK ? 0 : -1;
 }

@@ -117,6 +117,24 @@ typedef struct nsx_host {
 	 * alpha is 255. */
 	int (*image_decode)(void *ctx, const uint8_t *data, size_t len,
 			uint8_t *pixels, int width, int height, int *opaque);
+	/* The status line text NetSurf wants shown for `win` (the link under
+	 * the pointer, the load's progress). */
+	void (*win_status)(void *ctx, void *win, const char *text);
+	/* A URL NetSurf has no fetcher for (mailto:, say), for the host to
+	 * hand to the system. `win` is the window it came from, or NULL. */
+	void (*launch_url)(void *ctx, void *win, const char *url);
+	/* A download starts in `win` (or NULL): download `id` of `url`, with
+	 * NetSurf's file name (from Content-Disposition or the URL), its MIME
+	 * type and its total size (0 when unknown). 1 to accept it, 0 to
+	 * refuse. */
+	int (*dl_start)(void *ctx, void *win, uint64_t id, const char *url,
+			const char *filename, const char *mime,
+			unsigned long long total);
+	/* The next bytes of download `id`; 1 to go on, 0 to stop it. */
+	int (*dl_data)(void *ctx, uint64_t id, const uint8_t *data,
+			size_t len);
+	/* Download `id` ended: `error` is NULL when it completed. */
+	void (*dl_end)(void *ctx, uint64_t id, const char *error);
 } nsx_host;
 
 /* Where one redraw's drawing goes. Coordinates are CSS pixels. */
@@ -177,6 +195,13 @@ int nsx_window_redraw(struct gui_window *gw, int x0, int y0, int x1, int y1,
 void nsx_window_mouse(struct gui_window *gw, int action, int x, int y);
 /* A typed character (UCS-4) or NetSurf key code; 1 if it was used. */
 int nsx_window_key(struct gui_window *gw, uint32_t key);
+/* Stops the window's load. */
+void nsx_window_stop(struct gui_window *gw);
+/* Downloads `url` (instead of showing it) for the window; 0 on success. */
+int nsx_window_download(struct gui_window *gw, const char *url);
+
+/* Stops download `id`; its dl_end reports "Cancelled". */
+void nsx_download_cancel(uint64_t id);
 
 /* Hands http: and https: URLs to the host's fetch_start from now on; 0 on
  * success. */

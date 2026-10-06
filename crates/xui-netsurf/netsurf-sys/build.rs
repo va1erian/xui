@@ -206,6 +206,7 @@ fn build_netsurf(
         "nsx_fetch.c",
         "nsx_post.c",
         "nsx_image.c",
+        "nsx_download.c",
     ] {
         build.file(root.join("csrc").join(glue));
     }
