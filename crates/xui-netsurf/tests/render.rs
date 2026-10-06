@@ -321,6 +321,12 @@ fn a_space_at_the_start_of_an_inline_element_stays() {
     assert!(both.1.abs_diff(before.1) <= 1, "{both:?} vs {before:?}");
     let empty = line_extent("11 <span> </span>days");
     assert!(empty.1.abs_diff(plain.1) <= 1, "{empty:?} vs {plain:?}");
+    // And across the closing tag.
+    let around = line_extent("11 <span> </span> days");
+    assert!(around.1.abs_diff(plain.1) <= 1, "{around:?} vs {plain:?}");
+    let closing = line_extent("<i>11 </i> days");
+    let italic = line_extent("<i>11 </i>days");
+    assert!(closing.1.abs_diff(italic.1) <= 1, "{closing:?} vs {italic:?}");
 }
 
 #[test]
