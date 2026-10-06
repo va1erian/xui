@@ -24,10 +24,10 @@ use crate::engine::{Output, Reporter};
 /// not wake the UI for every piece.
 const PROGRESS_STEP: u64 = 64 * 1024;
 
-/// Names one download in the view's events and in
+/// Names one download (the engine numbers them) in the view's events and in
 /// [`NetSurfView::cancel_download`](crate::NetSurfView::cancel_download).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct DownloadId(pub(crate) u64);
+pub struct DownloadId(pub u64);
 
 /// A download as NetSurf starts it.
 #[derive(Debug, Clone, PartialEq, Eq)]
