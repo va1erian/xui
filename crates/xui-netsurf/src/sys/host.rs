@@ -190,7 +190,7 @@ pub(super) unsafe extern "C" fn host_launch_url(
         // SAFETY: `ctx` is the engine.
         let last = unsafe { engine(ctx) }.last_window.borrow().clone();
         match last {
-            Some(view) => view.send(crate::engine::Output::Launch {
+            Some((_, view)) => view.send(crate::engine::Output::Launch {
                 url: url.into_owned(),
                 by_user: false,
             }),

@@ -227,9 +227,9 @@ pub(crate) struct Engine {
     pub(crate) fonts: Fonts,
     pub(crate) fetches: Fetches,
     pub(crate) downloads: Downloads,
-    /// The window opened last, told about a URL to launch that NetSurf
-    /// raised outside any window's call.
-    pub(crate) last_window: RefCell<Option<Reporter>>,
+    /// The newest open window (its id and reporter), told about a URL to
+    /// launch that NetSurf raised outside any window's call.
+    pub(crate) last_window: RefCell<Option<(u64, Reporter)>>,
     /// Whether NetSurf hands `http(s):` to the host fetcher yet.
     fetcher_registered: Cell<bool>,
 }
@@ -352,7 +352,7 @@ fn handle(engine: &Engine, windows: &mut HashMap<u64, Window>, cmd: Command) {
                 status: RefCell::default(),
                 reporter: Reporter { out, wake },
             });
-            *engine.last_window.borrow_mut() = Some(state.reporter());
+            *engine.last_window.borrow_mut() = Some((id, state.reporter()));
             match sys::Window::open(&state, &url) {
                 Some(handle) => {
                     windows.insert(id, Window { handle, state });
@@ -402,6 +402,14 @@ fn handle(engine: &Engine, windows: &mut HashMap<u64, Window>, cmd: Command) {
         Command::Close { id } => {
             if let Some(w) = windows.remove(&id) {
                 w.handle.destroy();
+            }
+            let mut last = engine.last_window.borrow_mut();
+            if last.as_ref().is_some_and(|(open, _)| *open == id) {
+                // Fall back to the newest window still open.
+                *last = windows
+                    .iter()
+                    .max_by_key(|(open, _)| **open)
+                    .map(|(open, w)| (*open, w.state.reporter()));
             }
         }
         Command::Fetch { id, event } => fetch_event(engine, windows, id, event),
