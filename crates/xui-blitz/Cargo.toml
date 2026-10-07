@@ -10,16 +10,19 @@ repository = "https://github.com/va1erian/xui"
 default = ["system-fonts"]
 # Find the platform's installed fonts (DirectWrite, CoreText, fontconfig). Off
 # on a system with none to find (LazyOS): the host then registers its fonts
-# with `register_font`.
-system-fonts = ["blitz-dom/system-fonts"]
+# with `register_font`. On Linux fontconfig is loaded at run time (`dlopen`),
+# so building needs no fontconfig headers or pkg-config.
+system-fonts = ["blitz-dom/system-fonts", "fontique/fontconfig-dlopen"]
 
 [dependencies]
 # The engine, pinned to one release from crates.io (no fork): parsing
 # (html5ever), style (Stylo), layout (Taffy, with floats) and painting
-# (anyrender), all pure Rust and MIT/Apache-2.0 (Stylo MPL-2.0).
-blitz-dom = { version = "=0.3.0-beta.2", default-features = false, features = ["svg", "woff", "floats"] }
+# (anyrender), all pure Rust and MIT/Apache-2.0 (Stylo MPL-2.0). `scrollbars`
+# draws overlay scrollbars on the page and every scroll container, which fade
+# after a scroll and can be dragged.
+blitz-dom = { version = "=0.3.0-beta.2", default-features = false, features = ["svg", "woff", "floats", "scrollbars"] }
 blitz-html = "=0.3.0-beta.2"
-blitz-paint = { version = "=0.3.0-beta.2", default-features = false, features = ["svg"] }
+blitz-paint = { version = "=0.3.0-beta.2", default-features = false, features = ["svg", "scrollbars"] }
 blitz-traits = { version = "=0.3.0-beta.2", default-features = false }
 # The CPU rasteriser a frame is drawn with, and the paint vocabulary it takes;
 # the versions blitz-paint 0.3.0-beta.2 is built against.
@@ -29,6 +32,7 @@ peniko = "0.6"
 kurbo = "0.13"
 # Fonts: the collection a document lays text out with.
 parley = { version = "0.11", default-features = false, features = ["std"] }
+fontique = { version = "0.11", default-features = false, features = ["std"] }
 # Blitz's input and pointer vocabulary.
 keyboard-types = "0.7"
 cursor-icon = "1"

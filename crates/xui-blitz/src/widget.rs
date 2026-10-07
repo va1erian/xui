@@ -140,7 +140,10 @@ impl Widget {
             canvas.clear(self.background.get());
         }
         let (w, h) = (image.width() as i32, image.height() as i32);
-        canvas.draw_image(image, Rect::new(bounds.left, bounds.top, bounds.left + w, bounds.top + h));
+        canvas.draw_image(
+            image,
+            Rect::new(bounds.left, bounds.top, bounds.left + w, bounds.top + h),
+        );
     }
 
     /// Node-local device pixels as client CSS pixels.
@@ -149,7 +152,14 @@ impl Widget {
         (x as f32 / s, y as f32 / s)
     }
 
-    fn pointer(&self, action: PointerAction, x: i32, y: i32, button: MouseButton, mods: xui_core::message::Modifiers) {
+    fn pointer(
+        &self,
+        action: PointerAction,
+        x: i32,
+        y: i32,
+        button: MouseButton,
+        mods: xui_core::message::Modifiers,
+    ) {
         let (x, y) = self.css(x, y);
         self.send(Command::Input(Input::Pointer {
             action,

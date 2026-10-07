@@ -19,13 +19,13 @@ use std::path::Path;
 use std::rc::Rc;
 use std::time::{Duration, Instant};
 
+use xui_blitz::{BlitzView, BlitzViewEvent};
 use xui_canvas::WinitBackend;
 use xui_canvas::snapshot::{Snapshot, Stage, render_with};
 use xui_core::app::{App, Ui, run_app};
 use xui_core::backend::{Backend, PlatformSpec, Result};
 use xui_core::theme::Theme;
 use xui_core::{Color, Dip};
-use xui_blitz::{BlitzView, BlitzViewEvent};
 
 const DEMO: &str = include_str!("demo.html");
 /// How long `--screenshot` waits for the page.
@@ -53,7 +53,8 @@ impl App for Page {
             Msg::Event(event) => eprintln!("page: {event:?}"),
             Msg::Quit => ui.quit(),
         }
-        self.ready.set(self.view.is_ready() || self.view.has_failed());
+        self.ready
+            .set(self.view.is_ready() || self.view.has_failed());
     }
 }
 
@@ -142,11 +143,17 @@ fn main() {
     if let Some(out) = shot {
         let watched = Rc::clone(&ready);
         let image = render_with(
-            Snapshot::new(Dip(width), Dip(height)).dpi(dpi).theme(theme).title("page"),
+            Snapshot::new(Dip(width), Dip(height))
+                .dpi(dpi)
+                .theme(theme)
+                .title("page"),
             move |ui| build(ui, &url, dark, ready),
             move |stage| settle(stage, &watched),
         );
-        match image.map_err(|e| e.to_string()).and_then(|i| i.save_png(&out).map_err(|e| e.to_string())) {
+        match image
+            .map_err(|e| e.to_string())
+            .and_then(|i| i.save_png(&out).map_err(|e| e.to_string()))
+        {
             Ok(()) => eprintln!("page: wrote {out}"),
             Err(e) => {
                 eprintln!("page: screenshot failed: {e}");

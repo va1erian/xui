@@ -1,1 +1,3 @@
 crates/xui-netsurf/netsurf-sys/vendor/** -text
+# Shell scripts run in bash (WSL, Linux CI), which a CRLF checkout breaks.
+*.sh text eol=lf

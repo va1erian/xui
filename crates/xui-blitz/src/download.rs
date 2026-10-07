@@ -37,8 +37,9 @@ pub struct DownloadInfo {
     /// Where it comes from.
     pub url: String,
     /// A file name for it: the `Content-Disposition` file name, else the URL's
-    /// last path segment. It is untrusted (a server chose it): sanitise it
-    /// before using it as a path.
+    /// last path segment, with path separators, `:` and the other characters
+    /// Windows refuses in a name replaced by `_`. A server still chose it:
+    /// check it against existing files before writing.
     pub filename: String,
     /// The MIME type the server gave.
     pub mime: String,
@@ -207,10 +208,19 @@ pub(crate) fn begin(head: &Head<'_>, view: Reporter) -> Option<Box<dyn Response>
 /// Whether a response with these headers is one to save rather than show:
 /// an attachment, or a type the view does not display.
 pub(crate) fn is_download(headers: &[(String, String)]) -> bool {
-    let attachment = header(headers, "Content-Disposition")
-        .is_some_and(|d| d.trim_start().to_ascii_lowercase().starts_with("attachment"));
+    let attachment = header(headers, "Content-Disposition").is_some_and(|d| {
+        d.trim_start()
+            .to_ascii_lowercase()
+            .starts_with("attachment")
+    });
     let mime = header(headers, "Content-Type")
-        .map(|t| t.split(';').next().unwrap_or("").trim().to_ascii_lowercase())
+        .map(|t| {
+            t.split(';')
+                .next()
+                .unwrap_or("")
+                .trim()
+                .to_ascii_lowercase()
+        })
         .unwrap_or_default();
     attachment || !crate::engine::page::is_displayable(&mime)
 }
@@ -247,8 +257,27 @@ fn filename(url: &str, disposition: Option<&str>) -> String {
                     .into_owned(),
             )
         })
+        .map(|f| safe_name(&f))
         .filter(|f| !f.is_empty())
         .unwrap_or_else(|| "download".to_string())
+}
+
+/// `name` with every character that is not allowed in a file name on
+/// Windows (`<>:"/\|?*` and controls) replaced by `_`, and the leading dots
+/// and trailing dots and spaces Windows strips removed.
+fn safe_name(name: &str) -> String {
+    let replaced: String = name
+        .chars()
+        .map(|c| match c {
+            '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*' => '_',
+            c if c.is_control() => '_',
+            c => c,
+        })
+        .collect();
+    replaced
+        .trim_start_matches('.')
+        .trim_end_matches(['.', ' '])
+        .to_string()
 }
 
 #[cfg(test)]
@@ -262,7 +291,10 @@ mod tests {
             "r e.pdf"
         );
         assert_eq!(
-            filename("http://x/a/b.zip", Some("attachment; filename*=UTF-8''na%C3%AFve.txt")),
+            filename(
+                "http://x/a/b.zip",
+                Some("attachment; filename*=UTF-8''na%C3%AFve.txt")
+            ),
             "naïve.txt"
         );
         assert_eq!(filename("http://x/a/my%20file.zip", None), "my file.zip");
@@ -270,16 +302,35 @@ mod tests {
     }
 
     #[test]
+    fn file_names_lose_colons_and_separators() {
+        assert_eq!(
+            filename("http://x/", Some("attachment; filename=\"C:\\a/b:c?.zip\"")),
+            "C__a_b_c_.zip"
+        );
+        assert_eq!(filename("http://x/File%3AMap.png", None), "File_Map.png");
+        assert_eq!(
+            filename("http://x/", Some("attachment; filename=\"..\"")),
+            "download"
+        );
+    }
+
+    #[test]
     fn attachments_and_unshown_types_download() {
         let h = |pairs: &[(&str, &str)]| -> Vec<(String, String)> {
-            pairs.iter().map(|(a, b)| (a.to_string(), b.to_string())).collect()
+            pairs
+                .iter()
+                .map(|(a, b)| (a.to_string(), b.to_string()))
+                .collect()
         };
         assert!(is_download(&h(&[("Content-Type", "application/zip")])));
         assert!(is_download(&h(&[
             ("Content-Type", "text/html"),
             ("Content-Disposition", "attachment"),
         ])));
-        assert!(!is_download(&h(&[("Content-Type", "text/html; charset=utf-8")])));
+        assert!(!is_download(&h(&[(
+            "Content-Type",
+            "text/html; charset=utf-8"
+        )])));
         assert!(!is_download(&h(&[("Content-Type", "image/png")])));
     }
 }

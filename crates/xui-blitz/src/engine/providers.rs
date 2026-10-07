@@ -22,7 +22,10 @@ impl Post {
     }
 
     fn send(&self, command: Command) {
-        let tx = self.0.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let tx = self
+            .0
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let _ = tx.send(command);
     }
 }

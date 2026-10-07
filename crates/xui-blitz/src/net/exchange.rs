@@ -182,7 +182,8 @@ impl Response for Exchange {
             return done(Outcome::Failed(message));
         }
         if let Some(request) = self.redirect() {
-            let mut next = Exchange::new(request, Arc::clone(&self.aborted), self.divert.take(), done);
+            let mut next =
+                Exchange::new(request, Arc::clone(&self.aborted), self.divert.take(), done);
             next.hops = self.hops + 1;
             return next.spawn();
         }
@@ -204,7 +205,10 @@ mod tests {
         FetchRequest {
             url: "http://example.com/a/b".into(),
             method,
-            headers: vec![("Content-Type".into(), "application/x-www-form-urlencoded".into())],
+            headers: vec![(
+                "Content-Type".into(),
+                "application/x-www-form-urlencoded".into(),
+            )],
             body: Some(b"x=1".to_vec()),
         }
     }

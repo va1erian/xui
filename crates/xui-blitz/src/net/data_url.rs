@@ -3,7 +3,10 @@
 /// The MIME type and bytes of a `data:` URL, or `None` when it is malformed.
 /// `url` is the whole URL, scheme included.
 pub(crate) fn decode(url: &str) -> Option<(String, Vec<u8>)> {
-    let rest = url.get(..5)?.eq_ignore_ascii_case("data:").then(|| &url[5..])?;
+    let rest = url
+        .get(..5)?
+        .eq_ignore_ascii_case("data:")
+        .then(|| &url[5..])?;
     let (meta, data) = rest.split_once(',')?;
     // A fragment is not part of the data.
     let data = data.split_once('#').map_or(data, |(d, _)| d);
@@ -17,7 +20,11 @@ pub(crate) fn decode(url: &str) -> Option<(String, Vec<u8>)> {
         m => m.to_string(),
     };
     let bytes = percent_decode(data);
-    let bytes = if base64 { base64_decode(&bytes)? } else { bytes };
+    let bytes = if base64 {
+        base64_decode(&bytes)?
+    } else {
+        bytes
+    };
     Some((mime, bytes))
 }
 
@@ -27,7 +34,11 @@ fn percent_decode(s: &str) -> Vec<u8> {
     let mut i = 0;
     while i < b.len() {
         let hex = |c: u8| (c as char).to_digit(16);
-        match (b[i], b.get(i + 1).copied().and_then(hex), b.get(i + 2).copied().and_then(hex)) {
+        match (
+            b[i],
+            b.get(i + 1).copied().and_then(hex),
+            b.get(i + 2).copied().and_then(hex),
+        ) {
             (b'%', Some(hi), Some(lo)) => {
                 out.push((hi * 16 + lo) as u8);
                 i += 3;
@@ -81,7 +92,10 @@ mod tests {
     fn plain_text_is_percent_decoded() {
         assert_eq!(
             decode("data:,Hello%2C%20World!"),
-            Some(("text/plain;charset=US-ASCII".into(), b"Hello, World!".to_vec()))
+            Some((
+                "text/plain;charset=US-ASCII".into(),
+                b"Hello, World!".to_vec()
+            ))
         );
     }
 

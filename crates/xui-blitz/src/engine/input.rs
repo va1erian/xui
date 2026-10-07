@@ -82,8 +82,8 @@ pub(crate) fn to_ui_event(input: &Input, scroll: (f64, f64)) -> Option<UiEvent> 
         client_x: x,
         client_y: y,
     };
-    Some(match input {
-        &Input::Pointer {
+    Some(match *input {
+        Input::Pointer {
             action,
             x,
             y,
@@ -111,16 +111,22 @@ pub(crate) fn to_ui_event(input: &Input, scroll: (f64, f64)) -> Option<UiEvent> 
                 PointerAction::Up => UiEvent::PointerUp(event),
             }
         }
-        &Input::Wheel {
+        Input::Wheel {
             notches,
             horizontal,
             x,
             y,
             mods: m,
         } => {
-            // Rolling away from the user scrolls toward the top.
-            let pixels = -notches * WHEEL_LINE;
-            let (dx, dy) = if horizontal { (-pixels, 0.0) } else { (0.0, pixels) };
+            // Blitz takes winit's signs: a positive delta moves the content
+            // down (scrolls up), as rolling the wheel away does; tilting it
+            // right (a positive horizontal notch) scrolls right.
+            let pixels = notches * WHEEL_LINE;
+            let (dx, dy) = if horizontal {
+                (-pixels, 0.0)
+            } else {
+                (0.0, pixels)
+            };
             UiEvent::Wheel(BlitzWheelEvent {
                 delta: BlitzWheelDelta::Pixels(dx, dy),
                 coords: coords(x, y),
@@ -129,12 +135,12 @@ pub(crate) fn to_ui_event(input: &Input, scroll: (f64, f64)) -> Option<UiEvent> 
                 element: Default::default(),
             })
         }
-        &Input::Key {
+        Input::Key {
             key,
             mods: m,
             repeat,
         } => UiEvent::KeyDown(key_event(blitz_key(key, m)?, None, mods(m), repeat)),
-        &Input::Char(c) => {
+        Input::Char(c) => {
             let text = c.to_string();
             UiEvent::KeyDown(key_event(
                 Key::Character(text.clone()),
@@ -224,12 +230,21 @@ mod tests {
         let Some(UiEvent::Wheel(e)) = to_ui_event(&input, (0.0, 0.0)) else {
             panic!("not a wheel");
         };
-        assert!(matches!(e.delta, BlitzWheelDelta::Pixels(x, y) if x == 0.0 && y == WHEEL_LINE));
+        assert!(matches!(e.delta, BlitzWheelDelta::Pixels(x, y) if x == 0.0 && y == -WHEEL_LINE));
     }
 
     #[test]
     fn letters_pass_only_as_shortcuts_and_chars_carry_text() {
-        let key = |k, m| to_ui_event(&Input::Key { key: k, mods: m, repeat: false }, (0.0, 0.0));
+        let key = |k, m| {
+            to_ui_event(
+                &Input::Key {
+                    key: k,
+                    mods: m,
+                    repeat: false,
+                },
+                (0.0, 0.0),
+            )
+        };
         assert!(key(XKey::C, XMods::NONE).is_none());
         let Some(UiEvent::KeyDown(e)) = key(XKey::C, CTRL) else {
             panic!("no ctrl+c");

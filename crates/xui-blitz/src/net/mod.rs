@@ -18,8 +18,8 @@ mod data_url;
 mod exchange;
 mod form;
 
-pub(crate) use exchange::{Divert, Done, Head, Loaded, Outcome, header};
 use exchange::Exchange;
+pub(crate) use exchange::{Divert, Done, Head, Loaded, Outcome, header};
 
 /// What the view says it is, to servers.
 pub(crate) const USER_AGENT: &str = "Mozilla/5.0 (compatible; xui-blitz/0.1; Blitz)";
@@ -37,8 +37,18 @@ pub(crate) fn is_loadable(url: &url::Url) -> bool {
 
 /// Starts `request`; `done` hears how it ended, from whichever thread
 /// finishes it. `aborted` stops it early.
-pub(crate) fn start(request: FetchRequest, aborted: Arc<AtomicBool>, divert: Option<Divert>, done: Done) {
-    let scheme = request.url.split(':').next().unwrap_or("").to_ascii_lowercase();
+pub(crate) fn start(
+    request: FetchRequest,
+    aborted: Arc<AtomicBool>,
+    divert: Option<Divert>,
+    done: Done,
+) {
+    let scheme = request
+        .url
+        .split(':')
+        .next()
+        .unwrap_or("")
+        .to_ascii_lowercase();
     if matches!(scheme.as_str(), "http" | "https") {
         if crate::fetch::fetcher().is_none() {
             return done(Outcome::Failed(format!("no fetcher for {scheme}: URLs")));
@@ -192,7 +202,12 @@ impl NetProvider for Net {
             in_flight.fetch_sub(1, Ordering::AcqRel);
             handler.bytes(url, Bytes::from(body));
         });
-        start(fetch_request(request, "*/*"), Arc::clone(&self.aborted), None, done);
+        start(
+            fetch_request(request, "*/*"),
+            Arc::clone(&self.aborted),
+            None,
+            done,
+        );
     }
 }
 
@@ -247,7 +262,10 @@ mod tests {
     #[test]
     fn unknown_schemes_and_missing_files_fail() {
         assert!(matches!(load("gopher://x/"), Outcome::Failed(_)));
-        assert!(matches!(load("file:///no/such/file.html"), Outcome::Failed(_)));
+        assert!(matches!(
+            load("file:///no/such/file.html"),
+            Outcome::Failed(_)
+        ));
     }
 
     #[test]

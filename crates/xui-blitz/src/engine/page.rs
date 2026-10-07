@@ -42,7 +42,10 @@ pub(crate) fn html_for(loaded: &Loaded) -> String {
             escape(&loaded.url)
         )
     } else {
-        error_page(&loaded.url, &format!("This is {mime}, which cannot be shown."))
+        error_page(
+            &loaded.url,
+            &format!("This is {mime}, which cannot be shown."),
+        )
     }
 }
 

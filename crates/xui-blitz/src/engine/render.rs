@@ -38,7 +38,10 @@ impl Raster {
         scale: f64,
         background: Color,
     ) -> Option<Image> {
-        let (width, height) = (width.clamp(1, u16::MAX as u32), height.clamp(1, u16::MAX as u32));
+        let (width, height) = (
+            width.clamp(1, u16::MAX as u32),
+            height.clamp(1, u16::MAX as u32),
+        );
         if self.size != (width, height) {
             self.renderer.resize(width, height);
             self.size = (width, height);
@@ -68,14 +71,24 @@ pub(crate) fn cursor_for(icon: Option<CursorIcon>) -> Cursor {
         Some(CursorIcon::Pointer) => Cursor::Hand,
         Some(CursorIcon::Text | CursorIcon::VerticalText) => Cursor::Text,
         Some(CursorIcon::Wait | CursorIcon::Progress) => Cursor::Busy,
-        Some(CursorIcon::EwResize | CursorIcon::ColResize | CursorIcon::EResize | CursorIcon::WResize) => {
-            Cursor::SizeHorizontal
+        Some(
+            CursorIcon::EwResize
+            | CursorIcon::ColResize
+            | CursorIcon::EResize
+            | CursorIcon::WResize,
+        ) => Cursor::SizeHorizontal,
+        Some(
+            CursorIcon::NsResize
+            | CursorIcon::RowResize
+            | CursorIcon::NResize
+            | CursorIcon::SResize,
+        ) => Cursor::SizeVertical,
+        Some(CursorIcon::NwseResize | CursorIcon::NwResize | CursorIcon::SeResize) => {
+            Cursor::SizeNwSe
         }
-        Some(CursorIcon::NsResize | CursorIcon::RowResize | CursorIcon::NResize | CursorIcon::SResize) => {
-            Cursor::SizeVertical
+        Some(CursorIcon::NeswResize | CursorIcon::NeResize | CursorIcon::SwResize) => {
+            Cursor::SizeNeSw
         }
-        Some(CursorIcon::NwseResize | CursorIcon::NwResize | CursorIcon::SeResize) => Cursor::SizeNwSe,
-        Some(CursorIcon::NeswResize | CursorIcon::NeResize | CursorIcon::SwResize) => Cursor::SizeNeSw,
         _ => Cursor::Default,
     }
 }
@@ -89,7 +102,10 @@ mod tests {
         assert_eq!(cursor_for(Some(CursorIcon::Pointer)), Cursor::Hand);
         assert_eq!(cursor_for(Some(CursorIcon::Text)), Cursor::Text);
         assert_eq!(cursor_for(Some(CursorIcon::Progress)), Cursor::Busy);
-        assert_eq!(cursor_for(Some(CursorIcon::ColResize)), Cursor::SizeHorizontal);
+        assert_eq!(
+            cursor_for(Some(CursorIcon::ColResize)),
+            Cursor::SizeHorizontal
+        );
         assert_eq!(cursor_for(Some(CursorIcon::Move)), Cursor::Default);
         assert_eq!(cursor_for(None), Cursor::Default);
     }

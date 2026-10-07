@@ -1,0 +1,23 @@
+# Headless render probes, one per HTML engine, for scripts/engine-compare.
+# A workspace of its own: the NetSurf probe links GPL-2.0-only C that only
+# builds on Linux, and none of this belongs in the main workspace.
+[workspace]
+members = ["baseline", "litehtml", "netsurf", "blitz"]
+resolver = "3"
+
+[workspace.dependencies]
+xui-core = { path = "../../../crates/xui-core" }
+# The software painter and offscreen snapshot only: no window system.
+xui-canvas = { path = "../../../crates/xui-canvas", default-features = false }
+
+# What a shipped binary would use: optimised and stripped.
+[profile.release]
+strip = true
+
+# Smallest: what a size-constrained target (LazyOS) would ship.
+[profile.small]
+inherits = "release"
+opt-level = "s"
+lto = "fat"
+codegen-units = 1
+panic = "abort"

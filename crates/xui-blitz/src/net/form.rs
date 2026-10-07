@@ -77,7 +77,9 @@ fn multipart(form: &FormData) -> (Vec<u8>, String) {
 
 /// Escapes a name for a quoted `Content-Disposition` parameter.
 fn quote(s: &str) -> String {
-    s.replace('"', "%22").replace('\r', "%0D").replace('\n', "%0A")
+    s.replace('"', "%22")
+        .replace('\r', "%0D")
+        .replace('\n', "%0A")
 }
 
 /// Varies the boundary with the form and the time, so a value is unlikely to
