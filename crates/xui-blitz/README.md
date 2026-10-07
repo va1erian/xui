@@ -56,10 +56,10 @@ The `Fetcher`, `FetchRequest`, `FetchResponder`, `Downloader`, `DownloadSink`,
 fetcher and downloader work by changing the import. Two differences: the view
 keeps no cookies (a fetcher that wants them keeps a jar), and
 `DownloadInfo::filename` already has `:`, path separators and the other
-characters Windows refuses replaced. `set_font_families` becomes
-`register_font` (Blitz draws from font files) plus `set_font_families` with
-family names. Events arrive through `on_event` instead of `update()`'s return
-value.
+characters Windows refuses replaced. `set_font_families` needs no
+replacement: the bundled fonts cover the generic families (a host can still
+name its own with `register_font` and `set_font_families`). Events arrive
+through `on_event` instead of `update()`'s return value.
 
 ## Design
 
@@ -89,15 +89,29 @@ value.
 
 ## Fonts
 
-With the `system-fonts` feature (default) the platform's fonts are found
-(DirectWrite, CoreText, fontconfig loaded at run time). Without it, as on
-LazyOS, register fonts with `register_font(bytes)` and name the generic
-families with `set_font_families`.
+The view ships the **Liberation** fonts (Sans, Serif and Mono, each in four
+styles; `assets/liberation/`, 1.7 MB as WOFF2, decoded once per process) under
+the `bundled-fonts` feature (default). CSS `sans-serif`, `serif` and `monospace`
+are drawn with them, and they stand in for Arial, Helvetica, Times New Roman,
+Times, Courier New and Courier where the system has none of those. They are
+metric-compatible with Arial, Times New Roman and Courier New, so lines break
+where Chrome on Windows breaks them, on every platform and on LazyOS with no
+font setup at all.
+
+With `system-fonts` (default) the platform's fonts are found too (DirectWrite,
+CoreText, fontconfig loaded at run time), for pages that name them. A host can
+add fonts with `register_font(bytes)` and choose the generic families with
+`set_font_families`.
 
 ## Licence
 
-MIT. Blitz and its dependencies are MIT or Apache-2.0, except Stylo
-(MPL-2.0, file-level copyleft). No C, and no `unsafe` in this crate.
+MIT for the code. Blitz and its dependencies are MIT or Apache-2.0, except
+Stylo (MPL-2.0, file-level copyleft). No C, and no `unsafe` in this crate.
+
+The bundled Liberation fonts are © Google and Red Hat under the SIL Open Font
+License 1.1 (`assets/liberation/LICENSE`): the 2.1.5 release, unmodified apart
+from being stored as WOFF2. A program embedding them must keep that licence
+with them; turn `bundled-fonts` off to leave them out.
 
 ## Comparing engines
 
