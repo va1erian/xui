@@ -9,7 +9,7 @@ in [AGENTS.md](../AGENTS.md); the design invariants are repeated in
 - Stable Rust, edition 2024. There is no pinned `rust-toolchain` file and no
   declared MSRV; CI uses `stable`.
 - The workspace members include `xui-core`, `xui-win32`, `xui-canvas`,
-  `xui`, `xui-litehtml`, `xui-code-editor` (`Cargo.toml`, resolver 3).
+  `xui`, `xui-litehtml`, `xui-blitz`, `xui-code-editor` (`Cargo.toml`, resolver 3).
 
 ## Checks
 

@@ -45,6 +45,20 @@
 
 ### Additions
 
+- **xui-blitz: a web view on the Blitz engine**, to replace both
+  `xui-litehtml` and `xui-netsurf`. `BlitzView::builder(on_frame, on_event)`
+  starts from HTML (`.html(..).base_url(..)`) or a URL (`.url(..)`); with
+  `follow_links(false)` (the default) links and forms come back as
+  `LinkClicked`, with `follow_links(true)` the view opens them. Pages load
+  through the same `Fetcher`/`Downloader` contract `xui-netsurf` had (redirects
+  are followed by the view), and it reports the title, URL, loading, status
+  text, `LaunchUrl`, `CopyRequested`, fetch failures and downloads. Blitz
+  (Stylo, Taffy, Parley; pinned from crates.io, not forked) brings CSS grid,
+  `var()`, opacity, SVG, floats, overlay scrollbars, text selection and form
+  fields; the theme's light or dark reaches `prefers-color-scheme`. MIT, no C,
+  no `unsafe`. `scripts/engine-compare/` renders fixtures with litehtml,
+  NetSurf, Blitz and Chrome and measures each engine's binary size.
+
 - **xui-netsurf: what a browser needs from the view.** `NetSurfView` reports
   NetSurf's status line (`StatusChanged`: the link under the pointer, load
   progress) and links it cannot follow (`LaunchUrl`, e.g. `mailto:`), can

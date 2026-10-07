@@ -253,6 +253,7 @@ crates/xui-gpu/src/       the shared OpenGL surface seam (no platform code)
 crates/xui-code-editor/src/  the code-editor widget (a portable custom-painted node)
 crates/xui-icons/src/     the optional Global Village icon set (vector shapes drawn through Canvas)
 crates/xui-litehtml/src/  the litehtml HTML view (a portable custom-painted node)
+crates/xui-blitz/src/     the Blitz web view (a portable custom-painted node; replaces litehtml and NetSurf)
 crates/xui/src/           the umbrella crate
 ```
 

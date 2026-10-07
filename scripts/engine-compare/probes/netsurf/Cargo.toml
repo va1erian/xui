@@ -1,0 +1,11 @@
+[package]
+name = "probe-netsurf"
+version = "0.0.0"
+edition = "2024"
+license = "GPL-2.0-only"
+publish = false
+
+[dependencies]
+xui-core = { workspace = true }
+xui-canvas = { workspace = true }
+xui-netsurf = { path = "../../../../crates/xui-netsurf" }

@@ -1,0 +1,61 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>xui-blitz demo</title>
+<style>
+  :root { --accent: #24427a; --soft: #e4e9f2; }
+  body { font-family: sans-serif; margin: 16px; color: #1d2330; background: #ffffff; }
+  h1 { font-size: 26px; margin: 0 0 8px; color: var(--accent); }
+  h2 { font-size: 18px; margin: 18px 0 6px; border-bottom: 2px solid #c8d3e6; }
+  p { line-height: 1.4; margin: 6px 0; }
+  .note { background: #fff6d6; border: 1px solid #e3c766; border-left: 6px solid #d9a400; padding: 6px 10px; border-radius: 6px; }
+  .row { display: flex; gap: 8px; }
+  .row div { flex: 1; padding: 8px; color: #ffffff; text-align: center; border-radius: 4px; }
+  .a { background: #3f6fc4; } .b { background: #2f9e6a; } .c { background: #c4553f; opacity: 0.6; }
+  .grid { display: grid; grid-template-columns: 120px 1fr 1fr; gap: 6px; }
+  .grid div { background: var(--soft); padding: 6px; }
+  .grid .wide { grid-column: span 2; background: linear-gradient(90deg, #dfe8ff, #f5d6e6); }
+  table { border-collapse: collapse; margin-top: 4px; }
+  th, td { border: 1px solid #8a96ab; padding: 3px 8px; }
+  th { background: var(--soft); }
+  .float { float: right; width: 90px; height: 60px; margin: 0 0 6px 10px; background: #e9d6f5; border: 2px dashed #8a4fb3; }
+  .pill { display: inline-block; padding: 2px 8px; margin-right: 4px; background: #dfe8ff; border: 1px solid #7d97d8; border-radius: 10px; }
+  .pill::before { content: "#"; color: #7d97d8; }
+  pre { background: #f2f4f8; padding: 6px; font-family: monospace; }
+  .shadow { box-shadow: 0 2px 6px rgba(0,0,0,.35); padding: 8px; margin: 8px 0; width: 50%; }
+</style>
+</head>
+<body>
+<h1>xui-blitz</h1>
+<p>Laid out by <b>Blitz</b> (Stylo, Taffy, Parley). Accents: &eacute;&agrave;&uuml;&ccedil; &euro; &mdash; &ldquo;quotes&rdquo;.</p>
+<p class="note">A note box with a thick left border and rounded corners.</p>
+
+<h2>Flexbox and grid</h2>
+<div class="row"><div class="a">one</div><div class="b">two</div><div class="c">three (opacity)</div></div>
+<div class="grid" style="margin-top: 6px"><div>120px</div><div class="wide">span 2, gradient</div><div>a</div><div>b</div><div>c</div></div>
+
+<h2>Floats, inline blocks and generated content</h2>
+<div class="float"></div>
+<p>This paragraph wraps around a dashed float on the right. <i>Italic</i>,
+<b>bold</b>, <u>underlined</u> and <s>struck</s> text, a <a href="#bottom">link</a>,
+and <code>inline code</code>.</p>
+<p><span class="pill">alpha</span><span class="pill">beta</span><span class="pill">gamma</span></p>
+<div class="shadow">A box with a shadow.</div>
+
+<h2>Lists, tables and SVG</h2>
+<ul><li>First item</li><li>Second item with more words in it</li></ul>
+<table>
+<tr><th>Engine</th><th>Licence</th><th>CSS</th></tr>
+<tr><td>Blitz</td><td>MIT/Apache</td><td>grid, var(), opacity</td></tr>
+</table>
+<p><svg width="160" height="40"><rect x="2" y="2" width="60" height="36" rx="6" fill="#3f6fc4"/><circle cx="100" cy="20" r="16" fill="#c4553f"/></svg></p>
+
+<h2>Forms and code</h2>
+<form><input type="text" value="a text field"> <input type="checkbox" checked> <button>Go</button></form>
+<pre>fn main() {
+    println!("hello");
+}</pre>
+<p id="bottom">End of the page.</p>
+</body>
+</html>
