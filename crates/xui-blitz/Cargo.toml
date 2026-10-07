@@ -37,6 +37,10 @@ kurbo = "0.13"
 # Fonts: the collection a document lays text out with.
 parley = { version = "0.11", default-features = false, features = ["std"] }
 fontique = { version = "0.11", default-features = false, features = ["std"] }
+# The image formats pages use. Blitz decodes with `image` but enables no
+# format itself (today they come in through the SVG renderer); named here so
+# they stay on whatever else changes.
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "webp"] }
 # Blitz's input and pointer vocabulary.
 keyboard-types = "0.7"
 cursor-icon = "1"
