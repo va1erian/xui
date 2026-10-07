@@ -83,6 +83,8 @@ struct box_construct_props {
 	struct box *inline_container;
 	/** Whether the current node is the root of the DOM tree */
 	bool node_is_root;
+	/** Opacity of the parent element's box, with its ancestors' (nsx) */
+	float parent_opacity;
 };
 
 static const content_type image_types = CONTENT_IMAGE;
@@ -156,6 +158,7 @@ box_extract_properties(dom_node *n, struct box_construct_props *props)
 {
 	memset(props, 0, sizeof(*props));
 
+	props->parent_opacity = 1;
 	props->node_is_root = box_is_root(n);
 
 	/* Extract properties from containing DOM node */
@@ -176,6 +179,9 @@ box_extract_properties(dom_node *n, struct box_construct_props *props)
 
 			if (parent_box != NULL) {
 				props->parent_style = parent_box->style;
+				if (parent_box->opacity >= 0)
+					props->parent_opacity =
+							parent_box->opacity;
 				props->href = parent_box->href;
 				props->target = parent_box->target;
 				props->title = parent_box->title;
@@ -298,30 +304,227 @@ box_get_style(html_content *c,
 }
 
 
+static void
+box_text_transform(char *s, unsigned int len, enum css_text_transform_e tt);
+
+
+/**
+ * Give \a b the collapsed space that follows it.
+ *
+ * The layout counts a space on an inline's opening and closing boxes
+ * (nsx), so such a box gets none when a box before it on the line already
+ * has one with only other opening and closing boxes, which are zero width,
+ * in between: `foo <b> bar</b>`, `a <span> </span>b` and
+ * `a <span> </span> b` keep one space.
+ *
+ * \param b  box the space follows
+ */
+static void box_space_after(struct box *b)
+{
+	struct box *prev;
+
+	if (b->type == BOX_INLINE || b->type == BOX_INLINE_END) {
+		for (prev = b->prev; prev != NULL; prev = prev->prev) {
+			if (prev->space != 0)
+				return;
+			if (prev->type != BOX_INLINE &&
+			    prev->type != BOX_INLINE_END)
+				break;
+		}
+	}
+	b->space = UNKNOWN_WIDTH;
+}
+
+
+/**
+ * The opacity a box with \a style draws with when its parent element's box
+ * draws with \a parent (nsx).
+ *
+ * CSS opacity is not inherited, but it applies to everything an element
+ * draws, its descendants included, so a box's opacity is the product of its
+ * own and every ancestor element's. Text boxes are siblings of their inline
+ * parent's box rather than children, so the product is kept on each box
+ * instead of being applied while the redraw recurses.
+ */
+static float box_opacity(const css_computed_style *style, float parent)
+{
+	css_fixed opacity;
+	float f;
+
+	if (style == NULL ||
+	    css_computed_opacity(style, &opacity) != CSS_OPACITY_SET)
+		return parent;
+
+	f = FIXTOFLT(opacity);
+	if (f < 0)
+		f = 0;
+	if (f > 1)
+		f = 1;
+	return parent * f;
+}
+
+
+/**
+ * The text of a pseudo element's `content` (nsx): its strings and `attr()`
+ * values joined, on \a ctx. Counters, quotes and images are left out.
+ *
+ * \return the text, or NULL on memory exhaustion
+ */
+static char *
+box_generated_text(dom_node *n,
+		   const css_computed_content_item *item,
+		   void *ctx)
+{
+	char *text = talloc_strdup(ctx, "");
+
+	for (; text != NULL && item->type != CSS_COMPUTED_CONTENT_NONE;
+			item++) {
+		dom_string *name, *value = NULL;
+
+		switch (item->type) {
+		case CSS_COMPUTED_CONTENT_STRING:
+			text = talloc_append_string(ctx, text,
+					lwc_string_data(item->data.string));
+			break;
+		case CSS_COMPUTED_CONTENT_ATTR:
+			if (dom_string_create_interned(
+					(const uint8_t *) lwc_string_data(
+							item->data.attr),
+					lwc_string_length(item->data.attr),
+					&name) != DOM_NO_ERR)
+				break;
+			if (dom_element_get_attribute(n, name, &value) ==
+					DOM_NO_ERR && value != NULL) {
+				text = talloc_append_string(ctx, text,
+						dom_string_data(value));
+				dom_string_unref(value);
+			}
+			dom_string_unref(name);
+			break;
+		default:
+			break;
+		}
+	}
+	return text;
+}
+
+
+/**
+ * Add the text of an inline pseudo element to an inline container (nsx), as
+ * one text box styled by the pseudo element, with its white space collapsed
+ * the way box_construct_text() collapses a text node's.
+ *
+ * \param n          Element the pseudo element belongs to
+ * \param content    Content of type CONTENT_HTML that is being processed
+ * \param box        Box of the element
+ * \param style      Computed style of the pseudo element
+ * \param container  Inline container to append the text to
+ */
+static void
+box_construct_generate_text(dom_node *n,
+			    html_content *content,
+			    struct box *box,
+			    const css_computed_style *style,
+			    struct box *container)
+{
+	const css_computed_content_item *c_item;
+	enum css_white_space_e white_space;
+	struct box *text_box;
+	char *raw, *text, *start;
+	size_t length;
+	bool space_after = false;
+
+	if (css_computed_content(style, &c_item) != CSS_CONTENT_SET)
+		return;
+
+	raw = box_generated_text(n, c_item, content->bctx);
+	if (raw == NULL || raw[0] == '\0')
+		return;
+
+	white_space = css_computed_white_space(style);
+	if (white_space == CSS_WHITE_SPACE_NORMAL ||
+	    white_space == CSS_WHITE_SPACE_NOWRAP) {
+		text = squash_whitespace(raw);
+	} else {
+		text = strdup(raw);
+	}
+	if (text == NULL)
+		return;
+
+	start = text;
+	length = strlen(text);
+	if (white_space == CSS_WHITE_SPACE_NORMAL ||
+	    white_space == CSS_WHITE_SPACE_NOWRAP) {
+		/* A collapsed space at either end becomes the space after
+		 * the box before it, or after the text itself. */
+		if (start[0] == ' ') {
+			if (container->last != NULL)
+				box_space_after(container->last);
+			start++;
+			length--;
+		}
+		if (length > 0 && start[length - 1] == ' ') {
+			space_after = true;
+			length--;
+		}
+	}
+	if (length == 0) {
+		free(text);
+		return;
+	}
+
+	/** \todo Not wise to drop const from the computed style */
+	text_box = box_create(NULL, (css_computed_style *) style, false,
+			box->href, box->target, box->title, NULL,
+			content->bctx);
+	if (text_box == NULL) {
+		free(text);
+		return;
+	}
+	text_box->type = BOX_TEXT;
+	text_box->text = talloc_strndup(content->bctx, start, length);
+	free(text);
+	if (text_box->text == NULL)
+		return;
+	text_box->length = length;
+	if (space_after)
+		text_box->space = UNKNOWN_WIDTH;
+	text_box->opacity = box_opacity(style, box->opacity);
+
+	if (css_computed_text_transform(style) != CSS_TEXT_TRANSFORM_NONE)
+		box_text_transform(text_box->text, text_box->length,
+				css_computed_text_transform(style));
+
+	box_add_child(container, text_box);
+}
+
+
 /**
  * Construct the box required for a generated element.
  *
- * \param n        XML node of type XML_ELEMENT_NODE
- * \param content  Content of type CONTENT_HTML that is being processed
- * \param box      Box which may have generated content
- * \param style    Complete computed style for pseudo element, or NULL
+ * \param n          XML node of type XML_ELEMENT_NODE
+ * \param content    Content of type CONTENT_HTML that is being processed
+ * \param box        Box which may have generated content
+ * \param style      Complete computed style for pseudo element, or NULL
+ * \param container  Inline container of \a box when it is an inline box,
+ *                   which an inline pseudo element's text joins; NULL for
+ *                   a block, whose own inline container it joins (nsx)
  *
- * \todo This is currently incomplete. It just does enough to support
- * the clearfix hack. (http://www.positioniseverything.net/easyclearing.html )
+ * \todo This is currently incomplete. It does enough to support the
+ * clearfix hack (http://www.positioniseverything.net/easyclearing.html )
+ * and, for nsx, the text of inline pseudo elements (`li::after
+ * { content: " · " }`); their margins, borders and backgrounds are not drawn.
  */
 static void
 box_construct_generate(dom_node *n,
 		       html_content *content,
 		       struct box *box,
-		       const css_computed_style *style)
+		       const css_computed_style *style,
+		       struct box *container)
 {
 	struct box *gen = NULL;
 	enum css_display_e computed_display;
 	const css_computed_content_item *c_item;
-
-	/* Nothing to generate if the parent box is not a block */
-	if (box->type != BOX_BLOCK)
-		return;
 
 	/* To determine if an element has a pseudo element, we select
 	 * for it and test to see if the returned style's content
@@ -333,8 +536,40 @@ box_construct_generate(dom_node *n,
 		return;
 	}
 
-	/* create box for this element */
 	computed_display = ns_computed_display(style, box_is_root(n));
+
+	if (computed_display == CSS_DISPLAY_INLINE ||
+	    computed_display == CSS_DISPLAY_INLINE_BLOCK) {
+		if (box->type == BOX_INLINE) {
+			if (container != NULL)
+				box_construct_generate_text(n, content, box,
+						style, container);
+			return;
+		}
+		if (box->type != BOX_BLOCK && box->type != BOX_INLINE_BLOCK &&
+		    box->type != BOX_TABLE_CELL)
+			return;
+		/* The block's current inline container, as for its inline
+		 * children (box_extract_properties()). */
+		container = box->last;
+		if (container == NULL ||
+		    container->type != BOX_INLINE_CONTAINER) {
+			container = box_create(NULL, NULL, false, NULL, NULL,
+					NULL, NULL, content->bctx);
+			if (container == NULL)
+				return;
+			container->type = BOX_INLINE_CONTAINER;
+			box_add_child(box, container);
+		}
+		box_construct_generate_text(n, content, box, style, container);
+		return;
+	}
+
+	/* Nothing to generate if the parent box is not a block */
+	if (box->type != BOX_BLOCK)
+		return;
+
+	/* create box for this element */
 	if (computed_display == CSS_DISPLAY_BLOCK ||
 			computed_display == CSS_DISPLAY_TABLE) {
 		/* currently only support block level boxes */
@@ -349,6 +584,7 @@ box_construct_generate(dom_node *n,
 		/* set box type from computed display */
 		gen->type = box_map[ns_computed_display(
 				style, box_is_root(n))];
+		gen->opacity = box_opacity(style, box->opacity);
 
 		box_add_child(box, gen);
 	}
@@ -380,6 +616,7 @@ box_construct_marker(struct box *box,
 		return false;
 
 	marker->type = BOX_BLOCK;
+	marker->opacity = box->opacity;
 
 	list_style_type = css_computed_list_style_type(box->style);
 
@@ -541,6 +778,8 @@ box_construct_element(struct box_construct_ctx *ctx, bool *convert_children)
 	if (box == NULL)
 		return false;
 
+	box->opacity = box_opacity(box->style, props.parent_opacity);
+
 	/* If this is the root box, add it to the context */
 	if (props.node_is_root)
 		ctx->root_box = box;
@@ -620,10 +859,12 @@ box_construct_element(struct box_construct_ctx *ctx, bool *convert_children)
 		return false;
 	}
 
-	/* Handle the :before pseudo element */
+	/* Handle the :before pseudo element (an inline box's, once it is
+	 * in its inline container, below) */
 	if (!(box->flags & IS_REPLACED)) {
 		box_construct_generate(ctx->n, ctx->content, box,
-				box->styles->styles[CSS_PSEUDO_ELEMENT_BEFORE]);
+				box->styles->styles[CSS_PSEUDO_ELEMENT_BEFORE],
+				NULL);
 	}
 
 	if (box->type == BOX_NONE || (ns_computed_display(box->style,
@@ -720,6 +961,12 @@ box_construct_element(struct box_construct_ctx *ctx, bool *convert_children)
 		assert(props.inline_container != NULL);
 
 		box_add_child(props.inline_container, box);
+
+		if (box->type == BOX_INLINE && !(box->flags & IS_REPLACED))
+			box_construct_generate(ctx->n, ctx->content, box,
+					box->styles->styles[
+						CSS_PSEUDO_ELEMENT_BEFORE],
+					props.inline_container);
 	} else {
 		if (ns_computed_display(box->style, props.node_is_root) ==
 				CSS_DISPLAY_LIST_ITEM) {
@@ -791,7 +1038,14 @@ static void box_construct_element_after(dom_node *n, html_content *content)
 
 		if (has_children == false ||
 				(box->flags & CONVERT_CHILDREN) == 0) {
-			/* No children, or didn't want children converted */
+			/* No children, or didn't want children converted:
+			 * the :after text follows the box itself (nsx) */
+			if (box->type == BOX_INLINE && box->parent != NULL &&
+			    !(box->flags & IS_REPLACED))
+				box_construct_generate(n, content, box,
+						box->styles->styles[
+						CSS_PSEUDO_ELEMENT_AFTER],
+						box->parent);
 			return;
 		}
 
@@ -808,12 +1062,20 @@ static void box_construct_element_after(dom_node *n, html_content *content)
 					props.inline_container);
 		}
 
+		/* Handle the :after pseudo element, inside the INLINE_END */
+		if (box->type == BOX_INLINE && !(box->flags & IS_REPLACED))
+			box_construct_generate(n, content, box,
+					box->styles->styles[
+						CSS_PSEUDO_ELEMENT_AFTER],
+					props.inline_container);
+
 		inline_end = box_create(NULL, box->style, false,
 				box->href, box->target, box->title,
 				box->id == NULL ? NULL :
 				lwc_string_ref(box->id), content->bctx);
 		if (inline_end != NULL) {
 			inline_end->type = BOX_INLINE_END;
+			inline_end->opacity = box->opacity;
 
 			assert(props.inline_container != NULL);
 
@@ -825,7 +1087,8 @@ static void box_construct_element_after(dom_node *n, html_content *content)
 	} else if (!(box->flags & IS_REPLACED)) {
 		/* Handle the :after pseudo element */
 		box_construct_generate(n, content, box,
-				box->styles->styles[CSS_PSEUDO_ELEMENT_AFTER]);
+				box->styles->styles[CSS_PSEUDO_ELEMENT_AFTER],
+				NULL);
 	}
 }
 
@@ -1026,8 +1289,7 @@ static bool box_construct_text(struct box_construct_ctx *ctx)
 			if (props.inline_container != NULL) {
 				assert(props.inline_container->last != NULL);
 
-				props.inline_container->last->space =
-						UNKNOWN_WIDTH;
+				box_space_after(props.inline_container->last);
 			}
 
 			free(text);
@@ -1063,6 +1325,7 @@ static bool box_construct_text(struct box_construct_ctx *ctx)
 		}
 
 		box->type = BOX_TEXT;
+		box->opacity = props.parent_opacity;
 
 		box->text = talloc_strdup(ctx->bctx, text);
 		free(text);
@@ -1091,7 +1354,7 @@ static bool box_construct_text(struct box_construct_ctx *ctx)
 			memmove(box->text, &box->text[1], box->length);
 
 			if (box->prev != NULL)
-				box->prev->space = UNKNOWN_WIDTH;
+				box_space_after(box->prev);
 		}
 	} else {
 		/* white-space: pre */
@@ -1182,6 +1445,7 @@ static bool box_construct_text(struct box_construct_ctx *ctx)
 			}
 
 			box->type = BOX_TEXT;
+			box->opacity = props.parent_opacity;
 
 			box->text = talloc_strdup(ctx->bctx, current);
 			if (box->text == NULL) {

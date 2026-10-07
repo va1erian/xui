@@ -111,6 +111,7 @@ box_create(css_select_results *styles,
 	box->flags = style_owned ? (box->flags | STYLE_OWNED) : box->flags;
 	box->styles = styles;
 	box->style = style;
+	box->opacity = -1;
 	box->x = box->y = 0;
 	box->width = UNKNOWN_WIDTH;
 	box->height = 0;

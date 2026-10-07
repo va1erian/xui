@@ -37,7 +37,9 @@ use host::{
     host_win_event, host_win_invalidate, host_win_pointer, host_win_size, host_win_status,
     host_win_title, host_win_url,
 };
-use sink::{sink_bitmap, sink_clip, sink_disc, sink_line, sink_polygon, sink_rect, sink_text};
+use sink::{
+    sink_bitmap, sink_clip, sink_disc, sink_line, sink_opacity, sink_polygon, sink_rect, sink_text,
+};
 
 pub(crate) const EVENT_UPDATE_EXTENT: i32 = ns::NSX_EVENT_UPDATE_EXTENT;
 pub(crate) const EVENT_START_THROBBER: i32 = ns::NSX_EVENT_START_THROBBER;
@@ -161,6 +163,7 @@ impl Window {
             polygon: sink_polygon,
             bitmap: sink_bitmap,
             text: sink_text,
+            opacity: sink_opacity,
         };
         // SAFETY: `self.0` is a live window; `sink` and the recorder it points
         // at live for the call, and NetSurf drops the pointer when it returns.

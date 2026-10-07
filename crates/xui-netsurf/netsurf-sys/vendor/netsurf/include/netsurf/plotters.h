@@ -329,6 +329,24 @@ struct plotter_table {
 	nserror (*flush)(
 			const struct redraw_context *ctx);
 
+	/**
+	 * Sets how opaque subsequent plot operations draw (nsx).
+	 *
+	 * optional, may be NULL. The value is absolute, not relative to
+	 *  the previous one: the alpha of everything plotted after it,
+	 *  colours and bitmaps alike, is scaled by \a opacity until the
+	 *  next call. A box and its descendants are not composited as
+	 *  one group, so overlapping parts of a translucent box show
+	 *  through each other.
+	 *
+	 * \param ctx The current redraw context.
+	 * \param opacity From 0 (transparent) to 1 (opaque).
+	 * \return NSERROR_OK on success else error code.
+	 */
+	nserror (*set_opacity)(
+			const struct redraw_context *ctx,
+			float opacity);
+
 	/* flags */
 	/**
 	 * flag to enable knockout rendering.

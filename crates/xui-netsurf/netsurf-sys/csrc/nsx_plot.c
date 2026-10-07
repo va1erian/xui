@@ -155,6 +155,13 @@ static nserror p_text(const struct redraw_context *ctx,
 	return NSERROR_OK;
 }
 
+static nserror p_set_opacity(const struct redraw_context *ctx, float opacity)
+{
+	const nsx_sink *s = sink_of(ctx);
+	s->opacity(s->rec, opacity);
+	return NSERROR_OK;
+}
+
 const struct plotter_table nsx_plotters = {
 	.clip = p_clip,
 	.arc = p_arc,
@@ -165,6 +172,7 @@ const struct plotter_table nsx_plotters = {
 	.path = p_path,
 	.bitmap = p_bitmap,
 	.text = p_text,
+	.set_opacity = p_set_opacity,
 	.option_knockout = false,
 };
 

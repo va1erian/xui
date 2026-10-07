@@ -142,6 +142,9 @@ textarea[disabled] { background-color: #ddd; color: #333; }
 fieldset { display: block; border: thin solid #888; margin: 1.12em 0; }
 
 noembed, script, style, title { display: none; }
+/* nsx: the rest of HTML's hidden elements (Wikipedia puts <link> and
+   <meta> in the body). */
+base, basefont, datalist, link, meta, param, rp, template { display: none; }
 
 /* HTML5 elements */
 article, aside, figcaption, figure, footer, header, main, nav, section {
