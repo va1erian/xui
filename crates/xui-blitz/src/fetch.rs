@@ -55,6 +55,31 @@ pub(crate) trait Response: Send {
     fn end(self: Box<Self>, result: Result<(), String>);
 }
 
+/// The flag that stops one request. A page response that turns into a
+/// download swaps in the download's own flag, so leaving the page (which sets
+/// the page's flag) no longer stops it, and cancelling the download does.
+pub(crate) struct Abort(Mutex<Arc<AtomicBool>>);
+
+impl Abort {
+    pub(crate) fn new(flag: Arc<AtomicBool>) -> Arc<Abort> {
+        Arc::new(Abort(Mutex::new(flag)))
+    }
+
+    /// The flag in force.
+    pub(crate) fn flag(&self) -> Arc<AtomicBool> {
+        Arc::clone(&self.0.lock().unwrap_or_else(PoisonError::into_inner))
+    }
+
+    pub(crate) fn is_set(&self) -> bool {
+        self.flag().load(Ordering::Relaxed)
+    }
+
+    /// From now on, `flag` stops the request.
+    pub(crate) fn replace(&self, flag: Arc<AtomicBool>) {
+        *self.0.lock().unwrap_or_else(PoisonError::into_inner) = flag;
+    }
+}
+
 /// Where a [`Fetcher`] reports one response. It is `Send + 'static`, so the
 /// fetcher can move it to the thread that does the work.
 ///
@@ -65,11 +90,11 @@ pub(crate) trait Response: Send {
 /// that panics or forgets does not leave the page loading forever.
 pub struct FetchResponder {
     response: Mutex<Option<Box<dyn Response>>>,
-    aborted: Arc<AtomicBool>,
+    aborted: Arc<Abort>,
 }
 
 impl FetchResponder {
-    pub(crate) fn new(response: Box<dyn Response>, aborted: Arc<AtomicBool>) -> FetchResponder {
+    pub(crate) fn new(response: Box<dyn Response>, aborted: Arc<Abort>) -> FetchResponder {
         FetchResponder {
             response: Mutex::new(Some(response)),
             aborted,
@@ -138,7 +163,7 @@ impl FetchResponder {
     /// a download was cancelled): the fetcher should stop and drop the
     /// responder. Everything reported after this is discarded.
     pub fn is_aborted(&self) -> bool {
-        self.aborted.load(Ordering::Relaxed)
+        self.aborted.is_set()
     }
 }
 
@@ -234,7 +259,7 @@ mod tests {
     fn responder() -> (FetchResponder, mpsc::Receiver<Piece>, Arc<AtomicBool>) {
         let (tx, rx) = mpsc::channel();
         let aborted = Arc::new(AtomicBool::new(false));
-        let r = FetchResponder::new(Box::new(Record(tx)), Arc::clone(&aborted));
+        let r = FetchResponder::new(Box::new(Record(tx)), Abort::new(Arc::clone(&aborted)));
         (r, rx, aborted)
     }
 
@@ -253,6 +278,25 @@ mod tests {
                 Piece::Header("Content-Type".into(), "text/html".into()),
                 Piece::Data(b"<p>".to_vec()),
                 Piece::End(Ok(())),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_replaced_flag_decides_from_then_on() {
+        let (r, rx, page) = responder();
+        let download = Arc::new(AtomicBool::new(false));
+        r.aborted.replace(Arc::clone(&download));
+        page.store(true, Ordering::Relaxed);
+        r.data(b"still wanted");
+        download.store(true, Ordering::Relaxed);
+        r.data(b"dropped");
+        r.finish();
+        assert_eq!(
+            rx.try_iter().collect::<Vec<_>>(),
+            [
+                Piece::Data(b"still wanted".to_vec()),
+                Piece::End(Err("cancelled".into()))
             ]
         );
     }

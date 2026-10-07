@@ -25,7 +25,7 @@ impl Engine {
         if let Some(old) = self.doc.take() {
             old.net.abort();
         }
-        let net = Arc::new(Net::new());
+        let net = Arc::new(Net::new(&url));
         let post = Arc::new(Post::new(self.tx.clone()));
         let config = DocumentConfig {
             viewport: Some(self.viewport()),
@@ -88,6 +88,12 @@ impl Engine {
                 .report
                 .event(BlitzViewEvent::LaunchUrl { url, by_user: true });
         }
+        // A web page may not send the view to the disk.
+        if options.url.scheme() == "file" && !net::is_file_url(&self.url) {
+            return self.report.event(BlitzViewEvent::Failed(format!(
+                "a web page cannot open a local file: {url}"
+            )));
+        }
         self.load(net::fetch_request(options.into_request(), ACCEPT_PAGE));
     }
 
@@ -100,10 +106,18 @@ impl Engine {
         let generation = self.generation;
         let tx = Mutex::new(self.tx.clone());
         let report = self.report.clone();
+        let diverted = Mutex::new(self.tx.clone());
         let divert: Divert = Box::new(move |head| {
-            download::is_download(head.headers)
+            let download = download::is_download(head.headers)
                 .then(|| download::begin(head, report))
-                .flatten()
+                .flatten()?;
+            // The page load is over (the page on show stays); the download
+            // goes on by itself, stopped only by its own cancel.
+            let tx = diverted
+                .into_inner()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let _ = tx.send(Command::Diverted { generation });
+            Some(download)
         });
         let done: Done = Box::new(move |outcome| {
             let tx = tx

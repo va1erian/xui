@@ -55,6 +55,10 @@ pub(crate) enum Command {
         generation: u64,
         outcome: Outcome,
     },
+    /// A page request turned into a download: the page load is over.
+    Diverted {
+        generation: u64,
+    },
     Stop,
     Download(String),
     /// The view's size in device pixels and its scale.
@@ -274,6 +278,10 @@ impl Engine {
                 outcome,
             } if generation == self.generation => self.page(outcome),
             Command::Page { .. } => {}
+            Command::Diverted { generation } if generation == self.generation => {
+                self.loading = None;
+            }
+            Command::Diverted { .. } => {}
             Command::Stop => {
                 self.stop();
                 if let Some(doc) = &self.doc {

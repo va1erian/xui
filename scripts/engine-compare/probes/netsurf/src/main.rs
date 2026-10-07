@@ -14,30 +14,36 @@ struct Msg;
 
 struct Probe {
     view: NetSurfView<Msg>,
-    ready: Rc<Cell<bool>>,
+    state: Rc<Cell<common::Load>>,
 }
 
 impl App for Probe {
     type Msg = Msg;
     fn update(&mut self, _: Msg, _: &mut Ui<Msg>) {
         self.view.update();
-        self.ready.set(self.view.is_ready() || self.view.has_failed());
+        self.state.set(if self.view.has_failed() {
+            common::Load::Failed
+        } else if self.view.is_ready() {
+            common::Load::Ready
+        } else {
+            common::Load::Loading
+        });
     }
 }
 
 fn main() {
     let args = common::args();
     let url = common::file_url(&args.page);
-    let ready = Rc::new(Cell::new(false));
-    let flag = Rc::clone(&ready);
+    let state = Rc::new(Cell::new(common::Load::Loading));
+    let flag = Rc::clone(&state);
     common::run(
         "netsurf",
         &args,
         move |ui| {
             let view = NetSurfView::new(ui, ui.client_rect(), &url, || Msg)?;
-            Ok(Probe { view, ready: flag })
+            Ok(Probe { view, state: flag })
         },
         Msg,
-        ready,
+        state,
     );
 }

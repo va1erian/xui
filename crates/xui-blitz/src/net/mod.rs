@@ -19,7 +19,10 @@ mod exchange;
 mod form;
 
 use exchange::Exchange;
-pub(crate) use exchange::{Divert, Done, Head, Loaded, Outcome, header};
+pub(crate) use exchange::{Divert, Diverted, Done, Head, Loaded, Outcome, header};
+
+/// The largest local file the view reads; anything bigger fails.
+const MAX_FILE: u64 = 256 * 1024 * 1024;
 
 /// What the view says it is, to servers.
 pub(crate) const USER_AGENT: &str = "Mozilla/5.0 (compatible; xui-blitz/0.1; Blitz)";
@@ -55,15 +58,29 @@ pub(crate) fn start(
         }
         return Exchange::new(request, aborted, divert, done).spawn();
     }
+    let exchange = Box::new(Exchange::new(request.clone(), aborted, divert, done));
+    if scheme == "file" {
+        // A disk can be slow: never on the engine thread.
+        let spawned = std::thread::Builder::new()
+            .name("blitz-file".to_string())
+            .spawn(move || answer(exchange, read_file(&request.url)));
+        if let Err(e) = spawned {
+            log::error!("xui-blitz: could not start a file thread: {e}");
+        }
+        return;
+    }
     let local = match scheme.as_str() {
         "data" => data_url::decode(&request.url).ok_or_else(|| "malformed data: URL".to_string()),
-        "file" => read_file(&request.url),
         "about" if request.url.eq_ignore_ascii_case("about:blank") => {
             Ok(("text/html".to_string(), Vec::new()))
         }
         _ => Err(format!("cannot open {scheme}: URLs")),
     };
-    let mut exchange = Box::new(Exchange::new(request, aborted, divert, done));
+    answer(exchange, local);
+}
+
+/// Feeds a locally made response through `exchange`.
+fn answer(mut exchange: Box<Exchange>, local: Result<(String, Vec<u8>), String>) {
     match local {
         Ok((mime, body)) => {
             exchange.status(200);
@@ -76,13 +93,27 @@ pub(crate) fn start(
     }
 }
 
-/// A `file:` URL's bytes and a type guessed from its extension.
+/// A `file:` URL's bytes and a type guessed from its extension. Only a
+/// regular file of at most [`MAX_FILE`] bytes: a device such as `/dev/zero`
+/// would never end.
 fn read_file(url: &str) -> Result<(String, Vec<u8>), String> {
+    use std::io::Read as _;
     let path = url::Url::parse(url)
         .ok()
         .and_then(|u| u.to_file_path().ok())
         .ok_or_else(|| format!("not a local file: {url}"))?;
-    let body = std::fs::read(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+    let fail = |e: std::io::Error| format!("{}: {e}", path.display());
+    let file = std::fs::File::open(&path).map_err(fail)?;
+    if !file.metadata().map_err(fail)?.is_file() {
+        return Err(format!("{}: not a file", path.display()));
+    }
+    let mut body = Vec::new();
+    file.take(MAX_FILE + 1)
+        .read_to_end(&mut body)
+        .map_err(fail)?;
+    if body.len() as u64 > MAX_FILE {
+        return Err(format!("{}: larger than {MAX_FILE} bytes", path.display()));
+    }
     let ext = path
         .extension()
         .map(|e| e.to_string_lossy().to_ascii_lowercase())
@@ -158,13 +189,18 @@ pub(crate) fn fetch_request(request: Request, accept: &str) -> FetchRequest {
 pub(crate) struct Net {
     aborted: Arc<AtomicBool>,
     in_flight: Arc<AtomicUsize>,
+    /// Whether the document may load `file:` URLs: only a local document
+    /// may, so a web page cannot read the disk.
+    files: bool,
 }
 
 impl Net {
-    pub(crate) fn new() -> Net {
+    /// The loader for a document at `url`.
+    pub(crate) fn new(url: &str) -> Net {
         Net {
             aborted: Arc::default(),
             in_flight: Arc::default(),
+            files: is_file_url(url),
         }
     }
 
@@ -179,9 +215,20 @@ impl Net {
     }
 }
 
+/// Whether `url` is a `file:` URL.
+pub(crate) fn is_file_url(url: &str) -> bool {
+    url.get(..5)
+        .is_some_and(|s| s.eq_ignore_ascii_case("file:"))
+}
+
 impl NetProvider for Net {
     fn fetch(&self, _doc_id: usize, request: Request, handler: Box<dyn NetHandler>) {
         let url = request.url.to_string();
+        if !self.files && request.url.scheme() == "file" {
+            log::info!("xui-blitz: {url}: a web page cannot load local files");
+            // An empty answer, so a render-blocking style sheet does not wait.
+            return handler.bytes(url, Bytes::new());
+        }
         self.in_flight.fetch_add(1, Ordering::AcqRel);
         let in_flight = Arc::clone(&self.in_flight);
         let done: Done = Box::new(move |outcome| {
@@ -266,6 +313,43 @@ mod tests {
             load("file:///no/such/file.html"),
             Outcome::Failed(_)
         ));
+        // A directory is not a file to read (Windows refuses to open one; elsewhere
+        // the regular-file check does).
+        let dir = url::Url::from_directory_path(std::env::temp_dir()).unwrap();
+        assert!(matches!(load(dir.as_str()), Outcome::Failed(_)));
+    }
+
+    struct Answer(mpsc::Sender<(String, usize)>);
+
+    impl NetHandler for Answer {
+        fn bytes(self: Box<Self>, url: String, bytes: Bytes) {
+            let _ = self.0.send((url, bytes.len()));
+        }
+    }
+
+    #[test]
+    fn only_a_local_document_loads_local_files() {
+        let dir = std::env::temp_dir().join(format!("xui-blitz-files-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("style.css");
+        std::fs::write(&path, "p { color: red }").unwrap();
+        let file = url::Url::from_file_path(&path).unwrap();
+        let fetch = |doc: &str| {
+            let (tx, rx) = mpsc::channel();
+            Net::new(doc).fetch(0, Request::get(file.clone()), Box::new(Answer(tx)));
+            rx.recv().unwrap().1
+        };
+        assert_eq!(fetch("https://example.com/"), 0);
+        assert_eq!(fetch("about:blank"), 0);
+        assert_eq!(
+            fetch(
+                url::Url::from_file_path(dir.join("page.html"))
+                    .unwrap()
+                    .as_str()
+            ),
+            16
+        );
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[test]

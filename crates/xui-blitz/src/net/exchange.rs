@@ -4,7 +4,7 @@
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
-use crate::fetch::{self, FetchMethod, FetchRequest, FetchResponder, Response};
+use crate::fetch::{self, Abort, FetchMethod, FetchRequest, FetchResponder, Response};
 
 /// The most redirects one request follows.
 const MAX_REDIRECTS: u8 = 10;
@@ -42,9 +42,16 @@ pub(crate) struct Head<'a> {
     pub headers: &'a [(String, String)],
 }
 
+/// Where a diverted response goes: the stream for its body, and the flag that
+/// stops it from then on (in place of the request's own).
+pub(crate) struct Diverted {
+    pub stream: Box<dyn Response>,
+    pub abort: Arc<AtomicBool>,
+}
+
 /// Called once a final (not redirecting) response's headers are in; returns
-/// the stream the rest goes to, or `None` to collect it as usual.
-pub(crate) type Divert = Box<dyn FnOnce(&Head<'_>) -> Option<Box<dyn Response>> + Send>;
+/// where the rest goes, or `None` to collect it as usual.
+pub(crate) type Divert = Box<dyn FnOnce(&Head<'_>) -> Option<Diverted> + Send>;
 /// Told how the request ended.
 pub(crate) type Done = Box<dyn FnOnce(Outcome) + Send>;
 
@@ -60,7 +67,7 @@ pub(crate) fn header<'a>(headers: &'a [(String, String)], name: &str) -> Option<
 pub(crate) struct Exchange {
     request: FetchRequest,
     hops: u8,
-    aborted: Arc<AtomicBool>,
+    aborted: Arc<Abort>,
     status: u16,
     headers: Vec<(String, String)>,
     body: Vec<u8>,
@@ -80,7 +87,7 @@ impl Exchange {
         Exchange {
             request,
             hops: 0,
-            aborted,
+            aborted: Abort::new(aborted),
             status: 200,
             headers: Vec::new(),
             body: Vec::new(),
@@ -106,6 +113,11 @@ impl Exchange {
         let location = header(&self.headers, "Location")?;
         let base = url::Url::parse(&self.request.url).ok()?;
         let next = base.join(location.trim()).ok()?;
+        // A server may only send the view on to another server, never to a
+        // local file or another scheme.
+        if !matches!(next.scheme(), "http" | "https") {
+            return None;
+        }
         let to_get = self.status == 303
             || (matches!(self.status, 301 | 302) && self.request.method == FetchMethod::Post);
         let mut request = self.request.clone();
@@ -136,7 +148,8 @@ impl Exchange {
             url: &self.request.url,
             headers: &self.headers,
         };
-        if let Some(mut stream) = divert(&head) {
+        if let Some(Diverted { mut stream, abort }) = divert(&head) {
+            self.aborted.replace(abort);
             stream.status(self.status);
             for (name, value) in &self.headers {
                 stream.header(name, value);
@@ -182,8 +195,7 @@ impl Response for Exchange {
             return done(Outcome::Failed(message));
         }
         if let Some(request) = self.redirect() {
-            let mut next =
-                Exchange::new(request, Arc::clone(&self.aborted), self.divert.take(), done);
+            let mut next = Exchange::new(request, self.aborted.flag(), self.divert.take(), done);
             next.hops = self.hops + 1;
             return next.spawn();
         }
@@ -260,6 +272,14 @@ mod tests {
     }
 
     #[test]
+    fn a_redirect_never_leaves_http() {
+        let (mut e, _rx) = exchange(FetchMethod::Get);
+        e.status(302);
+        e.header("Location", "file:///etc/passwd");
+        assert!(e.redirect().is_none());
+    }
+
+    #[test]
     fn a_failure_is_reported() {
         let (e, rx) = exchange(FetchMethod::Get);
         e.end(Err("refused".into()));
@@ -281,13 +301,18 @@ mod tests {
         }
         let (tx, rx) = mpsc::channel();
         let (count_tx, count_rx) = mpsc::channel();
+        let download = Arc::new(AtomicBool::new(false));
+        let flag = Arc::clone(&download);
         let divert: Divert = Box::new(move |head| {
-            (header(head.headers, "Content-Type") == Some("application/zip"))
-                .then(|| Box::new(Count(count_tx, 0)) as Box<dyn Response>)
+            (header(head.headers, "Content-Type") == Some("application/zip")).then(|| Diverted {
+                stream: Box::new(Count(count_tx, 0)),
+                abort: flag,
+            })
         });
+        let page = Arc::new(AtomicBool::new(false));
         let mut e = Box::new(Exchange::new(
             request(FetchMethod::Get),
-            Arc::default(),
+            Arc::clone(&page),
             Some(divert),
             Box::new(move |o| {
                 let _ = tx.send(o);
@@ -296,6 +321,8 @@ mod tests {
         e.status(200);
         e.header("Content-Type", "application/zip");
         e.data(b"PK..");
+        // From the first byte on, the download's flag stops it, not the page's.
+        assert!(Arc::ptr_eq(&e.aborted.flag(), &download));
         e.data(b"rest");
         e.end(Ok(()));
         assert_eq!(count_rx.recv().unwrap(), 8);

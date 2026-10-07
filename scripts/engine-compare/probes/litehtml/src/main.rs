@@ -15,30 +15,32 @@ struct Msg;
 
 struct Probe {
     view: HtmlView<Msg>,
-    ready: Rc<Cell<bool>>,
+    state: Rc<Cell<common::Load>>,
 }
 
 impl App for Probe {
     type Msg = Msg;
     fn update(&mut self, _: Msg, _: &mut Ui<Msg>) {
         self.view.invalidate();
-        self.ready.set(self.view.is_ready());
+        if self.view.is_ready() {
+            self.state.set(common::Load::Ready);
+        }
     }
 }
 
 fn main() {
     let args = common::args();
     let html = std::fs::read_to_string(&args.page).expect("read the page");
-    let ready = Rc::new(Cell::new(false));
-    let flag = Rc::clone(&ready);
+    let state = Rc::new(Cell::new(common::Load::Loading));
+    let flag = Rc::clone(&state);
     common::run(
         "litehtml",
         &args,
         move |ui| {
             let view = HtmlView::new(ui, ui.client_rect(), html, || Msg, |_| None)?;
-            Ok(Probe { view, ready: flag })
+            Ok(Probe { view, state: flag })
         },
         Msg,
-        ready,
+        state,
     );
 }

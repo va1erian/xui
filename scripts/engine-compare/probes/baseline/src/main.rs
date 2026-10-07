@@ -23,7 +23,7 @@ impl App for Probe {
 fn main() {
     let args = common::args();
     let text = std::fs::read_to_string(&args.page).unwrap_or_default();
-    let ready = Rc::new(Cell::new(true));
+    let state = Rc::new(Cell::new(common::Load::Ready));
     common::run(
         "baseline",
         &args,
@@ -32,6 +32,6 @@ fn main() {
             Ok(Probe)
         },
         Msg,
-        ready,
+        state,
     );
 }

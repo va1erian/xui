@@ -5,7 +5,13 @@ edition = "2024"
 license = "MIT"
 publish = false
 
+[features]
+default = ["system-fonts"]
+# Off for the LazyOS build (`--no-default-features`): a static binary with no
+# fontconfig to find system fonts through.
+system-fonts = ["xui-blitz/system-fonts"]
+
 [dependencies]
 xui-core = { workspace = true }
 xui-canvas = { workspace = true }
-xui-blitz = { path = "../../../../crates/xui-blitz" }
+xui-blitz = { path = "../../../../crates/xui-blitz", default-features = false }

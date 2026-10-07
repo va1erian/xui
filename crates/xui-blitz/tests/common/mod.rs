@@ -21,6 +21,8 @@ const DEADLINE: Duration = Duration::from_secs(30);
 pub enum Msg {
     Frame,
     Event(BlitzViewEvent),
+    /// Calls `BlitzView::navigate`.
+    Navigate(String),
 }
 
 pub struct Host {
@@ -35,6 +37,7 @@ impl App for Host {
         match msg {
             Msg::Frame => self.view.update(),
             Msg::Event(e) => self.events.borrow_mut().push(e),
+            Msg::Navigate(url) => self.view.navigate(&url),
         }
     }
 }

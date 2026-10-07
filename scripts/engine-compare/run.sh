@@ -43,7 +43,20 @@ for page in "${pages[@]}"; do
     name="$(basename "$page" .html)"
     [ "$name" = index ] && name="$(basename "$(dirname "$page")")"
     for e in "${engines[@]}"; do
-        line="$(timeout 90 "$CARGO_TARGET_DIR/release/probe-$e" "$page" "$out/shots/$name.$e.png" "$width" "$height" 2>/dev/null | grep '^PROBE:' || echo "PROBE:$e:ready=crashed:ms=0")"
+        shot="$out/shots/$name.$e.png"
+        # A failed run must not leave an earlier run's picture to be scored.
+        rm -f "$shot"
+        if output="$(timeout 90 "$CARGO_TARGET_DIR/release/probe-$e" "$page" "$shot" "$width" "$height" 2>/dev/null)"; then
+            status=0
+        else
+            status=$?
+        fi
+        line="$(grep -m1 '^PROBE:' <<< "$output" || true)"
+        # The status line counts only from a probe that finished: one that
+        # reported ready and then failed to write its picture crashed.
+        if [ "$status" -ne 0 ] && { [ -z "$line" ] || [[ "$line" == *ready=true* ]]; }; then
+            line="PROBE:$e:ready=crashed:ms=0"
+        fi
         IFS=: read -r _ engine ready ms <<< "$line"
         echo "$name,$engine,${ready#ready=},${ms#ms=}" >> "$out/timings.csv"
         echo "$name $line"

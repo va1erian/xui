@@ -46,10 +46,15 @@ def similarity(a: Image.Image, b: Image.Image) -> float:
     return float(close.mean())
 
 
+#: The size of a column when nothing rendered at all.
+PLACEHOLDER = (1000, 1400)
+
+
 def composite(images, out: Path):
     scale = 0.5
-    w = max(i.width for i in images.values() if i) * scale
-    h = max(i.height for i in images.values() if i) * scale
+    sizes = [i.size for i in images.values() if i] or [PLACEHOLDER]
+    w = max(width for width, _ in sizes) * scale
+    h = max(height for _, height in sizes) * scale
     w, h, head, gap = int(w), int(h), 28, 8
     sheet = Image.new("RGB", (len(COLUMNS) * (w + gap) - gap, h + head), (230, 232, 236))
     draw = ImageDraw.Draw(sheet)

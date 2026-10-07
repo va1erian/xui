@@ -5,13 +5,17 @@
 
 mod common;
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
-use common::{builder, rgb, run};
+use common::{Msg, builder, rgb, run};
 use xui_blitz::{
     BlitzViewEvent, DownloadInfo, DownloadSink, Downloader, FetchRequest, FetchResponder, Fetcher,
 };
 use xui_core::theme::Theme;
+
+/// Lets `/slow.zip` finish.
+static RELEASE: AtomicBool = AtomicBool::new(false);
 
 /// The fake server.
 struct Server;
@@ -46,6 +50,18 @@ impl Fetcher for Server {
                 responder.header("Content-Disposition", "attachment; filename=\"a:b.zip\"");
                 responder.data(&[7; 100_000]);
                 responder.data(&[8; 50]);
+                responder.finish();
+            }
+            "/slow.zip" => {
+                responder.status(200);
+                responder.header("Content-Type", "application/zip");
+                responder.data(&[1; 1000]);
+                // The rest waits until the test has moved on to another page.
+                let start = std::time::Instant::now();
+                while !RELEASE.load(Ordering::Relaxed) && start.elapsed().as_secs() < 20 {
+                    std::thread::sleep(std::time::Duration::from_millis(5));
+                }
+                responder.data(&[2; 1000]);
                 responder.finish();
             }
             "/down" => responder.fail("connection refused"),
@@ -129,6 +145,31 @@ fn pages_style_sheets_failures_and_downloads_go_through_the_host() {
         },
     );
     assert_eq!(rgb(&image, 200, 200), [0, 128, 0]);
+
+    // A page request that becomes a download ends the page load at once, and
+    // going on to another page does not stop the download.
+    run(
+        Theme::light(),
+        || builder().url("http://test/slow.zip").follow_links(true),
+        |p| {
+            p.wait("the slow download to start", |e| {
+                e.iter()
+                    .any(|e| matches!(e, BlitzViewEvent::DownloadStarted(_)))
+            });
+            p.wait("the page load to end", |e| {
+                e.contains(&BlitzViewEvent::LoadingChanged(false))
+            });
+            p.stage.emit(Msg::Navigate("http://test/page".into()));
+            p.wait("the next page", |e| {
+                e.contains(&BlitzViewEvent::TitleChanged("Served".into()))
+            });
+            RELEASE.store(true, Ordering::Relaxed);
+            p.wait("the download to complete", |e| {
+                e.iter()
+                    .any(|e| matches!(e, BlitzViewEvent::DownloadFinished { error: None, .. }))
+            });
+        },
+    );
 
     // A failed fetch shows the error page and says why.
     run(

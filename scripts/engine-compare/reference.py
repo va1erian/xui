@@ -42,13 +42,16 @@ def pages(out: Path):
 
 
 def main() -> None:
-    out = Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT / "target" / "engine-compare"
+    # Absolute, so the pages under it make file: URLs.
+    out = (Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT / "target" / "engine-compare").resolve()
     (out / "shots").mkdir(parents=True, exist_ok=True)
     exe = browser()
     profile = out / "browser-profile"
     for name, page in pages(out):
         shot = out / "shots" / f"{name}.browser.png"
-        subprocess.run(
+        # A failed run must not leave an earlier run's picture to be scored.
+        shot.unlink(missing_ok=True)
+        result = subprocess.run(
             [
                 exe,
                 "--headless=new",
@@ -66,7 +69,10 @@ def main() -> None:
             capture_output=True,
             timeout=120,
         )
-        print(f"{name}: {'ok' if shot.exists() else 'FAILED'}")
+        ok = result.returncode == 0 and shot.exists()
+        if not ok:
+            shot.unlink(missing_ok=True)
+        print(f"{name}: {'ok' if ok else f'FAILED (exit {result.returncode})'}")
 
 
 if __name__ == "__main__":

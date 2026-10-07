@@ -12,12 +12,12 @@
 
 use std::collections::HashMap;
 use std::io;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, PoisonError, RwLock};
 
 use crate::engine::Reporter;
 use crate::fetch::Response;
-use crate::net::{Head, header};
+use crate::net::{Diverted, Head, header};
 use crate::view::BlitzViewEvent;
 
 /// The fewest new bytes between two progress reports, so a fast download does
@@ -92,10 +92,17 @@ struct Active {
 
 type Shared = Arc<Mutex<Option<Active>>>;
 
-/// The downloads under way, by id, for [`cancel`].
-static CANCELS: Mutex<Option<HashMap<u64, Shared>>> = Mutex::new(None);
+/// A download as [`cancel`] finds it: its state, and the flag that stops its
+/// fetch.
+struct Running {
+    shared: Shared,
+    abort: Arc<AtomicBool>,
+}
 
-fn registry<R>(f: impl FnOnce(&mut HashMap<u64, Shared>) -> R) -> R {
+/// The downloads under way, by id, for [`cancel`].
+static CANCELS: Mutex<Option<HashMap<u64, Running>>> = Mutex::new(None);
+
+fn registry<R>(f: impl FnOnce(&mut HashMap<u64, Running>) -> R) -> R {
     f(CANCELS
         .lock()
         .unwrap_or_else(PoisonError::into_inner)
@@ -112,21 +119,26 @@ impl Active {
                 received: self.received,
             });
         }
-        self.view.event(BlitzViewEvent::DownloadFinished {
-            id: self.id,
-            error: error.clone(),
-        });
-        self.sink.finish(error.map_or(Ok(()), Err));
+        // The file is complete (or removed) before the host hears it ended,
+        // so it can open or move it straight away.
+        self.sink.finish(error.clone().map_or(Ok(()), Err));
+        self.view
+            .event(BlitzViewEvent::DownloadFinished { id: self.id, error });
     }
 }
 
-/// Stops download `id`: it ends now with an error, and whatever the fetch
-/// still delivers is dropped.
+/// Stops download `id`: its fetch is told to stop, it ends now with an
+/// error, and whatever the fetch still delivers is dropped.
 pub(crate) fn cancel(id: DownloadId) {
-    let Some(shared) = registry(|r| r.remove(&id.0)) else {
+    let Some(running) = registry(|r| r.remove(&id.0)) else {
         return;
     };
-    let active = shared.lock().unwrap_or_else(PoisonError::into_inner).take();
+    running.abort.store(true, Ordering::Relaxed);
+    let active = running
+        .shared
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .take();
     if let Some(active) = active {
         active.end(Some("cancelled".to_string()));
     }
@@ -175,9 +187,10 @@ impl Response for Stream {
     }
 }
 
-/// Offers the response `head` describes to the downloader; the stream its
-/// body should go to, or `None` (and a log line) when it is refused.
-pub(crate) fn begin(head: &Head<'_>, view: Reporter) -> Option<Box<dyn Response>> {
+/// Offers the response `head` describes to the downloader; where its body
+/// goes, with a flag of its own that only [`cancel`] sets, or `None` (and a
+/// log line) when it is refused.
+pub(crate) fn begin(head: &Head<'_>, view: Reporter) -> Option<Diverted> {
     static NEXT_ID: AtomicU64 = AtomicU64::new(1);
     let info = DownloadInfo {
         id: DownloadId(NEXT_ID.fetch_add(1, Ordering::Relaxed)),
@@ -201,8 +214,20 @@ pub(crate) fn begin(head: &Head<'_>, view: Reporter) -> Option<Box<dyn Response>
         received: 0,
         reported: 0,
     })));
-    registry(|r| r.insert(id.0, Arc::clone(&shared)));
-    Some(Box::new(Stream(shared)))
+    let abort = Arc::new(AtomicBool::new(false));
+    registry(|r| {
+        r.insert(
+            id.0,
+            Running {
+                shared: Arc::clone(&shared),
+                abort: Arc::clone(&abort),
+            },
+        )
+    });
+    Some(Diverted {
+        stream: Box::new(Stream(shared)),
+        abort,
+    })
 }
 
 /// Whether a response with these headers is one to save rather than show:

@@ -32,10 +32,9 @@ Everything lands in `target/engine-compare/`. File names are fixed and free of
   load for any engine; Chrome is run with every host unresolvable for the same
   reason. Like the mail and help readers, the litehtml probe gets the page as a
   string, so it loads no linked style sheet or local image.
-- The probes run on Linux; Chrome runs on Windows. Blitz draws with its bundled
-  Liberation fonts, which share Arial's and Times New Roman's metrics, while
-  litehtml and NetSurf use the Linux system fonts (DejaVu), so their text runs
-  wider than Chrome's.
+- The probes run on Linux with its system fonts (DejaVu); Chrome runs on
+  Windows (Arial, Times New Roman). Text in every probe runs wider than
+  Chrome's, so lines break in other places.
 - The similarity score compares blurred quarter-size images pixel by pixel
   (within 24 levels). It catches layout, colour and missing content, not text
   rendering; treat a few points as noise.
