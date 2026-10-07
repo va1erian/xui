@@ -1,0 +1,43 @@
+[package]
+name = "xui-blitz"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "A web view for xui: pages parsed, styled, laid out and painted by the Blitz engine (Stylo, Taffy, Parley), drawn through xui-core's portable canvas"
+repository = "https://github.com/va1erian/xui"
+
+[features]
+default = ["system-fonts"]
+# Find the platform's installed fonts (DirectWrite, CoreText, fontconfig). Off
+# on a system with none to find (LazyOS): the host then registers its fonts
+# with `register_font`.
+system-fonts = ["blitz-dom/system-fonts"]
+
+[dependencies]
+# The engine, pinned to one release from crates.io (no fork): parsing
+# (html5ever), style (Stylo), layout (Taffy, with floats) and painting
+# (anyrender), all pure Rust and MIT/Apache-2.0 (Stylo MPL-2.0).
+blitz-dom = { version = "=0.3.0-beta.2", default-features = false, features = ["svg", "woff", "floats"] }
+blitz-html = "=0.3.0-beta.2"
+blitz-paint = { version = "=0.3.0-beta.2", default-features = false, features = ["svg"] }
+blitz-traits = { version = "=0.3.0-beta.2", default-features = false }
+# The CPU rasteriser a frame is drawn with, and the paint vocabulary it takes;
+# the versions blitz-paint 0.3.0-beta.2 is built against.
+anyrender = "0.13"
+anyrender_vello_cpu = "0.17"
+peniko = "0.6"
+kurbo = "0.13"
+# Fonts: the collection a document lays text out with.
+parley = { version = "0.11", default-features = false, features = ["std"] }
+# Blitz's input and pointer vocabulary.
+keyboard-types = "0.7"
+cursor-icon = "1"
+url = "2"
+log = "0.4"
+
+xui-core = { path = "../xui-core" }
+
+[dev-dependencies]
+xui-canvas = { path = "../xui-canvas" }
+png = "0.17"
+env_logger = "0.11"
