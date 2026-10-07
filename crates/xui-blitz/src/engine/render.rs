@@ -46,6 +46,11 @@ impl Raster {
             self.renderer.resize(width, height);
             self.size = (width, height);
         }
+        // `render` leaves the frame's commands in the render context. Without
+        // this every frame replays all the earlier ones too (slower each
+        // time), and replays pictures the image cache has since evicted:
+        // vello_cpu then panics with "Image ... not found in registry".
+        self.renderer.reset();
         let mut pixels = Vec::new();
         self.renderer.render_to_vec(
             |scene| {
