@@ -2,12 +2,16 @@
 name = "xui-blitz"
 version = "0.1.0"
 edition = "2024"
-license = "MIT"
+license = "MIT AND OFL-1.1"
 description = "A web view for xui: pages parsed, styled, laid out and painted by the Blitz engine (Stylo, Taffy, Parley), drawn through xui-core's portable canvas"
 repository = "https://github.com/va1erian/xui"
 
 [features]
-default = ["system-fonts"]
+default = ["system-fonts", "bundled-fonts"]
+# Ship the Liberation fonts (SIL OFL 1.1, assets/liberation/, 1.7 MB as
+# WOFF2): CSS sans-serif, serif and monospace are drawn with them, metric-
+# compatible with Arial, Times New Roman and Courier New, on every platform.
+bundled-fonts = []
 # Find the platform's installed fonts (DirectWrite, CoreText, fontconfig). Off
 # on a system with none to find (LazyOS): the host then registers its fonts
 # with `register_font`. On Linux fontconfig is loaded at run time (`dlopen`),
