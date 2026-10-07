@@ -9,7 +9,7 @@ use blitz_html::HtmlDocument;
 use blitz_traits::navigation::NavigationOptions;
 
 use super::providers::Post;
-use super::{Command, Doc, Engine, Output, page};
+use super::{Command, Doc, Engine, Output, hints, page};
 use crate::download;
 use crate::fetch::{FetchMethod, FetchRequest};
 use crate::net::{self, Divert, Done, Net, Outcome};
@@ -36,7 +36,10 @@ impl Engine {
             font_ctx: Some(self.font_context()),
             ..DocumentConfig::default()
         };
-        let doc = HtmlDocument::from_html(html, config).into_inner();
+        let mut doc = HtmlDocument::from_html(html, config).into_inner();
+        if let Some(css) = hints::style_sheet(&doc) {
+            doc.add_user_agent_stylesheet(&css);
+        }
         self.doc = Some(Doc { doc, net });
         self.fragment = url::Url::parse(&url)
             .ok()

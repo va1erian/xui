@@ -25,6 +25,7 @@ use crate::fonts;
 use crate::net::{Net, Outcome};
 use crate::view::BlitzViewEvent;
 
+mod hints;
 mod input;
 mod interact;
 mod nav;
@@ -264,7 +265,7 @@ impl Engine {
             Command::Html { html, base_url } => {
                 self.stop();
                 self.begin_load();
-                self.show(&html, base_url);
+                self.show(&page::as_html(html), base_url);
             }
             Command::Navigate(url) => self.navigate(&url),
             Command::Link(options) => self.link(*options),

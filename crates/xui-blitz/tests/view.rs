@@ -234,3 +234,23 @@ fn typing_into_a_field_and_pressing_enter_submits_the_form() {
         },
     );
 }
+
+#[test]
+fn legacy_attributes_and_xhtml_doctypes_style_html_mail() {
+    // An XHTML doctype on HTML still parses as HTML, and body `text`, `<font
+    // color>` and `cellpadding` reach the style (`currentColor` shows it).
+    let html = r##"<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml"><body text="#ff0000" style="margin: 0">
+<div style="height: 50px; background: currentColor"></div>
+<font color="#0000FF"><div style="height: 50px; background: currentColor"></div></font>
+<table cellpadding="30" cellspacing="0" style="background: #008000"><tr><td></td></tr></table>"##;
+    let image = run(
+        Theme::light(),
+        move || builder().html(html),
+        |p| p.wait_loaded(),
+    );
+    assert_eq!(rgb(&image, 20, 25), RED);
+    assert_eq!(rgb(&image, 20, 75), BLUE);
+    // The empty cell is 60px square only with its padding.
+    assert_eq!(rgb(&image, 50, 150), GREEN);
+}

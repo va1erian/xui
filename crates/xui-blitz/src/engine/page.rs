@@ -29,8 +29,10 @@ pub(crate) fn html_for(loaded: &Loaded) -> String {
         .unwrap_or("")
         .trim()
         .to_ascii_lowercase();
-    if mime.is_empty() || is_html(&mime) {
+    if mime == "application/xhtml+xml" {
         decode(&loaded.body, content_type)
+    } else if mime.is_empty() || is_html(&mime) {
+        as_html(decode(&loaded.body, content_type))
     } else if is_text(&mime) {
         format!(
             "<!DOCTYPE html><html><body><pre style=\"white-space: pre-wrap; word-wrap: break-word\">{}</pre></body></html>",
@@ -46,6 +48,23 @@ pub(crate) fn html_for(loaded: &Loaded) -> String {
             &loaded.url,
             &format!("This is {mime}, which cannot be shown."),
         )
+    }
+}
+
+/// `text` as Blitz should parse it when it is `text/html`: as HTML, whatever
+/// its doctype says.
+///
+/// Blitz switches to its XML parser when the text starts with `<?xml`, an
+/// XHTML `<!DOCTYPE` or `<html xmlns="http://www.w3.org/1999/xhtml">` (as
+/// most HTML mail does), and the XML parser leaves elements without the HTML
+/// namespace unstyled. HTML ignores a comment before the doctype, and the
+/// comment stops the sniffing.
+pub(crate) fn as_html(text: String) -> String {
+    let start = text.trim_start_matches('\u{feff}').trim_start();
+    if start.starts_with("<?xml") || start.starts_with("<!DOCTYPE") || start.starts_with("<html") {
+        format!("<!-- xui-blitz: text/html -->{text}")
+    } else {
+        text
     }
 }
 
@@ -118,6 +137,17 @@ mod tests {
     #[test]
     fn html_is_shown_as_it_is() {
         assert_eq!(html_for(&loaded("text/html", b"<p>hi")), "<p>hi");
+    }
+
+    #[test]
+    fn xhtml_doctypes_served_as_html_are_parsed_as_html() {
+        let page = "<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\">\n<p>x";
+        assert!(html_for(&loaded("text/html", page.as_bytes())).starts_with("<!--"));
+        assert_eq!(
+            html_for(&loaded("application/xhtml+xml", page.as_bytes())),
+            page
+        );
+        assert_eq!(as_html("<!doctype html><p>".into()), "<!doctype html><p>");
     }
 
     #[test]

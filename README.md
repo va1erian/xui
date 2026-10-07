@@ -38,7 +38,8 @@ snapshots and tests. Dark mode is first-class on every backend.
 | `xui-rich-text` | An opt-in editable rich-text widget for a basic word processor: styled runs, paragraph formatting, lists, inline and floating images that text wraps around, undo, JSON save and Markdown export. Portable: lays out through the backend `TextShaper`. Enable with `xui`'s `rich-text` feature. |
 | `xui-icons` | An optional, multi-colour vector icon set (36 icons) in two compile-time styles, flat "Global Village" and glossy "Aero" (`--features aero`), drawn through the portable `Canvas` path API, so the software backend rasterises it with `tiny-skia`. Depends on `xui-core` only. |
 | `xui-explorer` | A portable spatial file explorer: one window per folder, with all OS specifics behind `Platform`/`Launcher` traits and a std-backed desktop shell. |
-| `xui-litehtml` | An HTML view built on `litehtml` and Direct2D. A portable custom-painted node that runs on every backend. |
+| `xui-blitz` | A web view on the [Blitz](https://github.com/DioxusLabs/blitz) engine (Stylo, Taffy, Parley): CSS grid, flexbox, floats, `var()`, SVG; links reported or followed, fetching through the app's `Fetcher`, downloads, selection and copy. A portable custom-painted node; replaces `xui-litehtml` and `xui-netsurf`. |
+| `xui-litehtml` | An HTML view built on `litehtml`. A portable custom-painted node that runs on every backend. Being replaced by `xui-blitz`. |
 
 ## Documentation
 

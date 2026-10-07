@@ -178,6 +178,26 @@ scrolling and text selection; Ctrl+C raises `HtmlViewEvent::CopyRequested` for
 the app to put on its clipboard. It has no platform code and is not part of the
 umbrella crate.
 
+## `xui-blitz` — a web view
+
+`crates/xui-blitz` is the web view meant to replace both `xui-litehtml` and
+`xui-netsurf`. Its pages are parsed, styled, laid out and painted by
+[Blitz](https://github.com/DioxusLabs/blitz) (html5ever, Stylo, Taffy,
+Parley), pinned from crates.io, on an engine thread per view; the visible part
+is rasterised with `vello_cpu` and drawn with `Canvas::draw_image`, so
+`BlitzView<M>` is a custom-painted node on any backend. Blitz draws its own
+glyphs from font files (system fonts, or `xui_blitz::register_font` where there
+are none), so text does not go through `Ui::text_shaper`.
+
+One builder covers both uses: `follow_links(false)` (the default) reports links
+and form submissions as `BlitzViewEvent::LinkClicked`, as a mail or help reader
+wants; `follow_links(true)` opens them, as a browser does, through the
+application's `Fetcher` for `http(s):`, with downloads offered to its
+`Downloader`. Selection, Ctrl+C (`CopyRequested`), form fields, overlay
+scrollbars and the theme's light/dark (`prefers-color-scheme`) are Blitz's own.
+`scripts/engine-compare/` renders fixtures with all three engines and a browser
+and measures their binary sizes.
+
 ## File dialogs and the filesystem seam
 
 `FileDialog` is the portable open/save picker. Before it draws, `open()` asks
