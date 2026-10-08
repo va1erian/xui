@@ -298,6 +298,12 @@
   it with `Window::set_window_icon`, remembering an icon set before the native
   window exists; the Win32 backend converts it to an `Icon`; `OffscreenBackend`
   records it and exposes `window_icon(window)` for app tests.
+- `xui-code-editor` indents like a modern code editor (#285): Tab advances to the next
+  tab stop (display columns, so a tab character counts) and replaces a selection inside one line,
+  Backspace in leading spaces goes back to the previous stop, Enter adds a level after
+  `{`, `(` or `[` and splits a bracket pair onto three lines, and a closer typed on a
+  whitespace-only line dedents it. The new `Options::smart_indent` (default on) gates
+  the Enter and closer rules.
 
 ### Fixes
 
