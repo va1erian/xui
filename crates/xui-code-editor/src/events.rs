@@ -11,6 +11,7 @@ use xui_core::backend::{Event, WidgetId};
 use xui_core::geometry::Rect;
 use xui_core::message::{Key, MouseButton};
 
+use crate::completing;
 use crate::edit;
 use crate::metrics::{CELL_PROBE, Metrics, Viewport};
 use crate::state::{Drag, EditorState, Effect};
@@ -35,7 +36,7 @@ pub(crate) struct Outcome {
 }
 
 /// The metrics and viewport for the current bounds and buffer.
-fn viewport<M: 'static>(ui: &Ui<M>, id: WidgetId, state: &EditorState) -> Viewport {
+pub(crate) fn viewport<M: 'static>(ui: &Ui<M>, id: WidgetId, state: &EditorState) -> Viewport {
     let dpi = ui.dpi();
     let style = state.options.font.style(xui_core::Color::rgb(0, 0, 0));
     let measured = ui.measure_text(CELL_PROBE, &style, dpi);
@@ -84,6 +85,7 @@ fn dispatch<M: 'static>(
         Event::KillFocus => {
             state.focused = false;
             state.view.dragging = false;
+            completing::close(state);
             Some(Outcome::default())
         }
         Event::MouseDown {
@@ -91,13 +93,19 @@ fn dispatch<M: 'static>(
             y,
             button: MouseButton::Left,
             modifiers,
-        } => Some(mouse_press(state, ui, id, *x, *y, modifiers.shift, None)),
+        } => Some(
+            press_popup(state, ui, id, *x, *y)
+                .unwrap_or_else(|| mouse_press(state, ui, id, *x, *y, modifiers.shift, None)),
+        ),
         Event::MouseDoubleClick {
             x,
             y,
             button: MouseButton::Left,
             ..
-        } => Some(mouse_press(state, ui, id, *x, *y, false, Some(2))),
+        } => Some(
+            press_popup(state, ui, id, *x, *y)
+                .unwrap_or_else(|| mouse_press(state, ui, id, *x, *y, false, Some(2))),
+        ),
         Event::MouseMove { x, y, .. } => Some(mouse_move(state, ui, id, *x, *y)),
         Event::MouseUp {
             button: MouseButton::Left,
@@ -123,8 +131,14 @@ fn dispatch<M: 'static>(
             delta,
             horizontal,
             modifiers,
-            ..
-        } => Some(wheel(state, ui, id, *delta, *horizontal, modifiers.shift)),
+            x,
+            y,
+        } => {
+            if !*horizontal && completing::wheel(state, ui, id, *x, *y, *delta) {
+                return Some(Outcome::default());
+            }
+            Some(wheel(state, ui, id, *delta, *horizontal, modifiers.shift))
+        }
         Event::KeyDown {
             key,
             modifiers,
@@ -146,6 +160,7 @@ fn dispatch<M: 'static>(
                 &state.options,
                 *character,
             );
+            completing::after_char(state, *character);
             finish_edit(state, ui, id);
             Some(Outcome { changed: true })
         }
@@ -161,6 +176,20 @@ fn dispatch<M: 'static>(
         }
         _ => None,
     }
+}
+
+/// Gives a left press to the completion popup when it is open: a click on a
+/// candidate accepts it. `None` means the press is the editor's.
+fn press_popup<M: 'static>(
+    state: &mut EditorState,
+    ui: &Ui<M>,
+    id: WidgetId,
+    x: i32,
+    y: i32,
+) -> Option<Outcome> {
+    let outcome = completing::mouse_down(state, ui, id, x, y)?;
+    finish_edit(state, ui, id);
+    Some(outcome)
 }
 
 /// Handles a left-button press: caret placement, word/line selection or a
@@ -322,6 +351,11 @@ fn key_down<M: 'static>(
     ctrl: bool,
     shift: bool,
 ) -> Option<Outcome> {
+    // An open completion popup (and Ctrl+Space) takes its keys first.
+    if let Some(outcome) = completing::intercept_key(state, key, ctrl, shift) {
+        finish_edit(state, ui, id);
+        return Some(outcome);
+    }
     let tab = state.options.tab_width;
     let layout = viewport(ui, id, state);
     let page = layout.visible_lines as i64;
@@ -385,6 +419,7 @@ fn key_down<M: 'static>(
         }
         _ => return None,
     }
+    completing::after_key(state, key, revision);
     let changed = state.buffer.revision() != revision;
     finish_edit(state, ui, id);
     Some(Outcome { changed })
@@ -587,6 +622,7 @@ fn horizontal_scroll(state: &EditorState, layout: &Viewport) -> Scroll {
 
 #[cfg(test)]
 mod tests {
+    mod completion;
     use std::cell::RefCell;
     use std::rc::Rc;
 

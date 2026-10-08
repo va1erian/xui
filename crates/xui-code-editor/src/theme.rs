@@ -8,6 +8,7 @@
 use xui_core::Color;
 use xui_core::theme::Theme;
 
+use crate::completion::CompletionKind;
 use crate::lexer::TokenClass;
 
 /// The colours the editor paints with.
@@ -65,6 +66,18 @@ pub struct EditorTheme {
     pub function: Color,
     /// The fill behind a matched bracket pair.
     pub bracket_match: Color,
+    /// The completion popup's background.
+    pub popup_background: Color,
+    /// The completion popup's border.
+    pub popup_border: Color,
+    /// A candidate's label.
+    pub popup_text: Color,
+    /// A candidate's dimmer detail note.
+    pub popup_detail: Color,
+    /// The selected candidate's row fill.
+    pub popup_selection: Color,
+    /// The selected candidate's label.
+    pub popup_selection_text: Color,
 }
 
 impl EditorTheme {
@@ -101,6 +114,27 @@ impl EditorTheme {
             punctuation: theme.text,
             function: theme.accent.lerp(theme.background, 0.2),
             bracket_match: theme.selection,
+            // The popup is a transient raised surface, like a menu.
+            popup_background: theme.raised,
+            popup_border: theme.input_border,
+            popup_text: theme.text,
+            popup_detail: theme.text_secondary,
+            popup_selection: theme.selection,
+            popup_selection_text: theme.text,
+        }
+    }
+
+    /// The colour of the marker letter for a completion candidate of `kind`,
+    /// borrowed from the syntax palette so it reads like the same thing in code.
+    pub fn kind_color(&self, kind: CompletionKind) -> Color {
+        match kind {
+            CompletionKind::Keyword => self.keyword,
+            CompletionKind::Function | CompletionKind::Method => self.function,
+            CompletionKind::Variable => self.identifier,
+            CompletionKind::Property => self.number,
+            CompletionKind::Module => self.string,
+            CompletionKind::Snippet => self.interpolation,
+            CompletionKind::Other => self.operator,
         }
     }
 
@@ -188,5 +222,36 @@ mod tests {
             );
         }
         assert_ne!(light.bracket_match, dark.bracket_match);
+    }
+
+    #[test]
+    fn the_popup_palette_follows_the_light_and_dark_theme() {
+        let light = EditorTheme::from_theme(Theme::light());
+        let dark = EditorTheme::from_theme(Theme::dark());
+        assert_ne!(light.popup_background, dark.popup_background);
+        assert_ne!(light.popup_text, dark.popup_text);
+        assert_ne!(light.popup_detail, dark.popup_detail);
+        assert_ne!(light.popup_selection, dark.popup_selection);
+        for theme in [light, dark] {
+            assert_ne!(theme.popup_background, theme.popup_text, "text is legible");
+            assert_ne!(theme.popup_text, theme.popup_detail, "detail is dimmer");
+        }
+    }
+
+    #[test]
+    fn every_completion_kind_has_a_colour() {
+        let theme = EditorTheme::default();
+        for kind in [
+            CompletionKind::Keyword,
+            CompletionKind::Function,
+            CompletionKind::Variable,
+            CompletionKind::Property,
+            CompletionKind::Method,
+            CompletionKind::Module,
+            CompletionKind::Snippet,
+            CompletionKind::Other,
+        ] {
+            let _ = theme.kind_color(kind);
+        }
     }
 }

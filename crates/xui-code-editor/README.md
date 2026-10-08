@@ -47,6 +47,29 @@ fn build<M: 'static>(ui: &Ui<M>) -> xui_core::backend::Result<Editor<M>> {
 }
 ```
 
+## Completion
+
+The popup is language-agnostic: implement `Completer` (or pass a closure) and
+hand it to `Editor::with_completer`. It receives the whole text and the caret as
+a char offset and returns a `Completion`: where the word being completed starts
+and a list of `CompletionItem`s (label, text to insert, optional detail, kind).
+
+```rust,ignore
+let editor = Editor::new(ui, bounds)?.with_completer(|text: &str, caret: usize| {
+    Some(Completion {
+        start: word_start(text, caret),
+        items: vec![CompletionItem::new("print", CompletionKind::Function)],
+    })
+});
+```
+
+Ctrl+Space opens the popup; it also opens after a word's second character and
+after `.` or `::`, and narrows as you type. Up/Down/PageUp/PageDown move the
+selection, Enter or Tab accepts it (one undo step), a click accepts, Escape
+closes. `is_completing`, `trigger_completion` and `close_completion` let a host
+drive it. It is painted inside the editor, below the caret line (above it when
+it does not fit), in the editor theme's popup colours.
+
 ## Notepad example
 
 `examples/notepad/` is a small, cross-platform text editor built on the widget:

@@ -15,6 +15,7 @@ use xui_core::theme::Theme;
 use crate::lexer::{Token, TokenClass};
 use crate::markers::MarkerKind;
 use crate::metrics::{CELL_PROBE, Metrics, Viewport};
+use crate::popup;
 use crate::state::EditorState;
 use crate::text::{display_col, expand_tabs};
 use crate::theme::EditorTheme;
@@ -104,6 +105,8 @@ fn paint_local(
     if state.selected {
         canvas.stroke_rect(bounds, xui_theme.accent, 2.0);
     }
+    // Last, so the popup overlaps the scrollbars and the border it may reach.
+    popup::paint(canvas, state, theme, &viewport);
 }
 
 /// The current line's highlight, behind the text.
