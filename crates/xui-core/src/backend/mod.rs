@@ -8,6 +8,11 @@
 //! and describes what to create with a [`NodeSpec`]. Events arrive as a
 //! portable [`Event`] and are routed by a [`Router`](crate::router::Router).
 //!
+//! A backend that implements focus traversal on Tab and Shift+Tab must honour
+//! [`NodeSpec::wants_tab`]: while a node that sets it has the focus, Tab is
+//! delivered to that node as an ordinary key press instead of moving the focus
+//! (Ctrl+Tab and Alt+Tab are not affected).
+//!
 //! This contract grows as controls are ported; it deliberately covers the
 //! operations the widget layer needs today rather than a speculative full API.
 

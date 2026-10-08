@@ -43,6 +43,15 @@ pub struct Editor<M: 'static> {
     on_change: Rc<RefCell<Option<ChangeMapper<M>>>>,
 }
 
+/// The node the editor asks the backend for. It takes Tab itself (to indent
+/// and to accept a completion), so a backend that moves focus on Tab must
+/// deliver the key to it.
+fn node_spec(bounds: Rect) -> NodeSpec {
+    NodeSpec::new(NodeKind::Custom, bounds)
+        .tab_stop()
+        .wants_tab()
+}
+
 impl<M: 'static> Editor<M> {
     /// Creates an editor at `bounds` with the default options.
     pub fn new(ui: &Ui<M>, bounds: Rect) -> Result<Editor<M>> {
@@ -51,10 +60,7 @@ impl<M: 'static> Editor<M> {
 
     /// Creates an editor at `bounds` with `options`.
     pub fn with_options(ui: &Ui<M>, bounds: Rect, options: Options) -> Result<Editor<M>> {
-        let control = xui_core::widget::Control::new(
-            ui,
-            &NodeSpec::new(NodeKind::Custom, bounds).tab_stop(),
-        )?;
+        let control = xui_core::widget::Control::new(ui, &node_spec(bounds))?;
         ui.set_cursor(control.id(), Cursor::Text);
 
         let state = Rc::new(RefCell::new(EditorState::new(
@@ -549,6 +555,12 @@ impl<M: 'static> Editor<M> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn the_editor_node_takes_tab_itself() {
+        let spec = super::node_spec(xui_core::geometry::Rect::new(0, 0, 10, 10));
+        assert!(spec.tab_stop && spec.wants_tab);
+    }
+
     #[test]
     fn the_completion_api_opens_closes_and_survives_programmatic_edits() {
         use std::rc::Rc;
