@@ -117,6 +117,13 @@ pub struct NodeSpec {
     pub enabled: bool,
     /// Whether the node takes part in the Tab order.
     pub tab_stop: bool,
+    /// Whether the widget handles Tab and Shift+Tab itself (a code editor
+    /// indents with them).
+    ///
+    /// A backend that moves the focus on Tab must deliver Tab to this node
+    /// instead while it has the focus, like Win32's `DLGC_WANTTAB`. Ctrl+Tab and
+    /// Alt+Tab are not affected.
+    pub wants_tab: bool,
     /// Whether the node is a transient popup surface that floats above every
     /// other node in its window (a menu or combo drop-down).
     ///
@@ -138,6 +145,7 @@ impl NodeSpec {
             visible: true,
             enabled: true,
             tab_stop: false,
+            wants_tab: false,
             popup: false,
         }
     }
@@ -160,6 +168,15 @@ impl NodeSpec {
         self
     }
 
+    /// Marks the widget as handling Tab and Shift+Tab itself (a code editor
+    /// indents); a backend that moves focus on Tab must deliver Tab to this
+    /// widget instead while it has focus. Ctrl+Tab / Alt+Tab are not affected.
+    /// See [`NodeSpec::wants_tab`].
+    pub fn wants_tab(mut self) -> NodeSpec {
+        self.wants_tab = true;
+        self
+    }
+
     /// Creates the node as a transient popup surface that floats above the
     /// window's other nodes. See [`NodeSpec::popup`].
     pub fn popup(mut self) -> NodeSpec {
@@ -175,4 +192,20 @@ pub enum ImplKind {
     Native,
     /// The front layer paints the widget through [`Canvas`](super::Canvas).
     Painted,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn wants_tab_is_off_by_default_and_set_by_the_builder() {
+        let spec = NodeSpec::new(NodeKind::Custom, Rect::default());
+        assert!(!spec.wants_tab);
+        assert!(spec.wants_tab().wants_tab);
+        let both = NodeSpec::new(NodeKind::Custom, Rect::default())
+            .tab_stop()
+            .wants_tab();
+        assert!(both.tab_stop && both.wants_tab);
+    }
 }
