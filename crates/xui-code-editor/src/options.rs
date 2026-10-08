@@ -1,6 +1,6 @@
 #![forbid(unsafe_code)]
 
-//! Editor options: the tab width, gutter visibility and font.
+//! Editor options: the tab width, gutter visibility, font and auto-indent.
 //!
 //! The font is a single monospace face at a fixed size: the editor is a
 //! monospace grid, with no wrapping and no proportional fonts.
@@ -49,6 +49,11 @@ pub struct Options {
     pub show_gutter: bool,
     /// The font.
     pub font: FontConfig,
+    /// Whether code-aware auto-indent is on: Enter adds a level after `{`, `(`
+    /// or `[` (and splits a bracket pair onto three lines), and typing a
+    /// closing bracket on a whitespace-only line dedents it. Turn it off for
+    /// plain text.
+    pub smart_indent: bool,
 }
 
 impl Default for Options {
@@ -57,6 +62,7 @@ impl Default for Options {
             tab_width: 4,
             show_gutter: true,
             font: FontConfig::default(),
+            smart_indent: true,
         }
     }
 }

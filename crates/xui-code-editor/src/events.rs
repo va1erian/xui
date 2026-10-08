@@ -140,7 +140,12 @@ fn dispatch<M: 'static>(
             if character.is_control() {
                 return None;
             }
-            edit::type_char(&mut state.buffer, &mut state.view, *character);
+            edit::type_char(
+                &mut state.buffer,
+                &mut state.view,
+                &state.options,
+                *character,
+            );
             finish_edit(state, ui, id);
             Some(Outcome { changed: true })
         }
@@ -341,13 +346,13 @@ fn key_down<M: 'static>(
         Key::PAGE_UP => state.view.page(&state.buffer, tab, -page, shift),
         Key::PAGE_DOWN => state.view.page(&state.buffer, tab, page, shift),
         Key::BACK => {
-            edit::backspace(&mut state.buffer, &mut state.view);
+            edit::backspace(&mut state.buffer, &mut state.view, &state.options);
         }
         Key::DELETE => {
             edit::delete_forward(&mut state.buffer, &mut state.view);
         }
         Key::RETURN => {
-            edit::enter(&mut state.buffer, &mut state.view);
+            edit::enter(&mut state.buffer, &mut state.view, &state.options);
         }
         Key::TAB if shift => {
             edit::outdent(&mut state.buffer, &mut state.view, &state.options);
@@ -796,6 +801,39 @@ mod tests {
             assert!(outdented.changed);
             let nothing = handle(&mut state, ui, id, &key(true)).expect("shift+tab");
             assert!(!nothing.changed, "no indent left to remove");
+        });
+    }
+
+    #[test]
+    fn tab_enter_backspace_and_closers_indent_like_a_code_editor() {
+        use xui_core::message::Key;
+
+        with_ui(|ui, id| {
+            let mut state = state("  ");
+            handle(&mut state, ui, id, &Event::SetFocus);
+            handle(&mut state, ui, id, &key_down(Key::END));
+            handle(&mut state, ui, id, &key_down(Key::TAB));
+            assert_eq!(state.buffer.text(), "    ", "up to the next stop");
+
+            handle(&mut state, ui, id, &Event::Char('{'));
+            handle(&mut state, ui, id, &Event::Char('}'));
+            handle(&mut state, ui, id, &key_down(Key::LEFT));
+            let enter = handle(&mut state, ui, id, &key_down(Key::RETURN)).expect("enter");
+            assert!(enter.changed);
+            let lines = |state: &EditorState| {
+                state
+                    .buffer
+                    .text()
+                    .lines()
+                    .map(str::to_owned)
+                    .collect::<Vec<_>>()
+            };
+            assert_eq!(lines(&state), ["    {", "        ", "    }"]);
+
+            handle(&mut state, ui, id, &key_down(Key::BACK));
+            assert_eq!(lines(&state), ["    {", "    ", "    }"], "back to a stop");
+            handle(&mut state, ui, id, &Event::Char('}'));
+            assert_eq!(lines(&state), ["    {", "}", "    }"], "dedented");
         });
     }
 
