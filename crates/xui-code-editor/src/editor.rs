@@ -15,6 +15,8 @@ use xui_core::backend::{Cursor, NodeKind, NodeSpec, Result, WidgetId};
 use xui_core::geometry::Rect;
 
 use crate::buffer::Buffer;
+use crate::completing;
+use crate::completion::Completer;
 use crate::edit;
 use crate::events;
 use crate::find;
@@ -142,6 +144,58 @@ impl<M: 'static> Editor<M> {
         self
     }
 
+    /// Supplies the completions the popup offers.
+    ///
+    /// [`Editor::new`] has no completer, so nothing completes. With one, the
+    /// popup opens on Ctrl+Space, after a second identifier character, and
+    /// after `.` or `::`; see [`Completer`]. The completer runs inside the
+    /// editor's event handling, so it must not call back into this editor.
+    pub fn with_completer(self, completer: impl Completer + 'static) -> Editor<M> {
+        self.set_completer(completer);
+        self
+    }
+
+    /// Replaces the completer on a live editor, closing any open popup.
+    pub fn set_completer(&self, completer: impl Completer + 'static) {
+        {
+            let mut state = self.state.borrow_mut();
+            state.completion = None;
+            state.completer = Some(Rc::new(completer));
+        }
+        self.control.invalidate();
+    }
+
+    /// Removes the completer, closing any open popup.
+    pub fn clear_completer(&self) {
+        {
+            let mut state = self.state.borrow_mut();
+            state.completion = None;
+            state.completer = None;
+        }
+        self.control.invalidate();
+    }
+
+    /// Whether the completion popup is open.
+    pub fn is_completing(&self) -> bool {
+        self.state.borrow().completion.is_some()
+    }
+
+    /// Asks the completer for candidates at the caret and opens the popup, as
+    /// Ctrl+Space does. Returns whether a popup is open afterwards: it is not
+    /// without a completer, with a selection, or when nothing matches.
+    pub fn trigger_completion(&self) -> bool {
+        let opened = completing::trigger(&mut self.state.borrow_mut());
+        self.control.invalidate();
+        opened
+    }
+
+    /// Closes the completion popup, if open.
+    pub fn close_completion(&self) {
+        if completing::close(&mut self.state.borrow_mut()) {
+            self.control.invalidate();
+        }
+    }
+
     /// Replaces the clipboard the editor copies, cuts and pastes through.
     ///
     /// [`Editor::new`] uses [`platform::clipboard`](crate::platform::clipboard):
@@ -202,6 +256,7 @@ impl<M: 'static> Editor<M> {
         let mut state = self.state.borrow_mut();
         state.buffer = Buffer::new(text);
         state.view = View::new();
+        state.completion = None;
         state.reset_highlight();
         drop(state);
         self.control.invalidate();
@@ -293,6 +348,7 @@ impl<M: 'static> Editor<M> {
             let mut state = self.state.borrow_mut();
             let state = &mut *state;
             edit::splice(&mut state.buffer, &mut state.view, text, false);
+            state.completion = None;
             state.sync_highlight();
         }
         self.control.invalidate();
@@ -311,6 +367,7 @@ impl<M: 'static> Editor<M> {
                 return false;
             }
             state.buffer.replace(start..end, text, false);
+            state.completion = None;
             state.view.caret = start + text.chars().count();
             state.view.anchor = state.view.caret;
             state.view.goal_col = None;
@@ -387,6 +444,7 @@ impl<M: 'static> Editor<M> {
             let state = &mut *state;
             let changed = command(state);
             if changed {
+                state.completion = None;
                 state.sync_highlight();
                 // Keep the caret on screen, as the keyboard path does after the
                 // same edits (a paste or an undo can move it far away).
@@ -491,6 +549,66 @@ impl<M: 'static> Editor<M> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn the_completion_api_opens_closes_and_survives_programmatic_edits() {
+        use std::rc::Rc;
+
+        use xui_canvas::OffscreenBackend;
+        use xui_core::app::{App, Ui, run_app};
+        use xui_core::backend::PlatformSpec;
+        use xui_core::geometry::Rect;
+        use xui_core::units::Dip;
+
+        use crate::{Completion, CompletionItem, CompletionKind};
+
+        struct Empty;
+        impl App for Empty {
+            type Msg = ();
+            fn update(&mut self, _msg: (), _ui: &mut Ui<()>) {}
+        }
+
+        run_app(
+            Rc::new(OffscreenBackend::new()),
+            PlatformSpec::new("completion").size(Dip(200.0), Dip(100.0)),
+            |ui| {
+                let editor =
+                    super::Editor::<()>::new(ui, Rect::new(0, 0, 200, 100)).expect("editor");
+                editor.set_text("pr");
+                editor.set_caret(2);
+                assert!(!editor.trigger_completion(), "no completer yet");
+                assert!(!editor.is_completing());
+
+                editor.set_completer(|_: &str, caret: usize| {
+                    Some(Completion {
+                        start: caret.saturating_sub(2),
+                        items: vec![CompletionItem::new("print", CompletionKind::Function)],
+                    })
+                });
+                assert!(editor.trigger_completion());
+                assert!(editor.is_completing());
+                editor.close_completion();
+                assert!(!editor.is_completing());
+
+                assert!(editor.trigger_completion());
+                editor.set_text("pr");
+                assert!(!editor.is_completing(), "replacing the text closes it");
+
+                editor.set_caret(2);
+                assert!(editor.trigger_completion());
+                editor.replace(0, 2, "pri");
+                assert!(!editor.is_completing(), "a programmatic edit closes it");
+
+                editor.set_caret(3);
+                assert!(editor.trigger_completion());
+                editor.clear_completer();
+                assert!(!editor.is_completing(), "dropping the completer closes it");
+                assert!(!editor.trigger_completion());
+                Empty
+            },
+        )
+        .expect("run_app");
+    }
+
     #[test]
     fn the_default_clipboard_is_the_windows_portable_one() {
         use std::rc::Rc;

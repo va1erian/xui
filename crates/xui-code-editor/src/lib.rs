@@ -32,6 +32,43 @@
 //! # }
 //! ```
 //!
+//! # Completion
+//!
+//! The editor has a language-agnostic completion popup; the host supplies the
+//! candidates through a [`Completer`]. It opens on Ctrl+Space, after the second
+//! identifier character of a word, and after `.` or `::`, and filters as you
+//! type (case-insensitive prefix first, then subsequence). Up/Down/PageUp/
+//! PageDown move the selection (Up and Down wrap, the page keys stop at the
+//! ends), Enter and Tab accept it as one undo step, a click accepts, the wheel
+//! scrolls, and Escape, a caret leaving the word, losing focus or any other
+//! edit closes it.
+//!
+//! ```no_run
+//! # use xui_core::app::Ui;
+//! # use xui_core::geometry::Rect;
+//! # use xui_code_editor::{Completion, CompletionItem, CompletionKind, Editor};
+//! # fn build<M: 'static>(ui: &Ui<M>) -> xui_core::backend::Result<Editor<M>> {
+//! let editor = Editor::new(ui, Rect::new(0, 0, 640, 400))?.with_completer(
+//!     |text: &str, caret: usize| {
+//!         // The word being completed ends at the caret; `start` is a char offset.
+//!         let start = text
+//!             .chars()
+//!             .take(caret)
+//!             .collect::<Vec<_>>()
+//!             .iter()
+//!             .rposition(|c| !c.is_alphanumeric() && *c != '_')
+//!             .map_or(0, |index| index + 1);
+//!         Some(Completion {
+//!             start,
+//!             items: vec![CompletionItem::new("print", CompletionKind::Function)
+//!                 .with_detail("fn(any)")],
+//!         })
+//!     },
+//! );
+//! # Ok(editor)
+//! # }
+//! ```
+//!
 //! # Features
 //!
 //! * `rhai-syntax`: the `RhaiHighlighter`. It is off by default, so a
@@ -40,6 +77,7 @@
 //! # Layout
 //!
 //! * [`buffer`] — the rope, line index and coalescing undo stack. No UI code.
+//! * [`completion`] — the [`Completer`] seam and the popup's state machine.
 //! * [`document`] — the file model: line endings, a UTF-8 BOM, atomic saves and
 //!   the dirty state. No UI code.
 //! * [`find`] — matching and replacement, plain or by regular expression.
@@ -61,6 +99,8 @@
 //!   advances.
 
 pub mod buffer;
+mod completing;
+pub mod completion;
 pub mod document;
 mod edit;
 mod editor;
@@ -73,6 +113,7 @@ pub mod options;
 mod paint;
 mod place;
 pub mod platform;
+mod popup;
 pub mod search;
 mod state;
 mod text;
@@ -80,6 +121,7 @@ pub mod theme;
 pub mod view;
 
 pub use buffer::Buffer;
+pub use completion::{Completer, Completion, CompletionItem, CompletionKind};
 pub use document::{Document, DocumentError, LineEnding};
 pub use editor::Editor;
 pub use find::Query;

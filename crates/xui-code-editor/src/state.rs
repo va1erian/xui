@@ -9,7 +9,10 @@
 
 use std::time::{Duration, Instant};
 
+use std::rc::Rc;
+
 use crate::buffer::Buffer;
+use crate::completion::{Completer, Popup};
 use crate::lexer::{HighlightCache, Highlighter, PlainText};
 use crate::markers::Marker;
 use crate::options::Options;
@@ -122,6 +125,10 @@ pub(crate) struct EditorState {
     pub(crate) wheel_cols_rest: i32,
     /// `Ui` calls to make after the current event, outside the borrow.
     pub(crate) effects: Vec<Effect>,
+    /// The host's source of completions, if it supplied one.
+    pub(crate) completer: Option<Rc<dyn Completer>>,
+    /// The open completion popup, if any.
+    pub(crate) completion: Option<Popup>,
 }
 
 impl EditorState {
@@ -157,6 +164,8 @@ impl EditorState {
             wheel_rows_rest: 0,
             wheel_cols_rest: 0,
             effects: Vec::new(),
+            completer: None,
+            completion: None,
         }
     }
 

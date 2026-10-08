@@ -304,6 +304,12 @@
   `{`, `(` or `[` and splits a bracket pair onto three lines, and a closer typed on a
   whitespace-only line dedents it. The new `Options::smart_indent` (default on) gates
   the Enter and closer rules.
+- `xui-code-editor` gains a language-agnostic completion popup (#287). The host
+  implements `Completer` (a closure works) and passes it to `Editor::with_completer`;
+  Ctrl+Space, a second identifier character, `.` and `::` open it, typing filters it,
+  Enter/Tab/click accept it as one undo step. `Editor::is_completing`,
+  `trigger_completion` and `close_completion` drive it from the host, and `EditorTheme`
+  has popup colours.
 
 ### Fixes
 
