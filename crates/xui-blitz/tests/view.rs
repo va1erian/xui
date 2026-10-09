@@ -129,12 +129,12 @@ fn selected_text_is_copied_on_ctrl_c() {
                 modifiers: mods,
             });
             p.stage.inject(Event::MouseMove {
-                x: 395,
+                x: 370,
                 y: 20,
                 modifiers: mods,
             });
             p.stage.inject(Event::MouseUp {
-                x: 395,
+                x: 370,
                 y: 20,
                 button: MouseButton::Left,
                 modifiers: mods,
@@ -253,4 +253,85 @@ fn legacy_attributes_and_xhtml_doctypes_style_html_mail() {
     assert_eq!(rgb(&image, 20, 75), BLUE);
     // The empty cell is 60px square only with its padding.
     assert_eq!(rgb(&image, 50, 150), GREEN);
+}
+
+#[test]
+fn a_scrollbar_thumb_shows_for_a_tall_page_and_dragging_it_scrolls() {
+    let html = r#"<body style="margin: 0">
+        <div style="height: 300px; background: #f00"></div>
+        <div style="height: 2000px; background: #00f"></div>"#;
+    let image = run(
+        Theme::light(),
+        move || builder().html(html),
+        |p| {
+            p.wait_loaded();
+            // Press the thumb at the top of the right edge and drag it down.
+            let x = 400 - 8;
+            p.stage.inject(Event::MouseDown {
+                x,
+                y: 10,
+                button: MouseButton::Left,
+                modifiers: Modifiers::NONE,
+            });
+            p.stage.inject(Event::MouseMove {
+                x,
+                y: 200,
+                modifiers: Modifiers::NONE,
+            });
+            p.stage.inject(Event::MouseUp {
+                x,
+                y: 200,
+                button: MouseButton::Left,
+                modifiers: Modifiers::NONE,
+            });
+            for _ in 0..20 {
+                let _ = p.stage.ui().capture();
+                p.stage.emit(Msg::Frame);
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+        },
+    );
+    // The page moved past the red block; the gutter is the bar, not the page.
+    assert_eq!(rgb(&image, 100, 10), BLUE);
+    assert_ne!(rgb(&image, 400 - 8, 290), BLUE);
+}
+
+#[test]
+fn a_right_click_reports_the_picture_and_link_under_the_pointer() {
+    let png = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80'%3E%3Crect width='80' height='80' fill='%23f00'/%3E%3C/svg%3E";
+    let html = format!(
+        r#"<body style="margin: 0"><a href="/next"><img src="{png}" width="80" height="80"></a>"#
+    );
+    run(
+        Theme::light(),
+        move || builder().html(html).base_url("https://example.com/dir/"),
+        |p| {
+            p.wait_loaded();
+            let at = |button, up: bool| {
+                if up {
+                    Event::MouseUp {
+                        x: 40,
+                        y: 40,
+                        button,
+                        modifiers: Modifiers::NONE,
+                    }
+                } else {
+                    Event::MouseDown {
+                        x: 40,
+                        y: 40,
+                        button,
+                        modifiers: Modifiers::NONE,
+                    }
+                }
+            };
+            p.stage.inject(at(MouseButton::Right, false));
+            p.stage.inject(at(MouseButton::Right, true));
+            p.wait("the context menu event", |e| {
+                e.iter().any(|e| {
+                    matches!(e, BlitzViewEvent::ContextMenu { link: Some(l), image: Some(i), .. }
+                        if l == "https://example.com/next" && i.starts_with("data:image/svg"))
+                })
+            });
+        },
+    );
 }

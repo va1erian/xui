@@ -85,8 +85,17 @@ pub(crate) struct Frame {
     pub ready: bool,
 }
 
+/// How far the page scrolls, in CSS pixels (the scrollbar's metrics).
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub(crate) struct ScrollMetrics {
+    pub offset: f32,
+    pub content: f32,
+    pub viewport: f32,
+}
+
 /// What the engine tells the view's UI side.
 pub(crate) enum Output {
+    Scroll(ScrollMetrics),
     Frame(Frame),
     Cursor(Cursor),
     /// The page could not be opened (an error page shows instead), or loading
@@ -194,6 +203,8 @@ struct Engine {
     cursor: Cursor,
     dirty: bool,
     started: Instant,
+    /// The scroll metrics the view was last told.
+    scroll: ScrollMetrics,
 }
 
 impl Engine {
@@ -225,6 +236,7 @@ impl Engine {
             cursor: Cursor::Default,
             dirty: false,
             started: Instant::now(),
+            scroll: ScrollMetrics::default(),
         }
     }
 
@@ -309,6 +321,8 @@ impl Engine {
             Command::ScrollTo(y) => {
                 if let Some(d) = &mut self.doc {
                     let x = d.doc.viewport_scroll().x;
+                    let max = interact::scroll_extent(&d.doc, self.size, self.scale);
+                    let y = y.clamp(0.0, (max.content - max.viewport).max(0.0) as f64);
                     d.doc.set_viewport_scroll(blitz_dom::Point { x, y });
                     self.dirty = true;
                 }
@@ -403,6 +417,12 @@ impl Engine {
             return;
         };
         let scale = d.doc.viewport().scale_f64();
+        let mut metrics = interact::scroll_extent(&d.doc, self.size, self.scale);
+        metrics.offset = d.doc.viewport_scroll().y as f32;
+        if metrics != self.scroll {
+            self.scroll = metrics;
+            self.report.send(Output::Scroll(metrics));
+        }
         if let Some(image) = self
             .raster
             .draw(&mut d.doc, self.size, scale, self.background)

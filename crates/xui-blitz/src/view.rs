@@ -8,9 +8,11 @@ use std::sync::mpsc;
 
 use xui_core::Color;
 use xui_core::app::Ui;
-use xui_core::backend::{NodeKind, NodeSpec, Result};
+use xui_core::backend::{NodeKind, NodeSpec, Result, WidgetId};
 use xui_core::geometry::Rect;
 use xui_core::widget::Control;
+use xui_core::widget::Orientation;
+use xui_core::widget::scrollbar::{self, ScrollBar, ThumbState};
 
 use crate::download::{self, DownloadId, DownloadInfo};
 use crate::engine::{self, Command, OnEvent, Options, Reporter, Wake};
@@ -60,6 +62,21 @@ pub enum BlitzViewEvent {
         url: String,
         /// Whether the user's click or key, or the app, asked for it.
         by_user: bool,
+    },
+    /// The user right-clicked the page. `x` and `y` are in device pixels
+    /// from the view's top-left corner; `link` and `image` are the absolute
+    /// URLs of the link and picture under the pointer, if any. The host
+    /// decides what to offer (a menu with Save Image As, say; see
+    /// [`BlitzView::download`]).
+    ContextMenu {
+        /// Pointer position, device pixels from the view's left edge.
+        x: i32,
+        /// Pointer position, device pixels from the view's top edge.
+        y: i32,
+        /// The link under the pointer.
+        link: Option<String>,
+        /// The picture under the pointer.
+        image: Option<String>,
     },
     /// A download started; its bytes go to the
     /// [`Downloader`](crate::Downloader)'s sink.
@@ -192,11 +209,50 @@ impl<M: Send + 'static> BlitzViewBuilder<M> {
                 None
             });
         }
+        let bar_node = Control::new(
+            &ui.with_parent(control.id()),
+            &NodeSpec::new(NodeKind::Container, Rect::default()),
+        )?;
+        let bar = Rc::new(ScrollBar::new(bar_node.id()));
+        {
+            let widget = Rc::clone(&widget);
+            let bar = Rc::clone(&bar);
+            let theme = ui.theme_handle();
+            bar_node.set_painter(Rc::new(move |canvas| {
+                let b = canvas.bounds();
+                let state = if bar.is_dragging() {
+                    ThumbState::Pressed
+                } else {
+                    ThumbState::Normal
+                };
+                scrollbar::paint_state(
+                    canvas,
+                    Rect::new(0, 0, b.width(), b.height()),
+                    widget.scroll_metrics(),
+                    Orientation::Vertical,
+                    theme.get(),
+                    state,
+                );
+            }));
+        }
+        {
+            let widget = Rc::clone(&widget);
+            let bar = Rc::clone(&bar);
+            let ui = ui.clone();
+            bar_node.on_events(move |event| {
+                let metrics = widget.scroll_metrics();
+                bar.handle(&ui, metrics, |target| widget.scroll_to_px(target), event);
+                None
+            });
+        }
         let view = BlitzView {
             ui: ui.clone(),
             control,
             widget,
+            bar_node,
+            bar,
         };
+        view.place_bar(bounds);
         match self.start {
             Start::Html { html, base_url } => view.load_html(html, base_url),
             Start::Url(url) => view.navigate(&url),
@@ -216,6 +272,9 @@ pub struct BlitzView<M: 'static> {
     ui: Ui<M>,
     control: Control<M>,
     widget: Rc<Widget>,
+    /// The vertical scrollbar along the view's right edge.
+    bar_node: Control<M>,
+    bar: Rc<ScrollBar>,
 }
 
 impl<M: Send + 'static> BlitzView<M> {
@@ -245,6 +304,23 @@ impl<M: Send + 'static> BlitzView<M> {
             self.ui.set_cursor(self.control.id(), cursor);
         }
         self.control.invalidate();
+        self.bar_node.invalidate();
+    }
+
+    /// Lays the scrollbar along the right edge of a view of `bounds`.
+    fn place_bar(&self, bounds: Rect) {
+        let width = scrollbar::THICKNESS.to_px(self.ui.dpi()).value();
+        let (w, h) = (bounds.width(), bounds.height());
+        self.bar.set_track(width, h);
+        self.ui
+            .apply_moves(&[(self.bar.id(), Rect::new(w - width, 0, w, h))]);
+        self.ui.raise(self.bar.id());
+    }
+
+    /// The view's node, for placing popups at its pointer positions
+    /// ([`BlitzViewEvent::ContextMenu`]).
+    pub fn id(&self) -> WidgetId {
+        self.control.id()
     }
 
     /// Shows `html`, resolving its links, style sheets and images against
@@ -311,6 +387,7 @@ impl<M: Send + 'static> BlitzView<M> {
     /// Moves and resizes the view (device pixels).
     pub fn set_bounds(&self, bounds: Rect) {
         self.control.set_bounds(bounds);
+        self.place_bar(bounds);
     }
 }
 

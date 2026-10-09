@@ -15,7 +15,9 @@ use xui_core::image::Image;
 use xui_core::message::MouseButton;
 use xui_core::theme::Theme;
 
-use crate::engine::{Command, Input, Output, PointerAction};
+use xui_core::widget::scrollbar::{self, Scroll};
+
+use crate::engine::{Command, Input, Output, PointerAction, ScrollMetrics};
 
 /// What handling an event asks of the host node.
 #[derive(Default)]
@@ -43,6 +45,8 @@ pub(crate) struct Widget {
     scale: Cell<f32>,
     held: Cell<MouseEventButtons>,
     cursor: Cell<Option<Cursor>>,
+    /// How far the page scrolls, as the engine last said (CSS pixels).
+    scroll: Cell<ScrollMetrics>,
 }
 
 impl Widget {
@@ -66,6 +70,7 @@ impl Widget {
             scale: Cell::new(scale),
             held: Cell::new(MouseEventButtons::None),
             cursor: Cell::new(None),
+            scroll: Cell::new(ScrollMetrics::default()),
         }
     }
 
@@ -103,6 +108,7 @@ impl Widget {
                     self.ready.set(frame.ready);
                     *self.frame.borrow_mut() = Some(frame.image);
                 }
+                Ok(Output::Scroll(metrics)) => self.scroll.set(metrics),
                 Ok(Output::Cursor(cursor)) => self.cursor.set(Some(cursor)),
                 Ok(Output::Failed(failed)) => self.failed.set(failed),
                 Err(TryRecvError::Empty) => break,
@@ -121,7 +127,13 @@ impl Widget {
         let bounds = canvas.bounds();
         let scale = canvas.dpi() as f32 / 96.0;
         self.scale.set(scale);
-        let size = (bounds.width().max(1) as u32, bounds.height().max(1) as u32);
+        // The scrollbar's gutter is the view's right edge: the page is laid
+        // out in what is left, so the bar never covers it.
+        let gutter = scrollbar::THICKNESS.to_px(canvas.dpi()).value();
+        let size = (
+            (bounds.width() - gutter).max(1) as u32,
+            bounds.height().max(1) as u32,
+        );
         if self.sent.get() != (size, scale) {
             self.sent.set((size, scale));
             self.send(Command::Resize { size, scale });
@@ -144,6 +156,25 @@ impl Widget {
             image,
             Rect::new(bounds.left, bounds.top, bounds.left + w, bounds.top + h),
         );
+    }
+
+    /// The scrollbar's metrics in device pixels.
+    pub(crate) fn scroll_metrics(&self) -> Scroll {
+        let (m, s) = (self.scroll.get(), self.scale.get());
+        Scroll {
+            viewport: (m.viewport * s).round() as i32,
+            content: (m.content * s).round() as i32,
+            offset: (m.offset * s).round() as i32,
+        }
+    }
+
+    /// The scrollbar asked for the device-pixel offset `target`.
+    pub(crate) fn scroll_to_px(&self, target: i32) {
+        let s = self.scale.get();
+        let mut m = self.scroll.get();
+        m.offset = target.max(0) as f32 / s;
+        self.scroll.set(m);
+        self.send(Command::ScrollTo(m.offset as f64));
     }
 
     /// Node-local device pixels as client CSS pixels.
