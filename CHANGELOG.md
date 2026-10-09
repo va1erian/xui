@@ -45,6 +45,14 @@
 
 ### Additions
 
+- **xui-blitz: a scrollbar and a context-menu event.** `BlitzView` draws the
+  toolkit's vertical scrollbar along its right edge (a gutter the page is
+  laid out beside, so it never covers content; drag the thumb or click the
+  track), and a right click raises `BlitzViewEvent::ContextMenu { x, y,
+  link, image }` with the absolute URLs of the link and picture under the
+  pointer, for a host to offer Save Image As (`BlitzView::download`) or Open
+  Link. `BlitzView::id` gives the view's node for placing the popup.
+
 - **xui-blitz: a web view on the Blitz engine**, to replace both
   `xui-litehtml` and `xui-netsurf`. `BlitzView::builder(on_frame, on_event)`
   starts from HTML (`.html(..).base_url(..)`) or a URL (`.url(..)`); with
