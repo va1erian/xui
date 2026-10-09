@@ -209,10 +209,10 @@ impl<M: Send + 'static> BlitzViewBuilder<M> {
                 None
             });
         }
-        let bar_node = Control::new(
-            &ui.with_parent(control.id()),
-            &NodeSpec::new(NodeKind::Container, Rect::default()),
-        )?;
+        // A sibling of the page's node, not a child: a custom node is not
+        // a container on every backend, and a child of it is not placed
+        // relative to it there.
+        let bar_node = Control::new(ui, &NodeSpec::new(NodeKind::Container, Rect::default()))?;
         let bar = Rc::new(ScrollBar::new(bar_node.id()));
         {
             let widget = Rc::clone(&widget);
@@ -307,13 +307,18 @@ impl<M: Send + 'static> BlitzView<M> {
         self.bar_node.invalidate();
     }
 
-    /// Lays the scrollbar along the right edge of a view of `bounds`.
+    /// Lays the scrollbar along the right edge of a view at `bounds` (in
+    /// the view's parent, where the bar sits beside the view's node).
     fn place_bar(&self, bounds: Rect) {
         let width = scrollbar::THICKNESS.to_px(self.ui.dpi()).value();
-        let (w, h) = (bounds.width(), bounds.height());
-        self.bar.set_track(width, h);
-        self.ui
-            .apply_moves(&[(self.bar.id(), Rect::new(w - width, 0, w, h))]);
+        self.bar.set_track(width, bounds.height());
+        let track = Rect::new(
+            bounds.right - width,
+            bounds.top,
+            bounds.right,
+            bounds.bottom,
+        );
+        self.ui.apply_moves(&[(self.bar.id(), track)]);
         self.ui.raise(self.bar.id());
     }
 
