@@ -297,6 +297,25 @@ fn a_scrollbar_thumb_shows_for_a_tall_page_and_dragging_it_scrolls() {
 }
 
 #[test]
+fn the_scrollbar_is_drawn_in_the_gutter_beside_the_page() {
+    let html = r#"<body style="margin: 0; background: #fff">
+        <div style="height: 2000px; background: #fff"></div>"#;
+    let image = run(
+        Theme::light(),
+        move || builder().html(html),
+        |p| p.wait_loaded(),
+    );
+    // The thumb sits at the top of the right-hand gutter, and nothing of the
+    // bar is drawn at the view's top-left corner.
+    let gutter: Vec<[u8; 3]> = (0..60).map(|y| rgb(&image, 400 - 8, y)).collect();
+    assert!(
+        gutter.iter().any(|px| *px != [255, 255, 255]),
+        "no thumb in the gutter"
+    );
+    assert_eq!(rgb(&image, 8, 10), [255, 255, 255]);
+}
+
+#[test]
 fn a_right_click_reports_the_picture_and_link_under_the_pointer() {
     let png = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80'%3E%3Crect width='80' height='80' fill='%23f00'/%3E%3C/svg%3E";
     let html = format!(

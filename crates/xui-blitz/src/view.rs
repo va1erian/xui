@@ -209,17 +209,19 @@ impl<M: Send + 'static> BlitzViewBuilder<M> {
                 None
             });
         }
-        // A sibling of the page's node, not a child: a custom node is not
-        // a container on every backend, and a child of it is not placed
-        // relative to it there.
-        let bar_node = Control::new(ui, &NodeSpec::new(NodeKind::Container, Rect::default()))?;
+        let bar_node = Control::new(
+            &ui.with_parent(control.id()),
+            &NodeSpec::new(NodeKind::Container, Rect::default()),
+        )?;
         let bar = Rc::new(ScrollBar::new(bar_node.id()));
         {
             let widget = Rc::clone(&widget);
             let bar = Rc::clone(&bar);
             let theme = ui.theme_handle();
             bar_node.set_painter(Rc::new(move |canvas| {
-                let b = canvas.bounds();
+                // The canvas's bounds are where the node is drawn (the
+                // page's own painter places its image by them too).
+                let track = canvas.bounds();
                 let state = if bar.is_dragging() {
                     ThumbState::Pressed
                 } else {
@@ -227,7 +229,7 @@ impl<M: Send + 'static> BlitzViewBuilder<M> {
                 };
                 scrollbar::paint_state(
                     canvas,
-                    Rect::new(0, 0, b.width(), b.height()),
+                    track,
                     widget.scroll_metrics(),
                     Orientation::Vertical,
                     theme.get(),
@@ -307,18 +309,15 @@ impl<M: Send + 'static> BlitzView<M> {
         self.bar_node.invalidate();
     }
 
-    /// Lays the scrollbar along the right edge of a view at `bounds` (in
-    /// the view's parent, where the bar sits beside the view's node).
+    /// Lays the scrollbar along the right edge of a view of `bounds`; the
+    /// bar is a child of the view's node, so it is placed in the view's own
+    /// coordinates.
     fn place_bar(&self, bounds: Rect) {
         let width = scrollbar::THICKNESS.to_px(self.ui.dpi()).value();
-        self.bar.set_track(width, bounds.height());
-        let track = Rect::new(
-            bounds.right - width,
-            bounds.top,
-            bounds.right,
-            bounds.bottom,
-        );
-        self.ui.apply_moves(&[(self.bar.id(), track)]);
+        let (w, h) = (bounds.width(), bounds.height());
+        self.bar.set_track(width, h);
+        self.ui
+            .apply_moves(&[(self.bar.id(), Rect::new(w - width, 0, w, h))]);
         self.ui.raise(self.bar.id());
     }
 
