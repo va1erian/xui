@@ -109,6 +109,13 @@ impl Image {
         &self.pixels
     }
 
+    /// Gives the pixel buffer back, for a producer that makes one image per
+    /// frame to fill the same allocation again instead of allocating (and
+    /// faulting in) a new one each time.
+    pub fn into_pixels(self) -> Vec<u8> {
+        self.pixels
+    }
+
     /// The RGBA value at `(x, y)`, if in bounds.
     pub fn pixel(&self, x: u32, y: u32) -> Option<[u8; 4]> {
         if x >= self.width || y >= self.height {
@@ -349,6 +356,16 @@ mod tests {
         let solid = Image::from_rgba(2, 2, [10, 20, 30, 255].repeat(4)).unwrap();
         let scaled = solid.resized(5, 3).unwrap();
         assert_eq!(scaled.pixel(2, 1), Some([10, 20, 30, 255]));
+    }
+
+    #[test]
+    fn into_pixels_returns_the_buffer_it_was_built_from() {
+        let pixels = vec![1, 2, 3, 255, 4, 5, 6, 255];
+        let at = pixels.as_ptr();
+        let image = Image::from_rgba(2, 1, pixels).unwrap();
+        let back = image.into_pixels();
+        assert_eq!(back, [1, 2, 3, 255, 4, 5, 6, 255]);
+        assert_eq!(back.as_ptr(), at, "the same allocation, not a copy");
     }
 
     #[test]
