@@ -6,7 +6,9 @@
 //! draw — the same row icon on every repaint — reuses it.
 //!
 //! A fresh image per frame (a GL readback) never hits and only churns the
-//! LRU, which the byte budget bounds.
+//! LRU, which the byte budget bounds. The pixmap the LRU evicts is kept for
+//! the next upload of the same size, so that stream of frames allocates (and
+//! page-faults in) no new buffer once the LRU is full.
 
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -40,6 +42,9 @@ pub(crate) struct ImageCache {
     clock: u64,
     bytes: usize,
     budget: usize,
+    /// The last pixmap evicted while nothing else held it, for the next
+    /// upload of the same size to overwrite.
+    spare: Option<Pixmap>,
 }
 
 impl ImageCache {
@@ -49,6 +54,7 @@ impl ImageCache {
             clock: 0,
             bytes: 0,
             budget: DEFAULT_BUDGET_BYTES,
+            spare: None,
         }
     }
 
@@ -64,7 +70,7 @@ impl ImageCache {
             return Some(entry.image.clone());
         }
         let uploaded = Uploaded {
-            pixmap: Rc::new(premultiplied(image)?),
+            pixmap: Rc::new(premultiplied(image, self.spare.take())?),
             opaque: image
                 .pixels()
                 .as_chunks::<4>()
@@ -107,14 +113,24 @@ impl ImageCache {
                 && let Some(entry) = self.images.remove(&id)
             {
                 self.bytes = self.bytes.saturating_sub(entry.bytes);
+                // A draw still holding it keeps its copy; only a pixmap
+                // nobody else references can be written over.
+                if let Ok(pixmap) = Rc::try_unwrap(entry.image.pixmap) {
+                    self.spare = Some(pixmap);
+                }
             }
         }
     }
 }
 
 /// Uploads `image` to a tiny-skia pixmap, premultiplying its straight alpha.
-fn premultiplied(image: &Image) -> Option<Pixmap> {
-    let mut pixmap = Pixmap::new(image.width(), image.height())?;
+/// A `spare` pixmap of the image's size is written over (every pixel is
+/// replaced) instead of allocating a new one.
+fn premultiplied(image: &Image, spare: Option<Pixmap>) -> Option<Pixmap> {
+    let mut pixmap = match spare {
+        Some(spare) if (spare.width(), spare.height()) == (image.width(), image.height()) => spare,
+        _ => Pixmap::new(image.width(), image.height())?,
+    };
     let source = image.pixels().as_chunks::<4>().0;
     for (destination, pixel) in pixmap
         .data_mut()
@@ -172,6 +188,65 @@ mod tests {
         assert!(back.opaque);
         let pixels = back.pixmap.data();
         assert_eq!(&pixels[..4], &[0x11, 0x11, 0x11, 0xFF][..]);
+    }
+
+    #[test]
+    fn a_stream_of_frames_reuses_the_evicted_pixmap() {
+        // One frame fits: every new frame evicts the last, and its pixmap is
+        // written over instead of a new one being allocated.
+        let mut cache = ImageCache::new();
+        cache.budget = 4 * 4 * 4;
+        let first = cache.pixmap(&solid(4, 4, 0x11)).unwrap();
+        let first_at = first.pixmap.data().as_ptr();
+        drop(first);
+        assert!(cache.spare.is_none(), "nothing evicted yet");
+
+        let second = cache.pixmap(&solid(4, 4, 0x22)).unwrap();
+        assert!(cache.spare.is_some(), "the first frame was evicted");
+        drop(second);
+
+        let third = cache.pixmap(&solid(4, 4, 0x33)).unwrap();
+        assert_eq!(
+            third.pixmap.data().first(),
+            Some(&0x33),
+            "the recycled pixmap holds the new frame"
+        );
+        assert_eq!(third.pixmap.data().len(), 4 * 4 * 4);
+        assert_eq!(cache.images.len(), 1);
+        // The first frame's allocation went round again for the third.
+        assert_eq!(third.pixmap.data().as_ptr(), first_at);
+    }
+
+    #[test]
+    fn a_spare_of_another_size_is_not_reused() {
+        let mut cache = ImageCache::new();
+        cache.budget = 4 * 4 * 4;
+        drop(cache.pixmap(&solid(4, 4, 0x11)));
+        drop(cache.pixmap(&solid(4, 4, 0x22)));
+        assert!(cache.spare.is_some());
+
+        let other = cache.pixmap(&solid(2, 8, 0x44)).unwrap();
+        assert_eq!((other.pixmap.width(), other.pixmap.height()), (2, 8));
+        assert!(
+            other
+                .pixmap
+                .data()
+                .chunks(4)
+                .all(|p| p == [0x44, 0x44, 0x44, 0xFF])
+        );
+    }
+
+    #[test]
+    fn an_evicted_pixmap_a_draw_still_holds_is_not_recycled() {
+        let mut cache = ImageCache::new();
+        cache.budget = 4 * 4 * 4;
+        let held = cache.pixmap(&solid(4, 4, 0x11)).unwrap();
+        drop(cache.pixmap(&solid(4, 4, 0x22)));
+        assert!(
+            cache.spare.is_none(),
+            "the held pixmap must not be overwritten"
+        );
+        assert_eq!(held.pixmap.data()[0], 0x11);
     }
 
     #[test]
