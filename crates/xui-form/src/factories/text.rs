@@ -82,16 +82,27 @@ fn create_toggle<M: 'static>(cx: &mut BuildCx<'_, M>) -> Created<M> {
 
 fn create_edit<M: 'static>(cx: &mut BuildCx<'_, M>) -> Created<M> {
     let handle = Handle::new();
-    let cue = cx.text("cue");
+    let placeholder = cx.text("placeholder");
+    let password = cx.bool("password", false);
     let mut entry = edit().text(cx.text("text")).bind(&handle);
-    if !cue.is_empty() {
-        entry = entry.placeholder(cue.clone());
+    if !placeholder.is_empty() {
+        entry = entry.placeholder(placeholder.clone());
+    }
+    if password {
+        entry = entry.password();
     }
     if let Some(handler) = cx.handler("Change") {
         entry = entry
             .then(move |edit| edit.on_change(move |text| handler(&[Value::Text(text.to_owned())])));
     }
-    cx.live(entry, EditProps { handle, cue })
+    cx.live(
+        entry,
+        EditProps {
+            handle,
+            placeholder,
+            password,
+        },
+    )
 }
 
 fn create_multiline<M: 'static>(cx: &mut BuildCx<'_, M>) -> Created<M> {
@@ -217,10 +228,12 @@ impl<M: 'static, W: Latch + HasText + Placeable<M> + 'static> WidgetProps<M> for
     }
 }
 
-/// An `Edit`: `text`, and the construction-only `cue`.
+/// An `Edit`: `text`, and the construction-only `placeholder` and
+/// `password`.
 struct EditProps<M: 'static> {
     handle: Handle<Edit<M>>,
-    cue: String,
+    placeholder: String,
+    password: bool,
 }
 
 impl<M: 'static> WidgetProps<M> for EditProps<M> {
@@ -231,14 +244,15 @@ impl<M: 'static> WidgetProps<M> for EditProps<M> {
     fn get_own(&self, prop: &str) -> Option<Value> {
         match prop {
             "text" => Some(Value::Text(self.handle.get().text())),
-            "cue" => Some(Value::Text(self.cue.clone())),
+            "placeholder" => Some(Value::Text(self.placeholder.clone())),
+            "password" => Some(Value::Bool(self.password)),
             _ => None,
         }
     }
 
     fn set_own(&self, prop: &str, value: &Value) -> Result<(), SetError> {
         match prop {
-            "cue" => Err(SetError::ReadOnly),
+            "placeholder" | "password" => Err(SetError::ReadOnly),
             _ => text_prop(&*self.handle.get(), prop, value),
         }
     }

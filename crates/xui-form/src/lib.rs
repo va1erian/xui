@@ -3,75 +3,63 @@
 
 //! Declarative forms for [xui](https://github.com/va1erian/xui).
 //!
-//! This crate adds a form layer on top of the portable `xui-core` widgets:
+//! A form is a window's content described as data: a `.lfm` file in
+//! [RON](https://github.com/ron-rs/ron) holding a tree of layouts and
+//! widgets.
 //!
-//! * a **schema** ([`Catalog`], [`WidgetSpec`]) that describes each widget kind,
-//!   its typed properties and the events it raises;
-//! * a **document** ([`FormDoc`]) that stores a form as plain TOML and round
-//!   trips byte-identically;
-//! * **validation** ([`FormDoc::validate`]) that reports every problem as a
-//!   [`Diagnostic`];
-//! * a **builder** ([`build`]) that turns a document into live `xui` widgets,
-//!   mapping events through a host-supplied [`Binder`].
-//!
-//! # Layout
-//!
-//! A format-1 form positions its nodes absolutely. [`build`] turns each
-//! container's children into an `xui_core::arrange::absolute` layout, every
-//! node an entry at its `left`/`top`/`width`/`height` with its `anchor`, so the
-//! form re-anchors itself whenever the window is resized. A `GroupBox` places
-//! its children inside its frame, below its title.
-//!
-//! # Extending
-//!
-//! The crate knows nothing about any particular application. A consumer
-//! registers its own widget kinds (a [`WidgetSpec`] plus a [`WidgetFactory`])
-//! or aliases a built-in one (see [`Catalog::alias`]) to expose
-//! application-specific names.
-//!
-//! # Example
+//! * The **model** ([`Form`], [`Node`] and one struct per kind) is plain
+//!   serde types: the file format and, through the macros that declare
+//!   them, the **schema** ([`Catalog`]) are one definition.
+//! * [`load`] reads a form, reporting a misspelt field or kind with a "did
+//!   you mean"; [`Form::to_ron`] writes it back canonically, defaults
+//!   omitted, byte-stable.
+//! * [`Form::validate`] reports every remaining problem as a [`Diagnostic`].
+//! * [`describe`] turns a form into the same `xui_core::arrange` builders
+//!   Rust code writes, and [`build`] mounts them into a [`LiveForm`] whose
+//!   widgets read and write their properties by name. Events map to the
+//!   app's messages through a [`Binder`], such as [`Handlers`].
 //!
 //! ```
-//! use xui_form::{Catalog, FormDoc, Value};
-//!
-//! let catalog = Catalog::xui();
-//! let doc = FormDoc::from_toml(
-//!     r#"
-//! format = 1
-//!
-//! [window]
-//! name = "main_form"
-//! title = "Hello"
-//!
-//! [[node]]
-//! kind = "Button"
-//! name = "cmdGo"
-//! text = "Go"
-//! "#,
-//!     &catalog,
+//! let form = xui_form::load(
+//!     r#"Form(
+//!         title: "Hello",
+//!         root: Column(padding: 16, gap: 8, children: [
+//!             Edit(name: "name_edit", placeholder: "Your name"),
+//!             Button(name: "greet_button", text: "Greet"),
+//!         ]),
+//!     )"#,
 //! )
 //! .expect("the form loads");
-//!
-//! assert_eq!(doc.node("cmdGo").and_then(|n| n.prop("text")), Some(&Value::Text("Go".to_owned())));
-//! assert_eq!(doc.to_toml(&catalog).contains("title = \"Hello\""), true);
+//! assert_eq!(form.title, "Hello");
+//! assert!(form.validate(&xui_form::Catalog::xui()).is_empty());
+//! assert!(form.to_ron().starts_with("Form(title: \"Hello\", size: (320, 200), root: Column("));
 //! ```
+//!
+//! A control array is one node with `array: n` (or several with `index: i`):
+//! its elements are `name[0]`, `name[1]`, …, and their events carry the
+//! element's index.
 
 pub mod build;
-pub mod doc;
+mod codec;
+mod factories;
+#[cfg(feature = "migrate")]
+pub mod migrate;
+pub mod model;
 pub mod schema;
+mod suggest;
 pub mod validate;
 pub mod value;
 
-mod factories;
-
-/// The current document format; loading anything newer is an error.
-pub const FORMAT_VERSION: u32 = 1;
-
 pub use build::{
-    Binder, BuildCx, BuildError, BuildOptions, Created, EventHandler, EventRef, Factories,
-    LiveForm, LiveWidget, SetError, WidgetFactory, build, build_with,
+    Binder, BuildCx, BuildError, BuildOptions, Controls, Created, Described, EventHandler,
+    EventRef, Factories, Handlers, LiveForm, LiveWidget, SetError, WidgetFactory, build,
+    build_with, describe,
 };
-pub use doc::{FormDoc, LoadError, Node, WindowNode};
-pub use schema::{Access, ArgSpec, Catalog, Children, EventSpec, PropertySpec, WidgetSpec};
+pub use codec::{LoadError, format, load};
+pub use model::{FORMAT_VERSION, Form, Node};
+pub use schema::{
+    Access, ArgSpec, Catalog, EventSpec, FieldSpec, LayoutSpec, PropertySpec, WidgetSpec,
+};
+pub use suggest::closest;
 pub use validate::{Diagnostic, Severity};
-pub use value::{DecodeError, Value, ValueType};
+pub use value::{Value, ValueType};

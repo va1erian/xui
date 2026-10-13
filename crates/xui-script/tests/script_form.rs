@@ -1,7 +1,7 @@
 //! Integration tests for [`ScriptForm`]: building a form on the offscreen
 //! backend, running its `.rhai` script and routing events.
 //!
-//! These exercise the reusable path with no LazyRAD project: a `FormDoc`, a
+//! These exercise the reusable path with no IDE project: a `Form`, a
 //! script string and `xui-script` alone.
 
 use std::cell::RefCell;
@@ -11,7 +11,7 @@ use xui_canvas::OffscreenBackend;
 use xui_core::app::{App, run_app};
 use xui_core::backend::{Backend, PlatformSpec};
 use xui_core::units::Dip;
-use xui_form::{Catalog, FormDoc, Node, Value};
+use xui_form::{Form, Value};
 use xui_script::form::{FormError, ScriptForm, ScriptSource};
 use xui_script::{EngineHost, Msg, ScriptError};
 
@@ -24,52 +24,38 @@ impl App for TestApp {
     fn update(&mut self, _msg: Msg, _ui: &mut xui_core::Ui<Msg>) {}
 }
 
-/// A form with an `Edit` named `name_edit` (holding "Ada") and a `Label` named
-/// `result_label`.
-fn greeting_doc() -> FormDoc {
-    let mut doc = FormDoc::new("frmMain");
-
-    let mut name = Node::new("Edit", "name_edit");
-    name.set_prop("left", Value::Int(10));
-    name.set_prop("top", Value::Int(10));
-    name.set_prop("width", Value::Int(160));
-    name.set_prop("height", Value::Int(24));
-    name.set_prop("text", Value::Text("Ada".to_owned()));
-    doc.insert(name);
-
-    let mut out = Node::new("Label", "result_label");
-    out.set_prop("left", Value::Int(10));
-    out.set_prop("top", Value::Int(40));
-    out.set_prop("width", Value::Int(160));
-    out.set_prop("height", Value::Int(20));
-    out.set_prop("text", Value::Text("before".to_owned()));
-    doc.insert(out);
-
-    doc
+/// A form with an `Edit` named `name_edit` (holding "Ada"), a `Label` named
+/// `result_label` and a control array of three buttons named `pick`.
+fn greeting_doc() -> Form {
+    xui_form::load(
+        r#"Form(name: "frmMain", root: Column(padding: 10, gap: 6, children: [
+            Edit(name: "name_edit", text: "Ada"),
+            Label(name: "result_label", text: "before"),
+            Row(children: [Button(name: "pick", array: 3, text: "{index}")]),
+        ]))"#,
+    )
+    .expect("the form loads")
 }
 
 /// Builds `doc` with `code`, runs `configure` on the engine, then runs `check`
 /// against the built [`ScriptForm`] and returns its result.
 fn run<R>(
-    doc: &FormDoc,
+    doc: &Form,
     code: &str,
     configure: impl FnOnce(&mut EngineHost) -> Result<(), ScriptError> + 'static,
     check: impl FnOnce(&ScriptForm) -> R + 'static,
 ) -> Result<R, FormError> {
     let backend: Rc<dyn Backend> = Rc::new(OffscreenBackend::new());
-    let catalog = Catalog::xui();
     let spec = PlatformSpec::new("xui-script test").size(Dip(320.0), Dip(200.0));
     let slot: Rc<RefCell<Option<Result<R, FormError>>>> = Rc::new(RefCell::new(None));
     let slot_inner = Rc::clone(&slot);
     let doc = doc.clone();
     let code = code.to_owned();
-    let catalog_for_app = catalog.clone();
 
     run_app(backend, spec, move |ui| {
         let result = ScriptForm::build(
             ui,
             &doc,
-            &catalog_for_app,
             ScriptSource {
                 name: "frmMain",
                 code: &code,
@@ -204,4 +190,46 @@ fn a_parse_error_is_located_before_the_form_is_built() {
     };
     assert_eq!((error.file.as_str(), error.line), ("frmMain.rhai", 2));
     assert!(error.column > 0);
+}
+
+#[test]
+fn a_control_array_handler_gets_the_index_and_elements_index_in_scripts() {
+    let doc = greeting_doc();
+    let text = run(
+        &doc,
+        "fn pick_click(index) { result_label.text = `${pick[index].text}!`; }",
+        |_| Ok(()),
+        |form| {
+            form.run("pick", "Click", &[Value::Int(2)])
+                .expect("the handler runs");
+            form.live_form().get("result_label", "text")
+        },
+    )
+    .expect("the form builds");
+    assert_eq!(text, Some(Value::Text("2!".to_owned())));
+}
+
+#[test]
+fn the_calculator_example_adds() {
+    let doc = xui_form::load(include_str!("../../xui/examples/forms/calculator.lfm"))
+        .expect("the calculator loads");
+    let code = include_str!("../../xui/examples/forms/calculator.rhai");
+    let display = run(
+        &doc,
+        code,
+        |_| Ok(()),
+        |form| {
+            let press = |control: &str, index: Option<i64>| {
+                let args: Vec<Value> = index.map(Value::Int).into_iter().collect();
+                form.run(control, "Click", &args).expect("the handler runs");
+            };
+            press("digit", Some(7));
+            press("operator", Some(3));
+            press("digit", Some(3));
+            press("equals", None);
+            form.live_form().get("display", "text")
+        },
+    )
+    .expect("the form builds");
+    assert_eq!(display, Some(Value::Text("10.0".to_owned())));
 }
