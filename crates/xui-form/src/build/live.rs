@@ -1,7 +1,7 @@
 #![forbid(unsafe_code)]
 
-//! [`LiveForm`] and the wrapper that gives every built-in widget the common
-//! properties.
+//! [`Controls`] and [`LiveForm`], and the wrapper that gives every built-in
+//! widget the common properties.
 
 use std::cell::Cell;
 use std::collections::BTreeMap;
@@ -14,15 +14,16 @@ use xui_core::geometry::Rect;
 use xui_core::layout::Placement;
 use xui_core::units::Dip;
 
-use super::{BuiltNode, LiveWidget, SetError};
-use crate::doc::FormDoc;
-use crate::schema::{Access, Catalog, anchor_from_name, anchor_name};
+use super::tree::Named;
+use super::{LiveWidget, SetError};
+use crate::schema::Catalog;
 use crate::value::{Value, ValueType};
 
 /// The widget-specific property surface a built-in widget implements.
 ///
-/// The [`Live`] wrapper adds the common properties (geometry, `anchor`,
-/// `visible`, `enabled`, `tab_index`) and the schema's access and type rules.
+/// The [`Live`] wrapper adds the common properties (`visible`, `enabled` and,
+/// in an absolute layout, the geometry) and the schema's access and type
+/// rules.
 pub(crate) trait WidgetProps<M: 'static>: 'static {
     /// The widget's node identity.
     fn id(&self) -> WidgetId;
@@ -37,68 +38,71 @@ pub(crate) trait WidgetProps<M: 'static>: 'static {
     fn node_ids(&self) -> Vec<WidgetId> {
         vec![self.id()]
     }
+    /// Applies state the builder cannot set before the widget exists. The
+    /// default does nothing.
+    fn ready(&self) {}
 }
+
+/// The geometry properties, in `at` order.
+const GEOMETRY: [&str; 4] = ["left", "top", "width", "height"];
 
 /// The common property state every built-in widget shares.
 pub(super) struct Common<M: 'static> {
     ui: Ui<M>,
-    placement: Placement,
+    placement: Option<Placement>,
     visible: Cell<bool>,
     enabled: Cell<bool>,
-    tab_index: Cell<i64>,
 }
 
 impl<M: 'static> Common<M> {
-    /// The common state of a widget placed by `placement`.
-    pub(super) fn new(ui: Ui<M>, placement: Placement) -> Common<M> {
+    /// The common state of a widget, placed by `placement` in an absolute
+    /// layout.
+    pub(super) fn new(ui: Ui<M>, placement: Option<Placement>) -> Common<M> {
         Common {
             ui,
             placement,
             visible: Cell::new(true),
             enabled: Cell::new(true),
-            tab_index: Cell::new(0),
         }
+    }
+
+    /// Records the state the file asks for, applied once the widget exists.
+    pub(super) fn init(&self, visible: bool, enabled: bool) {
+        self.visible.set(visible);
+        self.enabled.set(enabled);
     }
 
     /// Reads a common property.
     fn get(&self, prop: &str) -> Option<Value> {
-        let rect = self.placement.rect();
-        let int = |dip: Dip| Value::Int(dip.value().round() as i64);
-        Some(match prop {
-            "left" => int(rect[0]),
-            "top" => int(rect[1]),
-            "width" => int(rect[2]),
-            "height" => int(rect[3]),
-            "anchor" => Value::Enum(anchor_name(self.placement.anchor()).to_owned()),
-            "visible" => Value::Bool(self.visible.get()),
-            "enabled" => Value::Bool(self.enabled.get()),
-            "tab_index" => Value::Int(self.tab_index.get()),
-            _ => return None,
-        })
+        if let Some(slot) = GEOMETRY.iter().position(|name| *name == prop) {
+            let rect = self.placement.as_ref()?.rect();
+            return Some(Value::Int(rect[slot].value().round() as i64));
+        }
+        match prop {
+            "visible" => Some(Value::Bool(self.visible.get())),
+            "enabled" => Some(Value::Bool(self.enabled.get())),
+            _ => None,
+        }
     }
 
-    /// Records a common property already checked against the schema;
-    /// `false` when `prop` is not a common property.
-    fn record(&self, prop: &str, value: &Value) -> bool {
-        let geometry = ["left", "top", "width", "height"];
+    /// Records a common property already checked against the schema; `None`
+    /// when `prop` is not a common property.
+    fn record(&self, prop: &str, value: &Value) -> Option<Result<(), SetError>> {
+        if let Some(slot) = GEOMETRY.iter().position(|name| *name == prop) {
+            let Some(placement) = &self.placement else {
+                return Some(Err(SetError::ReadOnly));
+            };
+            let mut rect = placement.rect();
+            rect[slot] = Dip(value.as_int().unwrap_or_default() as f32);
+            placement.set_rect(rect);
+            return Some(Ok(()));
+        }
         match (prop, value) {
-            (_, Value::Int(value)) if geometry.contains(&prop) => {
-                let mut rect = self.placement.rect();
-                let slot = geometry.iter().position(|name| *name == prop);
-                rect[slot.unwrap_or_default()] = Dip(*value as f32);
-                self.placement.set_rect(rect);
-            }
-            ("anchor", Value::Enum(name)) => {
-                if let Some(anchor) = anchor_from_name(name) {
-                    self.placement.set_anchor(anchor);
-                }
-            }
             ("visible", Value::Bool(visible)) => self.visible.set(*visible),
             ("enabled", Value::Bool(enabled)) => self.enabled.set(*enabled),
-            ("tab_index", Value::Int(index)) => self.tab_index.set(*index),
-            _ => return false,
+            _ => return None,
         }
-        true
+        Some(Ok(()))
     }
 }
 
@@ -126,9 +130,9 @@ impl<M: 'static, W: WidgetProps<M>> LiveWidget<M> for Live<M, W> {
             return Err(SetError::UnknownProperty);
         };
         let writable = if self.design_mode {
-            matches!(spec.access, Access::ReadWrite | Access::DesignOnly)
+            spec.access.writable_in_design()
         } else {
-            matches!(spec.access, Access::ReadWrite | Access::RuntimeOnly)
+            spec.access.writable_at_runtime()
         };
         if !writable {
             return Err(SetError::ReadOnly);
@@ -136,100 +140,92 @@ impl<M: 'static, W: WidgetProps<M>> LiveWidget<M> for Live<M, W> {
         if !spec.accepts(value) {
             return Err(SetError::TypeMismatch);
         }
-        if self.common.record(prop, value) {
-            self.apply_common(prop, value);
-            return Ok(());
+        match self.common.record(prop, value) {
+            Some(Ok(())) => {
+                self.apply_common(prop);
+                Ok(())
+            }
+            Some(error) => error,
+            None => self.inner.set_own(prop, value),
         }
-        self.inner.set_own(prop, value)
     }
 
     fn node_ids(&self) -> Vec<WidgetId> {
         self.inner.node_ids()
+    }
+
+    fn ready(&self) {
+        for prop in ["visible", "enabled"] {
+            if self.common.get(prop) == Some(Value::Bool(false)) {
+                self.apply_common(prop);
+            }
+        }
+        self.inner.ready();
     }
 }
 
 impl<M: 'static, W: WidgetProps<M>> Live<M, W> {
     /// Applies a common property that was just recorded to every node the
     /// widget owns, so a multi-node widget moves, hides and disables as one.
-    fn apply_common(&self, prop: &str, value: &Value) {
+    fn apply_common(&self, prop: &str) {
         let ui = &self.common.ui;
-        match (prop, value) {
-            ("visible", Value::Bool(visible)) => {
+        match prop {
+            "visible" => {
                 for id in self.inner.node_ids() {
-                    ui.set_visible(id, *visible);
+                    ui.set_visible(id, self.common.visible.get());
                 }
             }
-            ("enabled", Value::Bool(enabled)) => {
+            "enabled" => {
+                let enabled = self.common.enabled.get();
                 for id in self.inner.node_ids() {
-                    ui.set_enabled(id, *enabled);
+                    ui.set_enabled(id, enabled);
                 }
-                self.inner.set_enabled_hint(*enabled);
+                self.inner.set_enabled_hint(enabled);
             }
-            ("tab_index", _) => {}
-            // Geometry and anchor live in the placement the layout reads.
+            // Geometry lives in the placement the layout reads.
             _ => ui.relayout(),
         }
     }
 }
 
-/// One node's identity, kept for lookups by name.
-struct NodeMeta {
-    name: String,
-    kind: String,
-}
-
-/// A built form: every live widget, mounted in an absolute layout that keeps
-/// them anchored. Dropping it destroys the widgets.
-pub struct LiveForm<M: 'static> {
+/// A form's named widgets, read and written by name once the form's layout
+/// is mounted. A control array's elements are named `name[index]`.
+pub struct Controls<M: 'static> {
     ui: Ui<M>,
-    mounted: Mounted<M>,
     catalog: Rc<Catalog>,
-    widgets: Vec<Box<dyn LiveWidget<M>>>,
+    widgets: Vec<Named<M>>,
     by_name: BTreeMap<String, usize>,
-    nodes: Vec<NodeMeta>,
 }
 
-impl<M: 'static> LiveForm<M> {
-    /// The form over the widgets `built` mounted as `mounted`, with the
-    /// document's common properties applied.
-    pub(super) fn new(
-        ui: Ui<M>,
-        mounted: Mounted<M>,
-        catalog: Rc<Catalog>,
-        built: Vec<BuiltNode<M>>,
-        doc: &FormDoc,
-    ) -> LiveForm<M> {
-        let mut form = LiveForm {
+impl<M: 'static> Controls<M> {
+    pub(super) fn new(ui: Ui<M>, catalog: Rc<Catalog>, widgets: Vec<Named<M>>) -> Controls<M> {
+        let by_name = widgets
+            .iter()
+            .enumerate()
+            .map(|(index, (name, ..))| (name.clone(), index))
+            .collect();
+        Controls {
             ui,
-            mounted,
             catalog,
-            widgets: Vec::with_capacity(built.len()),
-            by_name: BTreeMap::new(),
-            nodes: Vec::with_capacity(built.len()),
-        };
-        for (name, kind, widget) in built {
-            form.by_name.insert(name.clone(), form.widgets.len());
-            form.widgets.push(widget);
-            form.nodes.push(NodeMeta { name, kind });
+            widgets,
+            by_name,
         }
-        // Geometry and anchors are already in the placements; the rest of
-        // the common state needs the widgets, which exist now.
-        for node in &doc.nodes {
-            for prop in ["visible", "enabled", "tab_index"] {
-                if let (Some(value), Some(widget)) = (node.prop(prop), form.widget(&node.name)) {
-                    let _ = widget.set(prop, value);
-                }
-            }
+    }
+
+    /// Applies the state a widget can only take once it exists (a hidden or
+    /// disabled widget, a tab control's selected page).
+    /// [`build`](super::build) calls it; call it once after mounting the
+    /// layout of a form [`describe`](super::describe)d.
+    pub fn ready(&self) {
+        for (_, _, widget) in &self.widgets {
+            widget.ready();
         }
-        form
     }
 
     /// The widget named `name`, if any.
     pub fn widget(&self, name: &str) -> Option<&dyn LiveWidget<M>> {
-        self.by_name
-            .get(name)
-            .and_then(|index| self.widgets.get(*index))
-            .map(Box::as_ref)
+        let index = *self.by_name.get(name)?;
+        Some(self.widgets[index].2.as_ref())
     }
 
     /// The value of `prop` on the widget named `name`, if any.
@@ -244,10 +240,17 @@ impl<M: 'static> LiveForm<M> {
             .set(prop, value)
     }
 
-    /// Every widget's node identity, in document order (a container before
-    /// its children).
+    /// Every named widget's node identity, in tree order.
     pub fn ids(&self) -> Vec<WidgetId> {
-        self.widgets.iter().map(|widget| widget.id()).collect()
+        self.widgets
+            .iter()
+            .map(|(.., widget)| widget.id())
+            .collect()
+    }
+
+    /// The widget names, in the order of [`Controls::ids`].
+    pub fn names(&self) -> impl Iterator<Item = &str> {
+        self.widgets.iter().map(|(name, ..)| name.as_str())
     }
 
     /// The pixel rectangle of the widget named `name`, if any.
@@ -255,9 +258,15 @@ impl<M: 'static> LiveForm<M> {
         Some(self.ui.bounds(self.widget(name)?.id()))
     }
 
-    /// The node names, in the order of [`LiveForm::ids`].
-    pub fn names(&self) -> impl Iterator<Item = &str> {
-        self.nodes.iter().map(|node| node.name.as_str())
+    /// The current bounds of every node the widget named `name` owns: one
+    /// for most widgets, one per option for a `RadioGroup`.
+    pub fn node_bounds(&self, name: &str) -> Vec<Rect> {
+        self.widget(name)
+            .map(|widget| {
+                let ids = widget.node_ids();
+                ids.into_iter().map(|id| self.ui.bounds(id)).collect()
+            })
+            .unwrap_or_default()
     }
 
     /// The catalog the form was built against.
@@ -265,44 +274,61 @@ impl<M: 'static> LiveForm<M> {
         &self.catalog
     }
 
-    /// The canonical widget kind of the node named `name`, if any.
-    ///
-    /// An alias resolves to the canonical kind, so a `CommandButton` node
-    /// reports `Button`.
+    /// The kind of the widget named `name`, if any.
     pub fn kind(&self, name: &str) -> Option<&str> {
-        self.nodes
-            .iter()
-            .find(|node| node.name == name)
-            .map(|node| node.kind.as_str())
+        let index = *self.by_name.get(name)?;
+        Some(self.widgets[index].1.as_str())
     }
 
-    /// The schema type of `property` on the node named `name`, if the catalog
-    /// declares that property for the node's kind.
-    ///
-    /// This is the schema lookup a runtime needs to decode a script value into
-    /// the right [`Value`] variant (for example an `enum` property).
+    /// The schema type of `property` on the widget named `name`, which a
+    /// runtime decodes a script value against.
     pub fn property_type(&self, name: &str, property: &str) -> Option<ValueType> {
         let kind = self.kind(name)?;
         self.catalog.property(kind, property).map(|spec| spec.ty)
     }
+}
 
-    /// The current bounds of every node the widget named `name` owns: one for
-    /// most widgets, one per option for a `RadioGroup`. A designer outlines
-    /// the union of these.
-    pub fn node_bounds(&self, name: &str) -> Vec<Rect> {
-        self.widget(name)
-            .map(|widget| {
-                widget
-                    .node_ids()
-                    .into_iter()
-                    .map(|id| self.ui.bounds(id))
-                    .collect()
-            })
-            .unwrap_or_default()
+/// A built form: its widgets, mounted. Dropping it destroys them.
+pub struct LiveForm<M: 'static> {
+    controls: Controls<M>,
+    mounted: Mounted<M>,
+}
+
+impl<M: 'static> LiveForm<M> {
+    /// The form over `controls`, mounted as `mounted`.
+    pub(super) fn new(controls: Controls<M>, mounted: Mounted<M>) -> LiveForm<M> {
+        controls.ready();
+        LiveForm { controls, mounted }
     }
 
-    /// Lays the form out again now. It re-anchors itself on every resize, so
-    /// this is only for reading new bounds within the same event handler.
+    /// The form's named widgets.
+    pub fn controls(&self) -> &Controls<M> {
+        &self.controls
+    }
+
+    /// The widget named `name`, if any.
+    pub fn widget(&self, name: &str) -> Option<&dyn LiveWidget<M>> {
+        self.controls.widget(name)
+    }
+
+    /// The value of `prop` on the widget named `name`, if any.
+    pub fn get(&self, name: &str, prop: &str) -> Option<Value> {
+        self.controls.get(name, prop)
+    }
+
+    /// Sets `prop` on the widget named `name`.
+    pub fn set(&self, name: &str, prop: &str, value: &Value) -> Result<(), SetError> {
+        self.controls.set(name, prop, value)
+    }
+
+    /// The pixel rectangle of the widget named `name`, if any.
+    pub fn bounds(&self, name: &str) -> Option<Rect> {
+        self.controls.bounds(name)
+    }
+
+    /// Lays the form out again now. It re-flows on its own after every
+    /// change, so this is only for reading new bounds within the same event
+    /// handler.
     pub fn relayout(&self) {
         self.mounted.relayout();
     }

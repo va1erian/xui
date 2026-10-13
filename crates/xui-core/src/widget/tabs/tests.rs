@@ -95,6 +95,33 @@ fn clicking_a_tab_selects_it_and_raises_the_message() {
 }
 
 #[test]
+fn a_built_tab_control_maps_a_click_through_on_change_with() {
+    use crate::arrange::{Handle, LayoutExt, column, tabs};
+    let (_backend, core, ui) = setup();
+    let container = Handle::<Tabs<usize>>::new();
+    let _mounted = ui
+        .mount(
+            column().child(
+                tabs()
+                    .page("One", column())
+                    .page("Two", column())
+                    .on_change_with(|index| (index > 0).then_some(index * 10))
+                    .bind(&container)
+                    .fill(1),
+            ),
+        )
+        .unwrap();
+    let log = Rc::new(RefCell::new(Vec::new()));
+    let runtime = Runtime::primary(core, TestApp(Rc::clone(&log)));
+
+    let tabs = container.get();
+    let second = tabs.shared.tabs.borrow()[1];
+    runtime.deliver(tabs.shared.strip_id, &click(second.left + 2));
+    runtime.deliver(WidgetId::NONE, &Event::Wake);
+    assert_eq!(*log.borrow(), vec![10]);
+}
+
+#[test]
 fn hovering_a_tab_only_repaints_the_strip() {
     let (backend, _core, ui) = setup();
     let tabs = Tabs::new(&ui, Rect::new(0, 0, 200, 120)).unwrap();

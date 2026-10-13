@@ -1,18 +1,13 @@
 //! A sign-in form loaded from a `.lfm` file and built into widgets.
 //!
-//! The form is data (`forms/login.lfm`): [`FormDoc::from_toml`] loads it
-//! against the schema, [`build`] turns it into live widgets, and a
-//! [`Binder`] maps the events the app cares about to its own `Msg`. The
-//! fields stretch and the buttons stay in the corner as the window resizes.
+//! The form is data (`forms/login.lfm`): [`load`] reads it, [`build`] turns
+//! it into the same builders Rust code writes, and [`Handlers`] attach the
+//! app's messages to events by name.
 //!
 //! Run it with `cargo run -p xui --features form --example form`.
 
-use std::rc::Rc;
-
 use xui::BackendError;
-use xui::form::{
-    Binder, Catalog, EventHandler, EventRef, Factories, FormDoc, LiveForm, Value, build,
-};
+use xui::form::{Factories, Handlers, LiveForm, Value, build, load};
 use xui::prelude::*;
 
 /// The form, embedded so the example runs from any directory.
@@ -22,20 +17,6 @@ const LOGIN: &str = include_str!("forms/login.lfm");
 enum Msg {
     SignIn,
     Cancel,
-}
-
-/// Maps the buttons' clicks to [`Msg`]; every other event stays unwired.
-struct LoginBinder;
-
-impl Binder<Msg> for LoginBinder {
-    fn bind(&self, event: EventRef<'_>) -> Option<EventHandler<Msg>> {
-        let msg = match (event.node, event.event) {
-            ("sign_in_button", "Click") => Msg::SignIn,
-            ("cancel_button", "Click") => Msg::Cancel,
-            _ => return None,
-        };
-        Some(Rc::new(move |_| Some(msg.clone())))
-    }
 }
 
 /// Owns the form, which owns every widget.
@@ -64,19 +45,14 @@ impl App for Login {
 }
 
 fn main() -> Result<()> {
-    let catalog = Catalog::xui();
-    let doc = FormDoc::from_toml(LOGIN, &catalog)
-        .map_err(|error| BackendError::Other(format!("login.lfm: {error}")))?;
-    let extent = |name| doc.window.prop(name).and_then(Value::as_int).unwrap_or(200) as f32;
-    let title = doc
-        .window
-        .prop("title")
-        .and_then(Value::as_str)
-        .unwrap_or("Sign in");
-    xui::app(title)
-        .size(extent("width"), extent("height"))
+    let form = load(LOGIN).map_err(|error| BackendError::Other(format!("login.lfm:{error}")))?;
+    let handlers = Handlers::new()
+        .on("sign_in_button", "Click", Msg::SignIn)
+        .on("cancel_button", "Click", Msg::Cancel);
+    xui::app(form.title.clone())
+        .size(form.size.0.dip(), form.size.1.dip())
         .run(|ui| {
-            let form = build(ui, &doc, &catalog, &Factories::xui(), &LoginBinder)
+            let form = build(ui, &form, &Factories::xui(), &handlers)
                 .map_err(|error| BackendError::Other(error.to_string()))?;
             Ok(Login { form })
         })

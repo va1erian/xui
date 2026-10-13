@@ -2,74 +2,63 @@
 
 //! [`BuildCx`]: what a factory receives when it describes a widget.
 
+use std::collections::BTreeMap;
 use std::rc::Rc;
 
 use xui_core::app::Ui;
-use xui_core::arrange::{IntoEntry, Layout, absolute};
+use xui_core::arrange::{IntoEntry, Layout, column};
 use xui_core::layout::Placement;
 
 use super::live::{Common, Live, WidgetProps};
 use super::{Binder, Created, EventHandler, EventRef};
-use crate::doc::Node;
 use crate::schema::{Catalog, WidgetSpec};
 use crate::value::Value;
 
-/// What a factory receives when it describes a widget.
+/// What a factory receives when it describes a widget: the widget's
+/// properties, its events' handlers and, for a container, its content.
 pub struct BuildCx<'a, M: 'static> {
-    ui: &'a Ui<M>,
-    node: &'a Node,
-    spec: &'a WidgetSpec,
-    binder: &'a dyn Binder<M>,
-    design_mode: bool,
-    catalog: Rc<Catalog>,
-    placement: Placement,
-    content: Option<Layout<M>>,
+    pub(super) ui: &'a Ui<M>,
+    /// The name the live form knows the widget by (`digit[3]` for an element
+    /// of a control array).
+    pub(super) name: &'a str,
+    /// The name written in the file (the array's name for an element).
+    pub(super) base: &'a str,
+    pub(super) index: Option<usize>,
+    pub(super) props: BTreeMap<String, Value>,
+    pub(super) spec: &'a WidgetSpec,
+    pub(super) binder: &'a dyn Binder<M>,
+    pub(super) design_mode: bool,
+    pub(super) catalog: Rc<Catalog>,
+    pub(super) placement: Option<Placement>,
+    pub(super) content: Option<Layout<M>>,
+    pub(super) pages: Vec<(String, Layout<M>)>,
 }
 
-impl<'a, M: 'static> BuildCx<'a, M> {
-    /// The context for one node.
-    #[allow(clippy::too_many_arguments)]
-    pub(super) fn new(
-        ui: &'a Ui<M>,
-        node: &'a Node,
-        spec: &'a WidgetSpec,
-        binder: &'a dyn Binder<M>,
-        design_mode: bool,
-        catalog: Rc<Catalog>,
-        placement: Placement,
-        content: Option<Layout<M>>,
-    ) -> BuildCx<'a, M> {
-        BuildCx {
-            ui,
-            node,
-            spec,
-            binder,
-            design_mode,
-            catalog,
-            placement,
-            content,
-        }
-    }
-
+impl<M: 'static> BuildCx<'_, M> {
     /// The [`Ui`] the form is built through.
     pub fn ui(&self) -> &Ui<M> {
         self.ui
     }
 
-    /// The node being built.
-    pub fn node(&self) -> &Node {
-        self.node
+    /// The name the live form knows the widget by.
+    pub fn name(&self) -> &str {
+        self.name
     }
 
-    /// The node's widget spec.
+    /// For an element of a control array, its index.
+    pub fn index(&self) -> Option<usize> {
+        self.index
+    }
+
+    /// The widget kind's spec.
     pub fn spec(&self) -> &WidgetSpec {
         self.spec
     }
 
-    /// Where the node sits in its parent: its design rectangle and anchor.
-    /// The build places the factory's entry with it.
-    pub fn placement(&self) -> &Placement {
-        &self.placement
+    /// For an entry of an `Absolute` layout, where it sits: its design
+    /// rectangle and anchor, which the build places it with.
+    pub fn placement(&self) -> Option<&Placement> {
+        self.placement.as_ref()
     }
 
     /// Whether this is a design-mode build.
@@ -77,15 +66,21 @@ impl<'a, M: 'static> BuildCx<'a, M> {
         self.design_mode
     }
 
-    /// For a container, the layout of its children, to place inside it (an
-    /// empty layout for a leaf, or once taken).
+    /// For a panel or a group, the layout of its content (an empty column
+    /// otherwise, or once taken).
     pub fn take_content(&mut self) -> Layout<M> {
-        self.content.take().unwrap_or_else(absolute)
+        self.content.take().unwrap_or_else(column)
     }
 
-    /// The raw value of a property, if set.
+    /// For a tab control, its pages' titles and layouts (empty otherwise, or
+    /// once taken).
+    pub fn take_pages(&mut self) -> Vec<(String, Layout<M>)> {
+        std::mem::take(&mut self.pages)
+    }
+
+    /// The value of a property; every declared property has one.
     pub fn prop(&self, name: &str) -> Option<&Value> {
-        self.node.props.get(name)
+        self.props.get(name)
     }
 
     /// A text property, or the empty string.
@@ -122,14 +117,15 @@ impl<'a, M: 'static> BuildCx<'a, M> {
     /// The handler for `event`, if the binder supplied one.
     ///
     /// In design mode this is always `None`, so the designer's preview does not
-    /// run the host's event code.
+    /// run the host's event code; an unnamed widget raises nothing either.
     pub fn handler(&self, event: &str) -> Option<EventHandler<M>> {
-        if self.design_mode {
+        if self.design_mode || self.base.is_empty() {
             return None;
         }
         let spec = self.spec.event(event)?;
         self.binder.bind(EventRef {
-            node: &self.node.name,
+            node: self.base,
+            index: self.index,
             event,
             spec,
         })
@@ -138,10 +134,12 @@ impl<'a, M: 'static> BuildCx<'a, M> {
     /// Pairs `entry` with a built-in widget's property surface, adding the
     /// common properties and the schema's access and type rules.
     pub(crate) fn live<W: WidgetProps<M>>(&self, entry: impl IntoEntry<M>, inner: W) -> Created<M> {
+        let common = Common::new(self.ui.clone(), self.placement.clone());
+        common.init(self.bool("visible", true), self.bool("enabled", true));
         Created::new(
             entry,
             Live {
-                common: Common::new(self.ui.clone(), self.placement.clone()),
+                common,
                 inner,
                 catalog: Rc::clone(&self.catalog),
                 kind: self.spec.kind.clone(),

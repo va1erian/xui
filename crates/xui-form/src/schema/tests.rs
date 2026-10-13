@@ -1,7 +1,7 @@
 use super::*;
 
 #[test]
-fn the_builtin_catalog_has_the_documented_kinds() {
+fn the_catalog_has_every_widget_kind() {
     let catalog = Catalog::xui();
     let kinds: Vec<&str> = catalog.kinds().collect();
     assert_eq!(
@@ -11,7 +11,7 @@ fn the_builtin_catalog_has_the_documented_kinds() {
             "CheckBox",
             "ComboBox",
             "Edit",
-            "GroupBox",
+            "Group",
             "Hyperlink",
             "Label",
             "ListView",
@@ -22,75 +22,68 @@ fn the_builtin_catalog_has_the_documented_kinds() {
             "RadioGroup",
             "Separator",
             "Slider",
+            "Tabs",
             "ToggleButton",
         ]
     );
+    let layouts: Vec<&str> = catalog.layouts().iter().map(|l| l.kind.as_str()).collect();
+    assert_eq!(layouts, ["Row", "Column", "Wrap", "Grid", "Absolute"]);
 }
 
 #[test]
-fn aliases_resolve_to_the_canonical_kind() {
-    let mut catalog = Catalog::xui();
-    catalog.alias("CommandButton", "Button");
-    assert_eq!(catalog.resolve("CommandButton"), Some("Button"));
+fn a_spec_comes_from_the_declaration() {
+    let catalog = Catalog::xui();
+    let edit = catalog.get("Edit").expect("Edit exists");
+    assert_eq!(edit.description, "A single-line text field.");
+    let placeholder = edit.property("placeholder").expect("placeholder exists");
+    assert_eq!(placeholder.access, Access::DesignOnly);
+    assert_eq!(placeholder.category, CATEGORY_APPEARANCE);
     assert_eq!(
-        catalog.get("CommandButton").map(|spec| spec.kind.as_str()),
-        Some("Button")
+        edit.default_event().map(|e| e.name.as_str()),
+        Some("Change")
     );
-    assert!(catalog.contains("CommandButton"));
-    assert_eq!(catalog.resolve("Nope"), None);
+    let fields: Vec<&str> = edit.fields.iter().map(|f| f.name.as_str()).collect();
+    assert_eq!(&fields[..4], ["name", "array", "index", "text"]);
+    assert!(fields.contains(&"fill") && fields.contains(&"anchor"));
 }
 
 #[test]
 fn common_properties_apply_to_every_kind() {
     let catalog = Catalog::xui();
     for kind in catalog.kinds() {
-        let spec = catalog.get(kind).expect("kind exists");
+        assert!(catalog.property(kind, "visible").is_some());
         assert!(catalog.property(kind, "left").is_some());
-        assert!(catalog.property(kind, "anchor").is_some());
-        // The spec itself holds only widget-specific properties.
-        assert!(spec.property("left").is_none());
+        assert!(
+            catalog
+                .get(kind)
+                .and_then(|s| s.property("visible"))
+                .is_none()
+        );
     }
-}
-
-#[test]
-fn width_defaults_to_the_widget_size() {
-    let catalog = Catalog::xui();
-    let width = catalog
-        .property("Button", "width")
-        .expect("width is common");
-    assert_eq!(width.default, Value::Int(100));
-    let height = catalog
-        .property("Panel", "height")
-        .expect("height is common");
-    assert_eq!(height.default, Value::Int(120));
-}
-
-#[test]
-fn only_named_widget_supports_its_events() {
-    let catalog = Catalog::xui();
-    let button = catalog.get("Button").expect("Button exists");
-    assert!(button.event("Click").is_some());
     assert_eq!(
-        button.default_event().map(|event| event.name.as_str()),
-        Some("Click")
+        catalog.property("ListView", "selected").map(|p| p.default),
+        Some(Value::Int(-1))
     );
-    let label = catalog.get("Label").expect("Label exists");
-    assert!(label.events.is_empty());
 }
 
 #[test]
-fn container_rules_accept_children() {
+fn field_defaults_are_ron() {
     let catalog = Catalog::xui();
-    assert!(catalog.is_container("Panel"));
-    assert!(catalog.accepts_child("GroupBox", "Button"));
-    assert!(!catalog.accepts_child("Button", "Label"));
-    assert!(!catalog.is_container("Label"));
+    let max = catalog
+        .get("NumberField")
+        .and_then(|spec| spec.fields.iter().find(|f| f.name == "max"))
+        .expect("max is a field");
+    assert_eq!((max.ty.as_str(), max.default.as_str()), ("f64", "100.0"));
+    let fill = &catalog.layout_fields()[0];
+    assert_eq!(
+        (fill.name.as_str(), fill.ty.as_str()),
+        ("fill", "Option<u32>")
+    );
 }
 
 #[test]
 fn the_catalog_serialises_to_json() {
-    let catalog = Catalog::xui();
-    let json = serde_json::to_string(&catalog).expect("catalog serialises");
+    let json = serde_json::to_string(&Catalog::xui()).expect("the catalog serialises");
     assert!(json.contains("\"Button\""));
-    assert!(json.contains("stretch_horizontal"));
+    assert!(json.contains("BottomRight") || json.contains("anchor"));
 }

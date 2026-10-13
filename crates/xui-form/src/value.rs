@@ -1,23 +1,16 @@
 #![forbid(unsafe_code)]
 
-//! Typed property values and the schema-guided TOML codec.
+//! Typed runtime property values and their schema types.
 //!
-//! A form stores properties as [`Value`]s, but its dependencies are plain TOML.
-//! The schema decides how a raw TOML literal decodes: a `String` may be a
-//! [`Value::Text`] or a [`Value::Enum`] depending on the property's
-//! [`ValueType`], and `"#ff0000"` is a [`Value::Color`] only where the schema
-//! says so. This is what fixes the ambiguity of an untagged value on disk.
-//!
-//! An [`Value::Int`] is accepted wherever a [`ValueType::Float`] is expected, so
-//! a hand-written `1` reads as `1.0`.
+//! A live form reads and writes properties as [`Value`]s, checked against
+//! each property's [`ValueType`] from the schema. An [`Value::Int`] is
+//! accepted wherever a [`ValueType::Float`] is expected.
 
 use serde::Serialize;
 use xui_core::Color;
 
 /// A typed property value.
 ///
-/// The variant records how the schema decoded a raw TOML literal; it is not on
-/// disk, which only stores the literal.
 #[non_exhaustive]
 #[derive(Clone, Debug, PartialEq)]
 pub enum Value {
@@ -100,79 +93,6 @@ impl Value {
             _ => None,
         }
     }
-
-    /// Decodes a raw TOML literal according to `ty`.
-    ///
-    /// The decode is deliberately permissive about enum membership: an unknown
-    /// variant still decodes to [`Value::Enum`] so [`crate::validate`] can
-    /// report it against the document rather than failing the whole load.
-    pub fn from_toml(raw: &toml::Value, ty: &ValueType) -> Result<Value, DecodeError> {
-        match ty {
-            ValueType::Bool => raw
-                .as_bool()
-                .map(Value::Bool)
-                .ok_or_else(|| DecodeError::new(ty.type_name(), raw.type_name())),
-            ValueType::Int { min, max } => {
-                let value = raw
-                    .as_integer()
-                    .ok_or_else(|| DecodeError::new(ty.type_name(), raw.type_name()))?;
-                check_int_range(value, *min, *max)?;
-                Ok(Value::Int(value))
-            }
-            ValueType::Float { min, max } => {
-                let value = match raw {
-                    toml::Value::Integer(value) => *value as f64,
-                    toml::Value::Float(value) => *value,
-                    _ => return Err(DecodeError::new(ty.type_name(), raw.type_name())),
-                };
-                check_float_range(value, *min, *max)?;
-                Ok(Value::Float(value))
-            }
-            ValueType::Text { .. } => raw
-                .as_str()
-                .map(|text| Value::Text(text.to_owned()))
-                .ok_or_else(|| DecodeError::new(ty.type_name(), raw.type_name())),
-            ValueType::Enum { .. } => raw
-                .as_str()
-                .map(|text| Value::Enum(text.to_owned()))
-                .ok_or_else(|| DecodeError::new(ty.type_name(), raw.type_name())),
-            ValueType::Color => {
-                let text = raw
-                    .as_str()
-                    .ok_or_else(|| DecodeError::new(ty.type_name(), raw.type_name()))?;
-                parse_color(text)
-                    .map(Value::Color)
-                    .ok_or_else(|| DecodeError::new("a `#rrggbb` colour", format!("`{text}`")))
-            }
-            ValueType::List => {
-                let items = raw
-                    .as_array()
-                    .ok_or_else(|| DecodeError::new(ty.type_name(), raw.type_name()))?;
-                let mut out = Vec::with_capacity(items.len());
-                for item in items {
-                    let text = item
-                        .as_str()
-                        .ok_or_else(|| DecodeError::new("a list of strings", item.type_name()))?;
-                    out.push(text.to_owned());
-                }
-                Ok(Value::List(out))
-            }
-        }
-    }
-
-    /// Encodes the value as a raw TOML literal.
-    pub fn to_toml(&self) -> toml::Value {
-        match self {
-            Value::Bool(value) => toml::Value::Boolean(*value),
-            Value::Int(value) => toml::Value::Integer(*value),
-            Value::Float(value) => toml::Value::Float(*value),
-            Value::Text(value) | Value::Enum(value) => toml::Value::String(value.clone()),
-            Value::Color(value) => toml::Value::String(format_color(*value)),
-            Value::List(items) => {
-                toml::Value::Array(items.iter().cloned().map(toml::Value::String).collect())
-            }
-        }
-    }
 }
 
 impl Serialize for Value {
@@ -180,7 +100,14 @@ impl Serialize for Value {
     where
         S: serde::Serializer,
     {
-        self.to_toml().serialize(serializer)
+        match self {
+            Value::Bool(value) => serializer.serialize_bool(*value),
+            Value::Int(value) => serializer.serialize_i64(*value),
+            Value::Float(value) => serializer.serialize_f64(*value),
+            Value::Text(value) | Value::Enum(value) => serializer.serialize_str(value),
+            Value::Color(color) => serializer.serialize_str(&format_color(*color)),
+            Value::List(items) => items.serialize(serializer),
+        }
     }
 }
 
@@ -306,50 +233,6 @@ impl ValueType {
     }
 }
 
-/// A failure to decode a raw TOML literal against a [`ValueType`].
-#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
-#[error("expected {expected}, found {found}")]
-pub struct DecodeError {
-    /// A description of what the schema wanted.
-    pub expected: String,
-    /// A description of what was on disk.
-    pub found: String,
-}
-
-impl DecodeError {
-    /// Creates a decode error from the expected and found descriptions.
-    pub fn new(expected: impl Into<String>, found: impl Into<String>) -> Self {
-        DecodeError {
-            expected: expected.into(),
-            found: found.into(),
-        }
-    }
-}
-
-/// Checks an integer against optional inclusive bounds.
-fn check_int_range(value: i64, min: Option<i64>, max: Option<i64>) -> Result<(), DecodeError> {
-    if in_int_range(value, min, max) {
-        Ok(())
-    } else {
-        Err(DecodeError::new(
-            format!("an int in {}", describe_int_bounds(min, max)),
-            format!("`{value}`"),
-        ))
-    }
-}
-
-/// Checks a float against optional inclusive bounds.
-fn check_float_range(value: f64, min: Option<f64>, max: Option<f64>) -> Result<(), DecodeError> {
-    if in_float_range(value, min, max) {
-        Ok(())
-    } else {
-        Err(DecodeError::new(
-            format!("a float in {}", describe_float_bounds(min, max)),
-            format!("`{value}`"),
-        ))
-    }
-}
-
 /// Whether `value` lies within the inclusive integer bounds.
 fn in_int_range(value: i64, min: Option<i64>, max: Option<i64>) -> bool {
     min.is_none_or(|min| value >= min) && max.is_none_or(|max| value <= max)
@@ -360,70 +243,9 @@ fn in_float_range(value: f64, min: Option<f64>, max: Option<f64>) -> bool {
     min.is_none_or(|min| value >= min) && max.is_none_or(|max| value <= max)
 }
 
-/// Renders integer bounds for a diagnostic.
-fn describe_int_bounds(min: Option<i64>, max: Option<i64>) -> String {
-    match (min, max) {
-        (Some(min), Some(max)) => format!("{min}..={max}"),
-        (Some(min), None) => format!("at least {min}"),
-        (None, Some(max)) => format!("at most {max}"),
-        (None, None) => "range".to_owned(),
-    }
-}
-
-/// Renders float bounds for a diagnostic.
-fn describe_float_bounds(min: Option<f64>, max: Option<f64>) -> String {
-    match (min, max) {
-        (Some(min), Some(max)) => format!("{min}..={max}"),
-        (Some(min), None) => format!("at least {min}"),
-        (None, Some(max)) => format!("at most {max}"),
-        (None, None) => "range".to_owned(),
-    }
-}
-
-/// Parses `#rrggbb` or `#rrggbbaa` (the leading `#` is optional), ignoring any
-/// alpha channel because [`Color`] is opaque.
-pub(crate) fn parse_color(text: &str) -> Option<Color> {
-    let hex = text.strip_prefix('#').unwrap_or(text);
-    if hex.len() != 6 && hex.len() != 8 {
-        return None;
-    }
-    let value = u32::from_str_radix(hex, 16).ok()?;
-    // `#rrggbb` is already in `Color::hex` order; `#rrggbbaa` drops the alpha.
-    Some(if hex.len() == 6 {
-        Color::hex(value)
-    } else {
-        Color::hex(value >> 8)
-    })
-}
-
 /// Formats an opaque colour as `#rrggbb`.
 pub(crate) fn format_color(color: Color) -> String {
     format!("#{:02x}{:02x}{:02x}", color.r, color.g, color.b)
-}
-
-/// The TOML literal for a value, as it would appear on disk (used by tests).
-#[cfg(test)]
-pub(crate) fn toml_literal(value: &Value) -> String {
-    value.to_toml().to_string()
-}
-
-/// The TOML kind name of a raw value (for error messages).
-trait TomlKind {
-    fn type_name(&self) -> &'static str;
-}
-
-impl TomlKind for toml::Value {
-    fn type_name(&self) -> &'static str {
-        match self {
-            toml::Value::String(_) => "a string",
-            toml::Value::Integer(_) => "an int",
-            toml::Value::Float(_) => "a float",
-            toml::Value::Boolean(_) => "a bool",
-            toml::Value::Datetime(_) => "a datetime",
-            toml::Value::Array(_) => "an array",
-            toml::Value::Table(_) => "a table",
-        }
-    }
 }
 
 #[cfg(test)]

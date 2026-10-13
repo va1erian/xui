@@ -1,0 +1,20 @@
+[package]
+name = "xui-form-cli"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "The xui-form tool: check, render, format, migrate and describe .lfm forms without compiling anything"
+repository = "https://github.com/va1erian/xui"
+
+[[bin]]
+name = "xui-form"
+path = "src/main.rs"
+
+[dependencies]
+xui-core = { path = "../xui-core" }
+xui-form = { path = "../xui-form", features = ["migrate"] }
+# `render --script` runs the form's `form_load` before the capture.
+xui-script = { path = "../xui-script" }
+# The headless renderer only: no window, no display.
+xui-canvas = { path = "../xui-canvas", default-features = false }
+serde_json = "1"

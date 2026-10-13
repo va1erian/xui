@@ -1,141 +1,82 @@
-//! Validation through the public API.
+//! Validating a well-typed form.
 
-use xui_form::{Catalog, FormDoc, Node, Severity, Value};
+use xui_form::{Catalog, Diagnostic, Severity, load};
 
-fn doc_with(node: Node) -> FormDoc {
-    let mut doc = FormDoc::new("main_form");
-    doc.insert(node);
-    doc
+fn diagnostics(text: &str) -> Vec<Diagnostic> {
+    let form = load(text).unwrap_or_else(|error| panic!("the form loads: {error}"));
+    form.validate(&Catalog::xui())
+}
+
+fn has(diagnostics: &[Diagnostic], severity: Severity, needle: &str) -> bool {
+    diagnostics
+        .iter()
+        .any(|d| d.severity == severity && d.message.contains(needle))
 }
 
 #[test]
 fn a_valid_form_has_no_diagnostics() {
-    let catalog = Catalog::xui();
-    let mut doc = FormDoc::new("main_form");
-    let mut button = Node::new("Button", "cmdGo");
-    button.set_prop("text", Value::Text("Go".to_owned()));
-    button.set_prop("width", Value::Int(100));
-    button.set_prop("height", Value::Int(30));
-    doc.insert(button);
-    assert!(doc.validate(&catalog).is_empty());
-}
-
-#[test]
-fn an_invalid_name_is_an_error() {
-    let diagnostics = doc_with(Node::new("Button", "1bad")).validate(&Catalog::xui());
-    assert!(
-        diagnostics
-            .iter()
-            .any(|d| d.is_error() && d.property.as_deref() == Some("name"))
+    let found = diagnostics(
+        r#"Form(name: "main_form", root: Column(children: [
+            Edit(name: "name_edit"),
+            Grid(columns: [Auto, Fill(1)], children: [
+                Label(text: "Size"), Slider(name: "size_slider", span: 1),
+            ]),
+            Absolute(children: [Button(name: "ok", at: (8, 8, 80, 28), anchor: BottomRight)]),
+            Row(children: [Button(name: "digit", index: 0), Button(name: "digit", index: 1)]),
+        ]))"#,
     );
+    assert!(found.is_empty(), "{found:?}");
 }
 
 #[test]
-fn duplicate_names_are_an_error() {
-    let mut doc = FormDoc::new("main_form");
-    doc.insert(Node::new("Button", "cmdGo"));
-    doc.insert(Node::new("Button", "cmdGo"));
-    let diagnostics = doc.validate(&Catalog::xui());
-    assert!(
-        diagnostics
-            .iter()
-            .any(|d| d.message.contains("more than once"))
+fn names_must_be_identifiers_and_unique() {
+    let found = diagnostics(
+        r#"Form(name: "main form", root: Column(children: [
+            Label(name: "1st"), Button(name: "go"), Button(name: "go"),
+        ]))"#,
     );
+    assert!(has(&found, Severity::Error, "`1st` is not a valid name"));
+    assert!(has(&found, Severity::Error, "`go` is used more than once"));
+    assert!(has(&found, Severity::Error, "not a valid form name"));
 }
 
 #[test]
-fn an_unknown_kind_is_an_error() {
-    let diagnostics = doc_with(Node::new("Nope", "bad")).validate(&Catalog::xui());
-    assert!(
-        diagnostics
-            .iter()
-            .any(|d| d.message.contains("unknown widget kind"))
+fn control_arrays_must_not_clash() {
+    let found = diagnostics(
+        r#"Form(root: Column(children: [
+            Button(name: "digit", array: 3), Button(name: "digit", index: 2),
+            Button(name: "other", array: 2, index: 1), Button(array: 2),
+        ]))"#,
     );
+    assert!(has(
+        &found,
+        Severity::Error,
+        "`digit` is used more than once"
+    ));
+    assert!(has(&found, Severity::Error, "either `array` or `index`"));
+    assert!(has(&found, Severity::Error, "needs a name"));
 }
 
 #[test]
-fn an_unknown_property_is_an_error() {
-    let mut node = Node::new("Button", "cmdGo");
-    node.set_prop("nonsense", Value::Bool(true));
-    let diagnostics = doc_with(node).validate(&Catalog::xui());
-    assert!(
-        diagnostics
-            .iter()
-            .any(|d| d.property.as_deref() == Some("nonsense"))
+fn values_out_of_range_are_errors() {
+    let found = diagnostics(r#"Form(root: ComboBox(name: "pick", selected: -1))"#);
+    assert_eq!(found.len(), 1);
+    assert_eq!(found[0].node.as_deref(), Some("pick"));
+    assert_eq!(found[0].property.as_deref(), Some("selected"));
+}
+
+#[test]
+fn layout_fields_the_parent_ignores_are_warnings() {
+    let found = diagnostics(
+        r#"Form(root: Column(children: [
+            Button(name: "a", at: (0, 0, 10, 10), anchor: Fill, span: 2),
+            Absolute(children: [Label(name: "loose")]),
+            Grid(),
+        ]))"#,
     );
-}
-
-#[test]
-fn a_mistyped_value_is_an_error() {
-    let mut node = Node::new("Button", "cmdGo");
-    node.set_prop("enabled", Value::Text("yes".to_owned()));
-    let diagnostics = doc_with(node).validate(&Catalog::xui());
-    assert!(
-        diagnostics
-            .iter()
-            .any(|d| d.property.as_deref() == Some("enabled"))
-    );
-}
-
-#[test]
-fn an_out_of_range_value_is_an_error() {
-    let mut node = Node::new("Button", "cmdGo");
-    node.set_prop("tab_index", Value::Int(-1));
-    let diagnostics = doc_with(node).validate(&Catalog::xui());
-    assert!(
-        diagnostics
-            .iter()
-            .any(|d| d.property.as_deref() == Some("tab_index"))
-    );
-}
-
-#[test]
-fn an_unknown_enum_variant_is_an_error() {
-    let mut node = Node::new("Button", "cmdGo");
-    node.set_prop("anchor", Value::Enum("sideways".to_owned()));
-    let diagnostics = doc_with(node).validate(&Catalog::xui());
-    assert!(
-        diagnostics
-            .iter()
-            .any(|d| d.property.as_deref() == Some("anchor"))
-    );
-}
-
-#[test]
-fn a_missing_parent_is_an_error() {
-    let mut node = Node::new("Button", "cmdGo");
-    node.parent = Some("ghost".to_owned());
-    let diagnostics = doc_with(node).validate(&Catalog::xui());
-    assert!(
-        diagnostics
-            .iter()
-            .any(|d| d.message.contains("does not exist"))
-    );
-}
-
-#[test]
-fn a_cycle_is_an_error() {
-    let mut doc = FormDoc::new("main_form");
-    let mut a = Node::new("Panel", "panA");
-    a.parent = Some("panB".to_owned());
-    let mut b = Node::new("Panel", "panB");
-    b.parent = Some("panA".to_owned());
-    doc.insert(a);
-    doc.insert(b);
-    let diagnostics = doc.validate(&Catalog::xui());
-    assert!(diagnostics.iter().any(|d| d.message.contains("cycle")));
-}
-
-#[test]
-fn a_duplicate_tab_index_is_a_warning() {
-    let mut doc = FormDoc::new("main_form");
-    let mut one = Node::new("Button", "cmdOne");
-    one.set_prop("tab_index", Value::Int(0));
-    let mut two = Node::new("Button", "cmdTwo");
-    two.set_prop("tab_index", Value::Int(0));
-    doc.insert(one);
-    doc.insert(two);
-    let diagnostics = doc.validate(&Catalog::xui());
-    assert_eq!(diagnostics.len(), 1);
-    assert_eq!(diagnostics[0].severity, Severity::Warning);
+    assert!(has(&found, Severity::Warning, "`at` only places"));
+    assert!(has(&found, Severity::Warning, "`anchor` only anchors"));
+    assert!(has(&found, Severity::Warning, "`span` only spans"));
+    assert!(has(&found, Severity::Warning, "`at` is missing"));
+    assert!(has(&found, Severity::Error, "needs at least one column"));
 }

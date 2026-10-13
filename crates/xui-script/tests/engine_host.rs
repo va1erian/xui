@@ -12,8 +12,8 @@ use xui_core::app::{App, run_app};
 use xui_core::backend::{Backend, PlatformSpec};
 use xui_core::units::Dip;
 use xui_form::{
-    Binder, BuildOptions, Catalog, EventHandler, EventRef, Factories, FormDoc, LiveForm, Node,
-    Value, build_with,
+    Binder, BuildOptions, Catalog, EventHandler, EventRef, Factories, Form, LiveForm, Value,
+    build_with,
 };
 use xui_script::{EngineHost, FormHost};
 
@@ -37,49 +37,31 @@ impl App for TestApp {
 
 /// A form with an `Edit` named `name_edit` (holding "Ada") and a `Label` named
 /// `result_label`.
-fn greeting_doc() -> FormDoc {
-    let mut doc = FormDoc::new("frmMain");
-
-    let mut name = Node::new("Edit", "name_edit");
-    name.set_prop("left", Value::Int(10));
-    name.set_prop("top", Value::Int(10));
-    name.set_prop("width", Value::Int(160));
-    name.set_prop("height", Value::Int(24));
-    name.set_prop("text", Value::Text("Ada".to_owned()));
-    doc.insert(name);
-
-    let mut out = Node::new("Label", "result_label");
-    out.set_prop("left", Value::Int(10));
-    out.set_prop("top", Value::Int(40));
-    out.set_prop("width", Value::Int(160));
-    out.set_prop("height", Value::Int(20));
-    doc.insert(out);
-
-    doc
+fn greeting_doc() -> Form {
+    xui_form::load(
+        r#"Form(name: "frmMain", root: Column(padding: 10, gap: 6, children: [
+            Edit(name: "name_edit", text: "Ada"),
+            Label(name: "result_label"),
+        ]))"#,
+    )
+    .expect("the form loads")
 }
 
 /// Builds `doc` offscreen, wires an [`EngineHost`] to it, runs `check` and
 /// returns its result.
-fn run_form<R>(doc: &FormDoc, check: impl FnOnce(&EngineHost, &Rc<LiveForm<()>>) -> R) -> R {
+fn run_form<R>(doc: &Form, check: impl FnOnce(&EngineHost, &Rc<LiveForm<()>>) -> R) -> R {
     let backend: Rc<dyn Backend> = Rc::new(OffscreenBackend::new());
     let catalog = Catalog::xui();
     let factories: Factories<()> = Factories::xui();
     let binder = NullBinder;
     let slot: Rc<RefCell<Option<R>>> = Rc::new(RefCell::new(None));
     let slot_inner = Rc::clone(&slot);
-    let spec = PlatformSpec::new("lazyrad-runtime test").size(Dip(320.0), Dip(200.0));
+    let spec = PlatformSpec::new("xui-script test").size(Dip(320.0), Dip(200.0));
 
     run_app(backend, spec, move |ui| {
         let form = Rc::new(
-            build_with(
-                ui,
-                doc,
-                &catalog,
-                &factories,
-                &binder,
-                BuildOptions::default(),
-            )
-            .expect("the form builds"),
+            build_with(ui, doc, &factories, &binder, BuildOptions::default())
+                .expect("the form builds"),
         );
         let host = EngineHost::new(
             Rc::clone(&form) as Rc<dyn FormHost>,
@@ -278,19 +260,12 @@ fn a_registered_global_resolves_in_a_handler() {
     let catalog = Catalog::xui();
     let factories: Factories<()> = Factories::xui();
     let binder = NullBinder;
-    let spec = PlatformSpec::new("lazyrad-runtime globals").size(Dip(320.0), Dip(200.0));
+    let spec = PlatformSpec::new("xui-script globals").size(Dip(320.0), Dip(200.0));
 
     run_app(backend, spec, move |ui| {
         let form = Rc::new(
-            build_with(
-                ui,
-                &doc,
-                &catalog,
-                &factories,
-                &binder,
-                BuildOptions::default(),
-            )
-            .expect("the form builds"),
+            build_with(ui, &doc, &factories, &binder, BuildOptions::default())
+                .expect("the form builds"),
         );
         let mut host = EngineHost::new(
             Rc::clone(&form) as Rc<dyn FormHost>,
@@ -298,7 +273,7 @@ fn a_registered_global_resolves_in_a_handler() {
             "frmMain.rhai",
             (),
         );
-        host.set_global("app", rhai::Dynamic::from("LazyRAD".to_owned()));
+        host.set_global("app", rhai::Dynamic::from("Host".to_owned()));
 
         let ast = host
             .compile("fn copy() { result_label.text = app; }")
@@ -307,7 +282,7 @@ fn a_registered_global_resolves_in_a_handler() {
 
         assert_eq!(
             form.get("result_label", "text"),
-            Some(Value::Text("LazyRAD".to_owned()))
+            Some(Value::Text("Host".to_owned()))
         );
         TestApp
     })
@@ -341,12 +316,22 @@ fn a_wrong_case_set_suggests_the_script_name() {
 
 #[test]
 fn a_wrong_case_get_suggests_the_script_name() {
-    let error = bad_call("let t = name_edit.TabIndex;");
+    let error = bad_call("let t = name_edit.PlaceHolder;");
     assert_eq!(
         error.message,
-        "unknown property 'TabIndex' on name_edit (Edit); did you mean 'tab_index'?"
+        "unknown property 'PlaceHolder' on name_edit (Edit); did you mean 'placeholder'?"
     );
     assert_eq!(error.line, 2);
+}
+
+#[test]
+fn a_misspelt_property_suggests_the_closest() {
+    let error = bad_call("let t = name_edit.txt;");
+    assert!(
+        error.message.ends_with("did you mean 'text'?"),
+        "{}",
+        error.message
+    );
 }
 
 #[test]
