@@ -54,6 +54,39 @@ cargo clippy --all-targets -- -D warnings
 cargo test
 ```
 
+## Review (before opening a PR)
+
+Always review before submitting a PR. Every PR is reviewed before it is opened,
+whatever its base branch (stacked PRs included), except a typo-only or comment-only PR,
+which needs a self-check. No review bot is part of this: do not wait for CodeRabbit
+and do not request it. If a bot comments anyway, treat its comments like any other
+finding.
+
+Run the checks above first (`cargo test` on a Windows desktop goes through the sandbox
+script under "Operational rules"), then review the diff that passed them. Re-review
+any change made after the review, other than a fix the reviewer has re-checked.
+
+- **Who reviews.** Not the session that wrote or planned the change: a new session
+  started on the branch (for example `/code-review` in Claude Code) or the owner.
+  Give the reviewer the diff, the sources it relies on, and the draft PR description's
+  claims as a list to verify, not the author's verdict. Re-reading your own diff is a
+  self-check, not a review.
+- **What it covers.** The whole diff against the sources it relies on: correctness
+  and edge cases, failure paths and tests, the invariants and quality bar above, and
+  every claim the PR description makes.
+- **Findings.** *Critical*: data loss, a crash, a security issue, a broken invariant
+  above. *Major*: wrong behaviour on realistic input, a false claim in the
+  description, a missing failure-path test. Fix every Critical finding before
+  opening. Fix every Major finding too, unless the owner agrees, in the PR
+  description, to defer it to a linked issue. The author does not dismiss a finding
+  alone: one the author believes is wrong goes back to the reviewer or the owner, with
+  evidence. Minor findings may be deferred with a reason.
+- **Record it.** The PR description has a `Review` section (the PR template has
+  one): who reviewed, what they covered, and what changed because of it. A typo-only
+  or comment-only PR may say "self-checked".
+- **A review is not permission to merge.** See "Do not merge your own PR unless
+  requested" below.
+
 ## Operational rules
 
 - **Running tests on a Windows desktop:** use `scripts\sandbox\run.ps1` (see the
