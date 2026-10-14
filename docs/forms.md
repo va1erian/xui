@@ -80,8 +80,9 @@ become an `Absolute` layout with their old rectangles and anchors, or a
 `Grid` when the rectangles line up in rows and columns with one gap and none
 is anchored, and the grid reproduces them: its padding is the left and top
 margin and the right and bottom margins are at least as wide, so no column is
-squeezed. The content of a `Group` or of a card `Panel` is inset, so it stays
-an `Absolute` layout (positions in it are relative to the inset content). A
+squeezed. The content of a `Group` is inset by its frame and title, so it
+stays an `Absolute` layout (positions in it are relative to the inset
+content); a `Panel`'s content, card or not, has the panel's whole rectangle. A
 `GroupBox` becomes a `Group`, `cue` becomes `placeholder`, and `tab_index` is
 dropped: the tab order is the tree order. What is left out is printed to
 standard error, one note each. A form that is not a tree (a name used twice,

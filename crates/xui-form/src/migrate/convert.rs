@@ -38,10 +38,10 @@ impl<'a> Converter<'a> {
     /// a grid when they line up, an absolute layout otherwise. The layout is
     /// `depth` levels down the tree.
     ///
-    /// `inset` is whether the container insets its content (a `Group`'s
-    /// frame and title, a card `Panel`'s card): the content is then smaller
-    /// than the container's `size`, which a grid would be designed against,
-    /// so it stays absolute.
+    /// `inset` is whether the container insets its content (a `Group`'s frame
+    /// and title): the content is then smaller than the container's `size`,
+    /// which a grid would be designed against, so it stays absolute. A
+    /// `Panel`, card or not, gives its content its whole rectangle.
     pub(super) fn level(
         &mut self,
         parent: Option<&str>,
@@ -147,8 +147,7 @@ impl<'a> Converter<'a> {
                 *group.content = self.level(Some(&v1.name), (width, height), depth + 1, true)?;
             }
             Node::Panel(panel) => {
-                let inset = panel.card;
-                *panel.content = self.level(Some(&v1.name), (width, height), depth + 1, inset)?;
+                *panel.content = self.level(Some(&v1.name), (width, height), depth + 1, false)?;
             }
             _ => {}
         }

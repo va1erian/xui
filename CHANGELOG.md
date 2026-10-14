@@ -365,9 +365,10 @@
   pixels. A grid is padded on every side, so the converted rectangles must
   leave at least the padding right of the last column and below the last row
   (two buttons filling a 144-wide window were squeezed to 67 and 53 wide);
-  otherwise the layout stays `Absolute`. The content of a `Group` and of a
-  card `Panel` is inset, so it stays `Absolute` too (64-wide buttons in a
-  group box were squeezed to 60).
+  otherwise the layout stays `Absolute`. The content of a `Group` is inset by
+  its frame and title, so it stays `Absolute` too (64-wide buttons in a group
+  box were squeezed to 60); a `Panel`'s content, card or not, has the panel's
+  whole rectangle and may still be a grid.
 - `xui-form migrate` no longer drops nodes or overflows the stack on an invalid
   format-1 form. Names that are not unique, a `parent` that does not exist or
   is not a `Panel` or `GroupBox`, a parent cycle and a position that is not an

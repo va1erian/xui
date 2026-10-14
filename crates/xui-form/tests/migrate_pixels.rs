@@ -179,27 +179,34 @@ fn a_plain_panel_has_no_inset_so_its_grid_lands_on_the_v1_pixels() {
 }
 
 #[test]
-fn a_card_panel_is_inset_like_a_group() {
+fn a_card_panel_gives_its_content_the_whole_rectangle_like_a_plain_one() {
+    // A card only draws behind its content: the content is laid out in the
+    // panel's own rectangle (`--report` says "layout at 0,0 size 160x60"), so
+    // a grid designed against the panel's size lands on the v1 pixels.
+    let (a, b) = ((8, 8, 64, 24), (80, 8, 64, 24));
     let text = v1(
         200,
         100,
         &[
-            node("Panel", "card", None, (10, 10, 160, 60), "card = true\n"),
-            button("a", Some("card"), (8, 8, 64, 24)),
-            button("b", Some("card"), (80, 8, 64, 24)),
+            node("Panel", "pane", None, (10, 10, 160, 60), "card = true\n"),
+            button("a", Some("pane"), a),
+            button("b", Some("pane"), b),
         ],
     );
-    let form = from_v1(&text).expect("the form converts").form;
+    let (form, bounds) = laid_out(&text, &["pane", "a", "b"]);
     let Node::Absolute(root) = &form.root else {
         panic!("one node, absolute: {:?}", form.root);
     };
-    let Node::Panel(card) = &root.children[0] else {
+    let Node::Panel(pane) = &root.children[0] else {
         panic!("a panel stays a panel");
     };
-    assert!(card.card);
+    assert!(pane.card, "the card survives the conversion");
     assert!(
-        matches!(&*card.content, Node::Absolute(_)),
+        matches!(&*pane.content, Node::Grid(_)),
         "{:?}",
-        card.content
+        pane.content
     );
+    assert_eq!(bounds[0], px((10, 10, 160, 60)));
+    assert_eq!(bounds[1], px(a));
+    assert_eq!(bounds[2], px(b));
 }
