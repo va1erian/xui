@@ -12,6 +12,7 @@ use crate::theme::Theme;
 
 mod boot;
 mod delivery;
+mod reduced_motion;
 mod runtime;
 mod windows;
 

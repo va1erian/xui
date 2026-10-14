@@ -272,6 +272,10 @@ impl Backend for OffscreenBackend {
         }
     }
 
+    fn prefers_reduced_motion(&self) -> bool {
+        self.prefers_reduced_motion.get()
+    }
+
     fn set_timer(&self, _window: WindowId, _millis: u32) -> TimerId {
         TimerId(0)
     }

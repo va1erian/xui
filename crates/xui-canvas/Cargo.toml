@@ -11,11 +11,11 @@ readme = "README.md"
 default = ["winit-backend"]
 # Everything that needs a windowing system: the `winit`/`softbuffer` window, the
 # optional `glutin`/`glow` GPU seam over `xui-gpu`, the `arboard` clipboard and
-# the `windows` double-click metrics. On by default, so existing users see no
-# change; turn it off (`default-features = false`) on a target without one (such
-# as LazyOS) to build the software painter core alone: `SkiaCanvas`, `Surface`,
-# the text shaper and `OffscreenBackend` over `xui-core`, `tiny-skia` and
-# `cosmic-text`.
+# the `windows` double-click metrics and animation setting. On by default, so
+# existing users see no change; turn it off (`default-features = false`) on a
+# target without one (such as LazyOS) to build the software painter core alone:
+# `SkiaCanvas`, `Surface`, the text shaper, `MonotonicClock` and
+# `OffscreenBackend` over `xui-core`, `tiny-skia` and `cosmic-text`.
 winit-backend = [
     "dep:xui-gpu",
     "dep:winit",
@@ -55,9 +55,10 @@ glutin = { version = "0.32", optional = true }
 
 [target.'cfg(windows)'.dependencies]
 # The only platform API the canvas backend needs: the user's double-click time
-# and distance, which `winit` does not expose. Both live in these two
-# namespaces; no other feature is pulled in. Optional: the double-click code is
-# part of the windowed backend.
+# and distance, and the "animation effects" setting (reduced motion), none of
+# which `winit` exposes. All three live in these two namespaces (the animation
+# query is `SystemParametersInfoW` in `Win32_UI_WindowsAndMessaging`); no other
+# feature is pulled in. Optional: this code is part of the windowed backend.
 windows = { version = "0.62", default-features = false, optional = true, features = [
     "Win32_UI_Input_KeyboardAndMouse",
     "Win32_UI_WindowsAndMessaging",

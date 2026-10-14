@@ -282,6 +282,10 @@ impl Backend for HeadlessBackend {
         }
     }
 
+    fn prefers_reduced_motion(&self) -> bool {
+        self.state.borrow().prefers_reduced_motion
+    }
+
     fn set_timer(&self, _window: WindowId, _millis: u32) -> TimerId {
         let mut state = self.state.borrow_mut();
         let id = state.next_timer;

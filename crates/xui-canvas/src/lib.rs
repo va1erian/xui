@@ -24,6 +24,7 @@
 //! font directories.
 
 mod canvas;
+mod clock;
 mod geometry;
 mod image_cache;
 mod offscreen;
@@ -45,6 +46,7 @@ mod sys;
 #[cfg(feature = "winit-backend")]
 pub use backend::WinitBackend;
 pub use canvas::SkiaCanvas;
+pub use clock::MonotonicClock;
 #[cfg(feature = "winit-backend")]
 pub use gl::{GlError, GlSurface, GlWidget};
 pub use offscreen::OffscreenBackend;

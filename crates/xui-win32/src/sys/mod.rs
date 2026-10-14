@@ -4,6 +4,7 @@
 //! here are safe to call; they encode the pointer/lifetime contracts of the
 //! Win32 APIs they wrap and document each block with a `// SAFETY:` comment.
 
+pub(crate) mod animation;
 pub(crate) mod capture;
 #[cfg(feature = "wgc")]
 pub(crate) mod capture_wgc;

@@ -319,6 +319,10 @@ impl Backend for Win32Backend {
         self.apply_theme(window, theme);
     }
 
+    fn prefers_reduced_motion(&self) -> bool {
+        sys::animation::reduced_motion()
+    }
+
     fn set_timer(&self, window: WindowId, millis: u32) -> TimerId {
         self.windows
             .borrow()
