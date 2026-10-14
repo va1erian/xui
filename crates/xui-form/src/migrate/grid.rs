@@ -2,7 +2,7 @@
 
 //! Recognising rectangles that line up as a grid.
 
-use super::Rect;
+use super::v1::Rect;
 use crate::model::{Grid, Length, Node, Track};
 
 /// Where one rectangle goes in the grid.
@@ -22,6 +22,7 @@ pub(super) struct GridLayout {
     padding: i64,
     /// Whether every column is as wide and the padding is the same on both
     /// sides, so `Fill(1)` columns reproduce the design and also stretch.
+    /// Otherwise the columns are `Fixed`: the design, without stretching.
     even: bool,
     /// One cell per rectangle, in the rectangles' order.
     pub(super) cells: Vec<Cell>,
@@ -79,9 +80,23 @@ pub(super) fn detect(rects: &[Rect], size: (i64, i64)) -> Option<GridLayout> {
         .iter()
         .map(|top| same(rects.iter().filter(|r| r.1 == *top).map(|r| r.3)).flatten())
         .collect::<Option<_>>()?;
-    let column_gaps = (1..lefts.len()).map(|k| lefts[k] - lefts[k - 1] - widths[k - 1]);
-    let row_gaps = (1..tops.len()).map(|r| tops[r] - tops[r - 1] - heights[r - 1]);
-    let gap = same(column_gaps.chain(row_gaps))?.unwrap_or(0);
+    // The coordinates are whatever the file says, so every sum is checked: an
+    // overflow is a form that is not a grid.
+    let column_gaps: Vec<i64> = (1..lefts.len())
+        .map(|k| {
+            lefts[k]
+                .checked_sub(lefts[k - 1])?
+                .checked_sub(widths[k - 1])
+        })
+        .collect::<Option<_>>()?;
+    let row_gaps: Vec<i64> = (1..tops.len())
+        .map(|r| {
+            tops[r]
+                .checked_sub(tops[r - 1])?
+                .checked_sub(heights[r - 1])
+        })
+        .collect::<Option<_>>()?;
+    let gap = same(column_gaps.into_iter().chain(row_gaps))?.unwrap_or(0);
     if gap < 0 || lefts[0] != tops[0] {
         return None;
     }
@@ -99,8 +114,9 @@ pub(super) fn detect(rects: &[Rect], size: (i64, i64)) -> Option<GridLayout> {
         if tops.get(row) != Some(&top) || lefts.get(column) != Some(&left) {
             return None;
         }
-        let right = left + width;
-        let last = (column..lefts.len()).find(|&k| lefts[k] + widths[k] == right)?;
+        let right = left.checked_add(width)?;
+        let last =
+            (column..lefts.len()).find(|&k| lefts[k].checked_add(widths[k]) == Some(right))?;
         cells[index] = Some(Cell {
             order: flow,
             height,
@@ -109,9 +125,18 @@ pub(super) fn detect(rects: &[Rect], size: (i64, i64)) -> Option<GridLayout> {
         column = last + 1;
     }
 
+    // The grid pads all four sides alike and squeezes its columns into what
+    // is left, so it lands on the designed pixels only when the rectangles
+    // leave at least that much room right of the last column and below the
+    // last row. Otherwise the layout stays absolute, which is exact.
     let padding = lefts[0];
-    let right = lefts[lefts.len() - 1] + widths[widths.len() - 1];
-    let even = same(widths.iter().copied()).flatten().is_some() && size.0 - right == padding;
+    let right = lefts[lefts.len() - 1].checked_add(widths[widths.len() - 1])?;
+    let bottom = tops[tops.len() - 1].checked_add(heights[heights.len() - 1])?;
+    let room = (size.0.checked_sub(right)?, size.1.checked_sub(bottom)?);
+    if padding < 0 || room.0 < padding || room.1 < padding {
+        return None;
+    }
+    let even = same(widths.iter().copied()).flatten().is_some() && room.0 == padding;
     Some(GridLayout {
         widths,
         gap,

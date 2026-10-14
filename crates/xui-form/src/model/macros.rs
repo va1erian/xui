@@ -160,11 +160,12 @@ macro_rules! widget {
                 /// The widget's name: the identifier scripts, binders and the
                 /// live form address it by.
                 name: String = String::new(),
-                /// Makes this node a control array of this many elements, named
-                /// `name[0]`, `name[1]`, …; a `{index}` in its text becomes the
-                /// element's index.
+                /// Makes this node a control array of 1 to 1024 elements, named
+                /// `name[0]`, `name[1]`, …; a `{index}` in its text and items
+                /// becomes the element's index. Containers cannot be arrays.
                 array: Option<u32> = None,
-                /// Makes this node one element of the control array `name`.
+                /// Makes this node one element (0 to 1023) of the control array
+                /// `name`. Containers cannot be array elements.
                 index: Option<u32> = None,
                 $( $(#[doc = $pdoc])* $prop : $ty = $default, )*
                 /// Whether the widget is shown.

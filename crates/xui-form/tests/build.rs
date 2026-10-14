@@ -200,3 +200,35 @@ fn a_migrated_grid_lays_out_as_it_was_designed() {
     assert_eq!(bounds[1], Some(Rect::new(8, 40, 56, 64)));
     assert_eq!(bounds[2], Some(Rect::new(120, 40, 168, 64)));
 }
+
+#[test]
+fn an_index_in_the_items_of_an_array_is_replaced_like_one_in_a_text() {
+    let combos = form(
+        r#"Form(root: Column(children: [
+            ComboBox(name: "pick", array: 3, items: ["Choice {index}", "Other"]),
+        ]))"#,
+    );
+    let items = with_form(&combos, BuildOptions::default(), |live| {
+        live.get("pick[2]", "items")
+    });
+    assert_eq!(
+        items,
+        Some(Value::List(vec!["Choice 2".to_owned(), "Other".to_owned()]))
+    );
+}
+
+#[test]
+fn a_range_that_is_not_a_number_does_not_panic_the_build() {
+    // `Slider::set_range` clamps, and `f64::clamp` panics on a NaN bound.
+    // Validation reports it; a build that skipped validation still holds.
+    let sliders = form(
+        r#"Form(root: Column(children: [
+            Slider(name: "s", min: NaN, max: NaN, value: NaN),
+            NumberField(name: "n", min: NaN, max: inf, value: NaN, step: NaN),
+        ]))"#,
+    );
+    with_form(&sliders, BuildOptions::default(), |live| {
+        assert_eq!(live.get("s", "max"), Some(Value::Float(100.0)));
+        assert_eq!(live.get("n", "min"), Some(Value::Float(0.0)));
+    });
+}

@@ -87,3 +87,36 @@ fn the_catalog_serialises_to_json() {
     assert!(json.contains("\"Button\""));
     assert!(json.contains("BottomRight") || json.contains("anchor"));
 }
+
+#[test]
+fn field_types_carry_no_macro_internals() {
+    let json = serde_json::to_value(Catalog::xui()).expect("the catalog serialises");
+    let mut types = Vec::new();
+    collect_types(&json, &mut types);
+    assert!(types.len() > 100, "{} field types", types.len());
+    for ty in &types {
+        assert!(!ty.contains('$'), "{ty}");
+        assert!(!ty.contains(",)"), "{ty}");
+        assert!(!ty.contains("::"), "{ty}");
+    }
+    assert!(types.contains(&"Option<Length>".to_owned()));
+    assert!(types.contains(&"Option<(Length,Length,Length,Length)>".to_owned()));
+}
+
+/// Every `ty` string of a field (a property's `ty` is an object).
+fn collect_types(value: &serde_json::Value, found: &mut Vec<String>) {
+    match value {
+        serde_json::Value::Object(map) => {
+            for (key, value) in map {
+                match value {
+                    serde_json::Value::String(ty) if key == "ty" => found.push(ty.clone()),
+                    other => collect_types(other, found),
+                }
+            }
+        }
+        serde_json::Value::Array(items) => {
+            items.iter().for_each(|item| collect_types(item, found));
+        }
+        _ => {}
+    }
+}

@@ -2,3 +2,6 @@ crates/xui-netsurf/netsurf-sys/vendor/** -text
 crates/xui-netsurf/netsurf-sys/patches/** -text
 # Shell scripts run in bash (WSL, Linux CI), which a CRLF checkout breaks.
 *.sh text eol=lf
+# `xui-form fmt --check` compares bytes: a form is canonical with LF line endings,
+# so a Windows checkout must not turn them into CRLF.
+*.lfm text eol=lf

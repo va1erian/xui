@@ -2,6 +2,7 @@
 
 //! Turning a form's tree into `arrange` builders.
 
+use std::collections::BTreeSet;
 use std::rc::Rc;
 
 use xui_core::app::Ui;
@@ -9,6 +10,7 @@ use xui_core::arrange::{Entry, Layout, LayoutExt, absolute, column, grid, row, w
 use xui_core::layout::Placement;
 
 use super::cx::BuildCx;
+use super::names::Name;
 use super::{Binder, BuildError, BuildOptions, Factories, LiveWidget};
 use crate::model::{Length, Node, Place, Stack, Widget};
 use crate::schema::Catalog;
@@ -25,6 +27,7 @@ pub(super) struct Walk<'a, M: 'static> {
     binder: &'a dyn Binder<M>,
     options: BuildOptions,
     widgets: Vec<Named<M>>,
+    names: BTreeSet<Name>,
 }
 
 impl<'a, M: 'static> Walk<'a, M> {
@@ -42,6 +45,7 @@ impl<'a, M: 'static> Walk<'a, M> {
             binder,
             options,
             widgets: Vec::new(),
+            names: BTreeSet::new(),
         }
     }
 
@@ -142,9 +146,15 @@ impl<'a, M: 'static> Walk<'a, M> {
             })?;
         let mut props = widget.props();
         if let Some(index) = index {
+            // A `{index}` in a text, or in an item of a list, is the
+            // element's index.
+            let index = index.to_string();
+            let replace = |text: &mut String| *text = text.replace("{index}", &index);
             for value in props.values_mut() {
-                if let Value::Text(text) = value {
-                    *text = text.replace("{index}", &index.to_string());
+                match value {
+                    Value::Text(text) => replace(text),
+                    Value::List(items) => items.iter_mut().for_each(replace),
+                    _ => {}
                 }
             }
         }
@@ -169,7 +179,7 @@ impl<'a, M: 'static> Walk<'a, M> {
             pages,
         };
         let created = factory.create(&mut cx);
-        if !widget.name().is_empty() && !self.widgets.iter().any(|(known, ..)| *known == name) {
+        if !widget.name().is_empty() && self.names.insert(Name(name.clone())) {
             self.widgets.push((name, kind.to_owned(), created.widget));
         }
         Ok(created.entry)

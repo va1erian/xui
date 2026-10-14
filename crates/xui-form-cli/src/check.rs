@@ -4,9 +4,10 @@
 
 use std::process::ExitCode;
 
-use xui_form::{Catalog, Diagnostic, Severity};
+use xui_form::{Catalog, Diagnostic};
 
-use crate::args::{self, Args, Failure, Outcome};
+use crate::args::{Args, Failure, Outcome};
+use crate::report;
 
 /// Checks every file named; exits 1 when any has an error.
 pub(crate) fn run(mut args: Args) -> Outcome {
@@ -18,24 +19,27 @@ pub(crate) fn run(mut args: Args) -> Outcome {
     let catalog = Catalog::xui();
     let mut failed = false;
     for file in files {
-        let text = args::read(&file)?;
         let name = file.display();
+        // An unreadable file is that file's error, not the end of the run.
+        let text = match std::fs::read_to_string(&file) {
+            Ok(text) => text,
+            Err(error) => {
+                failed = true;
+                println!("{name}: error: {error}");
+                continue;
+            }
+        };
         let form = match xui_form::load(&text) {
             Ok(form) => form,
             Err(error) => {
                 failed = true;
-                println!(
-                    "{name}:{}:{}: error: {}",
-                    error.line,
-                    error.column,
-                    describe_load(&error)
-                );
+                println!("{}", report::load_error(&name, &error));
                 continue;
             }
         };
         let diagnostics = form.validate(&catalog);
         for diagnostic in &diagnostics {
-            println!("{name}: {}", describe(diagnostic));
+            println!("{}", report::diagnostic(&name, diagnostic));
         }
         failed |= diagnostics.iter().any(Diagnostic::is_error);
         if diagnostics.is_empty() {
@@ -47,26 +51,4 @@ pub(crate) fn run(mut args: Args) -> Outcome {
     } else {
         ExitCode::SUCCESS
     })
-}
-
-/// A load error's message with its suggestion.
-fn describe_load(error: &xui_form::LoadError) -> String {
-    match &error.suggestion {
-        Some(suggestion) => format!("{} (did you mean `{suggestion}`?)", error.message),
-        None => error.message.clone(),
-    }
-}
-
-/// One diagnostic: severity, where, and what.
-fn describe(diagnostic: &Diagnostic) -> String {
-    let severity = match diagnostic.severity {
-        Severity::Error => "error",
-        Severity::Warning => "warning",
-    };
-    let place = match (&diagnostic.node, &diagnostic.property) {
-        (Some(node), _) => format!(" `{node}`:"),
-        (None, Some(property)) => format!(" `{property}`:"),
-        (None, None) => String::new(),
-    };
-    format!("{severity}:{place} {}", diagnostic.message)
 }

@@ -12,7 +12,8 @@
 //!   them, the **schema** ([`Catalog`]) are one definition.
 //! * [`load`] reads a form, reporting a misspelt field or kind with a "did
 //!   you mean"; [`Form::to_ron`] writes it back canonically, defaults
-//!   omitted, byte-stable.
+//!   omitted, byte-stable. A tree nests at most [`MAX_DEPTH`] levels, which
+//!   keeps what is written readable.
 //! * [`Form::validate`] reports every remaining problem as a [`Diagnostic`].
 //! * [`describe`] turns a form into the same `xui_core::arrange` builders
 //!   Rust code writes, and [`build`] mounts them into a [`LiveForm`] whose
@@ -32,16 +33,18 @@
 //! .expect("the form loads");
 //! assert_eq!(form.title, "Hello");
 //! assert!(form.validate(&xui_form::Catalog::xui()).is_empty());
-//! assert!(form.to_ron().starts_with("Form(title: \"Hello\", size: (320, 200), root: Column("));
+//! let text = form.to_ron().expect("a loaded form is written");
+//! assert!(text.starts_with("Form(title: \"Hello\", size: (320, 200), root: Column("));
 //! ```
 //!
-//! A control array is one node with `array: n` (or several with `index: i`):
-//! its elements are `name[0]`, `name[1]`, …, and their events carry the
-//! element's index.
+//! A control array is one widget with `array: n` (or several with `index: i`),
+//! at most [`MAX_ARRAY`] elements: its elements are `name[0]`, `name[1]`, …,
+//! and their events carry the element's index. A container cannot be one.
 
 pub mod build;
 mod codec;
 mod factories;
+mod locate;
 #[cfg(feature = "migrate")]
 pub mod migrate;
 pub mod model;
@@ -55,8 +58,8 @@ pub use build::{
     EventRef, Factories, Handlers, LiveForm, LiveWidget, SetError, WidgetFactory, build,
     build_with, describe,
 };
-pub use codec::{LoadError, format, load};
-pub use model::{FORMAT_VERSION, Form, Node};
+pub use codec::{LoadError, WriteError, format, load};
+pub use model::{FORMAT_VERSION, Form, MAX_ARRAY, MAX_DEPTH, MAX_LENGTH, Node};
 pub use schema::{
     Access, ArgSpec, Catalog, EventSpec, FieldSpec, LayoutSpec, PropertySpec, WidgetSpec,
 };

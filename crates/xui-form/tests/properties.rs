@@ -106,3 +106,26 @@ fn construction_only_properties_are_readable_in_design_mode() {
         assert_eq!(live.controls().kind("list"), Some("ListView"));
     });
 }
+
+#[test]
+fn a_progress_bar_refuses_what_it_would_truncate() {
+    with_form(&form(ALL_KINDS), BuildOptions::default(), |live| {
+        // `4294967296 as i32` is 0: the write used to return Ok and read back
+        // something else.
+        for (prop, value) in [("max", 4_294_967_296), ("value", 2_147_483_648), ("max", 0)] {
+            assert_eq!(
+                live.set("progress", prop, &Value::Int(value)),
+                Err(SetError::TypeMismatch),
+                "{prop} = {value}"
+            );
+        }
+        live.set("progress", "max", &Value::Int(2_147_483_647))
+            .expect("the largest i32 is a maximum");
+        assert_eq!(live.get("progress", "max"), Some(Value::Int(2_147_483_647)));
+        // A range that is not a number is no range either.
+        assert_eq!(
+            live.set("slider", "max", &Value::Float(f64::NAN)),
+            Err(SetError::TypeMismatch)
+        );
+    });
+}

@@ -1,44 +1,9 @@
 //! Every subcommand of the `xui-form` binary, run as a process on files in a
 //! scratch directory. Rendering is headless, so nothing opens a window.
 
-use std::path::{Path, PathBuf};
-use std::process::{Command, Output};
+mod common;
 
-/// A fresh scratch directory for `test`.
-fn scratch(test: &str) -> PathBuf {
-    let dir = Path::new(env!("CARGO_TARGET_TMPDIR"))
-        .join("xui-form-cli")
-        .join(test);
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).expect("the scratch directory is created");
-    dir
-}
-
-/// Runs `xui-form` with `args`.
-fn xui_form(args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_xui-form"))
-        .args(args)
-        .output()
-        .expect("xui-form runs")
-}
-
-fn stdout(output: &Output) -> String {
-    String::from_utf8_lossy(&output.stdout).into_owned()
-}
-
-/// Writes `text` to `dir/name` and returns the path as a string.
-fn file(dir: &Path, name: &str, text: &str) -> String {
-    let path = dir.join(name);
-    std::fs::write(&path, text).expect("the file is written");
-    path.to_string_lossy().into_owned()
-}
-
-const HELLO: &str = r#"Form(title: "Hello", size: (240, 120), root: Column(gap: 8, padding: 16, children: [
-    Edit(name: "name_edit", placeholder: "Your name"),
-    Button(name: "greet_button", text: "Greet"),
-    Label(name: "result_label"),
-]))
-"#;
+use common::{HELLO, file, scratch, stderr, stdout, xui_form};
 
 #[test]
 fn check_passes_a_valid_form_and_fails_a_broken_one() {
@@ -150,6 +115,126 @@ fn migrate_converts_a_format_one_form() {
 }
 
 #[test]
+fn migrate_refuses_a_form_nested_too_deep_and_writes_nothing() {
+    let dir = scratch("migrate-deep");
+    let mut v1 = String::from("format = 1\n[window]\nname = \"deep\"\n");
+    for level in 0..9 {
+        v1.push_str(&format!(
+            "[[node]]\nkind = \"Panel\"\nname = \"panel_{level}\"\nwidth = 180\nheight = 180\n"
+        ));
+        if level > 0 {
+            v1.push_str(&format!("parent = \"panel_{}\"\n", level - 1));
+        }
+    }
+    let source = file(&dir, "deep.lfm", &v1);
+    let out = dir.join("deep-v2.lfm");
+    let output = xui_form(&["migrate", &source, "--out", &out.to_string_lossy()]);
+    assert_eq!(output.status.code(), Some(1));
+    let message = stderr(&output);
+    assert!(message.contains("node `panel_7`"), "{message}");
+    assert!(message.contains("too deeply"), "{message}");
+    assert!(stdout(&output).is_empty(), "nothing is printed");
+    assert!(!out.exists(), "nothing is written");
+}
+
+#[test]
+fn migrate_reports_every_violation_by_node_and_writes_nothing() {
+    let dir = scratch("migrate-invalid");
+    let v1 = file(
+        &dir,
+        "bad.lfm",
+        r#"format = 1
+[window]
+name = "bad"
+[[node]]
+kind = "Button"
+name = "ok_button"
+[[node]]
+kind = "Label"
+name = "inside_button"
+parent = "ok_button"
+[[node]]
+kind = "Panel"
+name = "loop_a"
+parent = "loop_b"
+[[node]]
+kind = "Panel"
+name = "loop_b"
+parent = "loop_a"
+[[node]]
+kind = "Label"
+name = "orphan"
+parent = "nowhere"
+[[node]]
+kind = "Label"
+name = "orphan"
+"#,
+    );
+    let out = dir.join("bad-v2.lfm");
+    let output = xui_form(&["migrate", &v1, "--out", &out.to_string_lossy()]);
+    assert_eq!(output.status.code(), Some(1));
+    let report = stderr(&output);
+    for needle in [
+        "error: node `inside_button`: its parent `ok_button` is a Button",
+        "error: node `loop_a`: it is part of a parent cycle",
+        "error: node `loop_b`: it is part of a parent cycle",
+        "error: node `orphan`: its parent `nowhere` does not exist",
+        "error: node `orphan`: the name is used more than once",
+    ] {
+        assert!(report.contains(needle), "{needle}\n{report}");
+    }
+    assert!(stdout(&output).is_empty());
+    assert!(!out.exists(), "nothing is written");
+}
+
+#[test]
+fn migrate_to_standard_output_prints_nothing_on_a_violation() {
+    let dir = scratch("migrate-invalid-stdout");
+    let v1 = file(
+        &dir,
+        "bad.lfm",
+        "format = 1\n[window]\nname = \"bad\"\n[[node]]\nkind = \"Label\"\nname = \"a\"\nparent = \"a\"\n",
+    );
+    let output = xui_form(&["migrate", &v1]);
+    assert_eq!(output.status.code(), Some(1));
+    assert!(stdout(&output).is_empty(), "{}", stdout(&output));
+}
+
+#[test]
+fn a_huge_control_array_is_reported_and_never_built() {
+    let dir = scratch("array-cap");
+    let huge = file(
+        &dir,
+        "huge.lfm",
+        r#"Form(root: Button(name: "b", array: 100000000))"#,
+    );
+    let output = xui_form(&["check", &huge]);
+    assert_eq!(output.status.code(), Some(1));
+    assert!(
+        stdout(&output).contains("a control array has at most 1024 elements"),
+        "{}",
+        stdout(&output)
+    );
+
+    // `render` validates first, with or without a script, and builds nothing.
+    let script = file(&dir, "huge.rhai", "fn form_load() {}");
+    let out = dir.join("out").to_string_lossy().into_owned();
+    for extra in [vec![], vec!["--script", script.as_str()]] {
+        let mut args = vec!["render", huge.as_str(), "--out", out.as_str()];
+        args.extend(extra);
+        let output = xui_form(&args);
+        assert_eq!(output.status.code(), Some(1));
+        let message = stderr(&output);
+        assert!(
+            message.contains("a control array has at most 1024 elements"),
+            "{message}"
+        );
+        assert!(message.contains("not rendered"), "{message}");
+    }
+    assert!(!dir.join("out").exists(), "no image is written");
+}
+
+#[test]
 fn schema_prints_every_kind_as_json() {
     let output = xui_form(&["schema", "--json"]);
     assert!(output.status.success());
@@ -166,4 +251,45 @@ fn a_misspelt_command_suggests_the_closest() {
     let output = xui_form(&["chek", "form.lfm"]);
     assert_eq!(output.status.code(), Some(2));
     assert!(String::from_utf8_lossy(&output.stderr).contains("did you mean `check`?"));
+}
+
+#[test]
+fn migrate_refuses_a_form_that_would_not_pass_check_and_writes_nothing() {
+    let dir = scratch("migrate-invalid-v2");
+    let v1 = file(
+        &dir,
+        "old.lfm",
+        r#"format = 1
+[window]
+name = "old"
+[[node]]
+kind = "Button"
+name = "form"
+[[node]]
+kind = "Edit"
+name = "my-edit"
+[[node]]
+kind = "Slider"
+name = "level"
+min = 50
+max = 10
+"#,
+    );
+    let out = dir.join("new.lfm");
+    let output = xui_form(&["migrate", &v1, "--out", &out.to_string_lossy()]);
+    assert_eq!(output.status.code(), Some(1));
+    let report = stderr(&output);
+    assert!(
+        report.contains("node `form`: `form` is reserved"),
+        "{report}"
+    );
+    assert!(
+        report.contains("node `my-edit`: `my-edit` is not a valid name"),
+        "{report}"
+    );
+    assert!(
+        report.contains("node `level`: `min` (50) is greater than `max` (10)"),
+        "{report}"
+    );
+    assert!(!out.exists(), "nothing is written");
 }

@@ -122,11 +122,19 @@ impl FieldSpec {
     pub(crate) fn new(name: &str, ty: &str, default: &impl Serialize, doc: &[&str]) -> FieldSpec {
         FieldSpec {
             name: name.to_owned(),
-            ty: ty.split_whitespace().collect(),
+            ty: readable(ty),
             default: crate::codec::to_ron_compact(default),
             description: crate::model::doc(doc),
         }
     }
+}
+
+/// A declared type as the file reads it: `stringify!` of the macro's types
+/// leaves `$crate::model::` paths and the trailing comma of the tuple the
+/// macro writes, neither of which belongs in the schema.
+fn readable(ty: &str) -> String {
+    let spaced: String = ty.split_whitespace().collect();
+    spaced.replace("$crate::model::", "").replace(",)", ")")
 }
 
 /// A widget kind: its runtime properties, its events and its fields.

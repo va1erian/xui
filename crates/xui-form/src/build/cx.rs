@@ -101,9 +101,13 @@ impl<M: 'static> BuildCx<'_, M> {
         self.prop(name).and_then(Value::as_int).unwrap_or(default)
     }
 
-    /// A float property, or `default`.
+    /// A float property, or `default` (also when the value is not finite: a
+    /// `NaN` range cannot be handed to a widget).
     pub fn float(&self, name: &str, default: f64) -> f64 {
-        self.prop(name).and_then(Value::as_float).unwrap_or(default)
+        self.prop(name)
+            .and_then(Value::as_float)
+            .filter(|value| value.is_finite())
+            .unwrap_or(default)
     }
 
     /// A list property, or an empty vector.

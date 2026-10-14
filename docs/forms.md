@@ -39,32 +39,61 @@ Form(title: "Hello", size: (360, 160), root: Column(gap: 8, padding: 16, childre
   `End`, `Stretch`), `span` (in a `Grid`), and `at: (x, y, width, height)`
   with `anchor` (`TopLeft`, …, `BottomRight`, `StretchHorizontal`,
   `StretchVertical`, `Fill`) in an `Absolute` layout.
-- **Defaults are omitted.** Every field has a default and a field equal to
-  it is never written. `Form::to_ron` writes one canonical layout (a fixed
-  `PrettyConfig`: a node per line, its children below it), so a saved file is
-  byte-stable and `xui-form fmt` of a formatted file changes nothing.
-  Comments are not kept.
+- **Defaults are omitted.** Every field has a default and a node's field
+  equal to it is not written (the form's `size` and `root` always are).
+  `Form::to_ron` writes one canonical layout (a fixed `PrettyConfig`: a node
+  per line, its children below it), so a saved file is byte-stable and
+  `xui-form fmt` of a formatted file changes nothing. Comments are not kept.
+- **Limits.** A tree nests at most `MAX_DEPTH` (16) levels, the root node
+  being level 1; a `Group`'s or `Panel`'s content and a `Tabs` page's
+  content are each a level below the container. A length (a width, a gap,
+  a position) is finite and within `MAX_LENGTH` (32768) design units of
+  zero. `load` and `Form::to_ron` use the same limits, so a form that is
+  written always loads again: a deeper tree or a larger length is a located
+  load error, and `to_ron` returns a `WriteError` rather than a file that
+  does not load. `validate` reports them too, and `describe` refuses to
+  build a form that exceeds one (`BuildError::Limit`). A `ProgressBar`'s
+  `value` and `max` hold what an `i32` holds.
 - **Control arrays.** `Button(name: "digit", array: 10, text: "{index}")` is
-  ten buttons, `digit[0]` to `digit[9]`; `{index}` in a text becomes the
-  element's index. Elements placed apart are written one by one with
-  `index: 7`. All elements share one handler, which receives the index.
+  ten buttons, `digit[0]` to `digit[9]`; `{index}` in a text or in an
+  item of a list becomes the element's index. Elements placed apart are written one by one with
+  `index: 7`. All elements share one handler, which receives the index. An
+  array has 1 to `MAX_ARRAY` (1024) elements and an `index` is below that;
+  only widgets can be arrays, not a `Panel`, `Group` or `Tabs`. `validate`
+  reports a larger one, and `describe` refuses to build it.
 
 The node types are plain serde types in `xui::form::model`, declared once by
 macros that also produce the [`Catalog`](#the-schema): the format and the
 schema cannot drift. `xui::form::load` reports a misspelt field or kind with
 its line, column and a "did you mean" (`txt` → `text`, `Colum` → `Column`).
-`Form::validate` reports the rest at once: names that are not identifiers or
-are used twice, clashing control arrays, values out of range (`selected:
--1`), and layout fields the parent ignores (`at` outside an `Absolute`, `span`
-outside a `Grid`).
+`Form::validate` reports the rest at once: names that are not identifiers, are
+used twice or are `form` (a script's name for the form itself), clashing or
+oversized control arrays, values out of range (`selected: -1`), a selection
+past the items or pages, a `min` above its `max`, anything beyond the limits
+above, and layout fields the parent ignores (`at` outside an `Absolute`,
+`span` outside a `Grid`).
 
 A format-1 file (the flat TOML of the first LazyRAD releases) is not loaded
 at runtime: convert it once with `xui-form migrate` (or
 `xui_form::migrate::from_v1`, feature `migrate`). Each container's children
 become an `Absolute` layout with their old rectangles and anchors, or a
 `Grid` when the rectangles line up in rows and columns with one gap and none
-is anchored. A `GroupBox` becomes a `Group`, `cue` becomes `placeholder`, and
-`tab_index` is dropped: the tab order is the tree order.
+is anchored, and the grid reproduces them: its padding is the left and top
+margin and the right and bottom margins are at least as wide, so no column is
+squeezed. The content of a `Group` is inset by its frame and title, so it
+stays an `Absolute` layout (positions in it are relative to the inset
+content); a `Panel`'s content, card or not, has the panel's whole rectangle. A
+`GroupBox` becomes a `Group`, `cue` becomes `placeholder`, and `tab_index` is
+dropped: the tab order is the tree order. What is left out is printed to
+standard error, one note each. A form that is not a tree (a name used twice,
+a `parent` that does not exist or is not a `Panel` or `GroupBox`, a parent
+cycle, a position that is not an integer) is refused whole: each violation
+is printed with its node, nothing is written and the exit status is 1, so no
+node is dropped without a word. The converted form is written, read back and
+validated before it is reported as converted, and one that `check` would
+reject is refused the same way. Each container takes two of the form's 16
+levels (itself and the layout of its content), so a format-1 form converts
+only up to seven nested containers; a deeper one is refused, naming the node.
 
 ## Building a form
 
@@ -116,11 +145,17 @@ without compiling an app, so an agent or a designer can iterate in seconds:
 
 | Command | What it does |
 |---|---|
-| `xui-form check FILE...` | Loads and validates each form: `file:line:col: error: … (did you mean `text`?)` for a load error, `file: error: `node`: …` or `warning:` for each diagnostic, `file: ok` otherwise. Exits 1 when any form has an error. |
-| `xui-form render FILE [--out DIR] [--script F.rhai] [--dpi N] [--overlay] [--report]` | Renders `<name>-light.png` and `<name>-dark.png` headlessly. `--script` runs the script's top-level code and `form_load` first; `--overlay` draws the layout's bounds; `--report` prints `Ui::layout_report` (every rect, with warnings). |
-| `xui-form fmt FILE... [--check]` | Rewrites each form canonically; `--check` only lists the ones that are not, and exits 1 when there are any. |
-| `xui-form migrate FILE [--out F]` | Converts a format-1 (TOML) form to format 2, printing what it dropped to standard error. |
+| `xui-form check FILE...` | Loads and validates each form: `file:line:col: error: … (did you mean `text`?)` for a load error, `file: error: `node`: …` or `warning:` for each diagnostic, `file: ok` otherwise. A file that cannot be read is that file's error: the rest are still checked. Exits 1 when any form has an error. |
+| `xui-form render FILE [--out DIR] [--script F.rhai] [--dpi N] [--overlay] [--report]` | Renders `<name>-light.png` and `<name>-dark.png` headlessly. `--script` runs the script's top-level code and `form_load` first; `--overlay` draws the layout's bounds; `--report` prints `Ui::layout_report` (every rect, with warnings). A form with validation errors is not rendered: the diagnostics are printed instead and the exit status is 1. |
+| `xui-form fmt FILE... [--check]` | Rewrites each form canonically; `--check` only lists the ones that are not, and exits 1 when there are any. Canonical is LF line endings and no byte order mark (`.gitattributes` keeps `*.lfm` LF in a Windows checkout); comments are not kept, and `fmt` says so on standard error when it drops one. A file is replaced in one step, and one that does not load is left as it was. |
+| `xui-form migrate FILE [--out F]` | Converts a format-1 (TOML) form to format 2, printing what it dropped to standard error. A form that is not a tree is refused node by node with exit status 1, and `--out` is never the file being converted. |
 | `xui-form schema --json` | Prints the `Catalog`: every widget with its properties, events and fields, the layouts, and the common, layout, page and form fields. |
+
+`fmt` and `migrate --out` write a temporary file beside the target and rename it
+over the target, so a failure leaves the target as it was and a reader never
+sees half a file. The rename replaces a symlink or a hard link with a regular
+file, does not keep the file's ACLs or attributes, and needs write access to
+its directory; it is not retried.
 
 A misspelt command gets a "did you mean" too. Usage errors exit with
 status 2.

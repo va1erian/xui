@@ -233,3 +233,37 @@ fn the_calculator_example_adds() {
     .expect("the form builds");
     assert_eq!(display, Some(Value::Text("10.0".to_owned())));
 }
+
+#[test]
+fn a_script_cannot_write_a_value_a_widget_would_truncate_or_choke_on() {
+    let doc = xui_form::load(
+        r#"Form(root: Column(children: [
+            Slider(name: "level"), ProgressBar(name: "bar"),
+        ]))"#,
+    )
+    .expect("the form loads");
+    for (code, needle) in [
+        // `NaN` is no bound: `f64::clamp` panics on it.
+        ("fn form_load() { level.max = 0.0 / 0.0; }", "level"),
+        // 4294967296 does not fit the bar's `i32`: it used to be stored as 0
+        // and the write reported success.
+        ("fn form_load() { bar.max = 4294967296; }", "bar"),
+    ] {
+        let error = run(&doc, code, |_| Ok(()), |_script| ()).expect_err(code);
+        let FormError::Script(error) = error else {
+            panic!("a located script error is expected, got {error:?}");
+        };
+        assert_eq!(
+            (error.file.as_str(), error.line),
+            ("frmMain.rhai", 1),
+            "{code}"
+        );
+        assert!(error.message.contains(needle), "{code}: {}", error.message);
+    }
+}
+
+#[test]
+fn the_control_name_scripts_reserve_for_the_form_is_a_reserved_name() {
+    // A control named like the form's own scripting object would hide it.
+    assert!(xui_form::validate::RESERVED_NAMES.contains(&xui_script::form::FORM));
+}

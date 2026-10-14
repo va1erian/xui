@@ -58,12 +58,12 @@ take a screenshot.
 
 | Job | Runner | What it does |
 |---|---|---|
-| `check` | windows-latest | fmt, check, clippy and test on the default features; the `canvas` feature and `xui-canvas` tests; the GL test (`XUI_CANVAS_GL_TEST=1`, skips cleanly with no driver); `cargo test --all-features`; and a smoke run of the `widgets`, `gl`, `demo` and `umbrella` examples with an auto-close |
-| `check-wgc` | windows-latest | the capture feature: check, clippy and test with `--features wgc` |
-| `cross-check` | ubuntu-latest | `cargo check --all-targets`, clippy on `xui-core`, and `xui-core`/`xui-canvas` tests — proving the front layer has no Win32 dependency and the empty backends compile |
-| `cross-check-macos` | macos-latest | check, `xui-core`/`xui-canvas` tests, and the canvas gallery example |
-| `coverage` | windows-latest | `cargo llvm-cov --workspace --all-features`, uploading LCOV to Codecov and as a `coverage-lcov` artifact |
+| `lint` | windows-latest | `cargo fmt --all --check`, then clippy with `-D warnings` on `--all-targets` and again with `--all-features` (the d2d, canvas and wgc backends) |
+| `test` | windows-latest | `cargo test`; `xui-code-editor`'s tests with the `rhai-syntax` feature; the opt-in GL test (`XUI_CANVAS_GL_TEST=1`, skips cleanly with no driver); and a run of the `widgets` example with an auto-close. The all-features test pass runs in `coverage` |
+| `cross-check` | ubuntu-latest | `cargo check --all-targets`, clippy on `xui-core`, the `xui-core`, `xui-code-editor` (`rhai-syntax`) and `xui-canvas` tests — proving the front layer has no Win32 dependency and the empty backends compile — and a `xui-blitz` check for `x86_64-unknown-linux-musl` |
+| `cross-check-macos` | macos-latest | `cargo check --all-targets`, the `xui-core` and `xui-canvas` tests, and a check of the canvas `widgets` example |
 | `snapshots` | ubuntu-latest | `scripts/snapshots.sh`: every example rendered headlessly in light and dark, uploaded as the `snapshots` artifact (not a required check) |
+| `coverage` | windows-latest | `cargo llvm-cov --workspace --all-features`, uploading LCOV to Codecov and as a `coverage-lcov` artifact |
 
 ## Coverage
 
@@ -120,12 +120,12 @@ Treat a surviving mutant as a prompt to strengthen a test, not a per-PR gate.
 
 ## Examples as smoke tests
 
-Every example is compiled by `cargo check --all-targets`. The `check` job also
-*runs* the interactive ones with an auto-close
-(`XUI_DEMO_AUTOCLOSE_MS` / `WIN32UI_DEMO_AUTOCLOSE_MS`) so a panic on startup or
-a paint regression fails CI. When you add an example, give it the same
-auto-close hook — the per-control demos under `crates/xui/examples/controls/`
-are the smallest form.
+Every example is compiled by `cargo check --all-targets`. The `test` job also
+*runs* the `widgets` example with an auto-close (`XUI_DEMO_AUTOCLOSE_MS`;
+`WIN32UI_DEMO_AUTOCLOSE_MS` for the Win32 ones) so a panic on startup or a
+paint regression fails CI, and `snapshots` renders every example headlessly.
+When you add an example, give it the same auto-close hook — the per-control
+demos under `crates/xui/examples/controls/` are the smallest form.
 
 ## Adding a portable widget
 

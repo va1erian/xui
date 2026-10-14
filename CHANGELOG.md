@@ -42,6 +42,33 @@
   otherwise rarely needed now. `group(..)` returns a `GroupBuild` (bindable)
   instead of an `Entry`; `Insets::apply` keeps the result inside the rect
   when the insets are larger than it.
+- **`xui-form`: a form nests at most `MAX_DEPTH` (16) levels, and
+  `Form::to_ron` returns a `Result`.** The reader and the writer share the
+  limit, so a form that is written always loads again. `load` reports a
+  deeper node at its line and column; `to_ron` returns
+  `WriteError::TooDeep` (or `WriteError::Unwritable`) instead of panicking or
+  writing a file `load` rejects; `Form::validate` reports it and `describe`
+  returns the new `BuildError::Limit`. `migrate::from_v1` re-loads its own
+  output and returns the new `MigrateError::Write` when it does not match.
+  Callers of `to_ron` handle the error; forms nested between 17 and about 30
+  levels, which loaded before depending on their shape, no longer load. A
+  container's content that is the default (omitted from a file) is no level.
+  A format-1 form converts only up to seven nested containers: each takes
+  two levels (itself and the layout of its content), so a deeper one is
+  refused by `migrate`, naming the node.
+- **`xui-form`: forms that validated before can fail now, and `render`
+  refuses them.** `Form::validate` (and `xui-form check`) reports as errors a
+  widget named `form` (`validate::RESERVED_NAMES`), a `selected` past the
+  items or pages (a warning for a `ListView`, whose items a script may
+  replace), a `min` above `max`, `array: 0`, `array` or `index` on a `Panel`,
+  `Group` or `Tabs`, an `array` above `MAX_ARRAY` (1024) or an `index` at or
+  past it, a length that is not finite or beyond `MAX_LENGTH` (32768), a
+  `ProgressBar` `value` or `max` outside the `i32` range and a float
+  property that is not finite. `xui-form render` now validates first and
+  renders nothing for a form that has errors (warnings are printed and it
+  goes on); `migrate` validates what it converted and refuses a result
+  `check` would reject. `ValueType::accepts` refuses a float that is not
+  finite, so a script write of `NaN` is a type mismatch.
 
 ### Additions
 
@@ -350,6 +377,57 @@
 
 ### Fixes
 
+- `xui-form` format 2 hardening (the minors of the first review): a length
+  is finite and within `MAX_LENGTH` (32768) design units, so `load` rejects
+  `width: 1e38` (two of them panicked `render` in a debug build) and
+  `Form::to_ron` will not write one. The sums are not bounded by the limit
+  (six `Button(array: 1024, width: 32768)` in a `Wrap(gap: 32768)` panicked
+  `render --dpi 1024`), so `xui-core`'s stack, absolute, wrap and grid
+  layouts saturate their pixel sums at `i32::MAX` instead of overflowing. A
+  `ProgressBar`'s `value` and `max` are bounded to the `i32` range
+  (`max: 4294967296` read back as 1). A `NaN` bound no longer panics a build
+  (`f64::clamp` panics on one in a `Slider`): `ValueType::accepts` refuses a
+  float that is not finite and the build falls back to the default for one.
+  `validate` reports a widget named `form`
+  (`validate::RESERVED_NAMES`), a `selected` past the items or pages and a
+  `min` above `max`. `load` ignores a byte order mark, points a
+  `#`-commented format-1 file at `migrate`, and locates `fill: -1` at its
+  sign; `{index}` is also replaced in the items of a control array.
+- `xui-form` tool: `check` goes on past a file it cannot read, `render`
+  validates and refuses a form with errors (printing the diagnostics),
+  `fmt` replaces a file in one step, leaves one it cannot load as it
+  was and notes the comments it drops, `migrate` refuses `--out` the file it
+  converts, and `schema --json` no longer leaks `$crate::model::` into field
+  types. `*.lfm` is `eol=lf`
+  in `.gitattributes`, so `fmt --check` holds in a Windows checkout.
+- `xui-form migrate` builds a grid only where it lands on the format-1
+  pixels. A grid is padded on every side, so the converted rectangles must
+  leave at least the padding right of the last column and below the last row
+  (two buttons filling a 144-wide window were squeezed to 67 and 53 wide);
+  otherwise the layout stays `Absolute`. The content of a `Group` is inset by
+  its frame and title, so it stays `Absolute` too (64-wide buttons in a group
+  box were squeezed to 60); a `Panel`'s content, card or not, has the panel's
+  whole rectangle and may still be a grid.
+- `xui-form migrate` no longer drops nodes or overflows the stack on an invalid
+  format-1 form. Names that are not unique, a `parent` that does not exist or
+  is not a `Panel` or `GroupBox`, a parent cycle and a position that is not an
+  integer are reported with their node (the new `MigrateError::Invalid`,
+  listing `NodeProblem`s) and nothing is converted; unknown `[window]` and
+  top-level keys are noted like `tab_index`. The grid detection uses checked
+  arithmetic, so extreme coordinates no longer panic in debug builds, and the
+  conversion visits each node once.
+- `xui-form`: control arrays are bounded. `array` is at most
+  `MAX_ARRAY` (1024) and an `index` is below it; `array: 0` and `array` or
+  `index` on a `Panel`, `Group` or `Tabs` are validation errors, and
+  `describe` refuses a form that breaks the cap or repeats a container
+  (`BuildError::Limit`) instead of building it. Name clashes are checked by
+  ranges, a build's name de-duplication is logarithmic rather than
+  quadratic, and `xui-script` no longer grows an array to reach an element's
+  index. `Button(array: 100000000)` took 770 MB to check.
+- `xui-form`: `Form::to_ron` no longer panics near RON's recursion limit
+  (40 nested v1 panels migrated to a panic, 20 to a file `check` rejected),
+  and a hand-written form at the same depth is read and written alike. The
+  deserialiser's stack use is bounded by the depth limit.
 - `ColorPicker` now hit-tests in its own coordinates. Pointer events arrive relative to the node while `Ui::bounds` is relative to the parent, and the picker compared the two, so a picker not at the top-left of its container ignored every click and never showed hover. The same applied to the swatch grid inside `ColorPanel`.
 - `xui-code-editor` now paints text when the highlighter emits no tokens
   (`PlainText`, the default). Previously `paint` drew only token spans, so a

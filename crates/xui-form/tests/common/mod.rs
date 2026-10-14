@@ -109,6 +109,30 @@ pub fn with_form_sized<R>(
     slot.borrow_mut().take().expect("the closure ran")
 }
 
+/// Tries to build `form` offscreen and returns the failure's message, or
+/// `None` when it builds.
+pub fn build_failure(form: &Form) -> Option<String> {
+    let backend: Rc<dyn Backend> = Rc::new(OffscreenBackend::new());
+    let slot: Rc<RefCell<Option<String>>> = Rc::new(RefCell::new(None));
+    let out = Rc::clone(&slot);
+    let spec = PlatformSpec::new("xui-form build failure").size(Dip(320.0), Dip(200.0));
+    run_app(backend, spec, move |ui| {
+        let result = build_with(
+            ui,
+            form,
+            &Factories::xui(),
+            &TestBinder,
+            BuildOptions::default(),
+        );
+        *out.borrow_mut() = result.err().map(|error| error.to_string());
+        TestApp {
+            messages: Rc::new(RefCell::new(Vec::new())),
+        }
+    })
+    .expect("run_app succeeds");
+    slot.borrow_mut().take()
+}
+
 /// Builds `form` offscreen, clicks the middle of each widget in `names` in
 /// turn, and returns the messages the app received.
 pub fn click(form: &Form, options: BuildOptions, names: &[&str]) -> Vec<Msg> {

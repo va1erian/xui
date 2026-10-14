@@ -4,7 +4,7 @@
 //! options.
 
 use std::collections::VecDeque;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// Why a command stopped.
 pub(crate) enum Failure {
@@ -74,19 +74,49 @@ impl Args {
 }
 
 /// Reads `path`, failing with a message that names it.
-pub(crate) fn read(path: &std::path::Path) -> Result<String, Failure> {
+pub(crate) fn read(path: &Path) -> Result<String, Failure> {
     std::fs::read_to_string(path)
         .map_err(|error| Failure::Fatal(format!("{}: {error}", path.display())))
 }
 
-/// Writes `text` to `path`, failing with a message that names it.
-pub(crate) fn write(path: &std::path::Path, text: &str) -> Result<(), Failure> {
-    std::fs::write(path, text)
-        .map_err(|error| Failure::Fatal(format!("{}: {error}", path.display())))
+/// Writes `text` to `path` in one step, failing with a message that names it.
+///
+/// A temporary file beside `path` is written whole and renamed over it, so a
+/// failure (a full disk, an interrupted run) leaves `path` as it was and no
+/// reader sees half a file.
+///
+/// The cost of the rename: it replaces a symlink or a hard link at `path`
+/// with a regular file, does not keep the file's ACLs or attributes, and needs
+/// write access to the directory (not only to the file). It is not retried: a
+/// failure is reported.
+pub(crate) fn write(path: &Path, text: &str) -> Result<(), Failure> {
+    let fail = |error: std::io::Error| Failure::Fatal(format!("{}: {error}", path.display()));
+    let name = path
+        .file_name()
+        .ok_or_else(|| Failure::Fatal(format!("{}: not a file name", path.display())))?;
+    let temporary = path.with_file_name(format!(
+        ".{}.{}.tmp",
+        name.to_string_lossy(),
+        std::process::id()
+    ));
+    std::fs::write(&temporary, text).map_err(fail)?;
+    std::fs::rename(&temporary, path).map_err(|error| {
+        let _ = std::fs::remove_file(&temporary);
+        fail(error)
+    })
+}
+
+/// Whether `a` and `b` are the same file, following links and `..`. A path
+/// that does not exist is no file to be the same.
+pub(crate) fn same_file(a: &Path, b: &Path) -> bool {
+    match (std::fs::canonicalize(a), std::fs::canonicalize(b)) {
+        (Ok(a), Ok(b)) => a == b,
+        _ => false,
+    }
 }
 
 /// Loads the form at `path`, failing with its located error.
-pub(crate) fn load(path: &std::path::Path) -> Result<xui_form::Form, Failure> {
+pub(crate) fn load(path: &Path) -> Result<xui_form::Form, Failure> {
     let text = read(path)?;
     xui_form::load(&text).map_err(|error| Failure::Fatal(format!("{}:{error}", path.display())))
 }
