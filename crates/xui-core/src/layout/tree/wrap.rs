@@ -5,6 +5,9 @@
 //! An item wider than the group gets the whole line, at the group's width.
 //! Items keep their natural width; a `Fill` item is measured like an `Auto`
 //! one, since a line has no leftover space to share.
+//!
+//! Sizes can come from a file, so every sum saturates at the largest `i32`
+//! rather than overflowing.
 
 use super::{Align, Constraints, Group, Item, LeafFn, Out, align_span, clamp_to_caps};
 use crate::geometry::{Rect, Size};
@@ -36,11 +39,14 @@ fn lines<'a, K: Copy>(
         if let Some(room) = room {
             size.width = size.width.min(room);
         }
-        let fits =
-            |line: &Line<'a, K>| room.is_none_or(|room| line.width + gap + size.width <= room);
+        let fits = |line: &Line<'a, K>| {
+            room.is_none_or(|room| {
+                line.width.saturating_add(gap).saturating_add(size.width) <= room
+            })
+        };
         match lines.last_mut() {
             Some(line) if fits(line) => {
-                line.width += gap + size.width;
+                line.width = line.width.saturating_add(gap).saturating_add(size.width);
                 line.height = line.height.max(size.height);
                 line.items.push((item, size));
             }
@@ -68,24 +74,23 @@ pub(super) fn place<K: Copy>(
     let mut top = inner.top;
     for line in lines(&visible, Some(inner.width()), gap, dpi, leaf) {
         let leftover = (inner.width() - line.width).max(0);
-        let mut left = inner.left
-            + match group.justify {
-                Align::Center => leftover / 2,
-                Align::End => leftover,
-                Align::Start | Align::Stretch => 0,
-            };
+        let mut left = inner.left.saturating_add(match group.justify {
+            Align::Center => leftover / 2,
+            Align::End => leftover,
+            Align::Start | Align::Stretch => 0,
+        });
         // Lines past the bottom collapse onto it rather than escape.
         let line_top = top.min(inner.bottom);
-        let bottom = (top + line.height).min(inner.bottom);
+        let bottom = top.saturating_add(line.height).min(inner.bottom);
         for (item, size) in line.items {
             let aligns = item.aligns(group.align);
             let (y0, y1) = align_span(line_top, bottom, size.height, aligns.1);
-            let right = (left + size.width).min(inner.right);
+            let right = left.saturating_add(size.width).min(inner.right);
             let area = clamp_to_caps(item, Rect::new(left, y0, right, y1), aligns, dpi);
             item.place(area, dpi, leaf, out);
-            left += size.width + gap;
+            left = left.saturating_add(size.width).saturating_add(gap);
         }
-        top += line.height + gap;
+        top = top.saturating_add(line.height).saturating_add(gap);
     }
 }
 
@@ -105,9 +110,14 @@ pub(super) fn measure<K: Copy>(
     let visible = group.visible_items(leaf, dpi);
     let lines = lines(&visible, room, gap, dpi, leaf);
     let width = lines.iter().map(|line| line.width).max().unwrap_or(0);
-    let height = lines.iter().map(|line| line.height).sum::<i32>()
-        + gap * (lines.len().saturating_sub(1) as i32);
-    Size::new(width + margins.width, height + margins.height)
+    let height = lines
+        .iter()
+        .fold(0i32, |total, line| total.saturating_add(line.height))
+        .saturating_add(gap.saturating_mul(lines.len().saturating_sub(1) as i32));
+    Size::new(
+        width.saturating_add(margins.width),
+        height.saturating_add(margins.height),
+    )
 }
 
 fn px(value: Dip, dpi: u32) -> i32 {

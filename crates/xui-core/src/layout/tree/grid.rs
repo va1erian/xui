@@ -7,6 +7,9 @@
 //! `Fill`/`Fixed`/`Height` sizing on any of them). Both axes are split by a
 //! [`Stack`], so leftover pixels are shared the same way rows and columns share
 //! them.
+//!
+//! Sizes can come from a file, so every sum saturates at the largest `i32`
+//! rather than overflowing.
 
 use super::{
     Align, Constraints, Group, Item, LeafFn, Out, Sizing, Track, align_both, clamp_to_caps,
@@ -117,6 +120,13 @@ fn row_slots<K: Copy>(
         }
     }
     slots
+}
+
+/// The sum of `sizes`, saturating.
+fn sum(sizes: &[i32]) -> i32 {
+    sizes
+        .iter()
+        .fold(0i32, |total, &size| total.saturating_add(size))
 }
 
 fn fixed_px(slot: StackSlot) -> i32 {
@@ -234,7 +244,10 @@ pub(super) fn measure<K: Copy>(
     let gap = px(group.spacing);
     let margins = group.margins;
     let xs = constraints.max_width.map(|max| {
-        let inner = (max - px(margins.left) - px(margins.right)).max(0);
+        let inner = max
+            .saturating_sub(px(margins.left))
+            .saturating_sub(px(margins.right))
+            .max(0);
         stack(
             StackDirection::Horizontal,
             group.spacing,
@@ -253,7 +266,8 @@ pub(super) fn measure<K: Copy>(
                 None
             }
             None => Some(
-                naturals[cell.column..=last].iter().sum::<i32>() + gap * (cell.span as i32 - 1),
+                sum(&naturals[cell.column..=last])
+                    .saturating_add(gap.saturating_mul(cell.span as i32 - 1)),
             ),
         }
     };
@@ -262,10 +276,14 @@ pub(super) fn measure<K: Copy>(
         .map(fixed_px)
         .collect();
     let along = |sizes: &[i32]| -> i32 {
-        sizes.iter().sum::<i32>() + gap * (sizes.len().saturating_sub(1) as i32)
+        sum(sizes).saturating_add(gap.saturating_mul(sizes.len().saturating_sub(1) as i32))
     };
     Size::new(
-        along(&naturals) + px(margins.left) + px(margins.right),
-        along(&rows) + px(margins.top) + px(margins.bottom),
+        along(&naturals)
+            .saturating_add(px(margins.left))
+            .saturating_add(px(margins.right)),
+        along(&rows)
+            .saturating_add(px(margins.top))
+            .saturating_add(px(margins.bottom)),
     )
 }

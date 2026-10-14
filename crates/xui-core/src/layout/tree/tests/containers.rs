@@ -2,7 +2,9 @@
 
 use super::{leaf, rects};
 use crate::geometry::{Rect, Size};
-use crate::layout::tree::{Align, Group, GroupKind, Item, Sizing, TraceNode, Warning};
+use crate::layout::tree::{
+    Align, Constraints, Group, GroupKind, Item, Sizing, TraceNode, Track, Warning,
+};
 use crate::layout::{Anchor, Insets};
 use crate::units::dip;
 
@@ -135,6 +137,67 @@ fn an_absolute_item_far_out_does_not_overflow_the_pixel_sums() {
         Size::new(i32::MAX, i32::MAX),
         "the design size saturates"
     );
+}
+
+/// Natural sizes come from files, and a form may hold several lengths at the
+/// largest the format allows: line and column sums must not overflow.
+#[test]
+fn a_wrap_of_huge_items_saturates_instead_of_overflowing() {
+    let tree = Group::wrap()
+        .spacing(dip(32768.0))
+        .push(Item::leaf(0))
+        .push(Item::leaf(1))
+        .push(Item::leaf(2));
+    let natural = leaf(
+        &[(0, i32::MAX - 5, 10), (1, i32::MAX - 5, 10), (2, 100, 10)],
+        &[],
+    );
+    // Bounded: every item gets a line (or the one that fits).
+    let placed = tree.compute(Rect::new(0, 0, i32::MAX, 100), 96, &natural);
+    assert_eq!(placed.len(), 3, "all three are placed, none panics");
+    // Unbounded: one line of more than an `i32` holds.
+    assert_eq!(tree.preferred_size(96, &natural).width, i32::MAX);
+    let tall = Group::wrap()
+        .spacing(dip(32768.0))
+        .margins(Insets::all(dip(32768.0)))
+        .push(Item::leaf(0))
+        .push(Item::leaf(1));
+    let rows = leaf(&[(0, 10, i32::MAX - 5), (1, 10, i32::MAX - 5)], &[]);
+    let size = tall.measure(Constraints::unbounded(96).with_width(20), &rows);
+    assert_eq!(
+        size.height,
+        i32::MAX,
+        "two tall lines and their gap saturate"
+    );
+}
+
+#[test]
+fn a_grid_of_huge_cells_saturates_instead_of_overflowing() {
+    let tree = Group::grid(vec![Track::Auto, Track::Auto, Track::Auto])
+        .spacing(dip(32768.0))
+        .margins(Insets::all(dip(32768.0)))
+        .push(Item::leaf(0))
+        .push(Item::leaf(1))
+        .push(Item::leaf(2).span(3))
+        .push(Item::leaf(3))
+        .push(Item::leaf(4));
+    let natural = leaf(
+        &[
+            (0, i32::MAX / 2, i32::MAX / 2),
+            (1, i32::MAX / 2, i32::MAX / 2),
+            (2, 10, 10),
+            (3, 10, i32::MAX / 2),
+            (4, 10, 10),
+        ],
+        &[],
+    );
+    let size = tree.preferred_size(96, &natural);
+    assert_eq!(size, Size::new(i32::MAX, i32::MAX));
+    let placed = tree.compute(Rect::new(0, 0, i32::MAX, i32::MAX), 96, &natural);
+    assert_eq!(placed.len(), 5, "all are placed, none panics");
+    // Bounded measuring splits the columns first, then sums the rows.
+    let bounded = tree.measure(Constraints::unbounded(96).with_width(i32::MAX), &natural);
+    assert_eq!(bounded.height, i32::MAX);
 }
 
 #[test]
