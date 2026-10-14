@@ -12,8 +12,7 @@ use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 use xui_core::backend::{
-    Canvas as _, Event, Painter, ParentRef, PlatformSpec, Result as BackendResult, WidgetId,
-    WindowId,
+    Canvas as _, Event, Painter, PlatformSpec, Result as BackendResult, WidgetId, WindowId,
 };
 use xui_core::router::WidgetHost;
 use xui_core::{Image, Rect, Theme};
@@ -31,7 +30,8 @@ mod tests;
 
 use gl_fallback::GlContent;
 
-use crate::geometry::{absolute_bounds, ancestor_clip, effectively_visible, hit_bounds, intersect};
+use crate::geometry::{absolute_bounds, ancestor_clip, effectively_visible, hit_test, intersect};
+use crate::scene::{Node, Scene};
 use geometry::translate;
 
 /// The default dots-per-inch a surface is rendered at.
@@ -50,18 +50,6 @@ struct OffscreenWindow {
     gl: GlContent,
     /// The last icon the app set with `Backend::set_window_icon`.
     icon: Option<Image>,
-}
-
-struct Node {
-    window: WindowId,
-    parent: ParentRef,
-    bounds: Rect,
-    visible: bool,
-    enabled: bool,
-    text: String,
-    painter: Option<Painter>,
-    /// A clip on this node's descendants, in the node's own coordinates.
-    clip: Option<Rect>,
 }
 
 /// One node to draw in creation order: its painter (if any) and its clip. The
@@ -113,7 +101,7 @@ impl Drop for SurfaceRestore<'_> {
 /// [`OffscreenBackend::set_prefers_reduced_motion`].
 pub struct OffscreenBackend {
     windows: RefCell<HashMap<u64, OffscreenWindow>>,
-    nodes: RefCell<Vec<(WidgetId, Node)>>,
+    nodes: RefCell<Scene>,
     next_window: std::cell::Cell<u64>,
     next_widget: std::cell::Cell<u64>,
     /// The node the pointer is captured by, if any.
@@ -146,7 +134,7 @@ impl OffscreenBackend {
     pub fn new() -> OffscreenBackend {
         OffscreenBackend {
             windows: RefCell::new(HashMap::new()),
-            nodes: RefCell::new(Vec::new()),
+            nodes: RefCell::new(Scene::new()),
             next_window: std::cell::Cell::new(1),
             next_widget: std::cell::Cell::new(1),
             captured: RefCell::new(None),
@@ -297,19 +285,19 @@ impl OffscreenBackend {
             .filter(|(id, node)| node.window == window && effectively_visible(&nodes, *id))
             .filter_map(|(id, node)| {
                 let painter = node.painter.clone();
-                let has_gl = gl.as_ref().is_some_and(|gl| gl.has_node(*id));
+                let has_gl = gl.as_ref().is_some_and(|gl| gl.has_node(id));
                 if painter.is_none() && !has_gl {
                     return None;
                 }
-                let bounds = absolute_bounds(&nodes, *id)?;
-                let clip = ancestor_clip(&nodes, *id);
+                let bounds = absolute_bounds(&nodes, id)?;
+                let clip = ancestor_clip(&nodes, id);
                 if let Some(clip) = clip
                     && intersect(bounds, clip).is_empty()
                 {
                     return None;
                 }
                 Some(Draw {
-                    id: *id,
+                    id,
                     bounds,
                     clip,
                     painter,
@@ -363,12 +351,7 @@ impl OffscreenBackend {
     /// The `winit-backend` feature (with it the [`GlWidget`] seam) is required.
     #[cfg(feature = "winit-backend")]
     pub fn set_gl_content_on<W: crate::gl::GlWidget + 'static>(&self, id: WidgetId, widget: W) {
-        let window = self
-            .nodes
-            .borrow()
-            .iter()
-            .find(|(node_id, _)| *node_id == id)
-            .map(|(_, node)| node.window);
+        let window = self.nodes.borrow().window_of(id);
         if let Some(window) = window
             && let Some(entry) = self.windows.borrow_mut().get_mut(&window.raw())
         {
@@ -379,12 +362,7 @@ impl OffscreenBackend {
     /// Removes the GL content of the node `id`.
     #[cfg(feature = "winit-backend")]
     pub fn clear_gl_content_on(&self, id: WidgetId) {
-        let window = self
-            .nodes
-            .borrow()
-            .iter()
-            .find(|(node_id, _)| *node_id == id)
-            .map(|(_, node)| node.window);
+        let window = self.nodes.borrow().window_of(id);
         if let Some(window) = window
             && let Some(entry) = self.windows.borrow_mut().get_mut(&window.raw())
         {
@@ -397,12 +375,7 @@ impl OffscreenBackend {
         let Some(target) = *self.focused.borrow() else {
             return false;
         };
-        let in_window = self
-            .nodes
-            .borrow()
-            .iter()
-            .any(|(id, node)| *id == target && node.window == window);
-        if !in_window {
+        if self.nodes.borrow().window_of(target) != Some(window) {
             return false;
         }
         let sink = self
@@ -422,7 +395,7 @@ impl OffscreenBackend {
     pub(super) fn forget_focus_if_gone(&self) {
         let mut focused = self.focused.borrow_mut();
         if let Some(id) = *focused
-            && !self.nodes.borrow().iter().any(|(node, _)| *node == id)
+            && !self.nodes.borrow().contains(id)
         {
             *focused = None;
         }
@@ -444,16 +417,7 @@ impl OffscreenBackend {
                 let abs = absolute_bounds(&nodes, id);
                 abs.map(|abs| (id, x - abs.left, y - abs.top))
             }
-            None => {
-                let nodes = self.nodes.borrow();
-                nodes.iter().rev().find_map(|(id, node)| {
-                    if node.window != window {
-                        return None;
-                    }
-                    let abs = hit_bounds(&nodes, *id, x, y)?;
-                    Some((*id, x - abs.left, y - abs.top))
-                })
-            }
+            None => hit_test(&self.nodes.borrow(), window, x, y),
         };
         let Some((target, lx, ly)) = target else {
             return false;
@@ -476,10 +440,6 @@ impl OffscreenBackend {
     }
 
     fn with_node<R>(&self, id: WidgetId, f: impl FnOnce(&mut Node) -> R) -> Option<R> {
-        self.nodes
-            .borrow_mut()
-            .iter_mut()
-            .find(|(node_id, _)| *node_id == id)
-            .map(|(_, node)| f(node))
+        self.nodes.borrow_mut().get_mut(id).map(f)
     }
 }

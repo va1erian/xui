@@ -18,7 +18,8 @@ use xui_core::{Dip, Rect, Theme};
 use crate::Surface;
 use crate::text_layout::CosmicShaper;
 
-use super::{DEFAULT_DPI, Node, UserEvent, WindowState, WinitBackend, app, render};
+use super::{DEFAULT_DPI, UserEvent, WindowState, WinitBackend, app, render};
+use crate::scene::Node;
 
 impl Backend for WinitBackend {
     fn run(&self) -> i32 {
@@ -76,10 +77,7 @@ impl Backend for WinitBackend {
     fn close_window(&self, window: WindowId) {
         self.teardown_window_gl(window);
         self.shared.windows.borrow_mut().remove(&window.raw());
-        self.shared
-            .nodes
-            .borrow_mut()
-            .retain(|(_, node)| node.window != window);
+        self.shared.nodes.borrow_mut().remove_window(window);
         self.shared
             .timers
             .borrow_mut()
@@ -145,54 +143,23 @@ impl Backend for WinitBackend {
         let window = match parent {
             ParentRef::Window(window) => window,
             ParentRef::Widget(widget) => self
-                .shared
-                .nodes
-                .borrow()
-                .iter()
-                .find(|(id, _)| *id == widget)
-                .map(|(_, node)| node.window)
+                .window_of(widget)
                 .ok_or(BackendError::CreateFailed("parent node"))?,
         };
         if !self.shared.windows.borrow().contains_key(&window.raw()) {
             return Err(BackendError::CreateFailed("window"));
         }
         let id = WidgetId::from_raw(Self::allocate(&self.shared.next_widget));
-        self.shared.nodes.borrow_mut().push((
-            id,
-            Node {
-                window,
-                parent,
-                bounds: spec.bounds,
-                visible: spec.visible,
-                enabled: spec.enabled,
-                text: spec.text.clone(),
-                painter: None,
-                drag_region: false,
-                clip: None,
-            },
-        ));
+        let mut node = Node::new(window, parent, spec.bounds);
+        node.visible = spec.visible;
+        node.enabled = spec.enabled;
+        node.text = spec.text.clone();
+        self.shared.nodes.borrow_mut().insert(id, node);
         Ok(id)
     }
 
     fn destroy(&self, id: WidgetId) {
-        let mut nodes = self.shared.nodes.borrow_mut();
-        nodes.retain(|(node_id, _)| *node_id != id);
-        loop {
-            let gone: Vec<WidgetId> = nodes
-                .iter()
-                .filter(|(_, node)| match node.parent {
-                    ParentRef::Window(window) => {
-                        !self.shared.windows.borrow().contains_key(&window.raw())
-                    }
-                    ParentRef::Widget(parent) => !nodes.iter().any(|(id, _)| *id == parent),
-                })
-                .map(|(id, _)| *id)
-                .collect();
-            if gone.is_empty() {
-                break;
-            }
-            nodes.retain(|(id, _)| !gone.contains(id));
-        }
+        self.shared.nodes.borrow_mut().remove(id);
     }
 
     fn apply_moves(&self, window: WindowId, moves: &[(WidgetId, Rect)]) {
@@ -200,7 +167,7 @@ impl Backend for WinitBackend {
         {
             let mut nodes = self.shared.nodes.borrow_mut();
             for (id, rect) in moves {
-                if let Some((_, node)) = nodes.iter_mut().find(|(node_id, _)| node_id == id) {
+                if let Some(node) = nodes.get_mut(*id) {
                     if node.bounds.size() != rect.size() {
                         resized.push((*id, *rect));
                     }
@@ -232,11 +199,7 @@ impl Backend for WinitBackend {
     }
 
     fn raise(&self, id: WidgetId) {
-        let mut nodes = self.shared.nodes.borrow_mut();
-        if let Some(at) = nodes.iter().position(|(node_id, _)| *node_id == id) {
-            let entry = nodes.remove(at);
-            nodes.push(entry);
-        }
+        self.shared.nodes.borrow_mut().raise(id);
     }
 
     fn set_drag_region(&self, id: WidgetId, drag: bool) {
@@ -266,13 +229,7 @@ impl Backend for WinitBackend {
     }
 
     fn focus(&self, id: WidgetId) {
-        let window = self
-            .shared
-            .nodes
-            .borrow()
-            .iter()
-            .find(|(node_id, _)| *node_id == id)
-            .map(|(_, node)| node.window);
+        let window = self.window_of(id);
         let Some(window) = window else {
             return;
         };
@@ -301,9 +258,8 @@ impl Backend for WinitBackend {
         self.shared
             .nodes
             .borrow()
-            .iter()
-            .find(|(node_id, _)| *node_id == id)
-            .map(|(_, node)| node.text.clone())
+            .get(id)
+            .map(|node| node.text.clone())
             .unwrap_or_default()
     }
 
@@ -319,9 +275,8 @@ impl Backend for WinitBackend {
         self.shared
             .nodes
             .borrow()
-            .iter()
-            .find(|(node_id, _)| *node_id == id)
-            .map_or(Rect::default(), |(_, node)| node.bounds)
+            .get(id)
+            .map_or(Rect::default(), |node| node.bounds)
     }
 
     fn invalidate(&self, id: WidgetId) {

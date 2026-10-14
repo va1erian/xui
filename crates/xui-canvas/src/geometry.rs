@@ -1,44 +1,30 @@
 #![forbid(unsafe_code)]
 
 //! Node geometry traversal shared by the windowed compositor and the offscreen
-//! backend: a node's window-absolute bounds and the clip its ancestors impose.
+//! backend: a node's window-absolute bounds, the clip its ancestors impose,
+//! its effective visibility and the hit test, all over a [`Scene`].
 //!
 //! It lives at the crate root, not under `backend`, so the offscreen backend
 //! (which compiles with the `winit-backend` feature off) can share it without
-//! pulling in the windowed modules. Each backend implements [`GeometryNode`]
-//! for its own node type.
+//! pulling in the windowed modules.
 
-use xui_core::backend::{ParentRef, WidgetId};
+use xui_core::backend::{ParentRef, WidgetId, WindowId};
 use xui_core::geometry::{Point, Rect};
 
-/// The placement facts the geometry traversal needs from a node, so the
-/// windowed and offscreen nodes share one walk.
-pub(crate) trait GeometryNode {
-    /// The node this one is placed relative to.
-    fn parent(&self) -> ParentRef;
-    /// This node's bounds, relative to its parent.
-    fn bounds(&self) -> Rect;
-    /// A clip on this node's descendants, in this node's own coordinate space.
-    fn clip(&self) -> Option<Rect>;
-    /// Whether this node itself is visible (ignoring its ancestors).
-    fn visible(&self) -> bool;
-    /// Whether this node itself is enabled (ignoring its ancestors).
-    fn enabled(&self) -> bool;
-}
+use crate::scene::{Node, Scene};
 
 /// The window-absolute bounds of `id`, walking its parent chain.
-pub(crate) fn absolute_bounds<N: GeometryNode>(
-    nodes: &[(WidgetId, N)],
-    id: WidgetId,
-) -> Option<Rect> {
-    let (_, node) = nodes.iter().find(|(node_id, _)| *node_id == id)?;
-    Some(match node.parent() {
-        ParentRef::Window(_) => node.bounds(),
-        ParentRef::Widget(parent) => {
-            let outer = absolute_bounds(nodes, parent)?;
-            node.bounds().offset(outer.left, outer.top)
-        }
-    })
+pub(crate) fn absolute_bounds(scene: &Scene, id: WidgetId) -> Option<Rect> {
+    let node = scene.get(id)?;
+    let (mut left, mut top) = (0, 0);
+    let mut parent = node.parent;
+    while let ParentRef::Widget(parent_id) = parent {
+        let ancestor = scene.get(parent_id)?;
+        left += ancestor.bounds.left;
+        top += ancestor.bounds.top;
+        parent = ancestor.parent;
+    }
+    Some(node.bounds.offset(left, top))
 }
 
 /// The intersection of two rectangles.
@@ -51,39 +37,42 @@ pub(crate) fn intersect(a: Rect, b: Rect) -> Rect {
     )
 }
 
-/// The clip on `id`'s painting from its ancestors' [`GeometryNode::clip`]s, in
+/// `clip`, a clip in a node's own coordinates, in window coordinates, given
+/// the node's window-absolute bounds `origin`.
+pub(crate) fn lift(clip: Rect, origin: Rect) -> Rect {
+    Rect::new(
+        origin.left + clip.left,
+        origin.top + clip.top,
+        origin.left + clip.right,
+        origin.top + clip.bottom,
+    )
+}
+
+/// The clip on `id`'s painting from its ancestors' clips ([`Node::clip`]), in
 /// window coordinates, or `None` when no ancestor clips it.
 ///
 /// A node's clip is in that node's own coordinate space, so it is lifted to
 /// window coordinates with the node's absolute origin; descendants intersect
 /// every ancestor's clip.
-pub(crate) fn ancestor_clip<N: GeometryNode>(
-    nodes: &[(WidgetId, N)],
-    id: WidgetId,
-) -> Option<Rect> {
-    let (_, node) = nodes.iter().find(|(node_id, _)| *node_id == id)?;
+pub(crate) fn ancestor_clip(scene: &Scene, id: WidgetId) -> Option<Rect> {
+    let node = scene.get(id)?;
     let mut clip: Option<Rect> = None;
-    let mut parent = node.parent();
+    let mut parent = node.parent;
     while let ParentRef::Widget(parent_id) = parent {
-        let Some((_, ancestor)) = nodes.iter().find(|(node_id, _)| *node_id == parent_id) else {
+        let Some(ancestor) = scene.get(parent_id) else {
             break;
         };
-        let Some(origin) = absolute_bounds(nodes, parent_id) else {
+        let Some(origin) = absolute_bounds(scene, parent_id) else {
             break;
         };
-        if let Some(local) = ancestor.clip() {
-            let rect = Rect::new(
-                origin.left + local.left,
-                origin.top + local.top,
-                origin.left + local.right,
-                origin.top + local.bottom,
-            );
+        if let Some(local) = ancestor.clip {
+            let rect = lift(local, origin);
             clip = Some(match clip {
                 Some(current) => intersect(current, rect),
                 None => rect,
             });
         }
-        parent = ancestor.parent();
+        parent = ancestor.parent;
     }
     clip
 }
@@ -91,33 +80,29 @@ pub(crate) fn ancestor_clip<N: GeometryNode>(
 /// Whether `id` is visible through its whole ancestry: its own flag and every
 /// ancestor's. A node under a hidden ancestor is not composited, matching the
 /// Win32 child-window cascade.
-pub(crate) fn effectively_visible<N: GeometryNode>(nodes: &[(WidgetId, N)], id: WidgetId) -> bool {
-    ancestry_allows(nodes, id, GeometryNode::visible)
+pub(crate) fn effectively_visible(scene: &Scene, id: WidgetId) -> bool {
+    ancestry_allows(scene, id, |node| node.visible)
 }
 
 /// Whether `id` is enabled through its whole ancestry: its own flag and every
 /// ancestor's. A disabled container disables its children, as a disabled parent
 /// window does on Win32.
-pub(crate) fn effectively_enabled<N: GeometryNode>(nodes: &[(WidgetId, N)], id: WidgetId) -> bool {
-    ancestry_allows(nodes, id, GeometryNode::enabled)
+pub(crate) fn effectively_enabled(scene: &Scene, id: WidgetId) -> bool {
+    ancestry_allows(scene, id, |node| node.enabled)
 }
 
 /// Whether `id` and every ancestor satisfy `flag`, or `false` when a node on
 /// the chain is missing.
-fn ancestry_allows<N: GeometryNode>(
-    nodes: &[(WidgetId, N)],
-    id: WidgetId,
-    flag: impl Fn(&N) -> bool,
-) -> bool {
+fn ancestry_allows(scene: &Scene, id: WidgetId, flag: impl Fn(&Node) -> bool) -> bool {
     let mut current = Some(id);
     while let Some(node_id) = current {
-        let Some((_, node)) = nodes.iter().find(|(candidate, _)| *candidate == node_id) else {
+        let Some(node) = scene.get(node_id) else {
             return false;
         };
         if !flag(node) {
             return false;
         }
-        current = match node.parent() {
+        current = match node.parent {
             ParentRef::Window(_) => None,
             ParentRef::Widget(parent) => Some(parent),
         };
@@ -128,23 +113,18 @@ fn ancestry_allows<N: GeometryNode>(
 /// The window-absolute bounds of `id` for hit-testing `(x, y)`, or `None` when
 /// `id` is not [effectively visible](effectively_visible) and
 /// [enabled](effectively_enabled), the point is outside those bounds, or it
-/// falls outside an ancestor's [`GeometryNode::clip`]. The windowed and
-/// offscreen hit tests share this so both agree with the paint path.
-pub(crate) fn hit_bounds<N: GeometryNode>(
-    nodes: &[(WidgetId, N)],
-    id: WidgetId,
-    x: i32,
-    y: i32,
-) -> Option<Rect> {
-    if !effectively_visible(nodes, id) || !effectively_enabled(nodes, id) {
+/// falls outside an ancestor's clip. The windowed and offscreen hit tests share
+/// this so both agree with the paint path.
+pub(crate) fn hit_bounds(scene: &Scene, id: WidgetId, x: i32, y: i32) -> Option<Rect> {
+    if !effectively_visible(scene, id) || !effectively_enabled(scene, id) {
         return None;
     }
-    let bounds = absolute_bounds(nodes, id)?;
+    let bounds = absolute_bounds(scene, id)?;
     let point = Point::new(x, y);
     if !bounds.contains(point) {
         return None;
     }
-    if let Some(clip) = ancestor_clip(nodes, id)
+    if let Some(clip) = ancestor_clip(scene, id)
         && !clip.contains(point)
     {
         return None;
@@ -152,141 +132,168 @@ pub(crate) fn hit_bounds<N: GeometryNode>(
     Some(bounds)
 }
 
+/// The topmost node of `window` under `(x, y)` in window coordinates, with
+/// the point translated into that node's own client coordinates.
+pub(crate) fn hit_test(
+    scene: &Scene,
+    window: WindowId,
+    x: i32,
+    y: i32,
+) -> Option<(WidgetId, i32, i32)> {
+    scene.iter().rev().find_map(|(id, node)| {
+        if node.window != window {
+            return None;
+        }
+        let abs = hit_bounds(scene, id, x, y)?;
+        Some((id, x - abs.left, y - abs.top))
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use xui_core::backend::WindowId;
 
-    struct TestNode {
-        parent: ParentRef,
-        bounds: Rect,
-        clip: Option<Rect>,
-        visible: bool,
-        enabled: bool,
+    fn node(parent: ParentRef, bounds: Rect) -> Node {
+        Node::new(WindowId::from_raw(1), parent, bounds)
     }
 
-    impl GeometryNode for TestNode {
-        fn parent(&self) -> ParentRef {
-            self.parent
-        }
-
-        fn bounds(&self) -> Rect {
-            self.bounds
-        }
-
-        fn clip(&self) -> Option<Rect> {
-            self.clip
-        }
-
-        fn visible(&self) -> bool {
-            self.visible
-        }
-
-        fn enabled(&self) -> bool {
-            self.enabled
-        }
+    fn window() -> ParentRef {
+        ParentRef::Window(WindowId::from_raw(1))
     }
 
-    fn node(parent: ParentRef, bounds: Rect) -> TestNode {
-        TestNode {
-            parent,
-            bounds,
-            clip: None,
-            visible: true,
-            enabled: true,
-        }
+    /// A panel at (100, 50) with a child at (5, 7) inside it.
+    fn nested() -> (Scene, WidgetId, WidgetId) {
+        let (panel, child) = (WidgetId::from_raw(10), WidgetId::from_raw(11));
+        let mut scene = Scene::new();
+        scene.insert(panel, node(window(), Rect::new(100, 50, 200, 90)));
+        scene.insert(
+            child,
+            node(ParentRef::Widget(panel), Rect::new(5, 7, 25, 17)),
+        );
+        (scene, panel, child)
+    }
+
+    #[test]
+    fn nested_offsets_accumulate_to_window_coordinates() {
+        let (scene, panel, child) = nested();
+        assert_eq!(
+            absolute_bounds(&scene, panel),
+            Some(Rect::new(100, 50, 200, 90))
+        );
+        assert_eq!(
+            absolute_bounds(&scene, child),
+            Some(Rect::new(105, 57, 125, 67))
+        );
     }
 
     #[test]
     fn visibility_cascades_through_ancestors() {
-        let window = WindowId::from_raw(1);
-        let panel = WidgetId::from_raw(10);
-        let child = WidgetId::from_raw(11);
-        let mut panel_node = node(ParentRef::Window(window), Rect::new(0, 0, 50, 50));
-        panel_node.visible = false;
-        let nodes = vec![
-            (panel, panel_node),
-            (
-                child,
-                node(ParentRef::Widget(panel), Rect::new(5, 5, 10, 10)),
-            ),
-        ];
-
+        let (mut scene, panel, child) = nested();
+        scene.get_mut(panel).unwrap().visible = false;
         assert!(
-            !effectively_visible(&nodes, child),
+            !effectively_visible(&scene, child),
             "the hidden panel hides its child"
         );
     }
 
     #[test]
     fn enabled_cascades_through_ancestors() {
-        let window = WindowId::from_raw(1);
-        let panel = WidgetId::from_raw(10);
-        let child = WidgetId::from_raw(11);
-        let mut panel_node = node(ParentRef::Window(window), Rect::new(0, 0, 50, 50));
-        panel_node.enabled = false;
-        let nodes = vec![
-            (panel, panel_node),
-            (
-                child,
-                node(ParentRef::Widget(panel), Rect::new(5, 5, 10, 10)),
-            ),
-        ];
-
+        let (mut scene, panel, child) = nested();
+        scene.get_mut(panel).unwrap().enabled = false;
         assert!(
-            effectively_visible(&nodes, child),
+            effectively_visible(&scene, child),
             "visibility is unaffected"
         );
         assert!(
-            !effectively_enabled(&nodes, child),
+            !effectively_enabled(&scene, child),
             "the disabled panel disables its child"
         );
     }
 
     #[test]
     fn hit_testing_rejects_a_child_under_a_hidden_ancestor() {
-        let window = WindowId::from_raw(1);
-        let panel = WidgetId::from_raw(10);
-        let child = WidgetId::from_raw(11);
-        let mut panel_node = node(ParentRef::Window(window), Rect::new(0, 0, 50, 50));
-        panel_node.visible = false;
-        let nodes = vec![
-            (panel, panel_node),
-            (
-                child,
-                node(ParentRef::Widget(panel), Rect::new(5, 5, 10, 10)),
-            ),
-        ];
-
+        let (mut scene, panel, child) = nested();
+        scene.get_mut(panel).unwrap().visible = false;
         assert!(
-            hit_bounds(&nodes, child, 8, 8).is_none(),
+            hit_bounds(&scene, child, 108, 60).is_none(),
             "the hidden ancestor's child is not a hit target"
         );
     }
 
     #[test]
-    fn hit_testing_observes_ancestor_clips() {
-        let window = WindowId::from_raw(1);
-        let view = WidgetId::from_raw(20);
-        let child = WidgetId::from_raw(21);
-        let mut view_node = node(ParentRef::Window(window), Rect::new(0, 0, 100, 80));
+    fn an_ancestors_clip_bounds_a_childs_painted_area() {
+        let (view, child) = (WidgetId::from_raw(20), WidgetId::from_raw(21));
+        let mut scene = Scene::new();
+        let mut view_node = node(window(), Rect::new(0, 0, 100, 80));
         // The view clips its descendants to a 10px band at its top.
         view_node.clip = Some(Rect::new(0, 0, 100, 10));
-        let nodes = vec![
-            (view, view_node),
-            (
-                child,
-                node(ParentRef::Widget(view), Rect::new(0, 0, 100, 40)),
-            ),
-        ];
+        scene.insert(view, view_node);
+        scene.insert(
+            child,
+            node(ParentRef::Widget(view), Rect::new(0, 5, 100, 40)),
+        );
+
+        let clip = ancestor_clip(&scene, child).expect("the child is clipped");
+        let bounds = absolute_bounds(&scene, child).unwrap();
+        assert_eq!(
+            intersect(bounds, clip),
+            Rect::new(0, 5, 100, 10),
+            "the child's bounds are chopped to the view's clip"
+        );
+    }
+
+    #[test]
+    fn a_child_outside_its_ancestors_clip_has_nothing_to_paint() {
+        let (view, child) = (WidgetId::from_raw(30), WidgetId::from_raw(31));
+        let mut scene = Scene::new();
+        let mut view_node = node(window(), Rect::new(0, 0, 100, 80));
+        view_node.clip = Some(Rect::new(0, 0, 100, 10));
+        scene.insert(view, view_node);
+        scene.insert(
+            child,
+            node(ParentRef::Widget(view), Rect::new(0, 20, 100, 40)),
+        );
+
+        let clip = ancestor_clip(&scene, child).expect("the child is clipped");
+        let bounds = absolute_bounds(&scene, child).unwrap();
+        assert!(intersect(bounds, clip).is_empty());
+    }
+
+    #[test]
+    fn hit_testing_observes_ancestor_clips() {
+        let (view, child) = (WidgetId::from_raw(20), WidgetId::from_raw(21));
+        let mut scene = Scene::new();
+        let mut view_node = node(window(), Rect::new(0, 0, 100, 80));
+        view_node.clip = Some(Rect::new(0, 0, 100, 10));
+        scene.insert(view, view_node);
+        scene.insert(
+            child,
+            node(ParentRef::Widget(view), Rect::new(0, 0, 100, 40)),
+        );
 
         assert!(
-            hit_bounds(&nodes, child, 50, 5).is_some(),
+            hit_bounds(&scene, child, 50, 5).is_some(),
             "inside the clip"
         );
         assert!(
-            hit_bounds(&nodes, child, 50, 20).is_none(),
+            hit_bounds(&scene, child, 50, 20).is_none(),
             "below the clip is not a hit target"
+        );
+    }
+
+    #[test]
+    fn the_topmost_node_under_the_point_wins_with_local_coordinates() {
+        let (mut scene, panel, child) = nested();
+        let on_top = WidgetId::from_raw(12);
+        scene.insert(on_top, node(window(), Rect::new(100, 50, 140, 70)));
+        let window_id = WindowId::from_raw(1);
+        assert_eq!(hit_test(&scene, window_id, 110, 60), Some((on_top, 10, 10)));
+        scene.raise(child);
+        scene.raise(panel);
+        assert_eq!(
+            hit_test(&scene, window_id, 110, 60),
+            Some((panel, 10, 10)),
+            "a raised node is hit first"
         );
     }
 }

@@ -30,6 +30,7 @@ mod image_cache;
 mod offscreen;
 mod paint;
 mod region;
+mod scene;
 pub mod snapshot;
 mod text;
 mod text_layout;

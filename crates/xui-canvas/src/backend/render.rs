@@ -75,19 +75,19 @@ pub(super) fn composite(shared: &Shared, window: WindowId, surface: &mut Surface
             .filter(|(id, node)| node.window == window && effectively_visible(&nodes, *id))
             .filter_map(|(id, node)| {
                 let painter = node.painter.clone();
-                let gl = gl_nodes.is_some_and(|nodes| nodes.contains_key(id));
+                let gl = gl_nodes.is_some_and(|nodes| nodes.contains_key(&id));
                 if painter.is_none() && !gl {
                     return None;
                 }
-                let bounds = absolute_bounds(&nodes, *id)?;
-                let clip = ancestor_clip(&nodes, *id);
+                let bounds = absolute_bounds(&nodes, id)?;
+                let clip = ancestor_clip(&nodes, id);
                 if let Some(clip) = clip
                     && intersect(bounds, clip).is_empty()
                 {
                     return None;
                 }
                 Some(NodeDraw {
-                    id: *id,
+                    id,
                     bounds,
                     clip,
                     painter,
@@ -184,103 +184,4 @@ fn render_image(
         |gl| widget.paint_gl(gl, bounds, &theme),
         |gl| widget.gl_teardown(gl),
     )
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::backend::Node;
-    use xui_core::backend::{ParentRef, WidgetId, WindowId};
-
-    fn node(window: WindowId, parent: ParentRef, bounds: Rect) -> Node {
-        Node {
-            window,
-            parent,
-            bounds,
-            visible: true,
-            enabled: true,
-            text: String::new(),
-            painter: None,
-            drag_region: false,
-            clip: None,
-        }
-    }
-
-    #[test]
-    fn nested_offsets_accumulate_to_window_coordinates() {
-        let window = WindowId::from_raw(1);
-        let panel = WidgetId::from_raw(10);
-        let child = WidgetId::from_raw(11);
-        let nodes = vec![
-            (
-                panel,
-                node(
-                    window,
-                    ParentRef::Window(window),
-                    Rect::new(100, 50, 200, 90),
-                ),
-            ),
-            (
-                child,
-                node(window, ParentRef::Widget(panel), Rect::new(5, 7, 25, 17)),
-            ),
-        ];
-
-        assert_eq!(
-            absolute_bounds(&nodes, panel),
-            Some(Rect::new(100, 50, 200, 90))
-        );
-        assert_eq!(
-            absolute_bounds(&nodes, child),
-            Some(Rect::new(105, 57, 125, 67))
-        );
-    }
-
-    #[test]
-    fn an_ancestors_clip_bounds_a_childs_painted_area() {
-        let window = WindowId::from_raw(1);
-        let view = WidgetId::from_raw(20);
-        let child = WidgetId::from_raw(21);
-        let mut view_node = node(window, ParentRef::Window(window), Rect::new(0, 0, 100, 80));
-        // The view clips its descendants to a 10px band at its top.
-        view_node.clip = Some(Rect::new(0, 0, 100, 10));
-        let nodes = vec![
-            (view, view_node),
-            (
-                child,
-                node(window, ParentRef::Widget(view), Rect::new(0, 5, 100, 40)),
-            ),
-        ];
-
-        let clip = ancestor_clip(&nodes, child).expect("the child is clipped");
-        let bounds = absolute_bounds(&nodes, child).unwrap();
-        assert_eq!(
-            intersect(bounds, clip),
-            Rect::new(0, 5, 100, 10),
-            "the child's bounds are chopped to the view's clip"
-        );
-    }
-
-    #[test]
-    fn a_child_outside_its_ancestors_clip_is_culled() {
-        let window = WindowId::from_raw(1);
-        let view = WidgetId::from_raw(30);
-        let child = WidgetId::from_raw(31);
-        let mut view_node = node(window, ParentRef::Window(window), Rect::new(0, 0, 100, 80));
-        view_node.clip = Some(Rect::new(0, 0, 100, 10));
-        let nodes = vec![
-            (view, view_node),
-            (
-                child,
-                node(window, ParentRef::Widget(view), Rect::new(0, 20, 100, 40)),
-            ),
-        ];
-
-        let clip = ancestor_clip(&nodes, child).expect("the child is clipped");
-        let bounds = absolute_bounds(&nodes, child).unwrap();
-        assert!(
-            intersect(bounds, clip).is_empty(),
-            "a child entirely below the clip is culled"
-        );
-    }
 }

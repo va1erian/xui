@@ -184,7 +184,7 @@ fn rescale_nodes(shared: &Shared, raw: u64, ratio: f32) {
     if (ratio - 1.0).abs() < f32::EPSILON {
         return;
     }
-    for (_, node) in shared.nodes.borrow_mut().iter_mut() {
+    for node in shared.nodes.borrow_mut().nodes_mut() {
         if node.window.raw() == raw {
             node.bounds = scale_rect(node.bounds, ratio);
         }
