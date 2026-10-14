@@ -72,25 +72,23 @@ impl SkiaCanvas<'_> {
             .map_or(mapped, |clip| intersect(mapped, clip.bounds()))
     }
 
-    /// The transform from surface to pixmap coordinates, applied by tiny-skia
-    /// after a shape is built and stroked: shapes are computed in surface
-    /// coordinates whatever the pixmap, so a [`Region`](crate::Region)'s
-    /// scratch pixmap rasterises exactly the outline a whole-surface paint
-    /// does, shifted by whole pixels.
-    pub(super) fn shift(&self) -> Transform {
-        let (ox, oy) = self.origin;
-        Transform::from_translate(-ox as f32, -oy as f32)
+    /// `rect` trimmed to the region being repainted: the pixels outside it are
+    /// not copied back, so a rectangle fill need not rasterise them. Exact
+    /// for an axis-aligned integer rectangle, whatever shader fills it.
+    pub(super) fn scissored(&self, rect: Rect) -> Rect {
+        self.scissor
+            .map_or(rect, |scissor| intersect(rect, scissor))
     }
 
-    /// `rect` (surface coordinates) in pixmap coordinates.
-    pub(super) fn to_pixmap(&self, rect: Rect) -> Rect {
-        rect.offset(-self.origin.0, -self.origin.1)
-    }
-
-    /// The innermost clip's bounds in pixmap coordinates, for the text
-    /// painters, which write pixels directly.
+    /// The innermost clip's bounds, trimmed to the region being repainted,
+    /// for the text painters, which write pixels directly.
     pub(super) fn clip_bounds(&self) -> Option<Rect> {
-        self.clips.last().map(|clip| self.to_pixmap(clip.bounds()))
+        let clip = self.clips.last().map(|clip| clip.bounds());
+        match (clip, self.scissor) {
+            (Some(clip), Some(scissor)) => Some(intersect(clip, scissor)),
+            (None, scissor) => scissor,
+            (clip, None) => clip,
+        }
     }
 
     pub(super) fn corners(&self, corners: [Corner; 4]) -> [Corner; 4] {
@@ -98,15 +96,34 @@ impl SkiaCanvas<'_> {
     }
 
     /// Builds a coverage mask for the current clip stack, or `None` when there
-    /// are no clips. Start fully opaque, then intersect every clip outline.
+    /// are no clips: the product of every clip outline's coverage.
+    ///
+    /// The mask is allocated zeroed (the system hands untouched pages out
+    /// lazily) and only the rows and columns the outlines can reach are
+    /// written, so a small clip costs its own size, not the surface's.
     fn build_mask(&self) -> Option<Mask> {
-        let mut mask = Mask::new(self.pixmap.width(), self.pixmap.height())?;
-        mask.clear();
-        mask.invert();
+        let (width, height) = (self.pixmap.width(), self.pixmap.height());
+        let mut mask = Mask::new(width, height)?;
+        // The rectangle outside which the mask is zero, once a clip set it.
+        let mut reach: Option<Rect> = None;
         for clip in &self.clips {
-            if let Some(path) = clip.path() {
-                mask.intersect_path(&path, FILL_RULE, true, self.shift());
+            let Some(path) = clip.path() else {
+                continue;
+            };
+            let bounds = mask_reach(&path, width, height);
+            match reach {
+                None => mask.fill_path(&path, FILL_RULE, true, Transform::identity()),
+                Some(previous) => {
+                    let mut next = Mask::new(width, height)?;
+                    next.fill_path(&path, FILL_RULE, true, Transform::identity());
+                    multiply(&mut mask, &next, previous, bounds);
+                }
             }
+            reach = Some(reach.map_or(bounds, |previous| intersect(previous, bounds)));
+        }
+        if reach.is_none() {
+            // Every clip was empty: nothing is cut away.
+            mask.invert();
         }
         Some(mask)
     }
@@ -138,7 +155,7 @@ impl SkiaCanvas<'_> {
         let paint = paint(shader);
         let mask = self.mask.as_ref();
         self.pixmap
-            .fill_path(path, &paint, FILL_RULE, self.shift(), mask);
+            .fill_path(path, &paint, FILL_RULE, Transform::identity(), mask);
     }
 
     pub(super) fn stroke(&mut self, path: &Path, color: tiny_skia::Color, stroke: &Stroke) {
@@ -146,7 +163,7 @@ impl SkiaCanvas<'_> {
         let stroke = skia_stroke(stroke, self.scale);
         let mask = self.mask.as_ref();
         self.pixmap
-            .stroke_path(path, &paint, &stroke, self.shift(), mask);
+            .stroke_path(path, &paint, &stroke, Transform::identity(), mask);
     }
 
     /// The ellipse path at `center` with radii `radius_x`/`radius_y`, culled
@@ -165,5 +182,47 @@ impl SkiaCanvas<'_> {
         let mut builder = PathBuilder::new();
         builder.push_oval(sk_rect(bounds));
         builder.finish()
+    }
+}
+
+/// The whole-pixel rectangle, inside a `width` x `height` surface, that a clip
+/// outline can give coverage to; one pixel wider than its bounds so that
+/// anti-aliasing at the edge is inside it.
+fn mask_reach(path: &Path, width: u32, height: u32) -> Rect {
+    let bounds = path.bounds();
+    let reach = Rect::new(
+        bounds.left().floor() as i32 - 1,
+        bounds.top().floor() as i32 - 1,
+        bounds.right().ceil() as i32 + 1,
+        bounds.bottom().ceil() as i32 + 1,
+    );
+    intersect(reach, Rect::new(0, 0, width as i32, height as i32))
+}
+
+/// tiny-skia's 8-bit product of two coverages, `a * b / 255` rounded, which
+/// `Mask::intersect_path` applies; reproduced here so a mask built over the
+/// rectangles the outlines reach is bit-for-bit what intersecting whole
+/// surface masks gives.
+fn coverage_product(a: u8, b: u8) -> u8 {
+    let product = u32::from(a) * u32::from(b) + 128;
+    ((product + (product >> 8)) >> 8) as u8
+}
+
+/// Multiplies `mask` by `next` (the coverage of one more clip outline) over
+/// `held`, the rectangle `mask` can be non-zero in; `reach` is the one `next`
+/// can be non-zero in, so everything else in `held` becomes zero.
+fn multiply(mask: &mut Mask, next: &Mask, held: Rect, reach: Rect) {
+    let width = mask.width() as usize;
+    for y in held.top.max(0)..held.bottom {
+        for x in held.left.max(0)..held.right {
+            let at = y as usize * width + x as usize;
+            let inside = x >= reach.left && x < reach.right && y >= reach.top && y < reach.bottom;
+            let value = if inside {
+                coverage_product(mask.data()[at], next.data()[at])
+            } else {
+                0
+            };
+            mask.data_mut()[at] = value;
+        }
     }
 }

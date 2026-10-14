@@ -92,7 +92,7 @@ impl RgbaImage {
 pub struct Surface {
     pixmap: Pixmap,
     images: image_cache::ImageCache,
-    /// The pixels of the last [`Surface::paint_region`], kept for the next.
+    /// The scratch pixmap of [`Surface::paint_region`], kept for the next.
     scratch: Vec<u8>,
 }
 
