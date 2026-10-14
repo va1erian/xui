@@ -15,6 +15,16 @@ fn at_least(min: i64) -> ValueType {
     }
 }
 
+/// An int type from `min` to the largest `i32`: the range a progress bar's
+/// value and maximum have, so what a file or a script writes is what the bar
+/// holds and reads back.
+fn up_to_i32(min: i64) -> ValueType {
+    ValueType::Int {
+        min: Some(min),
+        max: Some(i64::from(i32::MAX)),
+    }
+}
+
 widget! {
     /// A static text label.
     Label {
@@ -146,9 +156,9 @@ widget! {
     /// A read-only progress indicator.
     ProgressBar {
         /// The current value.
-        value: i64 = 0; Data,
+        value: i64 = 0; Data => up_to_i32(i64::from(i32::MIN)),
         /// The upper bound of the range `0..=max`.
-        max: i64 = 100; Data => at_least(1),
+        max: i64 = 100; Data => up_to_i32(1),
     }
     events {}
 }

@@ -59,7 +59,7 @@ pub use build::{
     build_with, describe,
 };
 pub use codec::{LoadError, WriteError, format, load};
-pub use model::{FORMAT_VERSION, Form, MAX_ARRAY, MAX_DEPTH, Node};
+pub use model::{FORMAT_VERSION, Form, MAX_ARRAY, MAX_DEPTH, MAX_LENGTH, Node};
 pub use schema::{
     Access, ArgSpec, Catalog, EventSpec, FieldSpec, LayoutSpec, PropertySpec, WidgetSpec,
 };

@@ -1,29 +1,30 @@
 #![forbid(unsafe_code)]
 
-//! The limits of a form, and the scan that reports where one exceeds them.
+//! The limits of a form.
 //!
 //! A form is read from untrusted text and may be edited in memory, so what it
 //! asks a build to make is bounded: its tree nests at most [`MAX_DEPTH`]
-//! levels, and a control array has at most [`MAX_ARRAY`] elements. The depth
-//! limit serves the reader (`load` rejects a deeper node at its position) and
-//! the writer (`Form::to_ron` refuses a deeper tree) alike, so a form that is
-//! written can always be read back; `Form::validate` reports every breach and
-//! `describe` refuses to build one.
+//! levels, a control array has at most [`MAX_ARRAY`] elements and a length is
+//! within [`MAX_LENGTH`]. Each serves the reader (`load` rejects what exceeds
+//! it, at its position) and the writer (`Form::to_ron` refuses it) alike, so a
+//! form that is written can always be read back; the scan in
+//! [`breaches`](super::breach) is what `Form::validate` reports and
+//! `describe` refuses to build.
 
 use std::cell::Cell;
 
 use serde::de;
 
-use super::{Form, Node, Widget};
+use super::Node;
 
 /// The deepest a form's tree may nest: the root node is level 1, a node
 /// directly inside it level 2, and so on. A `Group`'s content, a `Panel`'s
 /// content and a `Tabs` page's content are each one level below the
 /// container.
 ///
-/// A form nested more deeply is not read (`load` reports the first node at
-/// level 17), not written (`Form::to_ron` returns an error), not built, and
-/// `Form::validate` reports it.
+/// A form nested more deeply is not read (`load` reports the first node one
+/// level past this), not written (`Form::to_ron` returns an error), not built,
+/// and `Form::validate` reports it.
 ///
 /// The value keeps the reader's stack use at what RON's default recursion
 /// limit allowed (a debug build needs about 5 KiB of stack for each level of
@@ -38,6 +39,14 @@ pub const MAX_DEPTH: usize = 16;
 /// 100000000)` took 770 MB to check). 1024 is far beyond a form's real
 /// controls; more rows belong in a `ListView`.
 pub const MAX_ARRAY: u32 = 1024;
+
+/// The largest length, in design units, either way: a width, a gap, a
+/// position. A length is finite and at most this many units from zero.
+///
+/// Layout adds lengths in 32-bit device pixels, so a length the file may write
+/// as `1e38` would overflow it (a panic in a debug build); 32768 is the range
+/// classic window coordinates had and is far beyond any form.
+pub const MAX_LENGTH: f32 = 32_768.0;
 
 /// The recursion limit the form's RON is read and written with. Eight is how
 /// many RON levels the most nested node kind (a `Tabs` page) takes, plus a few
@@ -91,88 +100,5 @@ impl Node {
             pending.extend(node.children().into_iter().map(|child| (child, level + 1)));
         }
         deepest
-    }
-}
-
-/// One place a form exceeds a limit.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct Breach {
-    /// The widget the breach is in, if it has a name.
-    pub(crate) node: Option<String>,
-    /// The field it is about.
-    pub(crate) property: &'static str,
-    /// What is wrong.
-    pub(crate) message: String,
-}
-
-/// Whether `node` is a container widget, whose content a control array would
-/// rebuild for each element.
-fn is_container(node: &Node) -> bool {
-    matches!(node, Node::Panel(_) | Node::Group(_) | Node::Tabs(_))
-}
-
-/// Every place `form` exceeds a limit. Neither `validate` nor `describe`
-/// recurses to find them, so a tree of any depth is scanned, and no array is
-/// enumerated.
-pub(crate) fn breaches(form: &Form) -> Vec<Breach> {
-    let mut found = Vec::new();
-    let depth = form.root.depth();
-    if depth > MAX_DEPTH {
-        found.push(Breach {
-            node: None,
-            property: "root",
-            message: format!("the form nests {depth} levels deep; at most {MAX_DEPTH} are allowed"),
-        });
-    }
-    form.root.walk(&mut |node, _| {
-        if let Some(widget) = node.widget() {
-            widget_breaches(node, widget, &mut found);
-        }
-    });
-    found
-}
-
-/// The breaches of one widget's `array` and `index`.
-fn widget_breaches(node: &Node, widget: &dyn Widget, found: &mut Vec<Breach>) {
-    let name = Some(widget.name().to_owned()).filter(|name| !name.is_empty());
-    let mut breach = |property: &'static str, message: String| {
-        found.push(Breach {
-            node: name.clone(),
-            property,
-            message,
-        });
-    };
-    if let Some(count) = widget.array()
-        && count > MAX_ARRAY
-    {
-        breach(
-            "array",
-            format!("`array` is {count}; a control array has at most {MAX_ARRAY} elements"),
-        );
-    }
-    if let Some(index) = widget.index()
-        && index >= MAX_ARRAY
-    {
-        breach(
-            "index",
-            format!("`index` is {index}; an element's index is below {MAX_ARRAY}"),
-        );
-    }
-    if is_container(node) {
-        for (property, set) in [
-            ("array", widget.array().is_some()),
-            ("index", widget.index().is_some()),
-        ] {
-            if set {
-                breach(
-                    property,
-                    format!(
-                        "a {} is a container, so `{property}` cannot repeat it: \
-                         only widgets can be control arrays",
-                        widget.kind()
-                    ),
-                );
-            }
-        }
     }
 }

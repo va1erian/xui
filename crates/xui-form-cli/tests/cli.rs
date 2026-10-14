@@ -1,48 +1,9 @@
 //! Every subcommand of the `xui-form` binary, run as a process on files in a
 //! scratch directory. Rendering is headless, so nothing opens a window.
 
-use std::path::{Path, PathBuf};
-use std::process::{Command, Output};
+mod common;
 
-/// A fresh scratch directory for `test`.
-fn scratch(test: &str) -> PathBuf {
-    let dir = Path::new(env!("CARGO_TARGET_TMPDIR"))
-        .join("xui-form-cli")
-        .join(test);
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).expect("the scratch directory is created");
-    dir
-}
-
-/// Runs `xui-form` with `args`.
-fn xui_form(args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_xui-form"))
-        .args(args)
-        .output()
-        .expect("xui-form runs")
-}
-
-fn stdout(output: &Output) -> String {
-    String::from_utf8_lossy(&output.stdout).into_owned()
-}
-
-fn stderr(output: &Output) -> String {
-    String::from_utf8_lossy(&output.stderr).into_owned()
-}
-
-/// Writes `text` to `dir/name` and returns the path as a string.
-fn file(dir: &Path, name: &str, text: &str) -> String {
-    let path = dir.join(name);
-    std::fs::write(&path, text).expect("the file is written");
-    path.to_string_lossy().into_owned()
-}
-
-const HELLO: &str = r#"Form(title: "Hello", size: (240, 120), root: Column(gap: 8, padding: 16, children: [
-    Edit(name: "name_edit", placeholder: "Your name"),
-    Button(name: "greet_button", text: "Greet"),
-    Label(name: "result_label"),
-]))
-"#;
+use common::{HELLO, file, scratch, stderr, stdout, xui_form};
 
 #[test]
 fn check_passes_a_valid_form_and_fails_a_broken_one() {
@@ -255,8 +216,7 @@ fn a_huge_control_array_is_reported_and_never_built() {
         stdout(&output)
     );
 
-    // `render` does not validate: the build itself refuses the form, with
-    // or without a script.
+    // `render` validates first, with or without a script, and builds nothing.
     let script = file(&dir, "huge.rhai", "fn form_load() {}");
     let out = dir.join("out").to_string_lossy().into_owned();
     for extra in [vec![], vec!["--script", script.as_str()]] {
@@ -265,7 +225,11 @@ fn a_huge_control_array_is_reported_and_never_built() {
         let output = xui_form(&args);
         assert_eq!(output.status.code(), Some(1));
         let message = stderr(&output);
-        assert!(message.contains("exceeds a limit"), "{message}");
+        assert!(
+            message.contains("a control array has at most 1024 elements"),
+            "{message}"
+        );
+        assert!(message.contains("not rendered"), "{message}");
     }
     assert!(!dir.join("out").exists(), "no image is written");
 }

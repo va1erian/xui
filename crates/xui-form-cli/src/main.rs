@@ -19,6 +19,7 @@ mod check;
 mod fmt;
 mod migrate;
 mod render;
+mod report;
 mod schema;
 
 use args::Args;

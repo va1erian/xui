@@ -121,6 +121,23 @@ fn an_absolute_group_without_a_design_size_holds_its_items() {
 }
 
 #[test]
+fn an_absolute_item_far_out_does_not_overflow_the_pixel_sums() {
+    // Two billion design units at, and as wide as, a position: the right edge
+    // is more than an `i32` holds.
+    let tree = Group::absolute()
+        .push(Item::leaf(0).at(dip(2.0e9), dip(2.0e9), dip(2.0e9), dip(2.0e9)))
+        .push(Item::leaf(1).at(dip(0.0), dip(0.0), dip(10.0), dip(10.0)));
+    let natural = leaf(&[], &[]);
+    let placed = tree.compute(Rect::new(0, 0, 100, 100), 96, &natural);
+    assert_eq!(placed.len(), 2, "both items are placed, none panics");
+    assert_eq!(
+        tree.preferred_size(96, &natural),
+        Size::new(i32::MAX, i32::MAX),
+        "the design size saturates"
+    );
+}
+
+#[test]
 fn trace_lists_every_node_with_its_depth() {
     let inner = Group::row().push(Item::leaf(1).sized(Sizing::Fill(1)));
     let tree = Group::column().push(Item::leaf(0)).push(Item::group(inner));

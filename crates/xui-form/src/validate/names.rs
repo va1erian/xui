@@ -8,7 +8,7 @@
 
 use std::collections::BTreeMap;
 
-use super::{Diagnostic, Severity, is_identifier};
+use super::{Diagnostic, RESERVED_NAMES, Severity, is_identifier};
 use crate::model::Widget;
 
 /// The names used so far, and how.
@@ -70,6 +70,12 @@ impl Names {
         if !is_identifier(name) {
             out.push(error("name", format!("`{name}` is not a valid name")));
             return;
+        }
+        if RESERVED_NAMES.contains(&name) {
+            out.push(error(
+                "name",
+                format!("`{name}` is reserved: scripts use it for the form itself"),
+            ));
         }
         let used = self.0.entry(name.to_owned()).or_default();
         let range = match (widget.array(), widget.index()) {

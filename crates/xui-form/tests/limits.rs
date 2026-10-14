@@ -206,3 +206,70 @@ fn an_array_at_the_cap_builds_every_element() {
         assert!(live.get("key[1024]", "text").is_none());
     });
 }
+
+#[test]
+fn a_length_that_cannot_be_read_back_is_not_written() {
+    use xui_form::model::{Length, Node, Stack};
+    for bad in [1.0e38, f32::NAN, f32::INFINITY, -32768.5] {
+        let form = Form {
+            root: Node::Column(Stack {
+                gap: Length(bad),
+                ..Stack::default()
+            }),
+            ..Form::default()
+        };
+        let Err(WriteError::Unwritable(message)) = form.to_ron() else {
+            panic!("{bad} is not written");
+        };
+        assert!(message.contains("is not a length"), "{message}");
+    }
+    // The limit itself is a length, and reads back.
+    let at_limit = Form {
+        root: Node::Column(Stack {
+            gap: Length(-32768.0),
+            width: Some(Length(32768.0)),
+            ..Stack::default()
+        }),
+        ..Form::default()
+    };
+    let text = at_limit.to_ron().expect("lengths at the limit are written");
+    assert_eq!(load(&text).expect("they read back"), at_limit);
+}
+
+#[test]
+fn huge_lengths_are_not_built_and_the_largest_ones_lay_out() {
+    use xui_form::model::{Label, Length, Node, Stack};
+    // Two `width: 1e38` made `render` panic in a debug build ("attempt to add
+    // with overflow"): such a form is refused where it is read, and one that
+    // was built in memory is refused by the build.
+    let row = Form {
+        root: Node::Row(Stack {
+            children: vec![
+                Node::Label(Label {
+                    width: Some(Length(1.0e38)),
+                    ..Label::default()
+                }),
+                Node::Label(Label {
+                    width: Some(Length(1.0e38)),
+                    ..Label::default()
+                }),
+            ],
+            ..Stack::default()
+        }),
+        ..Form::default()
+    };
+    let message = build_failure(&row).expect("it is not built");
+    assert!(message.contains("is not a length"), "{message}");
+
+    // The largest lengths a file may hold lay out, and shrink to the room.
+    let widest = form(
+        r#"Form(root: Row(children: [
+            Label(name: "a", width: 32768), Label(name: "b", width: 32768),
+            Absolute(children: [Label(name: "c", at: (32768, 32768, 32768, 32768))]),
+        ]))"#,
+    );
+    with_form(&widest, BuildOptions::default(), |live| {
+        live.relayout();
+        assert!(live.bounds("a").is_some() && live.bounds("c").is_some());
+    });
+}

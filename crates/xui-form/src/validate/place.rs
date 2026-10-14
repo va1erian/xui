@@ -54,3 +54,25 @@ pub(super) fn check_layout(node: &Node, out: &mut Vec<Diagnostic>) {
         ));
     }
 }
+
+/// Checks that a tab control's `selected` page exists.
+pub(super) fn check_tabs(node: &Node, out: &mut Vec<Diagnostic>) {
+    let Node::Tabs(tabs) = node else {
+        return;
+    };
+    let pages = tabs.pages.len() as u64;
+    // The default selection of a control without pages is not a mistake.
+    if tabs.selected >= 0 && tabs.selected as u64 >= pages && !(tabs.selected == 0 && pages == 0) {
+        out.push(Diagnostic::new(
+            Severity::Error,
+            Some(&tabs.name),
+            Some("selected"),
+            format!(
+                "`selected` is {} but there {} {pages} page{}",
+                tabs.selected,
+                if pages == 1 { "is" } else { "are" },
+                if pages == 1 { "" } else { "s" },
+            ),
+        ));
+    }
+}

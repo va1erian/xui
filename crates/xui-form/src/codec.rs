@@ -41,20 +41,41 @@ fn pretty() -> PrettyConfig {
         .new_line("\n")
 }
 
-/// Parses a form from `.lfm` format-2 text.
+/// Parses a form from `.lfm` format-2 text. A byte order mark at the start is
+/// ignored, and positions in an error do not count it.
 pub fn load(text: &str) -> Result<Form, LoadError> {
-    if text.trim_start().starts_with("format") {
+    let text = text.strip_prefix('\u{feff}').unwrap_or(text);
+    if let Some((line, column)) = format_one(text) {
         return Err(LoadError {
             message: "this is a format-1 (TOML) form; convert it with `xui-form migrate`"
                 .to_owned(),
-            line: 1,
-            column: 1,
+            line,
+            column,
             suggestion: None,
         });
     }
     options()
         .from_str(text)
         .map_err(|error| LoadError::from_ron(&error, text))
+}
+
+/// Where `text` starts like a format-1 (TOML) form: its first line that is not
+/// blank or a `#` comment is `format = 1`, or opens the `[window]` table or a
+/// `[[node]]`. A format-2 file starts with `Form(`, a comment or a `#![..]`
+/// attribute, none of which a TOML file does.
+fn format_one(text: &str) -> Option<(usize, usize)> {
+    for (index, line) in text.lines().enumerate() {
+        let trimmed = line.trim_start();
+        if trimmed.is_empty() || (trimmed.starts_with('#') && !trimmed.starts_with("#!")) {
+            continue;
+        }
+        let key = trimmed
+            .strip_prefix("format")
+            .is_some_and(|rest| rest.starts_with(|c: char| c == '=' || c.is_whitespace()));
+        let table = trimmed.starts_with("[window]") || trimmed.starts_with("[[node]]");
+        return (key || table).then(|| (index + 1, line.len() - trimmed.len() + 1));
+    }
+    None
 }
 
 /// Formats `.lfm` text canonically: [`load`] then [`Form::to_ron`].
@@ -141,6 +162,9 @@ impl LoadError {
         if matches!(&error.code, Error::Message(message) if *message == depth_message()) {
             // The reader stops before the node that is one level too deep.
             (line, column) = crate::locate::next_token(text, line, column);
+        } else if matches!(&error.code, Error::IntegerOutOfBounds) {
+            // RON reports the digits of `-1`; the number starts at its sign.
+            (line, column) = crate::locate::sign_start(text, line, column);
         }
         LoadError {
             message: error.code.to_string(),

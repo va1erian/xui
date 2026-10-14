@@ -17,6 +17,13 @@ pub(crate) fn run(mut args: Args) -> Outcome {
         return Err(Failure::Usage("`migrate` needs a file".to_owned()));
     };
     args.finish()?;
+    if let Some(out) = &out
+        && args::same_file(file.as_ref(), out.as_ref())
+    {
+        return Err(Failure::Fatal(format!(
+            "{out}: `--out` is the file being converted; refusing to overwrite the format-1 source"
+        )));
+    }
     let text = args::read(file.as_ref())?;
     let migration = match xui_form::migrate::from_v1(&text) {
         Ok(migration) => migration,

@@ -79,3 +79,75 @@ fn a_format_one_file_points_at_migrate() {
     let error = load("format = 1\n\n[window]\nname = \"main\"\n").expect_err("TOML is format 1");
     assert!(error.message.contains("xui-form migrate"), "{error}");
 }
+
+#[test]
+fn a_byte_order_mark_is_ignored_and_not_counted() {
+    let marked = format!("\u{feff}{CANONICAL}");
+    assert_eq!(load(&marked), load(CANONICAL));
+    assert_eq!(format(&marked).expect("it formats"), CANONICAL);
+    let error = load("\u{feff}Form(root: Button(txt: \"OK\"))").expect_err("txt is not a field");
+    assert_eq!((error.line, error.column), (1, 19), "{error}");
+}
+
+#[test]
+fn crlf_line_endings_load_and_format_to_lf() {
+    let crlf = CANONICAL.replace('\n', "\r\n");
+    assert_eq!(load(&crlf), load(CANONICAL));
+    assert_eq!(format(&crlf).expect("it formats"), CANONICAL);
+}
+
+#[test]
+fn a_commented_format_one_file_points_at_migrate_too() {
+    for text in [
+        "# my form\n\nformat = 1\n[window]\nname = \"main\"\n",
+        "   # indented comment\n#\n[window]\nname = \"main\"\n",
+        "\u{feff}# generated\n[[node]]\nkind = \"Button\"\nname = \"ok\"\n",
+    ] {
+        let error = load(text).expect_err("TOML is format 1");
+        assert!(error.message.contains("xui-form migrate"), "{error}");
+    }
+    let error = load("# my form\n\nformat = 1\n").expect_err("TOML is format 1");
+    assert_eq!(
+        (error.line, error.column),
+        (3, 1),
+        "at the first line of it"
+    );
+
+    // Comments and attributes of a format-2 file are not mistaken for it.
+    assert!(load("// my form\nForm()").is_ok());
+    assert!(load("#![enable(implicit_some)]\nForm()").is_ok());
+}
+
+#[test]
+fn a_negative_number_is_located_at_its_sign() {
+    let error = load("Form(root: Button(fill: -1))").expect_err("fill is unsigned");
+    assert_eq!((error.line, error.column), (1, 25), "{error}");
+    let error = load("Form(\n  root: Button(array: -3),\n)").expect_err("array is unsigned");
+    assert_eq!((error.line, error.column), (2, 23), "{error}");
+}
+
+#[test]
+fn a_length_that_is_not_finite_or_is_huge_is_refused_where_it_is() {
+    for (text, column) in [
+        ("Form(root: Column(gap: 1e38))", 24),
+        ("Form(root: Column(gap: NaN))", 24),
+        ("Form(root: Column(gap: inf))", 24),
+        ("Form(root: Column(gap: -inf))", 24),
+        ("Form(root: Column(gap: 32768.5))", 24),
+        ("Form(root: Column(padding: 9223372036854775807))", 28),
+        ("Form(size: (1e38, 100), root: Column())", 13),
+        ("Form(root: Button(width: 1e38))", 26),
+        (
+            "Form(root: Absolute(children: [Button(at: (1e38, 0, 10, 10))]))",
+            44,
+        ),
+        ("Form(root: Grid(columns: [Fixed(1e30)]))", 33),
+    ] {
+        let error = load(text).expect_err(text);
+        assert!(error.message.contains("is not a length"), "{text}: {error}");
+        assert_eq!((error.line, error.column), (1, column), "{text}: {error}");
+    }
+    // The limits themselves are lengths.
+    let form = load("Form(size: (32768, 100), root: Column(gap: -32768))").expect("at the limit");
+    assert_eq!(form.size.0, Length(32768.0));
+}

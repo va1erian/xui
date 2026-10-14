@@ -9,11 +9,12 @@ use xui_canvas::snapshot::{Snapshot, Stage, render_with};
 use xui_core::app::{App, Ui};
 use xui_core::backend::BackendError;
 use xui_core::{Image, Theme};
-use xui_form::{Factories, Form, Handlers, LiveForm};
+use xui_form::{Catalog, Diagnostic, Factories, Form, Handlers, LiveForm};
 use xui_script::Msg;
 use xui_script::form::{ScriptForm, ScriptSource};
 
 use crate::args::{self, Args, Failure, Outcome};
+use crate::report;
 
 /// A plain form, kept alive while it is captured.
 struct Plain {
@@ -72,6 +73,17 @@ pub(crate) fn run(mut args: Args) -> Outcome {
     args.finish()?;
     let file = PathBuf::from(file);
     let form = args::load(&file)?;
+    // A form with errors cannot be built correctly: say why, render nothing.
+    let diagnostics = form.validate(&Catalog::xui());
+    for diagnostic in &diagnostics {
+        eprintln!("{}", report::diagnostic(&file.display(), diagnostic));
+    }
+    if diagnostics.iter().any(Diagnostic::is_error) {
+        return Err(Failure::Fatal(format!(
+            "{}: not rendered: the form has errors",
+            file.display()
+        )));
+    }
     let stem = file
         .file_stem()
         .map_or_else(|| "form".into(), |stem| stem.to_string_lossy());

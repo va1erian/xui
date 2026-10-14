@@ -25,8 +25,8 @@
 //!
 //! Every field has a default and a node's field equal to it is not written,
 //! so a file says only what differs (the form's own `size` and `root` are
-//! always written). A tree nests at most [`MAX_DEPTH`] levels and a control
-//! array has at most [`MAX_ARRAY`] elements.
+//! always written). A tree nests at most [`MAX_DEPTH`] levels, a control array
+//! has at most [`MAX_ARRAY`] elements and a length is within [`MAX_LENGTH`].
 //!
 //! [`Catalog`]: crate::Catalog
 
@@ -36,6 +36,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::value::Value;
 
+mod breach;
 mod containers;
 mod limits;
 pub(crate) mod macros;
@@ -44,9 +45,10 @@ mod repr;
 mod types;
 mod widgets;
 
+pub(crate) use breach::{breaches, length_fits, length_message};
 pub use containers::{Absolute, Grid, Group, Page, Panel, Stack, Tabs};
-pub use limits::{MAX_ARRAY, MAX_DEPTH};
-pub(crate) use limits::{RECURSION_LIMIT, breaches, depth_message};
+pub use limits::{MAX_ARRAY, MAX_DEPTH, MAX_LENGTH};
+pub(crate) use limits::{RECURSION_LIMIT, depth_message};
 pub use prop::PropType;
 pub use types::{Align, Anchor, Length, Orientation, Track};
 pub use widgets::{

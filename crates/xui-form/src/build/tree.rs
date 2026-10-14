@@ -146,9 +146,15 @@ impl<'a, M: 'static> Walk<'a, M> {
             })?;
         let mut props = widget.props();
         if let Some(index) = index {
+            // A `{index}` in a text, or in an item of a list, is the
+            // element's index.
+            let index = index.to_string();
+            let replace = |text: &mut String| *text = text.replace("{index}", &index);
             for value in props.values_mut() {
-                if let Value::Text(text) = value {
-                    *text = text.replace("{index}", &index.to_string());
+                match value {
+                    Value::Text(text) => replace(text),
+                    Value::List(items) => items.iter_mut().for_each(replace),
+                    _ => {}
                 }
             }
         }

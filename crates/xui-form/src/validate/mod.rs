@@ -15,6 +15,10 @@ mod names;
 mod place;
 mod props;
 
+/// The names a widget cannot have: a script reaches the form itself by
+/// `form`, so a control of that name could not be reached.
+pub const RESERVED_NAMES: [&str; 1] = ["form"];
+
 /// How serious a [`Diagnostic`] is.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Severity {
@@ -86,6 +90,7 @@ impl Form {
         self.root.walk(&mut |node, parent| {
             place::check_place(node, parent, &mut out);
             place::check_layout(node, &mut out);
+            place::check_tabs(node, &mut out);
             if let Some(widget) = node.widget() {
                 names.check(widget, &mut out);
                 props::check(widget, catalog, &mut out);

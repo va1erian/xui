@@ -150,7 +150,11 @@ impl Stack {
         }
 
         let mut sizes = vec![0i32; count];
-        let rigid_total: i32 = rigid.iter().map(|&(_, size)| size).sum();
+        // Design values come from files and scripts, so the sums saturate:
+        // a total past `i32::MAX` is just "more than the room".
+        let rigid_total = rigid
+            .iter()
+            .fold(0i32, |total, &(_, size)| total.saturating_add(size));
         if rigid_total <= content {
             for &(index, size) in &rigid {
                 sizes[index] = size;
@@ -172,16 +176,13 @@ impl Stack {
         let mut rects = Vec::with_capacity(count);
         let mut cursor = main_start;
         for &size in &sizes {
-            let end = cursor + size;
+            let end = cursor.saturating_add(size);
+            let cross_end = cross_start.saturating_add(cross_len);
             rects.push(match self.direction {
-                StackDirection::Horizontal => {
-                    Rect::new(cursor, cross_start, end, cross_start + cross_len)
-                }
-                StackDirection::Vertical => {
-                    Rect::new(cross_start, cursor, cross_start + cross_len, end)
-                }
+                StackDirection::Horizontal => Rect::new(cursor, cross_start, end, cross_end),
+                StackDirection::Vertical => Rect::new(cross_start, cursor, cross_end, end),
             });
-            cursor = end + spacing;
+            cursor = end.saturating_add(spacing);
         }
         rects
     }
@@ -346,6 +347,30 @@ mod tests {
         }
         assert_eq!(slots[0].left, 0);
         assert_eq!(slots.last().unwrap().right, 10);
+    }
+
+    /// Lengths come from files, so a few huge ones must not overflow the
+    /// pixel sums: the stack shrinks them to the room like any others.
+    #[test]
+    fn stack_sums_saturate_instead_of_overflowing() {
+        let rect = Rect::new(0, 0, 200, 40);
+        let slots = Stack::horizontal()
+            .fixed(dip(1.0e9))
+            .fixed(dip(1.0e9))
+            .fixed(dip(1.0e9))
+            .split(rect, 96);
+        assert_eq!(slots.len(), 3);
+        assert_tiles(&slots, rect);
+
+        // The last slot ends at the edge of the pixel space, and the spacing
+        // after it must not carry past it.
+        let edge = Rect::new(i32::MAX - 100, 0, i32::MAX, 10);
+        let slots = Stack::horizontal()
+            .spacing(dip(8.0))
+            .fill(1)
+            .fill(1)
+            .split(edge, 96);
+        assert_eq!(slots[1].right, i32::MAX);
     }
 
     #[test]

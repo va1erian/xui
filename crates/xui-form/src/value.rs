@@ -238,9 +238,11 @@ fn in_int_range(value: i64, min: Option<i64>, max: Option<i64>) -> bool {
     min.is_none_or(|min| value >= min) && max.is_none_or(|max| value <= max)
 }
 
-/// Whether `value` lies within the inclusive float bounds.
+/// Whether `value` is finite and lies within the inclusive float bounds: a
+/// range or a position that is `NaN` has no meaning, and a slider cannot hold
+/// one.
 fn in_float_range(value: f64, min: Option<f64>, max: Option<f64>) -> bool {
-    min.is_none_or(|min| value >= min) && max.is_none_or(|max| value <= max)
+    value.is_finite() && min.is_none_or(|min| value >= min) && max.is_none_or(|max| value <= max)
 }
 
 /// Formats an opaque colour as `#rrggbb`.

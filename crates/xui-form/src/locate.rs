@@ -16,6 +16,16 @@ pub(crate) fn next_token(text: &str, line: usize, column: usize) -> (usize, usiz
     }
 }
 
+/// `(line, column)`, moved back over a `-` or `+` just before it: where the
+/// number whose digits start there begins. A position elsewhere is returned
+/// as it is.
+pub(crate) fn sign_start(text: &str, line: usize, column: usize) -> (usize, usize) {
+    match offset_of(text, line, column) {
+        Some(offset) if text[..offset].ends_with(['-', '+']) => position_of(text, offset - 1),
+        _ => (line, column),
+    }
+}
+
 /// The byte offset of `(line, column)`, columns counted in characters.
 fn offset_of(text: &str, line: usize, column: usize) -> Option<usize> {
     let mut start = 0;
@@ -97,6 +107,14 @@ mod tests {
     fn columns_count_characters() {
         // Two two-byte characters, then the cursor.
         assert_eq!(next_token("\"éé\" x", 1, 5), (1, 6));
+    }
+
+    #[test]
+    fn a_number_starts_at_its_sign() {
+        assert_eq!(sign_start("fill: -1", 1, 8), (1, 7));
+        assert_eq!(sign_start("fill: +1", 1, 8), (1, 7));
+        assert_eq!(sign_start("fill: 1", 1, 7), (1, 7));
+        assert_eq!(sign_start("a\nb: -12", 2, 5), (2, 4));
     }
 
     #[test]

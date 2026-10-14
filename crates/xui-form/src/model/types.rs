@@ -10,8 +10,14 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use xui_core::layout;
 use xui_core::units::Dip;
 
+use super::{length_fits, length_message};
+
 /// A length in design units. A whole number is written without a fraction
 /// (`16`, not `16.0`), so hand-written and saved files look the same.
+///
+/// A length in a file is finite and within [`MAX_LENGTH`](super::MAX_LENGTH)
+/// of zero: `load` rejects another at its position and `Form::to_ron` will not
+/// write one, so layout can add lengths without overflowing.
 #[derive(Clone, Copy, Debug, Default, PartialEq, PartialOrd)]
 pub struct Length(pub f32);
 
@@ -36,7 +42,10 @@ impl From<i32> for Length {
 
 impl Serialize for Length {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        if self.0.fract() == 0.0 && self.0.abs() < 1e9 {
+        if !length_fits(*self) {
+            return Err(serde::ser::Error::custom(length_message(self.0)));
+        }
+        if self.0.fract() == 0.0 {
             serializer.serialize_i64(self.0 as i64)
         } else {
             serializer.serialize_f32(self.0)
@@ -56,19 +65,30 @@ impl<'de> Deserialize<'de> for Length {
             }
 
             fn visit_i64<E: de::Error>(self, value: i64) -> Result<Length, E> {
-                Ok(Length(value as f32))
+                fit(value as f32)
             }
 
             fn visit_u64<E: de::Error>(self, value: u64) -> Result<Length, E> {
-                Ok(Length(value as f32))
+                fit(value as f32)
             }
 
             fn visit_f64<E: de::Error>(self, value: f64) -> Result<Length, E> {
-                Ok(Length(value as f32))
+                // A double too large for a float is infinite as one.
+                fit(value as f32)
             }
         }
 
         deserializer.deserialize_any(LengthVisitor)
+    }
+}
+
+/// A length read from a file, if it is one the format allows.
+fn fit<E: de::Error>(value: f32) -> Result<Length, E> {
+    let length = Length(value);
+    if length_fits(length) {
+        Ok(length)
+    } else {
+        Err(E::custom(length_message(value)))
     }
 }
 

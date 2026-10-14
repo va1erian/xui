@@ -17,7 +17,13 @@ fn design_rect<K: Copy>(item: &Item<K>, dpi: u32, leaf: LeafFn<'_, K>) -> Rect {
     match item.free_position().0 {
         Some([x, y, width, height]) => {
             let (x, y) = (px(x), px(y));
-            Rect::new(x, y, x + px(width).max(0), y + px(height).max(0))
+            // Positions come from files; a sum past `i32::MAX` saturates.
+            Rect::new(
+                x,
+                y,
+                x.saturating_add(px(width).max(0)),
+                y.saturating_add(px(height).max(0)),
+            )
         }
         None => Rect::from_size(item.own_size(
             StackDirection::Vertical,
@@ -83,5 +89,8 @@ pub(super) fn measure<K: Copy>(
     let dpi = constraints.dpi;
     let size = design_size(group, design, dpi, leaf);
     let margins = group.margin_size(dpi);
-    Size::new(size.width + margins.width, size.height + margins.height)
+    Size::new(
+        size.width.saturating_add(margins.width),
+        size.height.saturating_add(margins.height),
+    )
 }

@@ -160,3 +160,156 @@ fn nested_container_arrays_are_refused_not_multiplied() {
         "{found:?}"
     );
 }
+
+#[test]
+fn a_widget_cannot_be_named_form() {
+    // A script reaches the form by `form`: a control of that name made
+    // `form.title` fail with "unknown property 'title' on form (Button)".
+    let found = diagnostics(r#"Form(root: Column(children: [Button(name: "form")]))"#);
+    assert!(
+        has(&found, Severity::Error, "`form` is reserved"),
+        "{found:?}"
+    );
+    assert_eq!(found[0].node.as_deref(), Some("form"));
+    assert!(xui_form::validate::RESERVED_NAMES.contains(&"form"));
+}
+
+#[test]
+fn a_selection_must_exist() {
+    let found = diagnostics(
+        r#"Form(root: Column(children: [
+            ComboBox(name: "pick", items: ["a", "b"], selected: 2),
+            RadioGroup(name: "radio", items: ["a"], selected: 1),
+            ListView(name: "rows", items: ["a"], selected: 4),
+            Tabs(name: "tabs", selected: 2, pages: [Page(title: "One")]),
+            ComboBox(name: "ok_combo", items: ["a", "b"], selected: 1),
+            ListView(name: "ok_list", items: ["a"]),
+            RadioGroup(name: "empty_radio"),
+            ComboBox(name: "empty_combo"),
+            Tabs(name: "no_pages"),
+        ]))"#,
+    );
+    let on = |name: &str| {
+        found
+            .iter()
+            .filter(|d| d.node.as_deref() == Some(name))
+            .count()
+    };
+    assert_eq!(found.len(), 4, "{found:?}");
+    for name in ["pick", "radio", "rows", "tabs"] {
+        assert_eq!(on(name), 1, "{name}: {found:?}");
+    }
+    // A combo box's items are fixed at construction: an error. A list's can
+    // be replaced by a script, so its selection may yet be valid: a warning.
+    let severity = |name: &str| {
+        found
+            .iter()
+            .find(|d| d.node.as_deref() == Some(name))
+            .map(|d| d.severity)
+    };
+    assert_eq!(severity("pick"), Some(Severity::Error));
+    assert_eq!(severity("rows"), Some(Severity::Warning));
+    assert!(has(
+        &found,
+        Severity::Error,
+        "`selected` is 2 but there are 2 items"
+    ));
+    assert!(has(
+        &found,
+        Severity::Error,
+        "`selected` is 1 but there is 1 item"
+    ));
+    assert!(has(
+        &found,
+        Severity::Error,
+        "`selected` is 2 but there is 1 page"
+    ));
+}
+
+#[test]
+fn a_range_must_not_be_backwards_or_not_a_number() {
+    let found = diagnostics(
+        r#"Form(root: Column(children: [
+            Slider(name: "backwards", min: 10, max: 5),
+            NumberField(name: "also_backwards", min: 1, max: 0),
+            Slider(name: "fine", min: 5, max: 5),
+            Slider(name: "nan_value", value: NaN),
+            NumberField(name: "nan_min", min: NaN),
+            NumberField(name: "infinite", max: inf),
+        ]))"#,
+    );
+    assert!(
+        has(
+            &found,
+            Severity::Error,
+            "`min` (10) is greater than `max` (5)"
+        ),
+        "{found:?}"
+    );
+    assert!(
+        has(
+            &found,
+            Severity::Error,
+            "`min` (1) is greater than `max` (0)"
+        ),
+        "{found:?}"
+    );
+    for name in ["nan_value", "nan_min", "infinite"] {
+        assert!(
+            found
+                .iter()
+                .any(|d| d.node.as_deref() == Some(name) && d.is_error()),
+            "{name}: {found:?}"
+        );
+    }
+    assert!(found.iter().all(|d| d.node.as_deref() != Some("fine")));
+}
+
+#[test]
+fn a_progress_bar_holds_what_an_i32_holds() {
+    let found = diagnostics(
+        r#"Form(root: Column(children: [
+            ProgressBar(name: "ok", value: -2147483648, max: 2147483647),
+            ProgressBar(name: "big_max", max: 4294967296),
+            ProgressBar(name: "big_value", value: 2147483648),
+            ProgressBar(name: "zero_max", max: 0),
+        ]))"#,
+    );
+    assert_eq!(found.len(), 3, "{found:?}");
+    assert!(has(
+        &found,
+        Severity::Error,
+        "`max` must be an int from 1 to 2147483647"
+    ));
+    assert!(has(
+        &found,
+        Severity::Error,
+        "`value` must be an int from -2147483648 to 2147483647"
+    ));
+}
+
+#[test]
+fn a_length_out_of_range_is_an_error_on_a_form_that_was_never_read() {
+    use xui_form::model::{Length, Node, Stack};
+    let form = xui_form::Form {
+        size: (Length(f32::NAN), Length(100.0)),
+        root: Node::Column(Stack {
+            gap: Length(1.0e38),
+            width: Some(Length(f32::INFINITY)),
+            ..Stack::default()
+        }),
+        ..xui_form::Form::default()
+    };
+    let found = form.validate(&Catalog::xui());
+    assert_eq!(
+        found.iter().filter(|d| d.is_error()).count(),
+        3,
+        "{found:?}"
+    );
+    assert!(has(&found, Severity::Error, "`gap`: 1e38 is not a length"));
+    assert!(has(
+        &found,
+        Severity::Error,
+        "the window's size: NaN is not a length"
+    ));
+}
