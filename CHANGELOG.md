@@ -99,13 +99,14 @@
   checkbox's glow showed above its viewport; a frame stroked on the very edge
   of its clip, a scroll view's, loses the half that was outside it). For
   painters that stay within their reach the frames are bit-for-bit those of a
-  whole-window repaint: the
-  differential tests compare them after every step of seeded random operation
-  sequences (at 96, 120, 144 and 192 DPI) and of scripted sessions of the real
-  widgets on the light, dark and Midnight themes. `OffscreenBackend::inject`
-  now delivers what the windowed backend delivers (`MouseLeave` to the node
-  the pointer left, `KillFocus` and `SetFocus` on a press and on
-  `Backend::focus`), and `Edit` and `NumberField` repaint on a focus change.
+  whole-window repaint: the differential tests compare them after every step
+  of seeded random operation sequences (at 96, 120, 144 and 192 DPI) and of
+  scripted sessions of the real widgets on the light, dark and Midnight
+  themes. `OffscreenBackend::inject` now delivers what the windowed backend
+  delivers (`MouseLeave` to the node the pointer left, `KillFocus` and
+  `SetFocus` on a press and on `Backend::focus`), so a snapshot of a focused
+  widget shows what a window shows (a focus ring and caret, the active
+  selection colour), and `Edit` and `NumberField` repaint on a focus change.
   New API: `OffscreenBackend::present` lends the frame and the rectangles
   repainted without a copy, `PresentedFrame`, and
   `OffscreenBackend::invalidate_window` for a test that changed what a painter
