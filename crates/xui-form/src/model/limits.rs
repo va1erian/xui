@@ -26,9 +26,12 @@ use super::Node;
 /// level past this), not written (`Form::to_ron` returns an error), not built,
 /// and `Form::validate` reports it.
 ///
-/// The value keeps the reader's stack use at what RON's default recursion
-/// limit allowed (a debug build needs about 5 KiB of stack for each level of
-/// RON nesting, and a `Tabs` chain nests eight per level).
+/// The value keeps the reader inside a Windows main thread's 1 MiB of stack
+/// in a debug build, the worst case: a debug build needs about 5 KiB for each
+/// level of RON nesting, and a chain of `Tabs`, which nest eight per level,
+/// takes about 775 KiB to load at 16 (a `Column` chain 583 KiB, a `Panel`
+/// 519), and building adds 135 to 199 KiB at its own peak. A test runs every
+/// kind of chain at this depth on a 1 MiB thread.
 pub const MAX_DEPTH: usize = 16;
 
 /// The most elements a control array has: `array` is at most this, and an

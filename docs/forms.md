@@ -89,8 +89,11 @@ standard error, one note each. A form that is not a tree (a name used twice,
 a `parent` that does not exist or is not a `Panel` or `GroupBox`, a parent
 cycle, a position that is not an integer) is refused whole: each violation
 is printed with its node, nothing is written and the exit status is 1, so no
-node is dropped without a word. The converted form is written and read back
-before it is reported as converted.
+node is dropped without a word. The converted form is written, read back and
+validated before it is reported as converted, and one that `check` would
+reject is refused the same way. Each container takes two of the form's 16
+levels (itself and the layout of its content), so a format-1 form converts
+only up to seven nested containers; a deeper one is refused, naming the node.
 
 ## Building a form
 
@@ -147,6 +150,12 @@ without compiling an app, so an agent or a designer can iterate in seconds:
 | `xui-form fmt FILE... [--check]` | Rewrites each form canonically; `--check` only lists the ones that are not, and exits 1 when there are any. Canonical is LF line endings and no byte order mark (`.gitattributes` keeps `*.lfm` LF in a Windows checkout); comments are not kept, and `fmt` says so on standard error when it drops one. A file is replaced in one step, and one that does not load is left as it was. |
 | `xui-form migrate FILE [--out F]` | Converts a format-1 (TOML) form to format 2, printing what it dropped to standard error. A form that is not a tree is refused node by node with exit status 1, and `--out` is never the file being converted. |
 | `xui-form schema --json` | Prints the `Catalog`: every widget with its properties, events and fields, the layouts, and the common, layout, page and form fields. |
+
+`fmt` and `migrate --out` write a temporary file beside the target and rename it
+over the target, so a failure leaves the target as it was and a reader never
+sees half a file. The rename replaces a symlink or a hard link with a regular
+file, does not keep the file's ACLs or attributes, and needs write access to
+its directory; it is not retried.
 
 A misspelt command gets a "did you mean" too. Usage errors exit with
 status 2.

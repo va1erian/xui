@@ -84,6 +84,11 @@ pub(crate) fn read(path: &Path) -> Result<String, Failure> {
 /// A temporary file beside `path` is written whole and renamed over it, so a
 /// failure (a full disk, an interrupted run) leaves `path` as it was and no
 /// reader sees half a file.
+///
+/// The cost of the rename: it replaces a symlink or a hard link at `path`
+/// with a regular file, does not keep the file's ACLs or attributes, and needs
+/// write access to the directory (not only to the file). It is not retried: a
+/// failure is reported.
 pub(crate) fn write(path: &Path, text: &str) -> Result<(), Failure> {
     let fail = |error: std::io::Error| Failure::Fatal(format!("{}: {error}", path.display()));
     let name = path

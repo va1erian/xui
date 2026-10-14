@@ -51,7 +51,24 @@
   returns the new `BuildError::Limit`. `migrate::from_v1` re-loads its own
   output and returns the new `MigrateError::Write` when it does not match.
   Callers of `to_ron` handle the error; forms nested between 17 and about 30
-  levels, which loaded before depending on their shape, no longer load.
+  levels, which loaded before depending on their shape, no longer load. A
+  container's content that is the default (omitted from a file) is no level.
+  A format-1 form converts only up to seven nested containers: each takes
+  two levels (itself and the layout of its content), so a deeper one is
+  refused by `migrate`, naming the node.
+- **`xui-form`: forms that validated before can fail now, and `render`
+  refuses them.** `Form::validate` (and `xui-form check`) reports as errors a
+  widget named `form` (`validate::RESERVED_NAMES`), a `selected` past the
+  items or pages (a warning for a `ListView`, whose items a script may
+  replace), a `min` above `max`, `array: 0`, `array` or `index` on a `Panel`,
+  `Group` or `Tabs`, an `array` above `MAX_ARRAY` (1024) or an `index` at or
+  past it, a length that is not finite or beyond `MAX_LENGTH` (32768), a
+  `ProgressBar` `value` or `max` outside the `i32` range and a float
+  property that is not finite. `xui-form render` now validates first and
+  renders nothing for a form that has errors (warnings are printed and it
+  goes on); `migrate` validates what it converted and refuses a result
+  `check` would reject. `ValueType::accepts` refuses a float that is not
+  finite, so a script write of `NaN` is a type mismatch.
 
 ### Additions
 
@@ -346,11 +363,15 @@
 - `xui-form` format 2 hardening (the minors of the first review): a length
   is finite and within `MAX_LENGTH` (32768) design units, so `load` rejects
   `width: 1e38` (two of them panicked `render` in a debug build) and
-  `Form::to_ron` will not write one; `xui-core`'s stack and absolute layouts
-  saturate their pixel sums. A `ProgressBar`'s `value` and `max` are bounded
-  to the `i32` range (`max: 4294967296` read back as 1), and
-  `ValueType::accepts` refuses a float that is not finite (a `NaN` slider
-  bound panicked the build). `validate` reports a widget named `form`
+  `Form::to_ron` will not write one. The sums are not bounded by the limit
+  (six `Button(array: 1024, width: 32768)` in a `Wrap(gap: 32768)` panicked
+  `render --dpi 1024`), so `xui-core`'s stack, absolute, wrap and grid
+  layouts saturate their pixel sums at `i32::MAX` instead of overflowing. A
+  `ProgressBar`'s `value` and `max` are bounded to the `i32` range
+  (`max: 4294967296` read back as 1). A `NaN` bound no longer panics a build
+  (`f64::clamp` panics on one in a `Slider`): `ValueType::accepts` refuses a
+  float that is not finite and the build falls back to the default for one.
+  `validate` reports a widget named `form`
   (`validate::RESERVED_NAMES`), a `selected` past the items or pages and a
   `min` above `max`. `load` ignores a byte order mark, points a
   `#`-commented format-1 file at `migrate`, and locates `fill: -1` at its
@@ -358,8 +379,9 @@
 - `xui-form` tool: `check` goes on past a file it cannot read, `render`
   validates and refuses a form with errors (printing the diagnostics),
   `fmt` replaces a file in one step, leaves one it cannot load as it
-  was and notes the comments it drops, `migrate` refuses `--out` the file it converts, and `schema --json`
-  no longer leaks `$crate::model::` into field types. `*.lfm` is `eol=lf`
+  was and notes the comments it drops, `migrate` refuses `--out` the file it
+  converts, and `schema --json` no longer leaks `$crate::model::` into field
+  types. `*.lfm` is `eol=lf`
   in `.gitattributes`, so `fmt --check` holds in a Windows checkout.
 - `xui-form migrate` builds a grid only where it lands on the format-1
   pixels. A grid is padded on every side, so the converted rectangles must
