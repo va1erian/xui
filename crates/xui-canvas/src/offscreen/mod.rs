@@ -106,6 +106,9 @@ impl Drop for SurfaceRestore<'_> {
 }
 
 /// A backend that renders into a software surface.
+///
+/// It reports no reduced-motion preference whatever the machine's setting, so a
+/// headless render is the same everywhere.
 pub struct OffscreenBackend {
     windows: RefCell<HashMap<u64, OffscreenWindow>>,
     nodes: RefCell<Vec<(WidgetId, Node)>>,
