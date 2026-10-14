@@ -252,3 +252,44 @@ fn a_misspelt_command_suggests_the_closest() {
     assert_eq!(output.status.code(), Some(2));
     assert!(String::from_utf8_lossy(&output.stderr).contains("did you mean `check`?"));
 }
+
+#[test]
+fn migrate_refuses_a_form_that_would_not_pass_check_and_writes_nothing() {
+    let dir = scratch("migrate-invalid-v2");
+    let v1 = file(
+        &dir,
+        "old.lfm",
+        r#"format = 1
+[window]
+name = "old"
+[[node]]
+kind = "Button"
+name = "form"
+[[node]]
+kind = "Edit"
+name = "my-edit"
+[[node]]
+kind = "Slider"
+name = "level"
+min = 50
+max = 10
+"#,
+    );
+    let out = dir.join("new.lfm");
+    let output = xui_form(&["migrate", &v1, "--out", &out.to_string_lossy()]);
+    assert_eq!(output.status.code(), Some(1));
+    let report = stderr(&output);
+    assert!(
+        report.contains("node `form`: `form` is reserved"),
+        "{report}"
+    );
+    assert!(
+        report.contains("node `my-edit`: `my-edit` is not a valid name"),
+        "{report}"
+    );
+    assert!(
+        report.contains("node `level`: `min` (50) is greater than `max` (10)"),
+        "{report}"
+    );
+    assert!(!out.exists(), "nothing is written");
+}

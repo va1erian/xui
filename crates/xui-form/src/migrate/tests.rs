@@ -325,3 +325,29 @@ fn what_is_ignored_is_noted() {
     assert!(migration.notes[0].contains("`window`: dropped `colour`"));
     assert!(migration.notes[1].contains("top-level `nodes`"));
 }
+
+#[test]
+fn a_form_that_converts_to_an_invalid_one_is_refused() {
+    // Each is valid TOML and a tree; `check` would reject the result.
+    let text = form_of(&[
+        ("Button", "form", ""),
+        ("Edit", "my-edit", ""),
+        ("Slider", "level", "min = 50\nmax = 10"),
+        ("ComboBox", "pick", "items = [\"a\"]\nselected = 3"),
+    ]);
+    let found = problems(&text);
+    assert_eq!(found.len(), 4, "{found:?}");
+    assert!(
+        found[0].starts_with("form: `form` is reserved"),
+        "{found:?}"
+    );
+    assert!(
+        found[1].starts_with("my-edit: `my-edit` is not a valid name"),
+        "{found:?}"
+    );
+    assert!(
+        found[2].starts_with("level: `min` (50) is greater than `max` (10)"),
+        "{found:?}"
+    );
+    assert!(found[3].starts_with("pick: `selected` is 3"), "{found:?}");
+}

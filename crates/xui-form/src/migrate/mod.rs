@@ -8,6 +8,7 @@
 //! runtime: forms are converted once, with `xui-form migrate`.
 
 use crate::model::{Form, Length};
+use crate::{Catalog, Diagnostic};
 
 mod convert;
 mod grid;
@@ -33,10 +34,13 @@ pub enum MigrateError {
     /// The text is not valid format-1 TOML.
     #[error("not a format-1 form: {0}")]
     Toml(String),
-    /// The form breaks a rule of format 1: a name used twice, a parent that
+    /// The form breaks a rule of format 1 (a name used twice, a parent that
     /// does not exist or cannot hold nodes, a parent cycle, a value of the
-    /// wrong type. Each problem names its node; nothing is converted, because
-    /// converting would drop nodes.
+    /// wrong type), or converts to a form that is not valid format 2 (a name
+    /// that is not an identifier or is reserved, a range backwards, a
+    /// selection past the items). Each problem names its node; nothing is
+    /// converted or written, because converting would drop nodes or write
+    /// what `check` rejects.
     #[error("the form is not a valid format-1 form: {}", list(.0))]
     Invalid(Vec<NodeProblem>),
     /// A node could not be expressed in format 2.
@@ -154,10 +158,38 @@ pub fn from_v1(text: &str) -> Result<Migration, MigrateError> {
         root,
     };
     verify(&form)?;
-    Ok(Migration {
-        form,
-        notes: converter.notes,
-    })
+    let mut notes = converter.notes;
+    notes.extend(check_converted(&form)?);
+    Ok(Migration { form, notes })
+}
+
+/// Validates the converted form like `xui-form check` would. A form that
+/// is not valid format 2 (a name that is not an identifier, one reserved for
+/// scripts, a range backwards) is refused as the violations of format 1 are,
+/// instead of being written for `check` to reject afterwards; its warnings
+/// are returned as notes.
+fn check_converted(form: &Form) -> Result<Vec<String>, MigrateError> {
+    let (errors, warnings): (Vec<Diagnostic>, Vec<Diagnostic>) = form
+        .validate(&Catalog::xui())
+        .into_iter()
+        .partition(Diagnostic::is_error);
+    if !errors.is_empty() {
+        let problems = errors
+            .into_iter()
+            .map(|diagnostic| NodeProblem {
+                node: diagnostic.node.unwrap_or_else(|| "window".to_owned()),
+                message: diagnostic.message,
+            })
+            .collect();
+        return Err(MigrateError::Invalid(problems));
+    }
+    Ok(warnings
+        .into_iter()
+        .map(|diagnostic| match diagnostic.node {
+            Some(node) => format!("`{node}`: {}", diagnostic.message),
+            None => diagnostic.message,
+        })
+        .collect())
 }
 
 /// Writes `form` and reads the text back: a conversion is only reported as
