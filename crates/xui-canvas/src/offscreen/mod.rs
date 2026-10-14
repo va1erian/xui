@@ -13,22 +13,23 @@ use std::rc::Rc;
 
 use xui_core::backend::{Event, PlatformSpec, Result as BackendResult, WidgetId, WindowId};
 use xui_core::router::WidgetHost;
-use xui_core::{Image, Rect, Theme};
+use xui_core::{Image, Theme};
 
+use crate::Surface;
 use crate::text_layout::CosmicShaper;
-use crate::{RgbaImage, Surface};
 
 mod backend;
 #[cfg(test)]
 mod capture_tests;
 mod geometry;
 mod gl_fallback;
+mod present;
 #[cfg(test)]
 mod tests;
 
 use gl_fallback::GlContent;
+pub use present::PresentedFrame;
 
-use crate::compositor::{self, Frame};
 use crate::geometry::{absolute_bounds, hit_test};
 use crate::scene::{Node, Scene};
 use geometry::translate;
@@ -37,7 +38,9 @@ use geometry::translate;
 const DEFAULT_DPI: u32 = 96;
 
 struct OffscreenWindow {
-    surface: Surface,
+    /// The window's persistent frame; `None` only while a frame is being
+    /// painted (see [`OffscreenBackend::present`]).
+    surface: Option<Surface>,
     sink: Option<Rc<dyn WidgetHost>>,
     theme: Theme,
     dpi: u32,
@@ -49,38 +52,6 @@ struct OffscreenWindow {
     gl: GlContent,
     /// The last icon the app set with `Backend::set_window_icon`.
     icon: Option<Image>,
-}
-
-/// Clears a window's in-progress render flag when a frame finishes, however the
-/// render returns.
-struct RenderGuard<'a> {
-    rendering: &'a RefCell<HashSet<u64>>,
-    raw: u64,
-}
-
-impl Drop for RenderGuard<'_> {
-    fn drop(&mut self) {
-        self.rendering.borrow_mut().remove(&self.raw);
-    }
-}
-
-/// Puts a window's real surface back after compositing, on every exit path
-/// (including a panic in a painter), so a later frame cannot keep the 1x1
-/// placeholder that stood in for it while painters ran.
-struct SurfaceRestore<'a> {
-    backend: &'a OffscreenBackend,
-    raw: u64,
-    surface: Option<Surface>,
-}
-
-impl Drop for SurfaceRestore<'_> {
-    fn drop(&mut self) {
-        if let Some(surface) = self.surface.take()
-            && let Some(entry) = self.backend.windows.borrow_mut().get_mut(&self.raw)
-        {
-            entry.surface = surface;
-        }
-    }
 }
 
 /// A backend that renders into a software surface.
@@ -206,7 +177,7 @@ impl OffscreenBackend {
         self.windows.borrow_mut().insert(
             id.raw(),
             OffscreenWindow {
-                surface: Surface::new(width, height),
+                surface: Some(Surface::new(width, height)),
                 sink: None,
                 theme: Theme::light(),
                 dpi,
@@ -217,57 +188,6 @@ impl OffscreenBackend {
             },
         );
         Ok(id)
-    }
-
-    /// Renders `window`'s visible nodes, in creation order, into an image.
-    pub fn render(&self, window: WindowId) -> Option<RgbaImage> {
-        // A painter may ask to capture its own window, which would call `render`
-        // again; refuse the nested render rather than recursing forever. The
-        // guard clears this on every exit, including the early `?` below.
-        if !self.rendering.borrow_mut().insert(window.raw()) {
-            return None;
-        }
-        let _guard = RenderGuard {
-            rendering: &self.rendering,
-            raw: window.raw(),
-        };
-        // Take the surface out of the window state so a painter that re-enters
-        // the backend (for example `Ui::dpi`, which reads this same map) does not
-        // find it borrowed. The window stays in the map, with a placeholder
-        // surface, so painters still read its live DPI, theme and GL content.
-        // The GL content is snapshotted in the same step, so a widget's fallback
-        // paint can re-enter the backend without the window map staying borrowed.
-        let (dpi, theme, surface, gl) = {
-            let mut windows = self.windows.borrow_mut();
-            let entry = windows.get_mut(&window.raw())?;
-            let surface = std::mem::replace(&mut entry.surface, Surface::new(1, 1));
-            (entry.dpi, entry.theme, surface, entry.gl.snapshot())
-        };
-        // The guard puts the real surface back on every exit, including a panic
-        // in a painter, so a later frame never keeps the 1x1 placeholder.
-        let mut restore = SurfaceRestore {
-            backend: self,
-            raw: window.raw(),
-            surface: Some(surface),
-        };
-        let surface = restore.surface.as_mut().expect("a taken surface");
-        let (width, height) = surface.size();
-        let window_rect = Rect::new(0, 0, width as i32, height as i32);
-        // GL content is one painter among many, exactly as in the windowed
-        // backend; the offscreen backend has no GPU, so it paints the widget's
-        // software fallback: window-level content as the base layer, node-level
-        // content at its node's bounds. Everything goes through the shared
-        // compositor, as the windowed backend's frames do.
-        let plan = compositor::plan(&self.nodes.borrow(), window, &gl);
-        let frame = Frame {
-            window: window_rect,
-            dpi,
-            theme: &theme,
-        };
-        plan.paint(surface, &[window_rect], &frame, &gl);
-        let image = surface.to_image();
-        drop(restore);
-        Some(image)
     }
 
     /// Installs `widget` as `window`'s GL content. The offscreen backend has no
@@ -281,6 +201,7 @@ impl OffscreenBackend {
         if let Some(entry) = self.windows.borrow_mut().get_mut(&window.raw()) {
             entry.gl.set_window(widget);
         }
+        self.invalidate_window(window);
     }
 
     /// Removes `window`'s GL content.
@@ -289,6 +210,7 @@ impl OffscreenBackend {
         if let Some(entry) = self.windows.borrow_mut().get_mut(&window.raw()) {
             entry.gl.clear_window();
         }
+        self.invalidate_window(window);
     }
 
     /// Installs `widget` as the GL content of the node `id`, painted through its
@@ -303,6 +225,7 @@ impl OffscreenBackend {
             && let Some(entry) = self.windows.borrow_mut().get_mut(&window.raw())
         {
             entry.gl.set_node(id, widget);
+            self.invalidate_window(window);
         }
     }
 
@@ -314,6 +237,7 @@ impl OffscreenBackend {
             && let Some(entry) = self.windows.borrow_mut().get_mut(&window.raw())
         {
             entry.gl.clear_node(id);
+            self.invalidate_window(window);
         }
     }
 

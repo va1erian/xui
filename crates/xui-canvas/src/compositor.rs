@@ -28,8 +28,8 @@ use xui_core::Theme;
 use xui_core::backend::{Canvas as _, Painter, ParentRef, WidgetId, WindowId};
 use xui_core::geometry::Rect;
 
-use crate::geometry::{intersect, lift};
-use crate::scene::{Node, Scene};
+use crate::geometry::{Placement, intersect};
+use crate::scene::Scene;
 use crate::{Region, Surface};
 
 /// How far a painter may draw outside its node's bounds, in pixels.
@@ -67,6 +67,11 @@ pub(crate) trait Content {
     /// without a painter.
     fn has_node(&self, id: WidgetId) -> bool;
 
+    /// Whether the window's content changes without the compositor being told
+    /// (a GL frame; a software fallback reading a live value). A live window
+    /// is repainted whole every frame.
+    fn is_live(&self) -> bool;
+
     /// Paints the window-level content as the base layer, over `window`.
     fn paint_window(&self, region: &mut Region<'_>, window: Rect, dpi: u32, theme: &Theme);
 
@@ -100,43 +105,6 @@ struct Draw {
 /// The nodes of one window that paint, in creation order.
 pub(crate) struct Plan {
     draws: Vec<Draw>,
-}
-
-/// Where a node is, resolved once per frame from its parent's.
-#[derive(Clone, Copy)]
-struct Placement {
-    /// Window-absolute bounds.
-    bounds: Rect,
-    /// Visible through the whole ancestry.
-    visible: bool,
-    /// The clip that applies to the node itself: its ancestors'.
-    clip: Option<Rect>,
-    /// The clip that applies to its descendants: `clip` and its own.
-    below: Option<Rect>,
-}
-
-impl Placement {
-    fn of(node: &Node, parent: Option<&Placement>) -> Placement {
-        let (bounds, visible, clip) = match parent {
-            None => (node.bounds, node.visible, None),
-            Some(parent) => (
-                node.bounds.offset(parent.bounds.left, parent.bounds.top),
-                parent.visible && node.visible,
-                parent.below,
-            ),
-        };
-        let own = node.clip.map(|local| lift(local, bounds));
-        let below = match (clip, own) {
-            (Some(outer), Some(own)) => Some(intersect(outer, own)),
-            (outer, own) => outer.or(own),
-        };
-        Placement {
-            bounds,
-            visible,
-            clip,
-            below,
-        }
-    }
 }
 
 /// Resolves `id`'s placement, and its ancestors' on the way, into `resolved`.
@@ -215,7 +183,7 @@ pub(crate) fn plan(scene: &Scene, window: WindowId, content: &dyn Content) -> Pl
 }
 
 /// What painting a frame needs besides the plan.
-pub(crate) struct Frame<'a> {
+pub(crate) struct FrameInfo<'a> {
     /// The window's rectangle, `(0, 0, width, height)`.
     pub(crate) window: Rect,
     /// Dots per inch the painters scale their design values by.
@@ -247,7 +215,7 @@ impl Plan {
         &self,
         surface: &mut Surface,
         areas: &[Rect],
-        frame: &Frame<'_>,
+        frame: &FrameInfo<'_>,
         content: &dyn Content,
     ) {
         for area in areas {

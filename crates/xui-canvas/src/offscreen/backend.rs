@@ -95,11 +95,10 @@ impl Backend for OffscreenBackend {
         {
             let mut nodes = self.nodes.borrow_mut();
             for (id, rect) in moves {
-                if let Some(node) = nodes.get_mut(*id) {
-                    if node.bounds.size() != rect.size() {
-                        resized.push((*id, *rect));
-                    }
-                    node.bounds = *rect;
+                if let Some(previous) = nodes.set_bounds(*id, *rect)
+                    && previous.size() != rect.size()
+                {
+                    resized.push((*id, *rect));
                 }
             }
         }
@@ -125,7 +124,7 @@ impl Backend for OffscreenBackend {
     }
 
     fn set_visible(&self, id: WidgetId, visible: bool) {
-        self.with_node(id, |node| node.visible = visible);
+        self.nodes.borrow_mut().set_visible(id, visible);
     }
 
     fn set_enabled(&self, id: WidgetId, enabled: bool) {
@@ -133,7 +132,7 @@ impl Backend for OffscreenBackend {
     }
 
     fn set_clip(&self, id: WidgetId, rect: Option<Rect>) {
-        self.with_node(id, |node| node.clip = rect);
+        self.nodes.borrow_mut().set_clip(id, rect);
     }
 
     fn set_capture(&self, id: WidgetId) {
@@ -168,7 +167,7 @@ impl Backend for OffscreenBackend {
     }
 
     fn set_text(&self, id: WidgetId, text: &str) {
-        self.with_node(id, |node| node.text = text.to_string());
+        self.nodes.borrow_mut().set_text(id, text);
     }
 
     fn text(&self, id: WidgetId) -> String {
@@ -179,12 +178,16 @@ impl Backend for OffscreenBackend {
             .unwrap_or_default()
     }
 
-    fn invalidate(&self, _id: WidgetId) {}
+    fn invalidate(&self, id: WidgetId) {
+        self.nodes.borrow_mut().invalidate(id);
+    }
 
-    fn invalidate_rect(&self, _id: WidgetId, _rect: Rect) {}
+    fn invalidate_rect(&self, id: WidgetId, rect: Rect) {
+        self.nodes.borrow_mut().invalidate_rect(id, rect);
+    }
 
     fn set_painter(&self, id: WidgetId, painter: Painter) {
-        self.with_node(id, |node| node.painter = Some(painter));
+        self.nodes.borrow_mut().set_painter(id, painter);
     }
 
     fn bounds(&self, id: WidgetId) -> Rect {
@@ -231,6 +234,8 @@ impl Backend for OffscreenBackend {
         if let Some(entry) = self.windows.borrow_mut().get_mut(&window.raw()) {
             entry.theme = *theme;
         }
+        // Every painter reads the live theme.
+        self.nodes.borrow_mut().invalidate_window(window);
     }
 
     fn prefers_reduced_motion(&self) -> bool {

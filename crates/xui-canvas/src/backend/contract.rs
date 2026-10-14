@@ -159,7 +159,11 @@ impl Backend for WinitBackend {
     }
 
     fn destroy(&self, id: WidgetId) {
+        let window = self.window_of(id);
         self.shared.nodes.borrow_mut().remove(id);
+        if let Some(window) = window {
+            self.shared.request_redraw(window);
+        }
     }
 
     fn apply_moves(&self, window: WindowId, moves: &[(WidgetId, Rect)]) {
@@ -167,14 +171,14 @@ impl Backend for WinitBackend {
         {
             let mut nodes = self.shared.nodes.borrow_mut();
             for (id, rect) in moves {
-                if let Some(node) = nodes.get_mut(*id) {
-                    if node.bounds.size() != rect.size() {
-                        resized.push((*id, *rect));
-                    }
-                    node.bounds = *rect;
+                if let Some(previous) = nodes.set_bounds(*id, *rect)
+                    && previous.size() != rect.size()
+                {
+                    resized.push((*id, *rect));
                 }
             }
         }
+        self.shared.request_redraw(window);
         // A moved node gets no other size notification here (there is no HWND
         // to fire WM_SIZE on), so a resized widget must be told directly or its
         // own cached layout (e.g. a scrollbar's track) goes stale.
@@ -191,7 +195,8 @@ impl Backend for WinitBackend {
     }
 
     fn set_visible(&self, id: WidgetId, visible: bool) {
-        self.with_node(id, |node| node.visible = visible);
+        let changed = self.shared.nodes.borrow_mut().set_visible(id, visible);
+        self.redraw_if(changed, id);
     }
 
     fn set_enabled(&self, id: WidgetId, enabled: bool) {
@@ -199,7 +204,8 @@ impl Backend for WinitBackend {
     }
 
     fn raise(&self, id: WidgetId) {
-        self.shared.nodes.borrow_mut().raise(id);
+        let moved = self.shared.nodes.borrow_mut().raise(id);
+        self.redraw_if(moved, id);
     }
 
     fn set_drag_region(&self, id: WidgetId, drag: bool) {
@@ -211,7 +217,8 @@ impl Backend for WinitBackend {
     }
 
     fn set_clip(&self, id: WidgetId, rect: Option<Rect>) {
-        self.with_node(id, |node| node.clip = rect);
+        let changed = self.shared.nodes.borrow_mut().set_clip(id, rect);
+        self.redraw_if(changed, id);
     }
 
     fn set_capture(&self, id: WidgetId) {
@@ -251,7 +258,8 @@ impl Backend for WinitBackend {
     }
 
     fn set_text(&self, id: WidgetId, text: &str) {
-        self.with_node(id, |node| node.text = text.to_string());
+        let changed = self.shared.nodes.borrow_mut().set_text(id, text);
+        self.redraw_if(changed, id);
     }
 
     fn text(&self, id: WidgetId) -> String {
@@ -280,17 +288,18 @@ impl Backend for WinitBackend {
     }
 
     fn invalidate(&self, id: WidgetId) {
-        if let Some(window) = self.window_of(id) {
-            self.shared.request_redraw(window);
-        }
+        let damaged = self.shared.nodes.borrow_mut().invalidate(id);
+        self.redraw_if(damaged, id);
     }
 
-    fn invalidate_rect(&self, id: WidgetId, _rect: Rect) {
-        self.invalidate(id);
+    fn invalidate_rect(&self, id: WidgetId, rect: Rect) {
+        let damaged = self.shared.nodes.borrow_mut().invalidate_rect(id, rect);
+        self.redraw_if(damaged, id);
     }
 
     fn set_painter(&self, id: WidgetId, painter: Painter) {
-        self.with_node(id, |node| node.painter = Some(painter));
+        let changed = self.shared.nodes.borrow_mut().set_painter(id, painter);
+        self.redraw_if(changed, id);
     }
 
     fn measure_text(&self, text: &str, style: &TextStyle, dpi: u32) -> TextMetrics {
@@ -335,6 +344,9 @@ impl Backend for WinitBackend {
         if let Some(state) = self.shared.windows.borrow_mut().get_mut(&window.raw()) {
             state.theme = *theme;
         }
+        // Every painter reads the live theme.
+        self.shared.nodes.borrow_mut().invalidate_window(window);
+        self.shared.request_redraw(window);
     }
 
     fn prefers_reduced_motion(&self) -> bool {

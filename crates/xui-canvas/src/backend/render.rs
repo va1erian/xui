@@ -12,7 +12,7 @@ use xui_core::image::Image;
 
 use super::Shared;
 use crate::Surface;
-use crate::compositor::{self, Content, Frame};
+use crate::compositor::{self, Content, FrameInfo};
 use crate::gl::GlWidget;
 
 /// Where a window's GL content is attached.
@@ -44,6 +44,14 @@ impl Content for WindowGl<'_> {
             .borrow()
             .get(&self.window.raw())
             .is_some_and(|state| state.gl_nodes.contains_key(&id))
+    }
+
+    fn is_live(&self) -> bool {
+        self.shared
+            .windows
+            .borrow()
+            .get(&self.window.raw())
+            .is_some_and(|state| state.gl.is_some() || !state.gl_nodes.is_empty())
     }
 
     fn paint_window(&self, region: &mut crate::Region<'_>, window: Rect, dpi: u32, theme: &Theme) {
@@ -97,7 +105,7 @@ pub(super) fn composite(shared: &Shared, window: WindowId, surface: &mut Surface
     let window_rect = Rect::new(0, 0, size.0 as i32, size.1 as i32);
     let content = WindowGl { shared, window };
     let plan = compositor::plan(&shared.nodes.borrow(), window, &content);
-    let frame = Frame {
+    let frame = FrameInfo {
         window: window_rect,
         dpi,
         theme: &theme,

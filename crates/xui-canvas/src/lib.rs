@@ -52,6 +52,7 @@ pub use clock::MonotonicClock;
 #[cfg(feature = "winit-backend")]
 pub use gl::{GlError, GlSurface, GlWidget};
 pub use offscreen::OffscreenBackend;
+pub use offscreen::PresentedFrame;
 pub use region::Region;
 pub use text::{add_font, measure as measure_text, set_default_family, set_default_font};
 

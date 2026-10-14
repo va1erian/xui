@@ -3,6 +3,7 @@ use std::rc::Rc;
 
 use super::*;
 use crate::geometry::{absolute_bounds, ancestor_clip, effectively_visible};
+use crate::scene::Node;
 use xui_core::Color;
 
 /// Content that never has any.
@@ -10,6 +11,10 @@ struct Nothing;
 
 impl Content for Nothing {
     fn has_node(&self, _id: WidgetId) -> bool {
+        false
+    }
+
+    fn is_live(&self) -> bool {
         false
     }
 
@@ -63,7 +68,7 @@ fn frame(size: (i32, i32)) -> (Rect, Theme) {
 fn paint_whole(scene: &Scene, surface: &mut Surface, size: (i32, i32)) {
     let (window_rect, theme) = frame(size);
     let plan = plan(scene, window(), &Nothing);
-    let frame = Frame {
+    let frame = FrameInfo {
         window: window_rect,
         dpi: 96,
         theme: &theme,
@@ -219,7 +224,7 @@ fn an_area_repaints_only_the_nodes_whose_reach_meets_it() {
 
     let mut surface = Surface::new(200, 40);
     let theme = Theme::light();
-    let frame = Frame {
+    let frame = FrameInfo {
         window: Rect::new(0, 0, 200, 40),
         dpi: 96,
         theme: &theme,
@@ -246,7 +251,7 @@ fn painting_an_area_leaves_every_other_pixel_alone() {
     let mut surface = Surface::new(100, 30);
     surface.fill(Color::rgb(7, 8, 9));
     let theme = Theme::light();
-    let frame = Frame {
+    let frame = FrameInfo {
         window: Rect::new(0, 0, 100, 30),
         dpi: 96,
         theme: &theme,

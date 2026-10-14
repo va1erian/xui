@@ -37,6 +37,22 @@ pub(crate) fn intersect(a: Rect, b: Rect) -> Rect {
     )
 }
 
+/// The smallest rectangle holding `a` and `b`; an empty one is ignored.
+pub(crate) fn union(a: Rect, b: Rect) -> Rect {
+    if a.is_empty() {
+        return b;
+    }
+    if b.is_empty() {
+        return a;
+    }
+    Rect::new(
+        a.left.min(b.left),
+        a.top.min(b.top),
+        a.right.max(b.right),
+        a.bottom.max(b.bottom),
+    )
+}
+
 /// `clip`, a clip in a node's own coordinates, in window coordinates, given
 /// the node's window-absolute bounds `origin`.
 pub(crate) fn lift(clip: Rect, origin: Rect) -> Rect {
@@ -147,6 +163,75 @@ pub(crate) fn hit_test(
         let abs = hit_bounds(scene, id, x, y)?;
         Some((id, x - abs.left, y - abs.top))
     })
+}
+
+/// Where a node is: its window-absolute bounds, whether it is visible through
+/// its whole ancestry, and the clips that apply to it and to its descendants.
+/// Resolved from the parent's placement, so a pass over a scene resolves each
+/// node once instead of walking its ancestors.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct Placement {
+    /// Window-absolute bounds.
+    pub(crate) bounds: Rect,
+    /// Visible through the whole ancestry.
+    pub(crate) visible: bool,
+    /// The clip that applies to the node itself: its ancestors'.
+    pub(crate) clip: Option<Rect>,
+    /// The clip that applies to its descendants: `clip` and its own.
+    pub(crate) below: Option<Rect>,
+}
+
+impl Placement {
+    /// `node`'s placement given its parent's (`None` for a node placed in the
+    /// window itself).
+    pub(crate) fn of(node: &Node, parent: Option<&Placement>) -> Placement {
+        let (bounds, visible, clip) = match parent {
+            None => (node.bounds, node.visible, None),
+            Some(parent) => (
+                node.bounds.offset(parent.bounds.left, parent.bounds.top),
+                parent.visible && node.visible,
+                parent.below,
+            ),
+        };
+        let own = node.clip.map(|local| lift(local, bounds));
+        let below = match (clip, own) {
+            (Some(outer), Some(own)) => Some(intersect(outer, own)),
+            (outer, own) => outer.or(own),
+        };
+        Placement {
+            bounds,
+            visible,
+            clip,
+            below,
+        }
+    }
+
+    /// The part of `bounds` that paints: trimmed to the clip. Empty when the
+    /// node is hidden or the clip leaves nothing of it.
+    pub(crate) fn visible_bounds(&self) -> Rect {
+        if !self.visible {
+            return Rect::default();
+        }
+        match self.clip {
+            Some(clip) => intersect(self.bounds, clip),
+            None => self.bounds,
+        }
+    }
+}
+
+/// The placement of `id`, walking its parent chain once from the window.
+pub(crate) fn placement(scene: &Scene, id: WidgetId) -> Option<Placement> {
+    let mut chain = vec![id];
+    let mut parent = scene.get(id)?.parent;
+    while let ParentRef::Widget(parent_id) = parent {
+        chain.push(parent_id);
+        parent = scene.get(parent_id)?.parent;
+    }
+    let mut above: Option<Placement> = None;
+    for member in chain.iter().rev() {
+        above = Some(Placement::of(scene.get(*member)?, above.as_ref()));
+    }
+    above
 }
 
 #[cfg(test)]

@@ -16,6 +16,11 @@
 
 use std::collections::{BTreeMap, HashMap};
 
+mod damage;
+mod notes;
+
+use damage::Damage;
+
 use xui_core::backend::{Painter, ParentRef, WidgetId, WindowId};
 use xui_core::geometry::Rect;
 
@@ -76,6 +81,8 @@ pub(crate) struct Scene {
     next_seq: u64,
     /// The nodes created directly inside a container node, in no order.
     children: HashMap<WidgetId, Vec<WidgetId>>,
+    /// What changed in each window (by raw id) since its last painted frame.
+    damage: HashMap<u64, Damage>,
 }
 
 impl Scene {
@@ -170,12 +177,22 @@ impl Scene {
         slot.seq = self.next_seq;
         self.next_seq += 1;
         self.order.insert(slot.seq, id);
+        // Its pixels now paint above whatever it overlaps.
+        if let Some(window) = self.window_of(id) {
+            let extent = self.subtree_extent(id);
+            self.note(window, extent);
+        }
         true
     }
 
     /// Removes `id` and every node created inside it, and returns their ids
     /// (empty when `id` is not there).
     pub(crate) fn remove(&mut self, id: WidgetId) -> Vec<WidgetId> {
+        // What the subtree covered is stale once it is gone.
+        if let Some(window) = self.window_of(id) {
+            let extent = self.subtree_extent(id);
+            self.note(window, extent);
+        }
         let removed = self.subtree(id);
         if let Some(first) = removed.first() {
             self.unlink_from_parent(*first);
@@ -203,6 +220,7 @@ impl Scene {
             }
             self.children.remove(id);
         }
+        self.damage.remove(&window.raw());
         // A surviving container (another window's) cannot hold one of these,
         // since a node's parent is in its own window.
         gone

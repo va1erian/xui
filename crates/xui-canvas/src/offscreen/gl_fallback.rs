@@ -88,6 +88,10 @@ impl Content for GlSnapshot {
         self.nodes.iter().any(|(raw, _)| *raw == id.raw())
     }
 
+    fn is_live(&self) -> bool {
+        self.window.is_some() || !self.nodes.is_empty()
+    }
+
     /// Paints the window-level widget's software fallback as the base layer.
     fn paint_window(&self, region: &mut Region<'_>, window: Rect, dpi: u32, theme: &Theme) {
         if let Some(widget) = &self.window {
@@ -142,6 +146,9 @@ pub(super) struct GlSnapshot;
 #[cfg(not(feature = "winit-backend"))]
 impl Content for GlSnapshot {
     fn has_node(&self, _id: WidgetId) -> bool {
+        false
+    }
+    fn is_live(&self) -> bool {
         false
     }
 

@@ -202,6 +202,13 @@ impl Shared {
         sink.is_some_and(|sink| sink.deliver(target, event))
     }
 
+    /// Marks the whole of `window` stale and requests a frame of it: a
+    /// resize, a DPI or theme change, or GL content that came or went.
+    pub(crate) fn invalidate_window(&self, window: WindowId) {
+        self.nodes.borrow_mut().invalidate_window(window);
+        self.request_redraw(window);
+    }
+
     /// Requests a repaint of `window`.
     pub(crate) fn request_redraw(&self, window: WindowId) {
         if let Some(state) = self.windows.borrow().get(&window.raw())
@@ -275,6 +282,15 @@ impl WinitBackend {
     fn with_node(&self, id: WidgetId, f: impl FnOnce(&mut Node)) {
         if let Some(node) = self.shared.nodes.borrow_mut().get_mut(id) {
             f(node);
+        }
+    }
+
+    /// Asks for a frame of the window of node `id` when `damaged`: a change
+    /// that marked pixels stale is shown without waiting for the next
+    /// invalidate.
+    fn redraw_if(&self, damaged: bool, id: WidgetId) {
+        if damaged && let Some(window) = self.window_of(id) {
+            self.shared.request_redraw(window);
         }
     }
 
