@@ -14,7 +14,19 @@ fn curves() -> Vec<Easing> {
         Easing::expo_in(),
         Easing::expo_out(),
     ];
-    for exponent in [0.01, 1.0, 2.0, 12.0, 40.0, 300.0, -3.0] {
+    for exponent in [
+        0.01,
+        1.0,
+        2.0,
+        12.0,
+        40.0,
+        300.0,
+        -3.0,
+        f32::MAX,
+        -f32::MAX,
+        f32::INFINITY,
+        f32::NEG_INFINITY,
+    ] {
         all.push(Easing::ExpoIn { exponent });
         all.push(Easing::ExpoOut { exponent });
     }
@@ -201,4 +213,67 @@ fn the_default_constructors_use_the_toolkit_exponent() {
             exponent: DEFAULT_EXPONENT
         }
     );
+}
+
+#[test]
+fn the_default_exponent_hits_its_known_literals() {
+    // (e^3 - 1) / (e^6 - 1) = 0.047426, and its mirror 0.952574.
+    let ease_in = Easing::expo_in().ease(0.5);
+    let ease_out = Easing::expo_out().ease(0.5);
+    assert!((ease_in - 0.04743).abs() < 1.0e-5, "{ease_in}");
+    assert!((ease_out - 0.95257).abs() < 1.0e-5, "{ease_out}");
+}
+
+#[test]
+fn negative_infinite_and_huge_negative_exponents_are_steps_without_nan() {
+    for exponent in [f32::NEG_INFINITY, -f32::MAX] {
+        // A negative exponent swaps in and out, so an ease-in of it jumps at
+        // the start and an ease-out of it holds until the end.
+        let ease_in = Easing::ExpoIn { exponent };
+        let ease_out = Easing::ExpoOut { exponent };
+        for t in [1.0e-6, 0.001, 0.5, 0.999, 0.999_999] {
+            assert_eq!(ease_in.ease(t), 1.0, "ExpoIn {exponent} at {t}");
+            assert_eq!(ease_out.ease(t), 0.0, "ExpoOut {exponent} at {t}");
+        }
+        assert_eq!(ease_in.ease(0.0), 0.0);
+        assert_eq!(ease_in.ease(1.0), 1.0);
+        assert_eq!(ease_out.ease(0.0), 0.0);
+        assert_eq!(ease_out.ease(1.0), 1.0);
+    }
+}
+
+/// The `f32` bit patterns of `[0, 1]`, every `stride`-th one, plus the first
+/// few dense ones (the subnormals and tiny values) and `1.0` itself. Bit
+/// patterns of non-negative floats are ordered like the values.
+fn strided_unit_samples(stride: usize) -> impl Iterator<Item = f32> {
+    let one = 1.0_f32.to_bits();
+    (0..=one)
+        .step_by(stride)
+        .chain(one - 2..=one)
+        .chain(0..2048)
+        .map(f32::from_bits)
+}
+
+#[test]
+fn every_curve_is_monotonic_across_the_f32_bit_patterns_of_the_unit_range() {
+    for easing in curves() {
+        let mut previous_input = -1.0_f32;
+        let mut previous = 0.0_f32;
+        // Sorted by input so the sweep compares neighbours; the dense head and
+        // the tail were chained after the stride.
+        let mut samples: Vec<f32> = strided_unit_samples(10_007).collect();
+        samples.sort_by(f32::total_cmp);
+        samples.dedup();
+        for t in samples {
+            let value = easing.ease(t);
+            assert!((0.0..=1.0).contains(&value), "{easing:?} at {t:e}: {value}");
+            assert!(
+                value >= previous,
+                "{easing:?} went backwards between {previous_input:e} and {t:e}:                  {previous} -> {value}"
+            );
+            previous_input = t;
+            previous = value;
+        }
+        assert_eq!(previous, 1.0, "{easing:?} ends at 1.0");
+    }
 }

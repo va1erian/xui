@@ -65,6 +65,10 @@ impl Tween {
 
     /// The elapsed time at which the tween ends: `delay + duration`, saturating
     /// at [`Duration::MAX`] instead of overflowing.
+    ///
+    /// When the sum saturates, `total()` is only a lower bound on the end, so
+    /// do not compare an elapsed time against it: [`Tween::is_finished`] is
+    /// authoritative (it never forms the sum).
     pub fn total(&self) -> Duration {
         self.delay.saturating_add(self.duration)
     }

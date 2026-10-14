@@ -170,3 +170,70 @@ fn huge_durations_neither_overflow_nor_panic() {
     let value = long.sample(Duration::from_secs(60));
     assert!((0.0..1.0e-15).contains(&value), "{value}");
 }
+
+/// One `f32` step at `value` (which must be positive and finite).
+fn ulp(value: f32) -> f64 {
+    f64::from(f32::from_bits(value.to_bits() + 1) - value)
+}
+
+#[test]
+fn a_one_hour_tween_sampled_at_frame_steps_from_one_hour_is_exact_to_an_ulp() {
+    // A tween that starts after an hour of uptime and itself lasts an hour,
+    // sampled every 16.7 ms: the `Duration` arithmetic is exact, so the large
+    // elapsed time costs no precision.
+    let hour = Duration::from_secs(3600);
+    let tween = Tween::new(0.0, 1.0, hour).with_delay(hour);
+    let step = Duration::from_micros(16_700);
+
+    let mut previous = 0.0_f32;
+    for frame in 0..=4000_u32 {
+        let value = tween.sample(hour + step * frame);
+        // The exact progress, from integers: microseconds over microseconds.
+        let exact = f64::from(frame) * 16_700.0 / 3_600_000_000.0;
+        assert!(
+            (f64::from(value) - exact).abs() <= ulp(value),
+            "frame {frame}: {value} vs {exact}"
+        );
+        assert!(value >= previous, "frame {frame} went backwards");
+        previous = value;
+    }
+    assert!(previous > 0.0 && previous < 1.0, "still in flight");
+}
+
+#[test]
+fn a_one_hour_expo_out_tween_tracks_the_closed_form_at_frame_steps() {
+    let hour = Duration::from_secs(3600);
+    let tween = Tween::new(0.0, 1.0, hour)
+        .with_delay(hour)
+        .with_easing(Easing::expo_out());
+    let step = Duration::from_micros(16_700);
+
+    let mut previous = 0.0_f32;
+    for frame in 0..=4000_u32 {
+        let progress = f64::from(frame) * 16_700.0 / 3_600_000_000.0;
+        let exact = 1.0 - ((6.0 * (1.0 - progress)).exp() - 1.0) / (6.0_f64.exp() - 1.0);
+        let value = tween.sample(hour + step * frame);
+        assert!(
+            (f64::from(value) - exact).abs() < 1.0e-6,
+            "frame {frame}: {value} vs {exact}"
+        );
+        assert!(value >= previous, "frame {frame} went backwards");
+        previous = value;
+    }
+}
+
+#[test]
+fn a_delay_that_nearly_fills_the_duration_range_still_has_an_in_between() {
+    let delay = Duration::MAX - Duration::from_secs(1);
+    let tween = Tween::new(0.0, 1.0, Duration::from_secs(10)).with_delay(delay);
+
+    // One second into a ten-second move, at the very end of `Duration`.
+    let value = tween.sample(Duration::MAX);
+    assert!((value - 0.1).abs() < 1.0e-6, "{value}");
+    assert!(!tween.is_finished(Duration::MAX));
+
+    // `total` saturates, so it claims the end is already reached; only
+    // `is_finished` is right about it.
+    assert_eq!(tween.total(), Duration::MAX);
+    assert!(Duration::MAX >= tween.total());
+}
