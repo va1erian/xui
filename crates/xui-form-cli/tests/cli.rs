@@ -156,27 +156,13 @@ fn migrate_converts_a_format_one_form() {
 #[test]
 fn migrate_refuses_a_form_nested_too_deep_and_writes_nothing() {
     let dir = scratch("migrate-deep");
-    let mut v1 = String::from(
-        "format = 1
-[window]
-name = \"deep\"
-",
-    );
+    let mut v1 = String::from("format = 1\n[window]\nname = \"deep\"\n");
     for level in 0..9 {
         v1.push_str(&format!(
-            "[[node]]
-kind = \"Panel\"
-name = \"panel_{level}\"
-width = 180
-height = 180
-"
+            "[[node]]\nkind = \"Panel\"\nname = \"panel_{level}\"\nwidth = 180\nheight = 180\n"
         ));
         if level > 0 {
-            v1.push_str(&format!(
-                "parent = \"panel_{}\"
-",
-                level - 1
-            ));
+            v1.push_str(&format!("parent = \"panel_{}\"\n", level - 1));
         }
     }
     let source = file(&dir, "deep.lfm", &v1);
@@ -188,6 +174,69 @@ height = 180
     assert!(message.contains("too deeply"), "{message}");
     assert!(stdout(&output).is_empty(), "nothing is printed");
     assert!(!out.exists(), "nothing is written");
+}
+
+#[test]
+fn migrate_reports_every_violation_by_node_and_writes_nothing() {
+    let dir = scratch("migrate-invalid");
+    let v1 = file(
+        &dir,
+        "bad.lfm",
+        r#"format = 1
+[window]
+name = "bad"
+[[node]]
+kind = "Button"
+name = "ok_button"
+[[node]]
+kind = "Label"
+name = "inside_button"
+parent = "ok_button"
+[[node]]
+kind = "Panel"
+name = "loop_a"
+parent = "loop_b"
+[[node]]
+kind = "Panel"
+name = "loop_b"
+parent = "loop_a"
+[[node]]
+kind = "Label"
+name = "orphan"
+parent = "nowhere"
+[[node]]
+kind = "Label"
+name = "orphan"
+"#,
+    );
+    let out = dir.join("bad-v2.lfm");
+    let output = xui_form(&["migrate", &v1, "--out", &out.to_string_lossy()]);
+    assert_eq!(output.status.code(), Some(1));
+    let report = stderr(&output);
+    for needle in [
+        "error: node `inside_button`: its parent `ok_button` is a Button",
+        "error: node `loop_a`: it is part of a parent cycle",
+        "error: node `loop_b`: it is part of a parent cycle",
+        "error: node `orphan`: its parent `nowhere` does not exist",
+        "error: node `orphan`: the name is used more than once",
+    ] {
+        assert!(report.contains(needle), "{needle}\n{report}");
+    }
+    assert!(stdout(&output).is_empty());
+    assert!(!out.exists(), "nothing is written");
+}
+
+#[test]
+fn migrate_to_standard_output_prints_nothing_on_a_violation() {
+    let dir = scratch("migrate-invalid-stdout");
+    let v1 = file(
+        &dir,
+        "bad.lfm",
+        "format = 1\n[window]\nname = \"bad\"\n[[node]]\nkind = \"Label\"\nname = \"a\"\nparent = \"a\"\n",
+    );
+    let output = xui_form(&["migrate", &v1]);
+    assert_eq!(output.status.code(), Some(1));
+    assert!(stdout(&output).is_empty(), "{}", stdout(&output));
 }
 
 #[test]

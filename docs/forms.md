@@ -74,7 +74,12 @@ at runtime: convert it once with `xui-form migrate` (or
 become an `Absolute` layout with their old rectangles and anchors, or a
 `Grid` when the rectangles line up in rows and columns with one gap and none
 is anchored. A `GroupBox` becomes a `Group`, `cue` becomes `placeholder`, and
-`tab_index` is dropped: the tab order is the tree order.
+`tab_index` is dropped: the tab order is the tree order. What is left out is
+printed to standard error, one note each. A form that is not a tree (a name
+used twice, a `parent` that does not exist or is not a `Panel` or `GroupBox`,
+a parent cycle, a position that is not an integer) is refused whole: each
+violation is printed with its node, nothing is written and the exit status is
+1, so no node is dropped without a word.
 
 ## Building a form
 

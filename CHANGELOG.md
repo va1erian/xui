@@ -343,6 +343,14 @@
 
 ### Fixes
 
+- `xui-form migrate` no longer drops nodes or overflows the stack on an invalid
+  format-1 form. Names that are not unique, a `parent` that does not exist or
+  is not a `Panel` or `GroupBox`, a parent cycle and a position that is not an
+  integer are reported with their node (the new `MigrateError::Invalid`,
+  listing `NodeProblem`s) and nothing is converted; unknown `[window]` and
+  top-level keys are noted like `tab_index`. The grid detection uses checked
+  arithmetic, so extreme coordinates no longer panic in debug builds, and the
+  conversion visits each node once.
 - `xui-form`: control arrays are bounded. `array` is at most
   `MAX_ARRAY` (1024) and an `index` is below it; `array: 0` and `array` or
   `index` on a `Panel`, `Group` or `Tabs` are validation errors, and

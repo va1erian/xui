@@ -2,7 +2,7 @@
 
 //! Recognising rectangles that line up as a grid.
 
-use super::Rect;
+use super::v1::Rect;
 use crate::model::{Grid, Length, Node, Track};
 
 /// Where one rectangle goes in the grid.
@@ -79,9 +79,23 @@ pub(super) fn detect(rects: &[Rect], size: (i64, i64)) -> Option<GridLayout> {
         .iter()
         .map(|top| same(rects.iter().filter(|r| r.1 == *top).map(|r| r.3)).flatten())
         .collect::<Option<_>>()?;
-    let column_gaps = (1..lefts.len()).map(|k| lefts[k] - lefts[k - 1] - widths[k - 1]);
-    let row_gaps = (1..tops.len()).map(|r| tops[r] - tops[r - 1] - heights[r - 1]);
-    let gap = same(column_gaps.chain(row_gaps))?.unwrap_or(0);
+    // The coordinates are whatever the file says, so every sum is checked: an
+    // overflow is a form that is not a grid.
+    let column_gaps: Vec<i64> = (1..lefts.len())
+        .map(|k| {
+            lefts[k]
+                .checked_sub(lefts[k - 1])?
+                .checked_sub(widths[k - 1])
+        })
+        .collect::<Option<_>>()?;
+    let row_gaps: Vec<i64> = (1..tops.len())
+        .map(|r| {
+            tops[r]
+                .checked_sub(tops[r - 1])?
+                .checked_sub(heights[r - 1])
+        })
+        .collect::<Option<_>>()?;
+    let gap = same(column_gaps.into_iter().chain(row_gaps))?.unwrap_or(0);
     if gap < 0 || lefts[0] != tops[0] {
         return None;
     }
@@ -99,8 +113,9 @@ pub(super) fn detect(rects: &[Rect], size: (i64, i64)) -> Option<GridLayout> {
         if tops.get(row) != Some(&top) || lefts.get(column) != Some(&left) {
             return None;
         }
-        let right = left + width;
-        let last = (column..lefts.len()).find(|&k| lefts[k] + widths[k] == right)?;
+        let right = left.checked_add(width)?;
+        let last =
+            (column..lefts.len()).find(|&k| lefts[k].checked_add(widths[k]) == Some(right))?;
         cells[index] = Some(Cell {
             order: flow,
             height,
@@ -110,8 +125,9 @@ pub(super) fn detect(rects: &[Rect], size: (i64, i64)) -> Option<GridLayout> {
     }
 
     let padding = lefts[0];
-    let right = lefts[lefts.len() - 1] + widths[widths.len() - 1];
-    let even = same(widths.iter().copied()).flatten().is_some() && size.0 - right == padding;
+    let right = lefts[lefts.len() - 1].checked_add(widths[widths.len() - 1])?;
+    let even =
+        same(widths.iter().copied()).flatten().is_some() && size.0.checked_sub(right)? == padding;
     Some(GridLayout {
         widths,
         gap,
