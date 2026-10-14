@@ -13,6 +13,7 @@ use crate::theme::Theme;
 
 mod every;
 mod layouts;
+mod motion;
 mod node_ops;
 
 /// The widget layer's handle to a top-level window.

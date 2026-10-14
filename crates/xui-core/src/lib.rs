@@ -23,6 +23,7 @@ pub mod icon;
 pub mod image;
 pub mod layout;
 pub mod message;
+pub mod motion;
 pub mod property;
 pub mod router;
 pub mod theme;

@@ -125,3 +125,11 @@ fn run_app_builds_the_app_after_the_window_reports_its_dpi() {
         "a message queued by make reached `App::update`"
     );
 }
+
+#[test]
+fn a_backend_that_leaves_reduced_motion_alone_reports_no_preference() {
+    // `DeferredBackend` implements only the methods without a default, as an
+    // existing backend written before `prefers_reduced_motion` does.
+    let backend = DeferredBackend { dpi: Cell::new(96) };
+    assert!(!backend.prefers_reduced_motion());
+}
