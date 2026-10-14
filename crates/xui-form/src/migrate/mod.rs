@@ -141,7 +141,7 @@ pub fn from_v1(text: &str) -> Result<Migration, MigrateError> {
             "dropped the top-level `{key}`: format 1 ignored it too"
         ));
     }
-    let root = converter.level(None, size, 1)?;
+    let root = converter.level(None, size, 1, false)?;
     let form = Form {
         name: text("name"),
         title: text("title"),

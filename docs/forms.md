@@ -73,7 +73,10 @@ at runtime: convert it once with `xui-form migrate` (or
 `xui_form::migrate::from_v1`, feature `migrate`). Each container's children
 become an `Absolute` layout with their old rectangles and anchors, or a
 `Grid` when the rectangles line up in rows and columns with one gap and none
-is anchored. A `GroupBox` becomes a `Group`, `cue` becomes `placeholder`, and
+is anchored, and the grid reproduces them: its padding is the left and top
+margin and the right and bottom margins are at least as wide, so no column is
+squeezed. The content of a `Group` or of a card `Panel` is inset, so it stays
+an `Absolute` layout (positions in it are relative to the inset content). A `GroupBox` becomes a `Group`, `cue` becomes `placeholder`, and
 `tab_index` is dropped: the tab order is the tree order. What is left out is
 printed to standard error, one note each. A form that is not a tree (a name
 used twice, a `parent` that does not exist or is not a `Panel` or `GroupBox`,

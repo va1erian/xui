@@ -22,6 +22,7 @@ pub(super) struct GridLayout {
     padding: i64,
     /// Whether every column is as wide and the padding is the same on both
     /// sides, so `Fill(1)` columns reproduce the design and also stretch.
+    /// Otherwise the columns are `Fixed`: the design, without stretching.
     even: bool,
     /// One cell per rectangle, in the rectangles' order.
     pub(super) cells: Vec<Cell>,
@@ -124,10 +125,18 @@ pub(super) fn detect(rects: &[Rect], size: (i64, i64)) -> Option<GridLayout> {
         column = last + 1;
     }
 
+    // The grid pads all four sides alike and squeezes its columns into what
+    // is left, so it lands on the designed pixels only when the rectangles
+    // leave at least that much room right of the last column and below the
+    // last row. Otherwise the layout stays absolute, which is exact.
     let padding = lefts[0];
     let right = lefts[lefts.len() - 1].checked_add(widths[widths.len() - 1])?;
-    let even =
-        same(widths.iter().copied()).flatten().is_some() && size.0.checked_sub(right)? == padding;
+    let bottom = tops[tops.len() - 1].checked_add(heights[heights.len() - 1])?;
+    let room = (size.0.checked_sub(right)?, size.1.checked_sub(bottom)?);
+    if padding < 0 || room.0 < padding || room.1 < padding {
+        return None;
+    }
+    let even = same(widths.iter().copied()).flatten().is_some() && room.0 == padding;
     Some(GridLayout {
         widths,
         gap,

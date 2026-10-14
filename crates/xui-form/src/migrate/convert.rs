@@ -37,11 +37,17 @@ impl<'a> Converter<'a> {
     /// The children of `parent` (the window for `None`), designed at `size`:
     /// a grid when they line up, an absolute layout otherwise. The layout is
     /// `depth` levels down the tree.
+    ///
+    /// `inset` is whether the container insets its content (a `Group`'s
+    /// frame and title, a card `Panel`'s card): the content is then smaller
+    /// than the container's `size`, which a grid would be designed against,
+    /// so it stays absolute.
     pub(super) fn level(
         &mut self,
         parent: Option<&str>,
         size: (i64, i64),
         depth: usize,
+        inset: bool,
     ) -> Result<Node, MigrateError> {
         if depth > MAX_DEPTH {
             return Err(too_deep(parent.unwrap_or_default()));
@@ -54,7 +60,10 @@ impl<'a> Converter<'a> {
                 .and_then(toml::Value::as_str)
                 .is_some_and(|anchor| anchor != "top_left")
         });
-        if !anchored && let Some(layout) = grid::detect(&rects, size) {
+        if !anchored
+            && !inset
+            && let Some(layout) = grid::detect(&rects, size)
+        {
             let mut nodes = Vec::with_capacity(children.len());
             for (cell, &child) in layout.cells.iter().zip(&children) {
                 let mut fields = toml::Table::new();
@@ -135,10 +144,11 @@ impl<'a> Converter<'a> {
         let (.., width, height) = rect(v1);
         match &mut node {
             Node::Group(group) => {
-                *group.content = self.level(Some(&v1.name), (width, height), depth + 1)?;
+                *group.content = self.level(Some(&v1.name), (width, height), depth + 1, true)?;
             }
             Node::Panel(panel) => {
-                *panel.content = self.level(Some(&v1.name), (width, height), depth + 1)?;
+                let inset = panel.card;
+                *panel.content = self.level(Some(&v1.name), (width, height), depth + 1, inset)?;
             }
             _ => {}
         }
