@@ -127,6 +127,13 @@ impl ApplicationHandler<UserEvent> for App<'_> {
                     event_loop.exit();
                 }
             }
+            // A window that was hidden or shown again has to be handed the
+            // whole frame: the OS may have discarded what it showed.
+            WindowEvent::Occluded(_) => {
+                if let Some(real) = self.windows.get_mut(&raw) {
+                    real.buffer_stale = true;
+                }
+            }
             WindowEvent::Resized(size) => {
                 if let Some(state) = self.shared.windows.borrow_mut().get_mut(&raw) {
                     state.size = (size.width.max(1), size.height.max(1));

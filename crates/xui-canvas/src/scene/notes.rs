@@ -8,7 +8,7 @@
 //! after. That is the node's absolute bounds trimmed to its ancestors' clips,
 //! for itself and every node inside it, hidden subtrees excluded. The damage
 //! list grows each rectangle by the overdraw margin
-//! ([`OVERDRAW`](crate::compositor::OVERDRAW)).
+//! ([`margin`](crate::compositor::margin)) when it is taken.
 //!
 //! The mutators return whether they changed anything, so a backend asks for a
 //! frame only when one is owed.
@@ -38,11 +38,18 @@ impl Scene {
         self.damage_of(window).add_all();
     }
 
-    /// Takes `window`'s damage as rectangles inside `bounds` to repaint (the
+    /// Takes `window`'s damage as rectangles inside `bounds` to repaint, each
+    /// grown by `margin` pixels (the overdraw margin at the window's DPI; the
     /// whole of `bounds` when everything is stale or `force` is set), and
     /// resets it. Empty when nothing changed.
-    pub(crate) fn take_damage(&mut self, window: WindowId, bounds: Rect, force: bool) -> Vec<Rect> {
-        self.damage_of(window).take(bounds, force)
+    pub(crate) fn take_damage(
+        &mut self,
+        window: WindowId,
+        bounds: Rect,
+        force: bool,
+        margin: i32,
+    ) -> Vec<Rect> {
+        self.damage_of(window).take(bounds, force, margin)
     }
 
     /// The part of the window that `id` and every node inside it paint: the
@@ -207,6 +214,34 @@ impl Scene {
         self.note(window, area);
         true
     }
+}
+
+/// Whether delivering `event` to a node can change how the node looks without
+/// the node saying so: an input event, a focus change, a capture change or a
+/// leave. The backends mark the target's place stale after delivering one, so a
+/// widget that forgets to invalidate cannot leave stale pixels behind.
+///
+/// A plain `MouseMove` is left out: it is by far the commonest event, hover
+/// changes arrive as `MouseLeave` (and as the widget's own invalidate), and
+/// marking every node a pointer crosses would repaint a whole control for a
+/// pixel of movement.
+pub(crate) fn event_marks_target(event: &xui_core::backend::Event) -> bool {
+    use xui_core::backend::Event;
+    matches!(
+        event,
+        Event::MouseDown { .. }
+            | Event::MouseUp { .. }
+            | Event::MouseDoubleClick { .. }
+            | Event::MouseWheel { .. }
+            | Event::MouseLeave
+            | Event::CaptureChanged
+            | Event::KeyDown { .. }
+            | Event::KeyUp { .. }
+            | Event::Char(_)
+            | Event::TextChanged
+            | Event::SetFocus
+            | Event::KillFocus
+    )
 }
 
 #[cfg(test)]

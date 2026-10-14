@@ -67,7 +67,7 @@ fn frame(size: (i32, i32)) -> (Rect, Theme) {
 
 fn paint_whole(scene: &Scene, surface: &mut Surface, size: (i32, i32)) {
     let (window_rect, theme) = frame(size);
-    let plan = plan(scene, window(), &Nothing);
+    let plan = plan(scene, window(), 96, &Nothing);
     let frame = FrameInfo {
         window: window_rect,
         dpi: 96,
@@ -152,7 +152,7 @@ fn random_scene(seed: u64) -> Scene {
 fn the_one_pass_plan_matches_the_per_node_walks_on_random_scenes() {
     for seed in 1..=300 {
         let scene = random_scene(seed);
-        let planned = plan(&scene, window(), &Nothing);
+        let planned = plan(&scene, window(), 96, &Nothing);
         let mut expected = Vec::new();
         for (id, node) in scene.iter() {
             if node.painter.is_none() || !effectively_visible(&scene, id) {
@@ -229,7 +229,7 @@ fn an_area_repaints_only_the_nodes_whose_reach_meets_it() {
         dpi: 96,
         theme: &theme,
     };
-    let planned = plan(&scene, window(), &Nothing);
+    let planned = plan(&scene, window(), 96, &Nothing);
     planned.paint(&mut surface, &[Rect::new(0, 0, 50, 20)], &frame, &Nothing);
 
     assert_eq!(near.get(), 1, "the node inside the area paints");
@@ -256,7 +256,7 @@ fn painting_an_area_leaves_every_other_pixel_alone() {
         dpi: 96,
         theme: &theme,
     };
-    plan(&scene, window(), &Nothing).paint(
+    plan(&scene, window(), 96, &Nothing).paint(
         &mut surface,
         &[Rect::new(10, 5, 20, 15)],
         &frame,
@@ -291,7 +291,7 @@ fn a_hidden_ancestor_and_a_clip_remove_a_node_from_the_plan() {
     scene.insert(hidden, b);
     scene.insert(clipped, c);
 
-    let planned = plan(&scene, window(), &Nothing);
+    let planned = plan(&scene, window(), 96, &Nothing);
     assert_eq!(planned.ids(), [shown]);
     assert_eq!(planned.len(), 1);
 }
@@ -312,7 +312,7 @@ fn a_node_with_no_area_still_paints_where_its_corner_is_repainted() {
         dpi: 96,
         theme: &theme,
     };
-    let planned = plan(&scene, window(), &Nothing);
+    let planned = plan(&scene, window(), 96, &Nothing);
     planned.paint(&mut surface, &[Rect::new(26, 26, 40, 40)], &info, &Nothing);
     assert_eq!(runs.get(), 1, "its place is inside the repainted area");
     planned.paint(&mut surface, &[Rect::new(60, 60, 90, 90)], &info, &Nothing);
@@ -322,7 +322,7 @@ fn a_node_with_no_area_still_paints_where_its_corner_is_repainted() {
 #[test]
 fn growing_a_rectangle_at_the_limits_stays_representable() {
     let huge = Rect::new(0, 0, i32::MAX, i32::MAX);
-    let grown = grow(huge, OVERDRAW);
+    let grown = grow(huge, margin(96));
     assert!(!grown.is_empty());
     assert!(grown.width() > 0 && grown.height() > 0, "no overflow");
     assert!(grow(Rect::new(0, 0, 0, 0), 5).is_empty());

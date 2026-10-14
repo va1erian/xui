@@ -9,10 +9,18 @@
 //! 1. [`plan`] walks the window's nodes once, in creation order, and keeps the
 //!    ones that paint: visible through their whole ancestry, with something
 //!    left inside their ancestors' clips. Each carries its window-absolute
-//!    bounds, its clip, and the rectangle its pixels can reach.
+//!    bounds, its clip, and its *reach*: its bounds trimmed to the clips,
+//!    grown by the overdraw margin.
 //! 2. [`Plan::paint`] repaints rectangles of a [`Surface`]: for each, the
 //!    window background, then every planned node whose reach meets it, in
-//!    creation order, clipped to its ancestors' clips.
+//!    creation order, clipped to its ancestors' clips **and to its reach**.
+//!
+//! A painter cannot draw outside its reach, whether the frame repaints the
+//! whole window or one damaged rectangle: the clip is the same in both, which
+//! is what makes a repaint of damage equal a repaint of everything for any
+//! painter, and what damage tracking relies on (a node changes only pixels
+//! inside its reach, so only those need repainting). A widget that has to draw
+//! further out than the margin has to enlarge its node's bounds.
 //!
 //! Painting a rectangle is a [`Surface::paint_region`], so the pixels inside it
 //! are exactly what a whole-window paint draws there and the rest are not
@@ -32,19 +40,28 @@ use crate::geometry::{Placement, intersect};
 use crate::scene::Scene;
 use crate::{Region, Surface};
 
-/// How far a painter may draw outside its node's bounds, in pixels.
+/// How far a painter's pixels may reach outside its node's bounds, in design
+/// units (pixels at 96 DPI): the overdraw margin.
 ///
 /// Strokes are centred on a shape's edge, so a 1 px outline on the bounds'
 /// edge covers half a pixel outside it and anti-aliasing shows it; a focus
 /// ring or a glow (a theme's accent halo reaches about three pixels) goes
-/// further. The compositor repaints, besides every node a damaged rectangle
-/// touches, every node whose bounds *grown by this margin* touch it, and
-/// damage is grown by it too, so the overdraw of a neighbour is redrawn and
-/// the overdraw of a changed node is not left behind. A painter that draws
-/// further out than this has to report it with
-/// [`Backend::invalidate_rect`](xui_core::backend::Backend::invalidate_rect),
-/// whose rectangle is honoured as given.
-pub(crate) const OVERDRAW: i32 = 8;
+/// further, and a ring drawn in design units grows with the DPI, so the
+/// margin does too ([`margin`]). The measured need on the in-tree widgets is
+/// 1 px on the flat themes and 6 px on Midnight at 96 DPI.
+///
+/// A node's *reach* is its bounds, trimmed to its ancestors' clips and grown
+/// by the margin. The compositor clips each painter to its reach, so nothing is
+/// drawn outside it; damage is grown by the same margin, and a damaged
+/// rectangle repaints every node whose reach touches it.
+pub(crate) const OVERDRAW_DIP: i32 = 8;
+
+/// The overdraw margin at `dpi`, in device pixels: [`OVERDRAW_DIP`] design
+/// units, rounded up.
+pub(crate) fn margin(dpi: u32) -> i32 {
+    let scaled = (u64::from(OVERDRAW_DIP.unsigned_abs()) * u64::from(dpi)).div_ceil(96);
+    i32::try_from(scaled).unwrap_or(i32::MAX).min(EDGE_LIMIT)
+}
 
 /// The most any edge of a damaged or reached rectangle can be from the origin:
 /// far outside any window, and small enough that sums and widths of such
@@ -102,7 +119,7 @@ struct Draw {
     /// The clip its ancestors impose, in window coordinates.
     clip: Option<Rect>,
     /// Where its pixels can land: its bounds trimmed to the clip, grown by
-    /// [`OVERDRAW`].
+    /// the margin.
     reach: Rect,
     painter: Option<Painter>,
     /// Whether `Content` also paints at this node.
@@ -152,7 +169,8 @@ fn place(
 
 /// Plans a frame of `window`: its painting nodes in creation order, with
 /// bounds and clips resolved in a single pass over the scene.
-pub(crate) fn plan(scene: &Scene, window: WindowId, content: &dyn Content) -> Plan {
+pub(crate) fn plan(scene: &Scene, window: WindowId, dpi: u32, content: &dyn Content) -> Plan {
+    let overdraw = margin(dpi);
     let mut resolved = HashMap::new();
     let mut chain = Vec::new();
     let mut draws = Vec::new();
@@ -182,7 +200,7 @@ pub(crate) fn plan(scene: &Scene, window: WindowId, content: &dyn Content) -> Pl
             id,
             bounds: placement.bounds,
             clip: placement.clip,
-            reach: grow(reach, OVERDRAW),
+            reach: grow(reach, overdraw),
             painter: node.painter.clone(),
             content: has_content,
         });
@@ -248,6 +266,9 @@ impl Plan {
                             if let Some(clip) = draw.clip {
                                 canvas.push_clip(clip);
                             }
+                            // Nothing is drawn outside the reach, in a frame
+                            // of the whole window or of a damaged rectangle.
+                            canvas.reach = Some(draw.reach);
                             painter(canvas);
                         });
                     }

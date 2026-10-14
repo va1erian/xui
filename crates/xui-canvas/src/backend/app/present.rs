@@ -60,7 +60,10 @@ impl App<'_> {
         let Some(real) = self.windows.get_mut(&raw) else {
             return;
         };
-        if !handle.is_some_and(|handle| real.software.ensure(&handle)) {
+        if !handle
+            .as_ref()
+            .is_some_and(|handle| real.software.ensure(handle))
+        {
             return;
         }
         if real.software.sized(width, height).is_none() {
@@ -88,9 +91,10 @@ impl App<'_> {
             window_id,
             window_rect,
             renewed || content.is_live(),
+            compositor::margin(dpi),
         );
         if !areas.is_empty() {
-            let plan = compositor::plan(&self.shared.nodes.borrow(), window_id, &content);
+            let plan = compositor::plan(&self.shared.nodes.borrow(), window_id, dpi, &content);
             let info = FrameInfo {
                 window: window_rect,
                 dpi,
@@ -126,8 +130,12 @@ impl App<'_> {
             })
             .collect();
         // Nothing repainted (an expose, or damage that fell outside the
-        // window): the OS may need the whole buffer again, so present it.
-        let presented = if damage.is_empty() {
+        // window): the OS may need the whole buffer again, so present it. So
+        // does a window where an expose cannot be told from a redraw of our
+        // own (see `presents_in_parts`): the buffer holds the whole frame, and
+        // only the rows that changed were converted.
+        let in_parts = handle.as_deref().is_some_and(presents_in_parts);
+        let presented = if damage.is_empty() || !in_parts {
             buffer.present()
         } else {
             buffer.present_with_damage(&damage)
@@ -172,6 +180,23 @@ fn rects_to_send<'a>(
     } else {
         damage
     }
+}
+
+/// Whether `window` may be handed only the rectangles that changed.
+///
+/// On X11 without a compositing manager the server clears a region that was
+/// covered and exposed, and winit reports the expose as an ordinary
+/// `RedrawRequested`: a redraw that coincides with damage cannot be told from
+/// our own, so presenting only the damage would leave the exposed area blank.
+/// There the whole buffer is presented (still after converting only the rows
+/// that changed). Elsewhere the window's contents persist (Windows composites
+/// through DWM; Wayland and macOS keep the surface's buffer).
+fn presents_in_parts(window: &winit::window::Window) -> bool {
+    use winit::raw_window_handle::{HasWindowHandle as _, RawWindowHandle};
+    !matches!(
+        window.window_handle().map(|handle| handle.as_raw()),
+        Ok(RawWindowHandle::Xlib(_) | RawWindowHandle::Xcb(_))
+    )
 }
 
 #[cfg(test)]

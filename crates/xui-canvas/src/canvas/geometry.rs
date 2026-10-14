@@ -66,12 +66,22 @@ impl SkiaCanvas<'_> {
         )
     }
 
-    /// Maps `rect` into device space and trims it to the innermost clip.
+    /// The device-space rectangle every pixel is limited to: the innermost
+    /// clip's bounds, trimmed to the reach the compositor gave the painter.
+    /// `None` when neither is set.
+    pub(super) fn limit(&self) -> Option<Rect> {
+        let clip = self.clips.last().map(|clip| clip.bounds());
+        match (clip, self.reach) {
+            (Some(clip), Some(reach)) => Some(intersect(clip, reach)),
+            (clip, reach) => clip.or(reach),
+        }
+    }
+
+    /// Maps `rect` into device space and trims it to the limit.
     pub(super) fn rect(&self, rect: Rect) -> Rect {
         let mapped = self.map_rect(rect);
-        self.clips
-            .last()
-            .map_or(mapped, |clip| intersect(mapped, clip.bounds()))
+        self.limit()
+            .map_or(mapped, |limit| intersect(mapped, limit))
     }
 
     /// `rect` trimmed to the region being repainted: the pixels outside it are
@@ -82,14 +92,13 @@ impl SkiaCanvas<'_> {
             .map_or(rect, |scissor| intersect(rect, scissor))
     }
 
-    /// The innermost clip's bounds, trimmed to the region being repainted,
-    /// for the text painters, which write pixels directly.
+    /// The limit, trimmed to the region being repainted, for the text
+    /// painters, which write pixels directly.
     pub(super) fn clip_bounds(&self) -> Option<Rect> {
-        let clip = self.clips.last().map(|clip| clip.bounds());
-        match (clip, self.scissor) {
-            (Some(clip), Some(scissor)) => Some(intersect(clip, scissor)),
+        match (self.limit(), self.scissor) {
+            (Some(limit), Some(scissor)) => Some(intersect(limit, scissor)),
             (None, scissor) => scissor,
-            (clip, None) => clip,
+            (limit, None) => limit,
         }
     }
 
@@ -97,52 +106,44 @@ impl SkiaCanvas<'_> {
         corners.map(|corner| Corner::new(corner.x * self.scale, corner.y * self.scale))
     }
 
-    /// Builds a coverage mask for the current clip stack, or `None` when there
-    /// are no clips: the product of every clip outline's coverage.
-    ///
-    /// The mask is allocated zeroed (the system hands untouched pages out
-    /// lazily) and only the rows and columns the outlines can reach are
-    /// written, so a small clip costs its own size, not the surface's.
+    /// Builds a coverage mask for the active clips: the limit's rectangle,
+    /// times every rounded clip's outline coverage. (Each rectangular clip's
+    /// stored bounds already include the ones outside it, so the limit is all
+    /// of them.) Only what the limit and the outlines can reach is written, so
+    /// a small clip costs its own size, not the surface's.
     fn build_mask(&self) -> Option<Mask> {
         let (width, height) = (self.pixmap.width(), self.pixmap.height());
         let surface = Rect::new(0, 0, width as i32, height as i32);
         let mut mask = Mask::new(width, height)?;
-        // The rectangle outside which the mask is zero, once a clip set it.
-        let mut reach: Option<Rect> = None;
+        let Some(limit) = self.limit() else {
+            // Nothing limits the pixels.
+            mask.invert();
+            return Some(mask);
+        };
+        // A limit only matters where the surface is, so it is trimmed to it:
+        // that changes no pixel, and keeps one as large as the integer range
+        // from being dropped by the rasteriser as too big for its arithmetic
+        // (which would cut everything away).
+        let bounds = intersect(limit, surface);
+        let Some(path) = rect_path(bounds) else {
+            // Nothing is inside the limit.
+            return Some(mask);
+        };
+        mask.fill_path(&path, FILL_RULE, true, Transform::identity());
+        // The rectangle outside which the mask is zero.
+        let mut reach = bounds;
         for clip in &self.clips {
-            let path = match clip {
-                // A rectangular clip only matters where the surface is, so it
-                // is trimmed to it: that changes no pixel, and keeps a clip as
-                // large as the integer range from being dropped by the
-                // rasteriser as too big for its arithmetic (which would cut
-                // everything away).
-                Clip::Rect(rect) => {
-                    let trimmed = intersect(*rect, surface);
-                    if trimmed.is_empty() && !rect.is_empty() {
-                        // Wholly outside the surface: nothing is inside it.
-                        return Mask::new(width, height);
-                    }
-                    rect_path(trimmed)
-                }
-                Clip::Rounded(..) => clip.path(),
-            };
-            let Some(path) = path else {
+            let Clip::Rounded(..) = clip else {
                 continue;
             };
-            let bounds = mask_reach(&path, width, height);
-            match reach {
-                None => mask.fill_path(&path, FILL_RULE, true, Transform::identity()),
-                Some(previous) => {
-                    let mut next = Mask::new(width, height)?;
-                    next.fill_path(&path, FILL_RULE, true, Transform::identity());
-                    multiply(&mut mask, &next, previous, bounds);
-                }
-            }
-            reach = Some(reach.map_or(bounds, |previous| intersect(previous, bounds)));
-        }
-        if reach.is_none() {
-            // Every clip was empty: nothing is cut away.
-            mask.invert();
+            let Some(path) = clip.path() else {
+                continue;
+            };
+            let outline = mask_reach(&path, width, height);
+            let mut next = Mask::new(width, height)?;
+            next.fill_path(&path, FILL_RULE, true, Transform::identity());
+            multiply(&mut mask, &next, reach, outline);
+            reach = intersect(reach, outline);
         }
         Some(mask)
     }
@@ -157,6 +158,16 @@ impl SkiaCanvas<'_> {
             .iter()
             .any(|clip| matches!(clip, Clip::Rounded(..)));
         self.mask = if rounded { self.build_mask() } else { None };
+    }
+
+    /// Makes sure a mask exists for a shape under a clip, as the paths, ellipses
+    /// and polygons always have: with an ancestor clip active they are cut by
+    /// the mask whether or not they leave it. (A shape that leaves the limit
+    /// gets one anyway, in [`SkiaCanvas::fill`] and [`SkiaCanvas::stroke`].)
+    pub(super) fn ensure_mask(&mut self) {
+        if self.mask.is_none() && !self.clips.is_empty() {
+            self.mask = self.build_mask();
+        }
     }
 
     /// Makes sure a shape with these device-space `bounds`, `grow` pixels wider
@@ -178,10 +189,9 @@ impl SkiaCanvas<'_> {
     /// Whether a shape with these device-space `bounds`, `grow` pixels wider,
     /// lies partly outside the innermost clip.
     fn reaches_outside_clip(&self, bounds: tiny_skia::Rect, grow: f32) -> bool {
-        let Some(clip) = self.clips.last() else {
+        let Some(clip) = self.limit() else {
             return false;
         };
-        let clip = clip.bounds();
         let shape = Rect::new(
             (bounds.left() - grow).floor() as i32,
             (bounds.top() - grow).floor() as i32,

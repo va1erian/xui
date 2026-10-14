@@ -20,6 +20,7 @@ mod damage;
 mod notes;
 
 use damage::Damage;
+pub(crate) use notes::event_marks_target;
 
 use xui_core::backend::{Painter, ParentRef, WidgetId, WindowId};
 use xui_core::geometry::Rect;

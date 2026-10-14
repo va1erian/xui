@@ -22,7 +22,7 @@
 
 use xui_core::geometry::Rect;
 
-use crate::compositor::{OVERDRAW, grow};
+use crate::compositor::grow;
 use crate::geometry::{intersect, union};
 
 /// The most rectangles a window's damage keeps before it merges the closest.
@@ -91,13 +91,14 @@ impl Damage {
         self.rects.clear();
     }
 
-    /// Marks `rect` (window coordinates) stale, grown by the overdraw margin
-    /// so what a painter drew just outside its bounds is repainted with it.
+    /// Marks `rect` (window coordinates) stale. The overdraw margin is added
+    /// when the damage is taken ([`Damage::take`]), at the DPI of that frame.
     pub(crate) fn add(&mut self, rect: Rect) {
         if self.full || rect.is_empty() {
             return;
         }
-        let rect = grow(rect, OVERDRAW);
+        // Edges are kept far inside the range where widths and areas overflow.
+        let rect = grow(rect, 0);
         if self.rects.iter().any(|held| contains(*held, rect)) {
             return;
         }
@@ -143,10 +144,11 @@ impl Damage {
         }
     }
 
-    /// Takes the damage: the rectangles to repaint, inside `window`, or the
-    /// whole window when everything is stale (or `force` is set, or the list
-    /// already covers the window). Empty when nothing changed.
-    pub(crate) fn take(&mut self, window: Rect, force: bool) -> Vec<Rect> {
+    /// Takes the damage: the rectangles to repaint, each grown by `margin`
+    /// pixels (the overdraw margin at the window's DPI) and trimmed to
+    /// `window`, or the whole window when everything is stale (or `force` is
+    /// set, or the list already covers the window). Empty when nothing changed.
+    pub(crate) fn take(&mut self, window: Rect, force: bool, margin: i32) -> Vec<Rect> {
         let full = self.full || force;
         let rects = std::mem::take(&mut self.rects);
         self.full = false;
@@ -155,7 +157,7 @@ impl Damage {
         }
         let mut clipped: Vec<Rect> = rects
             .into_iter()
-            .map(|rect| intersect(rect, window))
+            .map(|rect| intersect(grow(rect, margin), window))
             .filter(|rect| !rect.is_empty())
             .collect();
         if clipped.iter().map(|rect| area(*rect)).sum::<i64>() >= area(window) {
@@ -177,26 +179,28 @@ mod tests {
     fn a_new_window_is_all_stale_and_taking_clears_it() {
         let mut damage = Damage::full();
         assert!(damage.is_pending());
-        assert_eq!(damage.take(window(), false), [window()]);
+        assert_eq!(damage.take(window(), false, 0), [window()]);
         assert!(!damage.is_pending(), "nothing is owed after a frame");
-        assert!(damage.take(window(), false).is_empty());
+        assert!(damage.take(window(), false, 0).is_empty());
     }
 
     #[test]
-    fn damage_is_grown_by_the_overdraw_margin() {
+    fn damage_is_grown_by_the_margin_it_is_taken_with() {
         let mut damage = Damage::default();
         damage.add(Rect::new(100, 100, 120, 110));
+        assert_eq!(damage.rects(), [Rect::new(100, 100, 120, 110)]);
         assert_eq!(
-            damage.rects(),
-            [Rect::new(
-                100 - OVERDRAW,
-                100 - OVERDRAW,
-                120 + OVERDRAW,
-                110 + OVERDRAW
-            )]
+            damage.take(window(), false, 8),
+            [Rect::new(92, 92, 128, 118)],
+            "the margin is the caller's, so it can follow the DPI"
         );
         damage.add(Rect::new(0, 0, 0, 0));
-        assert_eq!(damage.rects().len(), 1, "an empty rectangle is no damage");
+        assert!(damage.rects().is_empty(), "an empty rectangle is no damage");
+        damage.add(Rect::new(100, 100, 120, 110));
+        assert_eq!(
+            damage.take(window(), false, 16),
+            [Rect::new(84, 84, 136, 126)]
+        );
     }
 
     #[test]
@@ -215,8 +219,8 @@ mod tests {
         }
         assert_eq!(damage.rects().len(), 1, "a row of cells is one rectangle");
         let rect = damage.rects()[0];
-        assert_eq!(rect.left, 10 - OVERDRAW);
-        assert_eq!(rect.right, 10 + 200 * 3 + OVERDRAW);
+        assert_eq!(rect.left, 10);
+        assert_eq!(rect.right, 10 + 200 * 3);
     }
 
     #[test]
@@ -261,7 +265,7 @@ mod tests {
         let mut damage = Damage::default();
         damage.add(Rect::new(-50, 10, 30, 30));
         damage.add(Rect::new(2000, 2000, 2010, 2010));
-        let taken = damage.take(window(), false);
+        let taken = damage.take(window(), false, 0);
         assert_eq!(taken.len(), 1);
         assert_eq!(taken[0].left, 0);
         assert!(contains(window(), taken[0]));
@@ -272,7 +276,7 @@ mod tests {
         let mut damage = Damage::default();
         damage.add(Rect::new(0, 0, 1000, 500));
         damage.add(Rect::new(0, 500, 1000, 800));
-        assert_eq!(damage.take(window(), false), [window()]);
+        assert_eq!(damage.take(window(), false, 0), [window()]);
     }
 
     #[test]
@@ -282,7 +286,7 @@ mod tests {
         damage.add_all();
         damage.add(Rect::new(10, 10, 20, 20));
         assert!(damage.is_full());
-        assert_eq!(damage.take(window(), false), [window()]);
+        assert_eq!(damage.take(window(), false, 0), [window()]);
         assert!(!damage.is_pending());
     }
 
@@ -290,6 +294,6 @@ mod tests {
     fn force_repaints_the_whole_window_even_with_a_small_list() {
         let mut damage = Damage::default();
         damage.add(Rect::new(1, 1, 5, 5));
-        assert_eq!(damage.take(window(), true), [window()]);
+        assert_eq!(damage.take(window(), true, 0), [window()]);
     }
 }

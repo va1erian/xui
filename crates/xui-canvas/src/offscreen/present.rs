@@ -122,12 +122,14 @@ impl OffscreenBackend {
         // software fallback: window-level content as the base layer, node-level
         // content at its node's bounds. It can change behind the compositor's
         // back, so a window with any is repainted whole.
-        let areas = self
-            .nodes
-            .borrow_mut()
-            .take_damage(window, window_rect, gl.is_live());
+        let areas = self.nodes.borrow_mut().take_damage(
+            window,
+            window_rect,
+            gl.is_live(),
+            compositor::margin(dpi),
+        );
         if !areas.is_empty() {
-            let plan = compositor::plan(&self.nodes.borrow(), window, &gl);
+            let plan = compositor::plan(&self.nodes.borrow(), window, dpi, &gl);
             let frame = FrameInfo {
                 window: window_rect,
                 dpi,

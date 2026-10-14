@@ -48,6 +48,10 @@ pub struct SkiaCanvas<'a> {
     /// inside it); every other shape is drawn whole, in the surface's own
     /// coordinates, so it comes out as a whole-surface paint draws it.
     pub(crate) scissor: Option<Rect>,
+    /// The most the painter may draw: set by the compositor to the reach of
+    /// the node. It limits like an outermost rectangular clip, strictly: a
+    /// shape that leaves it is cut by a mask, as one that leaves a clip is.
+    pub(crate) reach: Option<Rect>,
     /// Painted over its ancestors' pixels ([`Canvas::composites_parents`]).
     pub(crate) over_parents: bool,
 }
@@ -71,6 +75,7 @@ impl<'a> SkiaCanvas<'a> {
             mask: None,
             saved: Vec::new(),
             scissor: None,
+            reach: None,
             over_parents: false,
         }
     }
@@ -112,6 +117,7 @@ impl Canvas for SkiaCanvas<'_> {
         let Some(path) = self.ellipse_path(center, radius_x, radius_y) else {
             return;
         };
+        self.ensure_mask();
         self.fill(&path, solid_shader(to_skia(color)));
     }
 
@@ -128,6 +134,7 @@ impl Canvas for SkiaCanvas<'_> {
         }
         builder.close();
         if let Some(path) = builder.finish() {
+            self.ensure_mask();
             self.fill(&path, solid_shader(to_skia(color)));
         }
     }
@@ -213,6 +220,7 @@ impl Canvas for SkiaCanvas<'_> {
 
     fn fill_path(&mut self, path: &[PathSeg], at: PathPlacement, color: Rgba) {
         if let Some(path) = self.placed_path(path, at) {
+            self.ensure_mask();
             self.fill(&path, solid_shader(to_skia_rgba(color)));
         }
     }
@@ -225,12 +233,14 @@ impl Canvas for SkiaCanvas<'_> {
         if let Some(path) = self.placed_path(path, at)
             && let Some(shader) = linear_shader_f(start, end, gradient.stops)
         {
+            self.ensure_mask();
             self.fill(&path, shader);
         }
     }
 
     fn stroke_path(&mut self, path: &[PathSeg], at: PathPlacement, color: Rgba, stroke: &Stroke) {
         if let Some(path) = self.placed_path(path, at) {
+            self.ensure_mask();
             self.stroke(&path, to_skia_rgba(color), stroke);
         }
     }
@@ -310,10 +320,7 @@ impl Canvas for SkiaCanvas<'_> {
         // Cropped, not squashed: only the source sub-rectangle under the clip
         // is drawn, at the full-size scale, so the image's left region stays at
         // the left edge when the right half is clipped away.
-        let visible = self
-            .clips
-            .last()
-            .map_or(dest, |clip| intersect(dest, clip.bounds()));
+        let visible = self.limit().map_or(dest, |limit| intersect(dest, limit));
         if visible.is_empty() {
             return;
         }

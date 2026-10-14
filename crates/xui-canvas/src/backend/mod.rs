@@ -187,7 +187,10 @@ impl Shared {
             .is_some_and(|node| node.drag_region)
     }
 
-    /// Sends `event` to the sink of `window`.
+    /// Sends `event` to the sink of `window`, then marks `target`'s place
+    /// stale when the event is one that can change how it looks (an input
+    /// event, a focus or capture change, a leave), so a widget that forgets to
+    /// invalidate cannot leave old pixels behind, and asks for a frame.
     pub(crate) fn deliver(
         &self,
         window: WindowId,
@@ -199,7 +202,14 @@ impl Shared {
             .borrow()
             .get(&window.raw())
             .and_then(|state| state.sink.clone());
-        sink.is_some_and(|sink| sink.deliver(target, event))
+        let handled = sink.is_some_and(|sink| sink.deliver(target, event));
+        if !target.is_none()
+            && crate::scene::event_marks_target(event)
+            && self.nodes.borrow_mut().invalidate(target)
+        {
+            self.request_redraw(window);
+        }
+        handled
     }
 
     /// Marks the whole of `window` stale and requests a frame of it: a

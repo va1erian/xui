@@ -23,6 +23,7 @@ mod backend;
 mod capture_tests;
 mod geometry;
 mod gl_fallback;
+mod input;
 mod present;
 #[cfg(test)]
 mod tests;
@@ -30,9 +31,7 @@ mod tests;
 use gl_fallback::GlContent;
 pub use present::PresentedFrame;
 
-use crate::geometry::{absolute_bounds, hit_test};
 use crate::scene::{Node, Scene};
-use geometry::translate;
 
 /// The default dots-per-inch a surface is rendered at.
 const DEFAULT_DPI: u32 = 96;
@@ -50,6 +49,8 @@ struct OffscreenWindow {
     /// (the offscreen backend never has a GL context). A no-op when the
     /// `winit-backend` feature is off.
     gl: GlContent,
+    /// The node the pointer is over, so a move to another tells it it left.
+    hover: Option<WidgetId>,
     /// The last icon the app set with `Backend::set_window_icon`.
     icon: Option<Image>,
 }
@@ -184,6 +185,7 @@ impl OffscreenBackend {
                 width: width as i32,
                 height: height as i32,
                 gl: GlContent::new(),
+                hover: None,
                 icon: None,
             },
         );
@@ -241,27 +243,6 @@ impl OffscreenBackend {
         }
     }
 
-    /// Delivers a positionless event to the focused node of `window`.
-    fn inject_to_focus(&self, window: WindowId, event: &Event) -> bool {
-        let Some(target) = *self.focused.borrow() else {
-            return false;
-        };
-        if self.nodes.borrow().window_of(target) != Some(window) {
-            return false;
-        }
-        let sink = self
-            .windows
-            .borrow()
-            .get(&window.raw())
-            .and_then(|entry| entry.sink.clone());
-        sink.is_some_and(|sink| sink.deliver(target, event))
-    }
-
-    /// Records `id` as the node with keyboard focus.
-    pub(super) fn set_focus(&self, id: WidgetId) {
-        *self.focused.borrow_mut() = Some(id);
-    }
-
     /// Forgets the focus when its node is gone.
     pub(super) fn forget_focus_if_gone(&self) {
         let mut focused = self.focused.borrow_mut();
@@ -270,36 +251,6 @@ impl OffscreenBackend {
         {
             *focused = None;
         }
-    }
-
-    /// Delivers `event` as a window system would, returning whether it was
-    /// consumed. A pointer event goes to the topmost node under its position,
-    /// and a captured node receives every pointer move and release, even
-    /// outside its bounds. An event without a position (a key or a character)
-    /// goes to the focused node in `window`, if any.
-    pub fn inject(&self, window: WindowId, event: Event) -> bool {
-        let Some((x, y)) = event.position() else {
-            return self.inject_to_focus(window, &event);
-        };
-        let captured = *self.captured.borrow();
-        let target = match captured {
-            Some(id) => {
-                let nodes = self.nodes.borrow();
-                let abs = absolute_bounds(&nodes, id);
-                abs.map(|abs| (id, x - abs.left, y - abs.top))
-            }
-            None => hit_test(&self.nodes.borrow(), window, x, y),
-        };
-        let Some((target, lx, ly)) = target else {
-            return false;
-        };
-        let sink = self
-            .windows
-            .borrow()
-            .get(&window.raw())
-            .and_then(|entry| entry.sink.clone());
-        let event = translate(event, lx, ly);
-        sink.is_some_and(|sink| sink.deliver(target, &event))
     }
 
     /// The dots-per-inch `window` is rendered at.

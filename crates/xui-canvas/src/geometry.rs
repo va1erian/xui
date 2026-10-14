@@ -209,22 +209,20 @@ impl Placement {
     /// The part of the window the node can paint: its bounds trimmed to the
     /// clip. Empty when the node is hidden or the clip leaves nothing of it.
     ///
-    /// A node with no area still has a place a painter can draw around (a
-    /// ring, a caret), so its bounds count as the pixel at its corner.
+    /// A node with no extent along one axis (a 0 x H or W x 0 node) still has
+    /// a place a painter can draw along or around (a rule, a ring, a caret), so
+    /// the axis with no extent counts as one pixel; the other keeps its size.
     pub(crate) fn visible_bounds(&self) -> Rect {
         if !self.visible {
             return Rect::default();
         }
-        let bounds = if self.bounds.is_empty() {
-            Rect::new(
-                self.bounds.left,
-                self.bounds.top,
-                self.bounds.left + 1,
-                self.bounds.top + 1,
-            )
-        } else {
-            self.bounds
-        };
+        let mut bounds = self.bounds;
+        if bounds.right <= bounds.left {
+            bounds.right = bounds.left.saturating_add(1);
+        }
+        if bounds.bottom <= bounds.top {
+            bounds.bottom = bounds.top.saturating_add(1);
+        }
         match self.clip {
             Some(clip) => intersect(bounds, clip),
             None => bounds,

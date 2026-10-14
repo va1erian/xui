@@ -4,7 +4,10 @@ use xui_core::backend::{Painter, ParentRef, WidgetId, WindowId};
 
 use super::super::Node;
 use super::*;
-use crate::compositor::{OVERDRAW, grow};
+use crate::compositor::grow;
+
+/// The overdraw margin at 96 DPI.
+const MARGIN: i32 = 8;
 
 fn window() -> WindowId {
     WindowId::from_raw(1)
@@ -20,7 +23,7 @@ const WINDOW: Rect = Rect::new(0, 0, 1000, 800);
 fn settled() -> Scene {
     let mut scene = Scene::new();
     scene.invalidate_window(window());
-    scene.take_damage(window(), WINDOW, false);
+    scene.take_damage(window(), WINDOW, false, MARGIN);
     scene
 }
 
@@ -37,17 +40,17 @@ fn top() -> ParentRef {
 }
 
 fn taken(scene: &mut Scene) -> Vec<Rect> {
-    scene.take_damage(window(), WINDOW, false)
+    scene.take_damage(window(), WINDOW, false, MARGIN)
 }
 
 fn grown(rect: Rect) -> Rect {
-    grow(rect, OVERDRAW)
+    grow(rect, MARGIN)
 }
 
 #[test]
 fn a_first_frame_is_everything() {
     let mut scene = Scene::new();
-    assert_eq!(scene.take_damage(window(), WINDOW, false), [WINDOW]);
+    assert_eq!(scene.take_damage(window(), WINDOW, false, MARGIN), [WINDOW]);
     assert!(taken(&mut scene).is_empty(), "then nothing is owed");
 }
 
@@ -68,7 +71,7 @@ fn moving_a_node_marks_its_old_and_new_places() {
     assert!(
         damage
             .iter()
-            .any(|rect| rect.left <= 100 - OVERDRAW && rect.right >= 150 + OVERDRAW),
+            .any(|rect| rect.left <= 100 - MARGIN && rect.right >= 150 + MARGIN),
         "the old place: {damage:?}"
     );
 }
@@ -136,7 +139,7 @@ fn destroying_marks_the_place_of_the_whole_subtree() {
     scene.remove(panel);
     let damage = taken(&mut scene);
     assert!(
-        damage.iter().any(|rect| rect.right >= 140 + OVERDRAW),
+        damage.iter().any(|rect| rect.right >= 140 + MARGIN),
         "the child's place, far outside its parent: {damage:?}"
     );
     assert!(scene.get(panel).is_none());
@@ -236,7 +239,7 @@ fn closing_a_window_forgets_its_damage() {
     scene.remove_window(window());
     // A window that comes back (a new one with the same id never does, but a
     // fresh scene entry must not inherit it) starts stale.
-    assert_eq!(scene.take_damage(window(), WINDOW, false), [WINDOW]);
+    assert_eq!(scene.take_damage(window(), WINDOW, false, MARGIN), [WINDOW]);
 }
 
 #[test]

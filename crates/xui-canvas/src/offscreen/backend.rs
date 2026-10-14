@@ -145,16 +145,8 @@ impl Backend for OffscreenBackend {
             return;
         };
         let window = self.nodes.borrow().window_of(id);
-        let Some(window) = window else {
-            return;
-        };
-        let sink = self
-            .windows
-            .borrow()
-            .get(&window.raw())
-            .and_then(|entry| entry.sink.clone());
-        if let Some(sink) = sink {
-            sink.deliver(id, &Event::CaptureChanged);
+        if let Some(window) = window {
+            self.deliver(window, id, &Event::CaptureChanged);
         }
     }
 
@@ -163,7 +155,7 @@ impl Backend for OffscreenBackend {
     }
 
     fn focus(&self, id: WidgetId) {
-        self.set_focus(id);
+        self.focus_node(id);
     }
 
     fn set_text(&self, id: WidgetId, text: &str) {

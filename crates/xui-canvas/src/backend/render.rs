@@ -104,7 +104,7 @@ pub(super) fn composite(shared: &Shared, window: WindowId, surface: &mut Surface
     };
     let window_rect = Rect::new(0, 0, size.0 as i32, size.1 as i32);
     let content = WindowGl { shared, window };
-    let plan = compositor::plan(&shared.nodes.borrow(), window, &content);
+    let plan = compositor::plan(&shared.nodes.borrow(), window, dpi, &content);
     let frame = FrameInfo {
         window: window_rect,
         dpi,
