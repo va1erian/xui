@@ -25,44 +25,71 @@ struct Used {
 }
 
 impl Used {
-    /// Takes `start..end`, merging it with the ranges it overlaps; whether
-    /// none was taken before.
-    fn take(&mut self, start: u64, end: u64) -> bool {
+    /// Takes `start..end`, merging it with the ranges it overlaps. When some
+    /// of it was taken before, the error is the first indices (as `start..end`)
+    /// that were.
+    fn take(&mut self, start: u64, end: u64) -> Result<(), (u64, u64)> {
         if start >= end {
-            return true;
+            return Ok(());
         }
         // The ranges are disjoint and sorted, so those that overlap are the
         // last ones that begin before `end`, back to the first that stops at
         // or before `start`.
-        let overlapped: Vec<u64> = self
+        let overlapped: Vec<(u64, u64)> = self
             .taken
             .range(..end)
             .rev()
             .take_while(|&(_, &stop)| stop > start)
-            .map(|(&begin, _)| begin)
+            .map(|(&begin, &stop)| (begin, stop))
             .collect();
+        // The last of them is the lowest.
+        let taken_before = overlapped
+            .last()
+            .map(|&(begin, stop)| (start.max(begin), end.min(stop)));
         let (mut low, mut high) = (start, end);
-        let free = overlapped.is_empty();
-        for begin in overlapped {
-            if let Some(stop) = self.taken.remove(&begin) {
-                low = low.min(begin);
-                high = high.max(stop);
-            }
+        for (begin, stop) in overlapped {
+            self.taken.remove(&begin);
+            low = low.min(begin);
+            high = high.max(stop);
         }
         self.taken.insert(low, high);
-        free
+        taken_before.map_or(Ok(()), Err)
+    }
+}
+
+/// What a clash of `name`'s elements `first..end` says: which of them.
+fn clash_message(name: &str, first: u64, end: u64) -> String {
+    if end - first == 1 {
+        format!("`{name}[{first}]` is used more than once")
+    } else {
+        format!(
+            "`{name}[{first}]` to `{name}[{}]` are used more than once",
+            end - 1
+        )
     }
 }
 
 impl Names {
-    /// Checks `widget`'s name and its `array` and `index`.
-    pub(super) fn check(&mut self, widget: &dyn Widget, out: &mut Vec<Diagnostic>) {
+    /// Checks `widget`'s name and its `array` and `index`. `repeatable` is
+    /// whether the widget may be a control array at all: a container may not,
+    /// which the limits report, so its `array` and `index` are not read here.
+    pub(super) fn check(
+        &mut self,
+        widget: &dyn Widget,
+        repeatable: bool,
+        out: &mut Vec<Diagnostic>,
+    ) {
+        let (array, index) = if repeatable {
+            (widget.array(), widget.index())
+        } else {
+            (None, None)
+        };
         let name = widget.name();
         let error = |property: &str, message: String| {
             Diagnostic::new(Severity::Error, Some(name), Some(property), message)
         };
         if name.is_empty() {
-            if widget.array().is_some() || widget.index().is_some() {
+            if array.is_some() || index.is_some() {
                 out.push(error("name", "a control array needs a name".to_owned()));
             }
             return;
@@ -78,7 +105,7 @@ impl Names {
             ));
         }
         let used = self.0.entry(name.to_owned()).or_default();
-        let range = match (widget.array(), widget.index()) {
+        let range = match (array, index) {
             (Some(_), Some(_)) => {
                 out.push(error(
                     "array",
@@ -97,17 +124,21 @@ impl Names {
             (None, Some(index)) => Some((u64::from(index), u64::from(index) + 1)),
             (None, None) => None,
         };
+        let more_than_once = format!("`{name}` is used more than once");
         let clash = match range {
             // Not a control array: it clashes with every other use.
             None => {
                 let clash = used.plain || !used.taken.is_empty();
                 used.plain = true;
-                clash
+                clash.then_some(more_than_once)
             }
-            Some((start, end)) => !used.take(start, end) || used.plain,
+            Some((start, end)) => match used.take(start, end) {
+                Err((first, end)) => Some(clash_message(name, first, end)),
+                Ok(()) => used.plain.then_some(more_than_once),
+            },
         };
-        if clash {
-            out.push(error("name", format!("`{name}` is used more than once")));
+        if let Some(message) = clash {
+            out.push(error("name", message));
         }
     }
 }
@@ -119,14 +150,15 @@ mod tests {
     #[test]
     fn ranges_merge_and_clash_without_enumerating() {
         let mut used = Used::default();
-        assert!(used.take(0, 3));
-        assert!(used.take(3, 4), "adjacent is not overlapping");
-        assert!(!used.take(2, 3), "inside the first");
-        assert!(used.take(10, 20));
-        assert!(!used.take(0, 100), "spans several, merging them");
-        assert_eq!(used.taken.len(), 1);
-        assert!(used.take(100, u64::from(u32::MAX) + 1));
-        assert!(!used.take(u64::from(u32::MAX), u64::from(u32::MAX) + 1));
-        assert!(used.take(5, 5), "an empty range takes nothing");
+        assert_eq!(used.take(0, 3), Ok(()));
+        assert_eq!(used.take(3, 4), Ok(()), "adjacent is not overlapping");
+        assert_eq!(used.take(2, 3), Err((2, 3)), "inside the first");
+        assert_eq!(used.take(10, 20), Ok(()));
+        assert_eq!(used.take(0, 100), Err((0, 3)), "the lowest taken first");
+        assert_eq!(used.taken.len(), 1, "merged");
+        assert_eq!(used.take(100, u64::from(u32::MAX) + 1), Ok(()));
+        let top = u64::from(u32::MAX);
+        assert_eq!(used.take(top, top + 1), Err((top, top + 1)));
+        assert_eq!(used.take(5, 5), Ok(()), "an empty range takes nothing");
     }
 }

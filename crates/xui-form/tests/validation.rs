@@ -48,11 +48,10 @@ fn control_arrays_must_not_clash() {
             Button(name: "other", array: 2, index: 1), Button(array: 2),
         ]))"#,
     );
-    assert!(has(
-        &found,
-        Severity::Error,
-        "`digit` is used more than once"
-    ));
+    assert!(
+        has(&found, Severity::Error, "`digit[2]` is used more than once"),
+        "{found:?}"
+    );
     assert!(has(&found, Severity::Error, "either `array` or `index`"));
     assert!(has(&found, Severity::Error, "needs a name"));
 }
@@ -117,8 +116,22 @@ fn a_huge_array_or_index_is_reported_without_being_built_or_enumerated() {
     assert_eq!(breaches, 6, "{found:?}");
     // The ranges are still compared: `b` is used twice, and `a`'s index
     // lies inside its array.
-    assert!(has(&found, Severity::Error, "`b` is used more than once"));
-    assert!(has(&found, Severity::Error, "`a` is used more than once"));
+    assert!(
+        has(
+            &found,
+            Severity::Error,
+            "`b[0]` to `b[4294967294]` are used more than once"
+        ),
+        "{found:?}"
+    );
+    assert!(
+        has(
+            &found,
+            Severity::Error,
+            "`a[99999999]` is used more than once"
+        ),
+        "{found:?}"
+    );
 }
 
 #[test]
@@ -312,4 +325,15 @@ fn a_length_out_of_range_is_an_error_on_a_form_that_was_never_read() {
         Severity::Error,
         "the window's size: NaN is not a length"
     ));
+}
+
+#[test]
+fn an_unnamed_container_array_is_only_a_container_error() {
+    // It used to say as well that "a control array needs a name", which
+    // sends the author to name something that cannot be an array at all.
+    let found = diagnostics(r#"Form(root: Column(children: [Panel(array: 2), Group(index: 1)]))"#);
+    assert_eq!(found.len(), 2, "{found:?}");
+    assert!(has(&found, Severity::Error, "a Panel is a container"));
+    assert!(has(&found, Severity::Error, "a Group is a container"));
+    assert!(!has(&found, Severity::Error, "needs a name"));
 }

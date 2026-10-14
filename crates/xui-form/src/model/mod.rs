@@ -45,7 +45,7 @@ mod repr;
 mod types;
 mod widgets;
 
-pub(crate) use breach::{breaches, length_fits, length_message};
+pub(crate) use breach::{breaches, is_container, length_fits, length_message};
 pub use containers::{Absolute, Grid, Group, Page, Panel, Stack, Tabs};
 pub use limits::{MAX_ARRAY, MAX_DEPTH, MAX_LENGTH};
 pub(crate) use limits::{RECURSION_LIMIT, depth_message};

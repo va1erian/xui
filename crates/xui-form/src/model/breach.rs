@@ -38,7 +38,7 @@ pub(crate) fn length_message(value: f32) -> String {
 
 /// Whether `node` is a container widget, whose content a control array would
 /// rebuild for each element.
-fn is_container(node: &Node) -> bool {
+pub(crate) fn is_container(node: &Node) -> bool {
     matches!(node, Node::Panel(_) | Node::Group(_) | Node::Tabs(_))
 }
 

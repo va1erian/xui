@@ -92,7 +92,7 @@ impl Form {
             place::check_layout(node, &mut out);
             place::check_tabs(node, &mut out);
             if let Some(widget) = node.widget() {
-                names.check(widget, &mut out);
+                names.check(widget, !crate::model::is_container(node), &mut out);
                 props::check(widget, catalog, &mut out);
             }
         });
