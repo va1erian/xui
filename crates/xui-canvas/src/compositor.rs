@@ -46,16 +46,23 @@ use crate::{Region, Surface};
 /// whose rectangle is honoured as given.
 pub(crate) const OVERDRAW: i32 = 8;
 
-/// `rect` grown by `by` pixels on every side; an empty rectangle stays empty.
+/// The most any edge of a damaged or reached rectangle can be from the origin:
+/// far outside any window, and small enough that sums and widths of such
+/// rectangles cannot overflow even where a layout saturated at `i32::MAX`.
+const EDGE_LIMIT: i32 = 1 << 29;
+
+/// `rect` grown by `by` pixels on every side, its edges kept within
+/// [`EDGE_LIMIT`]; an empty rectangle stays empty.
 pub(crate) fn grow(rect: Rect, by: i32) -> Rect {
     if rect.is_empty() {
         return rect;
     }
+    let edge = |value: i32| value.clamp(-EDGE_LIMIT, EDGE_LIMIT);
     Rect::new(
-        rect.left - by,
-        rect.top - by,
-        rect.right + by,
-        rect.bottom + by,
+        edge(rect.left.saturating_sub(by)),
+        edge(rect.top.saturating_sub(by)),
+        edge(rect.right.saturating_add(by)),
+        edge(rect.bottom.saturating_add(by)),
     )
 }
 
@@ -163,18 +170,19 @@ pub(crate) fn plan(scene: &Scene, window: WindowId, content: &dyn Content) -> Pl
         if !placement.visible {
             continue;
         }
-        let visible = match placement.clip {
-            Some(clip) => intersect(placement.bounds, clip),
-            None => placement.bounds,
-        };
-        if placement.clip.is_some() && visible.is_empty() {
+        // A node the clips leave nothing of is not drawn; one with no area of
+        // its own and no clip still is (its painter may draw around it).
+        if let Some(clip) = placement.clip
+            && intersect(placement.bounds, clip).is_empty()
+        {
             continue;
         }
+        let reach = placement.visible_bounds();
         draws.push(Draw {
             id,
             bounds: placement.bounds,
             clip: placement.clip,
-            reach: grow(visible, OVERDRAW),
+            reach: grow(reach, OVERDRAW),
             painter: node.painter.clone(),
             content: has_content,
         });

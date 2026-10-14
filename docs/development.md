@@ -91,6 +91,16 @@ insets, exact docking and stacks, anchors that stay inside their parent. They
 need no window, so they are fast and deterministic. Add a property whenever you
 add a pure function with a stated invariant.
 
+`crates/xui-canvas/tests/damage_differential/` and `damage_widgets.rs` are the
+differential tests of the canvas backend's damage-driven repaint: two offscreen
+backends get the same random (seeded) operations or the same scripted session,
+one repaints from damage only and the other repaints the whole window before
+each frame, and every frame must be equal pixel for pixel. `XUI_DAMAGE_SEEDS`
+(default 120) and `XUI_REGION_SEEDS` (default 96, for the region repaint of
+random curved scenes in `region_tests.rs`) raise the number of seeds for a
+longer run; a failure names the seed and the step. See
+[Repainting only what changed](backends.md#repainting-only-what-changed).
+
 ## Widget snapshots
 
 `crates/xui-canvas/tests/widget_snapshots.rs` builds one of every portable

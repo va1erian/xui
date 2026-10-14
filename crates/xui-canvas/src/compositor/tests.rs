@@ -295,3 +295,35 @@ fn a_hidden_ancestor_and_a_clip_remove_a_node_from_the_plan() {
     assert_eq!(planned.ids(), [shown]);
     assert_eq!(planned.len(), 1);
 }
+
+#[test]
+fn a_node_with_no_area_still_paints_where_its_corner_is_repainted() {
+    // A painter may draw around a node that has no area (a caret, a ring).
+    let mut scene = Scene::new();
+    let runs = Rc::new(Cell::new(0));
+    let mut empty = top(Rect::new(30, 30, 30, 30));
+    empty.painter = Some(counting(Color::rgb(1, 2, 3), &runs));
+    scene.insert(WidgetId::from_raw(1), empty);
+
+    let mut surface = Surface::new(100, 100);
+    let theme = Theme::light();
+    let info = FrameInfo {
+        window: Rect::new(0, 0, 100, 100),
+        dpi: 96,
+        theme: &theme,
+    };
+    let planned = plan(&scene, window(), &Nothing);
+    planned.paint(&mut surface, &[Rect::new(26, 26, 40, 40)], &info, &Nothing);
+    assert_eq!(runs.get(), 1, "its place is inside the repainted area");
+    planned.paint(&mut surface, &[Rect::new(60, 60, 90, 90)], &info, &Nothing);
+    assert_eq!(runs.get(), 1, "and not where it cannot reach");
+}
+
+#[test]
+fn growing_a_rectangle_at_the_limits_stays_representable() {
+    let huge = Rect::new(0, 0, i32::MAX, i32::MAX);
+    let grown = grow(huge, OVERDRAW);
+    assert!(!grown.is_empty());
+    assert!(grown.width() > 0 && grown.height() > 0, "no overflow");
+    assert!(grow(Rect::new(0, 0, 0, 0), 5).is_empty());
+}

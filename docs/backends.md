@@ -115,10 +115,86 @@ let bytes = image.pixel(x, y);
 - `set_gl_content`/`clear_gl_content` mirror the windowed GL seam so a
   `GlWidget`'s software fallback can be tested. The offscreen backend never
   creates a GL context.
-- `render(window)` returns an `RgbaImage { width, height, pixels }`.
+- `render(window)` returns an `RgbaImage { width, height, pixels }`;
+  `present(window, |frame| ..)` lends the frame without copying it, with the
+  rectangles repainted. Only what changed is repainted (see
+  [Repainting only what changed](#repainting-only-what-changed)), and
+  `invalidate_window` marks the whole window stale.
 
 This is how the `xui-core` and `xui-canvas` unit tests render deterministic
 snapshots without a desktop.
+
+## Repainting only what changed
+
+`WinitBackend` and `OffscreenBackend` share one compositor
+(`crates/xui-canvas/src/compositor.rs`) and one scene
+(`crates/xui-canvas/src/scene.rs`), so a frame costs what changed, not the
+size of the window: a 1080p window with a 400x300 card of about 30 widgets
+costs 0 ms idle and about 0.4 ms with the card moved one pixel (release,
+`cargo run --release -p xui-canvas --example damage_bench`), where it cost
+about 6 ms either way when every frame composited the whole window, cloned it
+and converted it.
+
+**The scene.** Nodes are kept by id, with their paint order (a raise is cheap)
+and their children, so a lookup, a destroy cascade and a frame's planning are
+linear in the nodes they touch, not quadratic.
+
+**Damage.** Each window keeps what changed since its last frame as a short list
+of rectangles. A change to a node says which window pixels it can have changed:
+
+- a **move** or **resize** marks the old and the new place of the node and of
+  everything inside it; **show** and **hide** the place it had or has; a
+  **destroy** the place of the whole subtree; a **clip** change what the
+  descendants showed and show now; a **raise**, a **text** or **painter**
+  change and `invalidate` the node's own place;
+- `invalidate_rect(node, rect)` marks `rect`, in the node's coordinates, as
+  given (it may leave the node's bounds), trimmed to what its ancestors' clips
+  show;
+- a window **resize**, a **DPI** or **theme** change and GL content marks the
+  whole window, the fallback that is always correct.
+
+Every rectangle is grown by an **overdraw margin** of 8 px, and a damaged
+rectangle repaints every node whose bounds grown by the margin touch it. Painters
+draw a little outside their bounds (a 1 px outline covers half a pixel beyond
+its edge; a focus ring or the Midnight theme's accent glow reaches up to about
+6 px), so the margin keeps a neighbour's overdraw in a repainted area and a
+moved node's overdraw from being left behind. **A painter that draws further out
+than 8 px, a label whose text overflows its node, for instance, must report the
+rectangle it dirtied with `invalidate_rect`**; otherwise pixels beyond the margin
+stay until the next full repaint. The list holds at most eight rectangles: a
+rectangle inside one is dropped, two merge when their union is no bigger than
+the two together, and past the bound the closest pair merges. Many small
+damages therefore become a few rectangles, and a frame repaints each once.
+
+**Repainting a rectangle** (`Surface::paint_region`) runs the painters over a
+scratch pixmap as large as the surface, in the surface's own coordinates, with
+the rectangle's pixels copied in first and only those copied back, so what it
+leaves is bit-for-bit what a whole-window repaint draws there: curved and
+slanted edges, gradients and clips come out the same. Rectangle fills, text and
+unscaled images are trimmed to the rectangle as they are drawn, and a clip mask
+is built over the rectangle its outline reaches, which keeps the cost near the
+rectangle's area. The differential tests assert equality after every step of
+seeded random sequences of node operations and of scripted sessions of the real
+widgets (see [Development](development.md#property-tests)).
+
+**Presenting.** A window keeps its frame between frames, and a frame with no
+damage paints nothing and allocates nothing. The windowed backend hands
+`softbuffer` only the repainted rows (`present_with_damage`) when the buffer
+still holds the previous frame (`Buffer::age() == 1`); otherwise (an unknown or
+older buffer, a resize, a frame that could not be handed over) it converts and
+presents the whole frame, which costs a conversion and not a repaint because
+the persistent frame holds every pixel. A window with GL content repaints whole
+every frame, since the GL frame changes behind the compositor's back.
+`OffscreenBackend::present(window, |frame| ..)` lends the frame and the
+rectangles repainted without a copy; `render` is `present` plus a copy;
+`invalidate_window` marks everything stale, for a test that changed what a
+painter draws behind the backend's back.
+
+> The windowed present path is **compile-checked on Windows, Linux and macOS
+> and reviewed, not run**: it needs an event loop and a display. `softbuffer`'s
+> buffer age is read as documented (1 on Win32 and X11 after the first present
+> of a size, 0 on macOS, tracked on Wayland); that is the part to watch on a
+> new platform.
 
 ## GPU rendering on the canvas backend
 

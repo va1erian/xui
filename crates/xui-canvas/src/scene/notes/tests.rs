@@ -238,3 +238,12 @@ fn closing_a_window_forgets_its_damage() {
     // fresh scene entry must not inherit it) starts stale.
     assert_eq!(scene.take_damage(window(), WINDOW, false), [WINDOW]);
 }
+
+#[test]
+fn a_node_with_no_area_marks_the_place_of_its_corner() {
+    let mut scene = settled();
+    let id = painting(&mut scene, 1, top(), Rect::new(30, 30, 30, 30));
+    taken(&mut scene);
+    scene.set_painter(id, painter());
+    assert_eq!(taken(&mut scene), [grown(Rect::new(30, 30, 31, 31))]);
+}
