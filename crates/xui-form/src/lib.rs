@@ -37,9 +37,9 @@
 //! assert!(text.starts_with("Form(title: \"Hello\", size: (320, 200), root: Column("));
 //! ```
 //!
-//! A control array is one node with `array: n` (or several with `index: i`):
-//! its elements are `name[0]`, `name[1]`, …, and their events carry the
-//! element's index.
+//! A control array is one widget with `array: n` (or several with `index: i`),
+//! at most [`MAX_ARRAY`] elements: its elements are `name[0]`, `name[1]`, …,
+//! and their events carry the element's index. A container cannot be one.
 
 pub mod build;
 mod codec;
@@ -59,7 +59,7 @@ pub use build::{
     build_with, describe,
 };
 pub use codec::{LoadError, WriteError, format, load};
-pub use model::{FORMAT_VERSION, Form, MAX_DEPTH, Node};
+pub use model::{FORMAT_VERSION, Form, MAX_ARRAY, MAX_DEPTH, Node};
 pub use schema::{
     Access, ArgSpec, Catalog, EventSpec, FieldSpec, LayoutSpec, PropertySpec, WidgetSpec,
 };

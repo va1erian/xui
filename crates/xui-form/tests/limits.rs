@@ -4,7 +4,7 @@ mod common;
 
 use common::{build_failure, form, with_form};
 use xui_form::model::{Absolute, Grid, Group, Label, Node, Page, Panel, Stack, Tabs};
-use xui_form::{BuildOptions, Catalog, Form, MAX_DEPTH, WriteError, format, load};
+use xui_form::{BuildOptions, Catalog, Form, MAX_ARRAY, MAX_DEPTH, WriteError, format, load};
 
 /// The kinds that nest a node, one of each shape of nesting: a child list, a
 /// container's content and a page's content.
@@ -172,4 +172,37 @@ fn a_form_at_the_limit_builds() {
     let past = nested_tree("Column", MAX_DEPTH + 1);
     let message = build_failure(&past).expect("one past the limit is not built");
     assert!(message.contains("17 levels deep"), "{message}");
+}
+
+#[test]
+fn a_form_past_the_array_cap_is_not_built() {
+    for (text, needle) in [
+        (
+            r#"Form(root: Button(name: "b", array: 100000000))"#,
+            "`array` is 100000000",
+        ),
+        (
+            r#"Form(root: Button(name: "b", index: 20000000))"#,
+            "`index` is 20000000",
+        ),
+        (
+            r#"Form(root: Panel(name: "p", array: 30, content: Button(name: "b")))"#,
+            "a Panel is a container",
+        ),
+    ] {
+        let message = build_failure(&form(text)).expect("it is not built");
+        assert!(message.contains(needle), "{message}");
+    }
+}
+
+#[test]
+fn an_array_at_the_cap_builds_every_element() {
+    let at_cap = form(&format!(
+        r#"Form(size: (640, 480), root: Wrap(children: [Button(name: "key", array: {MAX_ARRAY}, text: "{{index}}")]))"#
+    ));
+    with_form(&at_cap, BuildOptions::default(), |live| {
+        assert_eq!(live.controls().ids().len(), MAX_ARRAY as usize);
+        assert!(live.get("key[1023]", "text").is_some());
+        assert!(live.get("key[1024]", "text").is_none());
+    });
 }

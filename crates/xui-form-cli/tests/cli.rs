@@ -191,6 +191,37 @@ height = 180
 }
 
 #[test]
+fn a_huge_control_array_is_reported_and_never_built() {
+    let dir = scratch("array-cap");
+    let huge = file(
+        &dir,
+        "huge.lfm",
+        r#"Form(root: Button(name: "b", array: 100000000))"#,
+    );
+    let output = xui_form(&["check", &huge]);
+    assert_eq!(output.status.code(), Some(1));
+    assert!(
+        stdout(&output).contains("a control array has at most 1024 elements"),
+        "{}",
+        stdout(&output)
+    );
+
+    // `render` does not validate: the build itself refuses the form, with
+    // or without a script.
+    let script = file(&dir, "huge.rhai", "fn form_load() {}");
+    let out = dir.join("out").to_string_lossy().into_owned();
+    for extra in [vec![], vec!["--script", script.as_str()]] {
+        let mut args = vec!["render", huge.as_str(), "--out", out.as_str()];
+        args.extend(extra);
+        let output = xui_form(&args);
+        assert_eq!(output.status.code(), Some(1));
+        let message = stderr(&output);
+        assert!(message.contains("exceeds a limit"), "{message}");
+    }
+    assert!(!dir.join("out").exists(), "no image is written");
+}
+
+#[test]
 fn schema_prints_every_kind_as_json() {
     let output = xui_form(&["schema", "--json"]);
     assert!(output.status.success());

@@ -19,7 +19,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::rc::Rc;
 
 use rhai::{Dynamic, Engine, EvalAltResult, ImmutableString, Map, Position};
-use xui_form::{Catalog, LiveForm, SetError, Value, ValueType};
+use xui_form::{Catalog, LiveForm, MAX_ARRAY, SetError, Value, ValueType};
 
 /// The property surface a live form exposes to controls.
 ///
@@ -315,10 +315,14 @@ pub(crate) fn controls_by_name(host: &Rc<dyn FormHost>) -> BTreeMap<String, Dyna
 }
 
 /// A control array element's name split into the array's name and the
-/// index: `digit[3]` is `("digit", 3)`.
+/// index: `digit[3]` is `("digit", 3)`. A form never has an element at or past
+/// [`MAX_ARRAY`] (validation and building refuse it), so a host that names one
+/// has a control that is not an array slot, and its array is not grown to
+/// reach it.
 fn element(name: &str) -> Option<(&str, usize)> {
     let (base, rest) = name.split_once('[')?;
-    Some((base, rest.strip_suffix(']')?.parse().ok()?))
+    let index: usize = rest.strip_suffix(']')?.parse().ok()?;
+    (index < MAX_ARRAY as usize).then_some((base, index))
 }
 
 #[cfg(test)]
@@ -407,6 +411,50 @@ mod tests {
         let host: Rc<dyn FormHost> = Rc::new(MockHost::new());
         let control = Control::new(host, "lbl");
         assert!(control.get("nope").is_err());
+    }
+
+    /// A host that only names its controls.
+    struct Named(Vec<String>);
+
+    impl FormHost for Named {
+        fn get(&self, _control: &str, _property: &str) -> Option<Value> {
+            None
+        }
+
+        fn set(&self, _control: &str, _property: &str, _value: &Value) -> Result<(), SetError> {
+            Err(SetError::UnknownWidget)
+        }
+
+        fn property_type(&self, _control: &str, _property: &str) -> Option<ValueType> {
+            None
+        }
+
+        fn names(&self) -> Vec<String> {
+            self.0.clone()
+        }
+
+        fn kind(&self, _control: &str) -> Option<String> {
+            None
+        }
+
+        fn property_names(&self, _control: &str) -> Vec<String> {
+            Vec::new()
+        }
+    }
+
+    #[test]
+    fn an_element_past_the_cap_does_not_grow_the_array() {
+        let host: Rc<dyn FormHost> = Rc::new(Named(vec![
+            "key[1]".to_owned(),
+            "key[4000000000]".to_owned(),
+        ]));
+        let controls = controls_by_name(&host);
+        let array = controls["key"]
+            .clone()
+            .into_array()
+            .expect("key is an array");
+        assert_eq!(array.len(), 2, "the slots up to index 1, not four billion");
+        assert!(controls.contains_key("key[4000000000]"));
     }
 
     #[test]

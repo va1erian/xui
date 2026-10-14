@@ -80,3 +80,83 @@ fn layout_fields_the_parent_ignores_are_warnings() {
     assert!(has(&found, Severity::Warning, "`at` is missing"));
     assert!(has(&found, Severity::Error, "needs at least one column"));
 }
+
+#[test]
+fn a_control_array_is_bounded() {
+    let found = diagnostics(
+        r#"Form(root: Column(children: [
+            Button(name: "ok_array", array: 1024), Button(name: "ok_index", index: 1023),
+            Button(name: "big", array: 1025), Button(name: "high", index: 1024),
+        ]))"#,
+    );
+    assert!(has(&found, Severity::Error, "`array` is 1025"), "{found:?}");
+    assert!(has(&found, Severity::Error, "`index` is 1024"), "{found:?}");
+    assert_eq!(found.len(), 2, "{found:?}");
+    assert_eq!(found[0].node.as_deref(), Some("big"));
+    assert_eq!(found[0].property.as_deref(), Some("array"));
+}
+
+#[test]
+fn a_huge_array_or_index_is_reported_without_being_built_or_enumerated() {
+    // 100 million elements took 770 MB to check, and u32::MAX would have
+    // been 32 GB: the count is a range, never a list.
+    let found = diagnostics(
+        r#"Form(root: Column(children: [
+            Button(name: "a", array: 100000000),
+            Button(name: "b", array: 4294967295),
+            Button(name: "c", index: 20000000),
+            Button(name: "d", index: 4294967295),
+            Button(name: "a", index: 99999999),
+            Button(name: "b", array: 4294967295),
+        ]))"#,
+    );
+    let breaches = found
+        .iter()
+        .filter(|d| d.message.contains("at most 1024") || d.message.contains("below 1024"))
+        .count();
+    assert_eq!(breaches, 6, "{found:?}");
+    // The ranges are still compared: `b` is used twice, and `a`'s index
+    // lies inside its array.
+    assert!(has(&found, Severity::Error, "`b` is used more than once"));
+    assert!(has(&found, Severity::Error, "`a` is used more than once"));
+}
+
+#[test]
+fn an_array_of_zero_elements_is_an_error() {
+    let found = diagnostics(r#"Form(root: Button(name: "none", array: 0))"#);
+    assert!(has(&found, Severity::Error, "`array` is 0"), "{found:?}");
+    assert_eq!(found.len(), 1, "{found:?}");
+}
+
+#[test]
+fn a_container_cannot_be_a_control_array() {
+    let found = diagnostics(
+        r#"Form(root: Column(children: [
+            Panel(name: "panel", array: 2, content: Button(name: "b")),
+            Group(name: "group", index: 1),
+            Tabs(name: "tabs", array: 3),
+            Panel(name: "plain"),
+        ]))"#,
+    );
+    for kind in ["Panel", "Group", "Tabs"] {
+        assert!(
+            has(&found, Severity::Error, &format!("a {kind} is a container")),
+            "{kind}: {found:?}"
+        );
+    }
+    assert_eq!(found.len(), 3, "{found:?}");
+}
+
+#[test]
+fn nested_container_arrays_are_refused_not_multiplied() {
+    // Three nested `Panel(array: 30)` built 27000 widgets and ran past 150 s.
+    let found = diagnostics(
+        r#"Form(root: Panel(array: 30, name: "a", content: Panel(array: 30, name: "b",
+            content: Panel(array: 30, name: "c", content: Button(name: "leaf")))))"#,
+    );
+    assert_eq!(
+        found.iter().filter(|d| d.is_error()).count(),
+        3,
+        "{found:?}"
+    );
+}

@@ -54,7 +54,10 @@ Form(title: "Hello", size: (360, 160), root: Column(gap: 8, padding: 16, childre
 - **Control arrays.** `Button(name: "digit", array: 10, text: "{index}")` is
   ten buttons, `digit[0]` to `digit[9]`; `{index}` in a text becomes the
   element's index. Elements placed apart are written one by one with
-  `index: 7`. All elements share one handler, which receives the index.
+  `index: 7`. All elements share one handler, which receives the index. An
+  array has 1 to `MAX_ARRAY` (1024) elements and an `index` is below that;
+  only widgets can be arrays, not a `Panel`, `Group` or `Tabs`. `validate`
+  reports a larger one, and `describe` refuses to build it.
 
 The node types are plain serde types in `xui::form::model`, declared once by
 macros that also produce the [`Catalog`](#the-schema): the format and the

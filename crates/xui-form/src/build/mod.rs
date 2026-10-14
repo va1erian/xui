@@ -30,6 +30,7 @@ use crate::value::Value;
 mod cx;
 mod handlers;
 mod live;
+mod names;
 mod tree;
 
 pub use cx::BuildCx;

@@ -343,6 +343,14 @@
 
 ### Fixes
 
+- `xui-form`: control arrays are bounded. `array` is at most
+  `MAX_ARRAY` (1024) and an `index` is below it; `array: 0` and `array` or
+  `index` on a `Panel`, `Group` or `Tabs` are validation errors, and
+  `describe` refuses a form that breaks the cap or repeats a container
+  (`BuildError::Limit`) instead of building it. Name clashes are checked by
+  ranges, a build's name de-duplication is logarithmic rather than
+  quadratic, and `xui-script` no longer grows an array to reach an element's
+  index. `Button(array: 100000000)` took 770 MB to check.
 - `xui-form`: `Form::to_ron` no longer panics near RON's recursion limit
   (40 nested v1 panels migrated to a panic, 20 to a file `check` rejected),
   and a hand-written form at the same depth is read and written alike. The

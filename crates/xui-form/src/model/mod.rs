@@ -25,7 +25,8 @@
 //!
 //! Every field has a default and a node's field equal to it is not written,
 //! so a file says only what differs (the form's own `size` and `root` are
-//! always written). A tree nests at most [`MAX_DEPTH`] levels.
+//! always written). A tree nests at most [`MAX_DEPTH`] levels and a control
+//! array has at most [`MAX_ARRAY`] elements.
 //!
 //! [`Catalog`]: crate::Catalog
 
@@ -44,7 +45,7 @@ mod types;
 mod widgets;
 
 pub use containers::{Absolute, Grid, Group, Page, Panel, Stack, Tabs};
-pub use limits::MAX_DEPTH;
+pub use limits::{MAX_ARRAY, MAX_DEPTH};
 pub(crate) use limits::{RECURSION_LIMIT, breaches, depth_message};
 pub use prop::PropType;
 pub use types::{Align, Anchor, Length, Orientation, Track};

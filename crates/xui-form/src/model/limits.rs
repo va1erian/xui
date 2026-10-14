@@ -2,17 +2,19 @@
 
 //! The limits of a form, and the scan that reports where one exceeds them.
 //!
-//! A form is read from untrusted text and may be edited in memory, so the
-//! tree it holds is bounded: [`MAX_DEPTH`] levels. The same limit serves the
-//! reader (`load` rejects a deeper node at its position) and the writer
-//! (`Form::to_ron` refuses a deeper tree), so a form that is written can
-//! always be read back.
+//! A form is read from untrusted text and may be edited in memory, so what it
+//! asks a build to make is bounded: its tree nests at most [`MAX_DEPTH`]
+//! levels, and a control array has at most [`MAX_ARRAY`] elements. The depth
+//! limit serves the reader (`load` rejects a deeper node at its position) and
+//! the writer (`Form::to_ron` refuses a deeper tree) alike, so a form that is
+//! written can always be read back; `Form::validate` reports every breach and
+//! `describe` refuses to build one.
 
 use std::cell::Cell;
 
 use serde::de;
 
-use super::{Form, Node};
+use super::{Form, Node, Widget};
 
 /// The deepest a form's tree may nest: the root node is level 1, a node
 /// directly inside it level 2, and so on. A `Group`'s content, a `Panel`'s
@@ -27,6 +29,15 @@ use super::{Form, Node};
 /// limit allowed (a debug build needs about 5 KiB of stack for each level of
 /// RON nesting, and a `Tabs` chain nests eight per level).
 pub const MAX_DEPTH: usize = 16;
+
+/// The most elements a control array has: `array` is at most this, and an
+/// element's `index` is below it.
+///
+/// An array of `n` elements builds `n` widgets, so the count of a file would
+/// otherwise be a way to exhaust memory and time (a `Button(array:
+/// 100000000)` took 770 MB to check). 1024 is far beyond a form's real
+/// controls; more rows belong in a `ListView`.
+pub const MAX_ARRAY: u32 = 1024;
 
 /// The recursion limit the form's RON is read and written with. Eight is how
 /// many RON levels the most nested node kind (a `Tabs` page) takes, plus a few
@@ -94,8 +105,15 @@ pub(crate) struct Breach {
     pub(crate) message: String,
 }
 
+/// Whether `node` is a container widget, whose content a control array would
+/// rebuild for each element.
+fn is_container(node: &Node) -> bool {
+    matches!(node, Node::Panel(_) | Node::Group(_) | Node::Tabs(_))
+}
+
 /// Every place `form` exceeds a limit. Neither `validate` nor `describe`
-/// recurses to find them, so a tree of any depth is scanned.
+/// recurses to find them, so a tree of any depth is scanned, and no array is
+/// enumerated.
 pub(crate) fn breaches(form: &Form) -> Vec<Breach> {
     let mut found = Vec::new();
     let depth = form.root.depth();
@@ -106,5 +124,55 @@ pub(crate) fn breaches(form: &Form) -> Vec<Breach> {
             message: format!("the form nests {depth} levels deep; at most {MAX_DEPTH} are allowed"),
         });
     }
+    form.root.walk(&mut |node, _| {
+        if let Some(widget) = node.widget() {
+            widget_breaches(node, widget, &mut found);
+        }
+    });
     found
+}
+
+/// The breaches of one widget's `array` and `index`.
+fn widget_breaches(node: &Node, widget: &dyn Widget, found: &mut Vec<Breach>) {
+    let name = Some(widget.name().to_owned()).filter(|name| !name.is_empty());
+    let mut breach = |property: &'static str, message: String| {
+        found.push(Breach {
+            node: name.clone(),
+            property,
+            message,
+        });
+    };
+    if let Some(count) = widget.array()
+        && count > MAX_ARRAY
+    {
+        breach(
+            "array",
+            format!("`array` is {count}; a control array has at most {MAX_ARRAY} elements"),
+        );
+    }
+    if let Some(index) = widget.index()
+        && index >= MAX_ARRAY
+    {
+        breach(
+            "index",
+            format!("`index` is {index}; an element's index is below {MAX_ARRAY}"),
+        );
+    }
+    if is_container(node) {
+        for (property, set) in [
+            ("array", widget.array().is_some()),
+            ("index", widget.index().is_some()),
+        ] {
+            if set {
+                breach(
+                    property,
+                    format!(
+                        "a {} is a container, so `{property}` cannot repeat it: \
+                         only widgets can be control arrays",
+                        widget.kind()
+                    ),
+                );
+            }
+        }
+    }
 }
