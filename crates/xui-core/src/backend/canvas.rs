@@ -341,6 +341,10 @@ pub trait Canvas {
 
     /// Clips subsequent drawing to `rect` until the matching `pop_clip`.
     ///
+    /// Everything is clipped, strokes and lines too. A stroke is centred on its
+    /// path, so a frame stroked on the very edge of `rect` loses the half that
+    /// lies outside it: stroke such a frame outside the clip.
+    ///
     /// `push_clip`/`pop_clip` manage only the clip; the transform is untouched.
     /// [`Canvas::save`]/[`Canvas::restore`] manage only the transform and
     /// scale; the clip is untouched. Pop every clip you push and restore every

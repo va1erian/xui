@@ -26,17 +26,17 @@ pub(super) fn set_offset<M>(ui: &Ui<M>, s: &Shared<M>, value: i32) {
     }
 }
 
-/// Paints the viewport: its own drawing is clipped to it with `push_clip`.
+/// Paints the viewport: the backdrop and the card with its frame.
 ///
-/// A backend clips a node's children to it separately (Win32 child windows,
-/// a compositor with per-node clips); this clip only bounds the view's own
-/// background.
+/// The card is not under a `push_clip` of its own bounds: a stroke centred on
+/// the edge of its clip would lose the half outside it, and the frame of a
+/// card is exactly that (one half pixel on each side of the edge). The fill
+/// stays inside the bounds anyway, and what a node paints outside its bounds
+/// is limited by the backend (the compositor's reach, a Win32 child window).
 pub(super) fn paint_viewport(canvas: &mut dyn Canvas, theme: Theme) {
     let bounds = canvas.bounds();
     backdrop(canvas, theme.background);
-    canvas.push_clip(bounds);
     look::card(canvas, bounds, &theme);
-    canvas.pop_clip();
 }
 
 /// Handles the view's wheel, keyboard scroll and resize.

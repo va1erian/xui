@@ -155,9 +155,11 @@ runs on every backend. A widget:
    a backend leaves to the front layer. Paint inside the node's bounds, or
    within the overdraw margin around them (8 design units): the canvas
    backends clip every painter to that reach, so a shadow or a label that
-   overflows needs bounds that cover it. Invalidate the node (`Control::invalidate`)
-   whenever a change alters how it looks, including a focus change: the
-   canvas backends repaint only what was marked.
+   overflows needs bounds that cover it. A stroke is centred on its
+   rectangle's edge, so a frame stroked under a `push_clip` of that same
+   rectangle loses its outer half: stroke the frame outside the clip. Invalidate
+   the node (`Control::invalidate`) whenever a change alters how it looks,
+   including a focus change: the canvas backends repaint only what was marked.
 5. Implements `Placeable` so layouts can hold it: `measure(ui, constraints)`
    returns its natural size from its content and the theme's design values
    (never its current bounds, or a widget squeezed once stays small), reading

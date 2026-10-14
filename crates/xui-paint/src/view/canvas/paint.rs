@@ -35,8 +35,10 @@ pub(super) fn paint(canvas: &mut dyn Canvas, state: &CanvasState, theme: &Theme)
         let radius = (state.brush.max(1) as f32 / 2.0).max(1.0);
         canvas.stroke_ellipse(center, radius, radius, theme.text, 1.0);
     }
-    canvas.stroke_rect(bounds, theme.border, 1.0);
     canvas.pop_clip();
+    // The frame is stroked outside the clip: it is centred on the edge of the
+    // clip's own rectangle and would lose the half outside it.
+    canvas.stroke_rect(bounds, theme.border, 1.0);
 }
 
 /// Draws a rubber-banded shape in canvas coordinates, mapped into the node.
