@@ -20,7 +20,7 @@ use super::Node;
 /// The deepest a form's tree may nest: the root node is level 1, a node
 /// directly inside it level 2, and so on. A `Group`'s content, a `Panel`'s
 /// content and a `Tabs` page's content are each one level below the
-/// container.
+/// container; content that is the default (omitted from a file) is no level.
 ///
 /// A form nested more deeply is not read (`load` reports the first node one
 /// level past this), not written (`Form::to_ron` returns an error), not built,
@@ -92,12 +92,31 @@ impl Node {
     /// How deep the tree nests from this node: 1 for a node with nothing
     /// inside it. Walks the tree without recursing, so a tree of any depth is
     /// measured.
+    ///
+    /// The content of a `Panel`, a `Group` or a page that is the default (an
+    /// empty column) is not written to a file and not read from one, so it is
+    /// no level: the depth is that of the form the file spells out, which is
+    /// what the reader and the writer limit.
     pub fn depth(&self) -> usize {
+        let default = Node::default();
         let mut deepest = 0;
         let mut pending = vec![(self, 1usize)];
         while let Some((node, level)) = pending.pop() {
             deepest = deepest.max(level);
-            pending.extend(node.children().into_iter().map(|child| (child, level + 1)));
+            // A container's content is omitted from a file when it is the
+            // default; a layout's children are always spelt out.
+            let (inside, content) = match node {
+                Node::Panel(panel) => (vec![&*panel.content], true),
+                Node::Group(group) => (vec![&*group.content], true),
+                Node::Tabs(tabs) => (tabs.pages.iter().map(|page| &page.content).collect(), true),
+                other => (other.children(), false),
+            };
+            pending.extend(
+                inside
+                    .into_iter()
+                    .filter(|child| !content || **child != default)
+                    .map(|child| (child, level + 1)),
+            );
         }
         deepest
     }

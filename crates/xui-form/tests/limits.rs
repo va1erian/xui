@@ -273,3 +273,50 @@ fn huge_lengths_are_not_built_and_the_largest_ones_lay_out() {
         assert!(live.bounds("a").is_some() && live.bounds("c").is_some());
     });
 }
+
+#[test]
+fn omitted_content_is_no_level() {
+    // `Panel(name: "p")` has the default content, which is neither written
+    // nor read: a panel at level 16 is a form of 16 levels, not 17.
+    for leaf in [
+        r#"Panel(name: "p")"#,
+        r#"Group(name: "g", text: "G")"#,
+        r#"Tabs(name: "t", pages: [Page(title: "one"), Page(title: "two")])"#,
+    ] {
+        let mut text = String::from("Form(root: ");
+        text.push_str(&"Column(children: [".repeat(MAX_DEPTH - 1));
+        text.push_str(leaf);
+        text.push_str(&"])".repeat(MAX_DEPTH - 1));
+        text.push(')');
+
+        let form = load(&text).unwrap_or_else(|error| panic!("{leaf}: {error}"));
+        assert_eq!(form.root.depth(), MAX_DEPTH, "{leaf}");
+        assert!(!mentions_depth(&form), "{leaf}: validate agrees");
+        let written = form.to_ron().expect("the writer agrees");
+        assert_eq!(load(&written).expect("it reads back"), form, "{leaf}");
+        assert_eq!(format(&text).expect("fmt agrees"), written, "{leaf}");
+        with_form(&form, BuildOptions::default(), |_| ());
+
+        // The same, built in memory with the default content spelt out.
+        let mut node = load(&format!("Form(root: {leaf})")).expect("it loads").root;
+        for _ in 1..MAX_DEPTH {
+            node = Node::Column(Stack {
+                children: vec![node],
+                ..Stack::default()
+            });
+        }
+        let built = Form {
+            root: node,
+            ..Form::default()
+        };
+        assert_eq!(built, form, "{leaf}");
+    }
+
+    // Content that is written is a level: one more is one too many.
+    let mut text = String::from("Form(root: ");
+    text.push_str(&"Column(children: [".repeat(MAX_DEPTH - 1));
+    text.push_str(r#"Panel(content: Label())"#);
+    text.push_str(&"])".repeat(MAX_DEPTH - 1));
+    text.push(')');
+    assert!(load(&text).is_err());
+}
