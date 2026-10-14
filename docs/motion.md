@@ -6,8 +6,9 @@ It computes values. It does not yet move a widget: see [What does not
 exist](#what-does-not-exist).
 
 Everything here lives in `xui_core::motion` and is portable: no platform
-dependency, no `unsafe`, no clock read, no thread, no file system. It compiles
-for `wasm32` and runs the same in a headless test.
+dependency, no `unsafe`, no clock read, no thread, no file system. It uses
+nothing that is unavailable on `wasm32` (it has not yet been compiled for it in
+CI), and it runs the same in a headless test.
 
 ## Easing
 
@@ -74,7 +75,11 @@ test has to control time:
 - `ManualClock` (in `xui_core::motion`) moves only when told to
   (`set`, `advance`). Use it in tests and headless runs.
 - `xui_canvas::MonotonicClock` reads `std::time::Instant`. It is the real clock
-  of a desktop driver.
+  of a desktop driver. `Instant::now()` panics on `wasm32-unknown-unknown`, so a
+  web build implements `Clock` over `performance.now()` instead.
+
+A reference to a clock, and a `Box`, `Rc` or `Arc` of one, is itself a `Clock`,
+so `fn drive(clock: impl Clock)` accepts `&clock` or an `Rc<ManualClock>`.
 
 ## Reduced motion
 
@@ -97,7 +102,7 @@ let duration = if ui.prefers_reduced_motion() {
 | `Win32Backend` | `SystemParametersInfoW(SPI_GETCLIENTAREAANIMATION)`, inverted: the setting says whether client-area animation is *on*, so reduced motion is "off". A failed query is `false`. |
 | `WinitBackend` on Windows | the same query |
 | `WinitBackend` on macOS and Linux | `false`. No platform query is wired up there yet; nothing is guessed. |
-| `OffscreenBackend` | `false` always, so a headless render is the same on every machine |
+| `OffscreenBackend` | `false` unless a test scripts it with `set_prefers_reduced_motion`; it never reads the machine's setting, so a headless render is the same everywhere |
 | any other `Backend` | `false` unless it overrides the method (the default) |
 
 ## What does not exist

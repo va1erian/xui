@@ -50,12 +50,15 @@
   and the Windows Phone Toolkit's `ExpoIn`/`ExpoOut` with an `exponent`,
   default 6), `Tween` (`from`, `to`, `duration`, `delay`, `easing`; a pure
   `sample(elapsed)` and `is_finished`), and a `Clock` trait with a
-  `ManualClock` for tests and headless runs. `xui-core` reads no clock, so it
-  stays `wasm32`-clean; `xui_canvas::MonotonicClock` is the real one.
+  `ManualClock` for tests and headless runs. `xui-core` reads no clock and uses
+  nothing that is unavailable on `wasm32` (not yet compiled for it in CI);
+  `xui_canvas::MonotonicClock` is the real one.
   `Backend::prefers_reduced_motion()` (default `false`, so existing backends
   are unchanged) and `Ui::prefers_reduced_motion()` carry the system's
   animation setting: the Win32 backend and the windowed canvas backend read
-  `SPI_GETCLIENTAREAANIMATION` on Windows; macOS and Linux report `false`.
+  `SPI_GETCLIENTAREAANIMATION` on Windows; macOS and Linux report `false`, and
+  `OffscreenBackend` reports `false` unless `set_prefers_reduced_motion` says
+  otherwise.
   When it is set, motion resolves to a plain fade or an instant change and
   nothing loops. Per-node opacity and transform, a frame driver and widget
   animations are separate, later steps. See [Motion](docs/motion.md).

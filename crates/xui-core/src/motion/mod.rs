@@ -5,9 +5,10 @@
 //!
 //! This is the backend-independent foundation of animation. It computes values;
 //! it does not draw, schedule or own a timer, and it never reads the system
-//! clock, so it is usable on `wasm32` and in a headless test. What moves a
-//! widget (per-node opacity and transform, a frame driver) builds on it
-//! separately. See `docs/motion.md` for what exists and what does not.
+//! clock, so it uses nothing that is unavailable on `wasm32` and runs the same
+//! in a headless test. What moves a widget (per-node opacity and transform, a
+//! frame driver) builds on it separately. See `docs/motion.md` for what exists
+//! and what does not.
 //!
 //! [`Backend::prefers_reduced_motion`](crate::Backend::prefers_reduced_motion)
 //! and [`Ui::prefers_reduced_motion`](crate::Ui::prefers_reduced_motion) carry
