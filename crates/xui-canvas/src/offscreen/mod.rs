@@ -11,9 +11,7 @@ use std::cell::{OnceCell, RefCell};
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
-use xui_core::backend::{
-    Canvas as _, Event, Painter, PlatformSpec, Result as BackendResult, WidgetId, WindowId,
-};
+use xui_core::backend::{Event, PlatformSpec, Result as BackendResult, WidgetId, WindowId};
 use xui_core::router::WidgetHost;
 use xui_core::{Image, Rect, Theme};
 
@@ -30,7 +28,8 @@ mod tests;
 
 use gl_fallback::GlContent;
 
-use crate::geometry::{absolute_bounds, ancestor_clip, effectively_visible, hit_test, intersect};
+use crate::compositor::{self, Frame};
+use crate::geometry::{absolute_bounds, hit_test};
 use crate::scene::{Node, Scene};
 use geometry::translate;
 
@@ -50,15 +49,6 @@ struct OffscreenWindow {
     gl: GlContent,
     /// The last icon the app set with `Backend::set_window_icon`.
     icon: Option<Image>,
-}
-
-/// One node to draw in creation order: its painter (if any) and its clip. The
-/// id keys any GL fallback content the node carries.
-struct Draw {
-    id: WidgetId,
-    bounds: Rect,
-    clip: Option<Rect>,
-    painter: Option<Painter>,
 }
 
 /// Clears a window's in-progress render flag when a frame finishes, however the
@@ -222,7 +212,7 @@ impl OffscreenBackend {
                 dpi,
                 width: width as i32,
                 height: height as i32,
-                gl: GlContent::new(width as i32, height as i32),
+                gl: GlContent::new(),
                 icon: None,
             },
         );
@@ -245,20 +235,14 @@ impl OffscreenBackend {
         // the backend (for example `Ui::dpi`, which reads this same map) does not
         // find it borrowed. The window stays in the map, with a placeholder
         // surface, so painters still read its live DPI, theme and GL content.
-        let (dpi, theme, surface) = {
+        // The GL content is snapshotted in the same step, so a widget's fallback
+        // paint can re-enter the backend without the window map staying borrowed.
+        let (dpi, theme, surface, gl) = {
             let mut windows = self.windows.borrow_mut();
             let entry = windows.get_mut(&window.raw())?;
             let surface = std::mem::replace(&mut entry.surface, Surface::new(1, 1));
-            (entry.dpi, entry.theme, surface)
+            (entry.dpi, entry.theme, surface, entry.gl.snapshot())
         };
-        // Snapshot the GL content before the painters run, so a widget's
-        // fallback paint can re-enter the backend without the window map
-        // staying borrowed.
-        let gl = self
-            .windows
-            .borrow()
-            .get(&window.raw())
-            .map(|entry| entry.gl.snapshot());
         // The guard puts the real surface back on every exit, including a panic
         // in a painter, so a later frame never keeps the 1x1 placeholder.
         let mut restore = SurfaceRestore {
@@ -269,55 +253,18 @@ impl OffscreenBackend {
         let surface = restore.surface.as_mut().expect("a taken surface");
         let (width, height) = surface.size();
         let window_rect = Rect::new(0, 0, width as i32, height as i32);
-        surface.with_canvas_at(window_rect, dpi, |canvas| {
-            xui_core::theme::look::paint_background(canvas, window_rect, window_rect, &theme);
-        });
         // GL content is one painter among many, exactly as in the windowed
         // backend; the offscreen backend has no GPU, so it paints the widget's
         // software fallback: window-level content as the base layer, node-level
-        // content at its node's bounds.
-        if let Some(gl) = &gl {
-            gl.paint_window(surface, dpi, &theme);
-        }
-        let nodes = self.nodes.borrow();
-        let paints: Vec<Draw> = nodes
-            .iter()
-            .filter(|(id, node)| node.window == window && effectively_visible(&nodes, *id))
-            .filter_map(|(id, node)| {
-                let painter = node.painter.clone();
-                let has_gl = gl.as_ref().is_some_and(|gl| gl.has_node(id));
-                if painter.is_none() && !has_gl {
-                    return None;
-                }
-                let bounds = absolute_bounds(&nodes, id)?;
-                let clip = ancestor_clip(&nodes, id);
-                if let Some(clip) = clip
-                    && intersect(bounds, clip).is_empty()
-                {
-                    return None;
-                }
-                Some(Draw {
-                    id,
-                    bounds,
-                    clip,
-                    painter,
-                })
-            })
-            .collect();
-        drop(nodes);
-        for draw in paints {
-            if let Some(painter) = draw.painter {
-                surface.with_canvas_over_parents(draw.bounds, dpi, |canvas| {
-                    if let Some(clip) = draw.clip {
-                        canvas.push_clip(clip);
-                    }
-                    painter(canvas);
-                });
-            }
-            if let Some(gl) = &gl {
-                gl.paint_node(draw.id, surface, draw.bounds, draw.clip, dpi, &theme);
-            }
-        }
+        // content at its node's bounds. Everything goes through the shared
+        // compositor, as the windowed backend's frames do.
+        let plan = compositor::plan(&self.nodes.borrow(), window, &gl);
+        let frame = Frame {
+            window: window_rect,
+            dpi,
+            theme: &theme,
+        };
+        plan.paint(surface, &[window_rect], &frame, &gl);
         let image = surface.to_image();
         drop(restore);
         Some(image)

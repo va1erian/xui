@@ -25,6 +25,7 @@
 
 mod canvas;
 mod clock;
+mod compositor;
 mod geometry;
 mod image_cache;
 mod offscreen;
