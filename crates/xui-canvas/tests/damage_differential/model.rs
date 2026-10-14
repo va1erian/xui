@@ -4,10 +4,11 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use xui_core::backend::{Canvas, GradientStop, LinearGradient, Rgba};
+use xui_core::backend::{Canvas, Corner, GradientStop, LinearGradient, Rgba};
 use xui_core::geometry::{Point, Rect};
 use xui_core::image::Image;
-use xui_core::{Color, Dip, TextStyle};
+use xui_core::theme::look;
+use xui_core::{Color, Dip, TextStyle, Theme};
 
 /// The window's size in pixels.
 pub const W: i32 = 240;
@@ -59,8 +60,8 @@ pub struct Look {
 
 pub type Looks = Rc<RefCell<Vec<Look>>>;
 
-/// How many kinds of painter there are.
-pub const KINDS: usize = 10;
+/// How many kinds of painter there are (kind 9 is the polygon at the end).
+pub const KINDS: usize = 16;
 
 pub fn checker() -> Image {
     let mut pixels = Vec::new();
@@ -148,6 +149,96 @@ pub fn draw(canvas: &mut dyn Canvas, bounds: Rect, look: &Look, text: &str, imag
                 Rect::new(at, bounds.top + 2, at + 3, bounds.bottom - 2),
                 color,
             );
+        }
+        10 => {
+            // Strokes and a line only: a clipped container must cut them.
+            canvas.stroke_rect(bounds, color, 2.0);
+            let center = Point::new(
+                (bounds.left + bounds.right) / 2,
+                (bounds.top + bounds.bottom) / 2,
+            );
+            canvas.stroke_ellipse(
+                center,
+                (bounds.width() / 2) as f32,
+                (bounds.height() / 2) as f32,
+                Color::rgb(0, 0, 0),
+                2.0,
+            );
+            canvas.draw_line(
+                Point::new(bounds.left, bounds.bottom),
+                Point::new(bounds.right, bounds.top),
+                color,
+                3.0,
+            );
+        }
+        11 => {
+            // Nested rounded clips: the mask product.
+            canvas.push_clip_rounded(bounds, [Corner::uniform(9.0); 4]);
+            canvas.fill_rect(
+                Rect::new(
+                    bounds.left - 4,
+                    bounds.top - 4,
+                    bounds.right + 4,
+                    bounds.bottom + 4,
+                ),
+                color,
+            );
+            let inner = Rect::new(
+                bounds.left + 3,
+                bounds.top + 3,
+                bounds.right - 3,
+                bounds.bottom - 3,
+            );
+            canvas.push_clip_rounded(inner, [Corner::uniform(5.0); 4]);
+            canvas.fill_ellipse(
+                Point::new(bounds.left + 6, bounds.top + 6),
+                14.0,
+                10.0,
+                Color::rgb(255, 255, 255),
+            );
+            canvas.pop_clip();
+            canvas.pop_clip();
+        }
+        12 => {
+            // The Midnight halo and glow, as a primary button and a checkbox
+            // draw them.
+            let theme = Theme::midnight();
+            canvas.fill_rounded_rect(bounds, 5.0, color);
+            look::halo(canvas, bounds, 5.0, &theme);
+            let center = Point::new(
+                (bounds.left + bounds.right) / 2,
+                (bounds.top + bounds.bottom) / 2,
+            );
+            let radius = (bounds.height().min(bounds.width()) / 2) as f32;
+            look::glow(canvas, center, radius, &theme);
+        }
+        13 => {
+            // Text that overflows its node, unclipped, as a Label's does.
+            canvas.fill_rect(bounds, Color::rgb(240, 240, 240));
+            canvas.draw_text(
+                "Overflowing label text that is long",
+                bounds,
+                &TextStyle::new(color, Dip(13.0)),
+            );
+        }
+        14 => {
+            // A line along the top edge, which is all a node with no height
+            // has.
+            let y = bounds.top;
+            canvas.draw_line(
+                Point::new(bounds.left, y),
+                Point::new(bounds.right, y),
+                color,
+                2.0,
+            );
+        }
+        15 => {
+            // A handle whose radius is in design units, centred on the node's
+            // right edge.
+            let radius = (6.0 * canvas.dpi() as f32 / 96.0).max(2.0);
+            let center = Point::new(bounds.right, (bounds.top + bounds.bottom) / 2);
+            canvas.fill_ellipse(center, radius + 1.0, radius + 1.0, Color::rgb(0, 0, 0));
+            canvas.fill_ellipse(center, radius, radius, Color::rgb(255, 255, 255));
         }
         _ => canvas.fill_polygon(
             &[

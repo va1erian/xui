@@ -8,14 +8,17 @@
 //! - an idle frame (nothing changed),
 //! - the card moved by one pixel per frame,
 //! - a forced repaint of the whole window,
-//! - the whole-window repaint, image clone and conversion that the windowed
-//!   backend's present path did for every frame before it repainted damage.
+//! - the whole-window repaint, image clone and conversion: an estimate of what
+//!   the windowed present did for every frame before it repainted damage (which
+//!   also allocated a surface per frame; measured on the base tree, about 4 to
+//!   6 ms on the development machine, so machine dependent).
 //!
 //! Each timed frame includes what the windowed present does with the result:
 //! converting the repainted rows to the `0x00RRGGBB` buffer `softbuffer` takes.
 //!
 //! Run it in release: `cargo run --release -p xui-canvas --example
-//! damage_bench [-- --frames 300 --window 1920x1080]`. The numbers depend on
+//! damage_bench [-- --frames 300 --window 1920x1080 --theme midnight]`. The
+//! numbers depend on
 //! the machine; a debug build is an order of magnitude slower.
 
 use std::cell::RefCell;
@@ -30,7 +33,7 @@ use xui_core::arrange::{
 };
 use xui_core::backend::{Backend, PlatformSpec, WidgetId};
 use xui_core::widget::Panel;
-use xui_core::{Dip, Rect};
+use xui_core::{Dip, Rect, Theme};
 
 /// What the build hands the timed loop: the window and the card's node.
 type Built = (Ui<()>, WidgetId);
@@ -141,12 +144,18 @@ fn main() {
         bench(&backend, &ui, card, (width, height), frames);
     });
 
+    let theme = match argument("--theme", "light").as_str() {
+        "dark" => Theme::dark(),
+        "midnight" => Theme::midnight(),
+        _ => Theme::light(),
+    };
     let make_slot = Rc::clone(&slot);
     let run: Rc<dyn Backend> = backend.clone();
     run_app(
         run,
         PlatformSpec::new("damage bench").size(Dip(width as f32), Dip(height as f32)),
         move |ui| {
+            ui.set_theme(theme);
             let card_handle: Handle<Panel<()>> = Handle::new();
             ui.root(
                 absolute().design_size(width as f32, height as f32).child(
@@ -233,7 +242,7 @@ fn bench(
     );
 
     report(
-        "whole repaint + image clone + conversion (the old present)",
+        "whole repaint + image clone + conversion (old present, est.)",
         &measure(frames, 20, |_| {
             backend.invalidate_window(window);
             let image = backend.render(window).expect("a frame");

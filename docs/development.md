@@ -95,8 +95,9 @@ add a pure function with a stated invariant.
 differential tests of the canvas backend's damage-driven repaint: two offscreen
 backends get the same random (seeded) operations or the same scripted session,
 one repaints from damage only and the other repaints the whole window before
-each frame, and every frame must be equal pixel for pixel. `XUI_DAMAGE_SEEDS`
-(default 120) and `XUI_REGION_SEEDS` (default 96, for the region repaint of
+each frame, and every frame must be equal pixel for pixel, on several themes and
+at several DPIs. `XUI_DAMAGE_SEEDS`
+(default 25) and `XUI_REGION_SEEDS` (default 96, for the region repaint of
 random curved scenes in `region_tests.rs`) raise the number of seeds for a
 longer run; a failure names the seed and the step. See
 [Repainting only what changed](backends.md#repainting-only-what-changed).
@@ -151,7 +152,12 @@ runs on every backend. A widget:
 3. Maps events to the app's `Msg` through closures fixed at construction
    (`on_click`, `on_select`, …) — never a numeric control id.
 4. Paints only from `Theme` tokens, reading the live theme; owner-draw any part
-   a backend leaves to the front layer.
+   a backend leaves to the front layer. Paint inside the node's bounds, or
+   within the overdraw margin around them (8 design units): the canvas
+   backends clip every painter to that reach, so a shadow or a label that
+   overflows needs bounds that cover it. Invalidate the node (`Control::invalidate`)
+   whenever a change alters how it looks, including a focus change: the
+   canvas backends repaint only what was marked.
 5. Implements `Placeable` so layouts can hold it: `measure(ui, constraints)`
    returns its natural size from its content and the theme's design values
    (never its current bounds, or a widget squeezed once stays small), reading

@@ -75,26 +75,43 @@
 - **The canvas backends repaint only what changed.** `WinitBackend` and
   `OffscreenBackend` share one compositor and keep each window's frame between
   frames. A move, resize, show, hide, raise, destroy, clip, text or painter
-  change marks the old and new places of the node (and everything inside it)
-  and `invalidate_rect`, which was ignored, is honoured; the window repaints
-  only that damage (a list of at most eight rectangles, each grown by an 8 px
-  overdraw margin; a resize, DPI or theme change and GL content repaint the
-  whole window) and the windowed backend hands `softbuffer` only the repainted
-  rows when `Buffer::age() == 1`, converting the whole frame otherwise. An idle
-  frame paints nothing and allocates nothing; at 1080p, with a card of about 30
-  widgets, an idle frame went from about 6 ms to 0 ms and a card moved by one
-  pixel from about 6 ms to about 0.4 ms (release, `damage_bench`). The frames
-  are bit-for-bit those of a whole-window repaint: the differential tests
-  compare them after every step of seeded random operation sequences and of
-  scripted sessions of the real widgets on the light, dark and Midnight themes.
+  change marks the old and new places of the node (and everything inside it),
+  an input event (a press, a key, a focus or capture change, the pointer
+  leaving) marks the node it was delivered to once handled, and
+  `invalidate_rect`, which was ignored, is honoured; the window repaints only
+  that damage (a list of at most eight rectangles; a resize, DPI or theme
+  change and GL content repaint the whole window) and the windowed backend
+  hands `softbuffer` only the repainted rows when `Buffer::age() == 1`,
+  converting the whole frame otherwise (always, on X11, where an expose cannot
+  be told from a redraw). An idle frame paints nothing and allocates nothing;
+  at 1080p, with a card of about 30 widgets, an idle frame went from about 4 to
+  6 ms to 0 ms and a card moved by one pixel from about 4 to 6 ms to about
+  0.4 ms on the flat themes and about 2.6 ms on Midnight (release,
+  `damage_bench`, a 20-thread desktop CPU; machine dependent).
+  **A painter cannot draw outside its reach**: its bounds, trimmed to its
+  ancestors' clips and grown by an overdraw margin of 8 design units (8 px at
+  96 DPI, 12 at 144). The compositor clips every painter to it, in a frame of
+  damage and of the whole window alike, so a label whose text overflows its
+  node by more than the margin, or a shadow, is cut there (in every canvas
+  frame, not only in repaints of damage); a widget that has to draw further
+  out must give its node bounds that cover it. Lines, outlines and glows are
+  now cut by a rectangular clip as fills are (they were not, so a scrolled
+  checkbox's glow showed above its viewport; a frame stroked on the very edge
+  of its clip, a scroll view's, loses the half that was outside it). For
+  painters that stay within their reach the frames are bit-for-bit those of a
+  whole-window repaint: the
+  differential tests compare them after every step of seeded random operation
+  sequences (at 96, 120, 144 and 192 DPI) and of scripted sessions of the real
+  widgets on the light, dark and Midnight themes. `OffscreenBackend::inject`
+  now delivers what the windowed backend delivers (`MouseLeave` to the node
+  the pointer left, `KillFocus` and `SetFocus` on a press and on
+  `Backend::focus`), and `Edit` and `NumberField` repaint on a focus change.
   New API: `OffscreenBackend::present` lends the frame and the rectangles
   repainted without a copy, `PresentedFrame`, and
   `OffscreenBackend::invalidate_window` for a test that changed what a painter
-  draws behind the backend's back; `render` returns the same image as before.
-  A painter that draws further than the margin outside its node (a label whose
-  text overflows) reports the rectangle with `invalidate_rect`. The winit
-  present path is compile-checked, not run. See
-  [Backends](docs/backends.md#repainting-only-what-changed).
+  draws behind the backend's back; `render` returns the image it did, for
+  painters inside their reach. The winit present path is compile-checked, not
+  run. See [Backends](docs/backends.md#repainting-only-what-changed).
 - **A portable motion foundation, and the reduced-motion setting.**
   `xui_core::motion` adds `Easing` (linear, quadratic and cubic in/out/in-out,
   and the Windows Phone Toolkit's `ExpoIn`/`ExpoOut` with an `exponent`,

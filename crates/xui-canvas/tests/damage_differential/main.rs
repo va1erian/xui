@@ -9,7 +9,8 @@
 //! window before each frame, which is the reference.
 //!
 //! The sequences are seeded and deterministic. `XUI_DAMAGE_SEEDS` raises the
-//! number of seeds (default 120, of 36 operations each) for a longer run.
+//! number of seeds (the defaults are 25, of 36 operations each) for a longer
+//! run.
 
 mod model;
 
@@ -51,9 +52,10 @@ fn spec() -> PlatformSpec {
 }
 
 impl Twin {
-    fn new() -> Twin {
-        let a = Rc::new(OffscreenBackend::new());
-        let b = Rc::new(OffscreenBackend::new());
+    /// Two windows at `dpi`, laid out in device pixels.
+    fn new(dpi: u32) -> Twin {
+        let a = Rc::new(OffscreenBackend::with_dpi(dpi));
+        let b = Rc::new(OffscreenBackend::with_dpi(dpi));
         let wa = a.open_window(&spec()).unwrap();
         let wb = b.open_window(&spec()).unwrap();
         Twin {
@@ -198,13 +200,22 @@ impl Twin {
             let rect = match rng.below(3) {
                 // A nudge, the commonest animation step.
                 0 => current.offset(rng.range(-3, 4), rng.range(-3, 4)),
-                // A resize.
-                1 => Rect::new(
-                    current.left,
-                    current.top,
-                    current.left + rng.range(4, 90),
-                    current.top + rng.range(4, 70),
-                ),
+                // A resize, sometimes to nothing along one axis or both.
+                1 => {
+                    let mut size = (rng.range(4, 90), rng.range(4, 70));
+                    match rng.below(5) {
+                        0 => size.0 = 0,
+                        1 => size.1 = 0,
+                        2 => size = (0, 0),
+                        _ => {}
+                    }
+                    Rect::new(
+                        current.left,
+                        current.top,
+                        current.left + size.0,
+                        current.top + size.1,
+                    )
+                }
                 // Anywhere, partly or wholly outside the window.
                 _ => {
                     let left = rng.range(-60, W + 20);
@@ -393,20 +404,21 @@ impl Twin {
     }
 }
 
-fn seeds() -> u64 {
+/// How many seeds a test runs: `default`, or `XUI_DAMAGE_SEEDS` for a longer
+/// run. The defaults keep each test to a few seconds in a debug build.
+fn seeds(default: u64) -> u64 {
     std::env::var("XUI_DAMAGE_SEEDS")
         .ok()
         .and_then(|value| value.parse().ok())
-        .unwrap_or(120)
+        .unwrap_or(default)
 }
 
-/// Random sequences of every operation: region repaint equals full repaint
-/// after every step.
-#[test]
-fn region_repaint_equals_full_repaint_over_random_operation_sequences() {
-    for seed in 1..=seeds() {
-        let mut rng = Rng::new(seed);
-        let mut twin = Twin::new();
+/// Random sequences of every operation at `dpi`: region repaint equals full
+/// repaint after every step.
+fn random_sequences(dpi: u32, seeds: u64) {
+    for seed in 1..=seeds {
+        let mut rng = Rng::new(seed.wrapping_add(u64::from(dpi) << 32));
+        let mut twin = Twin::new(dpi);
         for step in 0..36 {
             let what = twin.step(&mut rng);
             twin.check(seed, step, &what);
@@ -414,13 +426,27 @@ fn region_repaint_equals_full_repaint_over_random_operation_sequences() {
     }
 }
 
+#[test]
+fn region_repaint_equals_full_repaint_over_random_operation_sequences() {
+    random_sequences(96, seeds(25));
+}
+
+/// The same at the DPIs where a ring drawn in design units is not a whole
+/// number of pixels and the overdraw margin has to follow the scale.
+#[test]
+fn region_repaint_equals_full_repaint_at_120_144_and_192_dpi() {
+    for dpi in [120, 144, 192] {
+        random_sequences(dpi, seeds(25) / 5);
+    }
+}
+
 /// The same, with many overlapping siblings in a few nested containers and
 /// mostly small moves: the animation workload.
 #[test]
 fn region_repaint_equals_full_repaint_for_overlapping_siblings_moving_a_little() {
-    for seed in 1..=seeds() {
+    for seed in 1..=seeds(25) {
         let mut rng = Rng::new(seed ^ 0xA5A5);
-        let mut twin = Twin::new();
+        let mut twin = Twin::new(96);
         for _ in 0..3 {
             twin.create(&mut rng, true);
         }
