@@ -182,4 +182,16 @@ mod tests {
         assert!(crate::sys::window_icon::has_icon(hwnd, false));
         backend.close_window(window);
     }
+
+    #[test]
+    fn the_contract_reports_the_systems_animation_preference() {
+        // No window is needed: the preference is a system setting, not a
+        // window's. On a machine with client-area animation switched off this
+        // tells the override from the trait's default of `false`.
+        let backend = Win32Backend::new();
+        assert_eq!(
+            backend.prefers_reduced_motion(),
+            crate::sys::animation::reduced_motion()
+        );
+    }
 }
