@@ -87,6 +87,11 @@ struct State {
     ///
     /// [`Backend::file_dialog`]: super::Backend::file_dialog
     file_dialog_request: Option<FileDialogRequest>,
+    /// The answer [`Backend::prefers_reduced_motion`] gives. `false` by
+    /// default, like a backend that cannot read the setting.
+    ///
+    /// [`Backend::prefers_reduced_motion`]: super::Backend::prefers_reduced_motion
+    prefers_reduced_motion: bool,
 }
 
 impl HeadlessBackend {
@@ -106,8 +111,16 @@ impl HeadlessBackend {
                 nodes: HashMap::new(),
                 file_dialog: FileDialogOutcome::Declined,
                 file_dialog_request: None,
+                prefers_reduced_motion: false,
             }),
         }
+    }
+
+    /// Scripts the answer [`Backend::prefers_reduced_motion`] gives.
+    ///
+    /// [`Backend::prefers_reduced_motion`]: super::Backend::prefers_reduced_motion
+    pub fn set_prefers_reduced_motion(&self, reduced: bool) {
+        self.state.borrow_mut().prefers_reduced_motion = reduced;
     }
 
     /// Scripts the outcome the next [`Backend::file_dialog`] returns.

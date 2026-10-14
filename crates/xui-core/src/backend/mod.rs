@@ -380,6 +380,23 @@ pub trait Backend {
         None
     }
 
+    /// Whether the user has asked the system to reduce motion.
+    ///
+    /// When this is `true`, motion must resolve to a plain fade or an instant
+    /// change and nothing may loop; see [`motion`](crate::motion). It is the
+    /// *opposite* sense of what Windows stores: `SPI_GETCLIENTAREAANIMATION`
+    /// says whether client-area animation is on.
+    ///
+    /// The value is read live, so a change the user makes while the app runs is
+    /// seen by the next call; ask when an animation starts rather than on every
+    /// frame. The default is `false`: a backend that has no way to read the
+    /// setting reports no preference rather than guessing one. Today only
+    /// Windows reads it (the Win32 backend and the windowed canvas backend);
+    /// macOS, Linux and the headless backends report `false`.
+    fn prefers_reduced_motion(&self) -> bool {
+        false
+    }
+
     /// Applies a theme to a window and its nodes.
     fn set_theme(&self, window: WindowId, theme: &Theme);
 

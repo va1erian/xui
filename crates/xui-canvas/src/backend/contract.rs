@@ -382,6 +382,10 @@ impl Backend for WinitBackend {
         }
     }
 
+    fn prefers_reduced_motion(&self) -> bool {
+        crate::sys::animation::reduced_motion()
+    }
+
     fn set_timer(&self, window: WindowId, millis: u32) -> TimerId {
         let id = self.shared.next_timer.get();
         self.shared.next_timer.set(id + 1);
