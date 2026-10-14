@@ -45,6 +45,20 @@
 
 ### Additions
 
+- **A portable motion foundation, and the reduced-motion setting.**
+  `xui_core::motion` adds `Easing` (linear, quadratic and cubic in/out/in-out,
+  and the Windows Phone Toolkit's `ExpoIn`/`ExpoOut` with an `exponent`,
+  default 6), `Tween` (`from`, `to`, `duration`, `delay`, `easing`; a pure
+  `sample(elapsed)` and `is_finished`), and a `Clock` trait with a
+  `ManualClock` for tests and headless runs. `xui-core` reads no clock, so it
+  stays `wasm32`-clean; `xui_canvas::MonotonicClock` is the real one.
+  `Backend::prefers_reduced_motion()` (default `false`, so existing backends
+  are unchanged) and `Ui::prefers_reduced_motion()` carry the system's
+  animation setting: the Win32 backend and the windowed canvas backend read
+  `SPI_GETCLIENTAREAANIMATION` on Windows; macOS and Linux report `false`.
+  When it is set, motion resolves to a plain fade or an instant change and
+  nothing loops. Per-node opacity and transform, a frame driver and widget
+  animations are separate, later steps. See [Motion](docs/motion.md).
 - **xui-blitz: a scrollbar and a context-menu event.** `BlitzView` draws the
   toolkit's vertical scrollbar along its right edge (a gutter the page is
   laid out beside, so it never covers content; drag the thumb or click the

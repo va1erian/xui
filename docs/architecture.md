@@ -53,7 +53,9 @@ the platform (winit + softbuffer/tiny-skia · Win32 · a headless surface)
   `set_painter`.
 - **Text** — `measure_text`, `text_shaper`/`layout_text` (a `Send + Sync` shaper
   a worker can use), `dpi`, `client_rect`.
-- **Runtime** — `set_theme`, `set_timer`/`kill_timer`, and
+- **Runtime** — `set_theme`, `set_timer`/`kill_timer`,
+  `prefers_reduced_motion` (the system's animation setting; default `false`,
+  meaning no preference; see [Motion](motion.md)), and
   `supports(NodeKind) -> ImplKind`.
 
 Methods a backend cannot meaningfully provide have defaults: `capture` and
@@ -242,6 +244,7 @@ crates/xui-core/src/
   units.rs          Dip / Px
   color.rs          Color
   theme/            Theme tokens and the Themed trait
+  motion/           Easing, Tween, Clock/ManualClock (portable; reads no clock)
   message/          Key, Modifiers, MouseButton, HitTest
   accessibility/    Role, Action, RangeValue, Node
   image.rs          portable RGBA images and PNG/JPEG decode
@@ -276,6 +279,8 @@ These are non-negotiable and are part of `AGENTS.md`.
 
 - [Backends](backends.md) — the available implementations and how to combine
   them.
+- [Motion](motion.md) — easing, tweens, the clock and the reduced-motion
+  setting.
 - [Development](development.md) — the checks and how to add a widget.
 - [The Win32 layer](win32.md) — the low-level platform layer `Win32Backend` is
   built on, for interop.
