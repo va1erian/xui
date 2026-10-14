@@ -11,34 +11,35 @@ use std::cell::{OnceCell, RefCell};
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
-use xui_core::backend::{
-    Canvas as _, Event, Painter, ParentRef, PlatformSpec, Result as BackendResult, WidgetId,
-    WindowId,
-};
+use xui_core::backend::{Event, PlatformSpec, Result as BackendResult, WidgetId, WindowId};
 use xui_core::router::WidgetHost;
-use xui_core::{Image, Rect, Theme};
+use xui_core::{Image, Theme};
 
+use crate::Surface;
 use crate::text_layout::CosmicShaper;
-use crate::{RgbaImage, Surface};
 
 mod backend;
 #[cfg(test)]
 mod capture_tests;
 mod geometry;
 mod gl_fallback;
+mod input;
+mod present;
 #[cfg(test)]
 mod tests;
 
 use gl_fallback::GlContent;
+pub use present::PresentedFrame;
 
-use crate::geometry::{absolute_bounds, ancestor_clip, effectively_visible, hit_bounds, intersect};
-use geometry::translate;
+use crate::scene::{Node, Scene};
 
 /// The default dots-per-inch a surface is rendered at.
 const DEFAULT_DPI: u32 = 96;
 
 struct OffscreenWindow {
-    surface: Surface,
+    /// The window's persistent frame; `None` only while a frame is being
+    /// painted (see [`OffscreenBackend::present`]).
+    surface: Option<Surface>,
     sink: Option<Rc<dyn WidgetHost>>,
     theme: Theme,
     dpi: u32,
@@ -48,61 +49,10 @@ struct OffscreenWindow {
     /// (the offscreen backend never has a GL context). A no-op when the
     /// `winit-backend` feature is off.
     gl: GlContent,
+    /// The node the pointer is over, so a move to another tells it it left.
+    hover: Option<WidgetId>,
     /// The last icon the app set with `Backend::set_window_icon`.
     icon: Option<Image>,
-}
-
-struct Node {
-    window: WindowId,
-    parent: ParentRef,
-    bounds: Rect,
-    visible: bool,
-    enabled: bool,
-    text: String,
-    painter: Option<Painter>,
-    /// A clip on this node's descendants, in the node's own coordinates.
-    clip: Option<Rect>,
-}
-
-/// One node to draw in creation order: its painter (if any) and its clip. The
-/// id keys any GL fallback content the node carries.
-struct Draw {
-    id: WidgetId,
-    bounds: Rect,
-    clip: Option<Rect>,
-    painter: Option<Painter>,
-}
-
-/// Clears a window's in-progress render flag when a frame finishes, however the
-/// render returns.
-struct RenderGuard<'a> {
-    rendering: &'a RefCell<HashSet<u64>>,
-    raw: u64,
-}
-
-impl Drop for RenderGuard<'_> {
-    fn drop(&mut self) {
-        self.rendering.borrow_mut().remove(&self.raw);
-    }
-}
-
-/// Puts a window's real surface back after compositing, on every exit path
-/// (including a panic in a painter), so a later frame cannot keep the 1x1
-/// placeholder that stood in for it while painters ran.
-struct SurfaceRestore<'a> {
-    backend: &'a OffscreenBackend,
-    raw: u64,
-    surface: Option<Surface>,
-}
-
-impl Drop for SurfaceRestore<'_> {
-    fn drop(&mut self) {
-        if let Some(surface) = self.surface.take()
-            && let Some(entry) = self.backend.windows.borrow_mut().get_mut(&self.raw)
-        {
-            entry.surface = surface;
-        }
-    }
 }
 
 /// A backend that renders into a software surface.
@@ -113,7 +63,7 @@ impl Drop for SurfaceRestore<'_> {
 /// [`OffscreenBackend::set_prefers_reduced_motion`].
 pub struct OffscreenBackend {
     windows: RefCell<HashMap<u64, OffscreenWindow>>,
-    nodes: RefCell<Vec<(WidgetId, Node)>>,
+    nodes: RefCell<Scene>,
     next_window: std::cell::Cell<u64>,
     next_widget: std::cell::Cell<u64>,
     /// The node the pointer is captured by, if any.
@@ -146,7 +96,7 @@ impl OffscreenBackend {
     pub fn new() -> OffscreenBackend {
         OffscreenBackend {
             windows: RefCell::new(HashMap::new()),
-            nodes: RefCell::new(Vec::new()),
+            nodes: RefCell::new(Scene::new()),
             next_window: std::cell::Cell::new(1),
             next_widget: std::cell::Cell::new(1),
             captured: RefCell::new(None),
@@ -228,111 +178,18 @@ impl OffscreenBackend {
         self.windows.borrow_mut().insert(
             id.raw(),
             OffscreenWindow {
-                surface: Surface::new(width, height),
+                surface: Some(Surface::new(width, height)),
                 sink: None,
                 theme: Theme::light(),
                 dpi,
                 width: width as i32,
                 height: height as i32,
-                gl: GlContent::new(width as i32, height as i32),
+                gl: GlContent::new(),
+                hover: None,
                 icon: None,
             },
         );
         Ok(id)
-    }
-
-    /// Renders `window`'s visible nodes, in creation order, into an image.
-    pub fn render(&self, window: WindowId) -> Option<RgbaImage> {
-        // A painter may ask to capture its own window, which would call `render`
-        // again; refuse the nested render rather than recursing forever. The
-        // guard clears this on every exit, including the early `?` below.
-        if !self.rendering.borrow_mut().insert(window.raw()) {
-            return None;
-        }
-        let _guard = RenderGuard {
-            rendering: &self.rendering,
-            raw: window.raw(),
-        };
-        // Take the surface out of the window state so a painter that re-enters
-        // the backend (for example `Ui::dpi`, which reads this same map) does not
-        // find it borrowed. The window stays in the map, with a placeholder
-        // surface, so painters still read its live DPI, theme and GL content.
-        let (dpi, theme, surface) = {
-            let mut windows = self.windows.borrow_mut();
-            let entry = windows.get_mut(&window.raw())?;
-            let surface = std::mem::replace(&mut entry.surface, Surface::new(1, 1));
-            (entry.dpi, entry.theme, surface)
-        };
-        // Snapshot the GL content before the painters run, so a widget's
-        // fallback paint can re-enter the backend without the window map
-        // staying borrowed.
-        let gl = self
-            .windows
-            .borrow()
-            .get(&window.raw())
-            .map(|entry| entry.gl.snapshot());
-        // The guard puts the real surface back on every exit, including a panic
-        // in a painter, so a later frame never keeps the 1x1 placeholder.
-        let mut restore = SurfaceRestore {
-            backend: self,
-            raw: window.raw(),
-            surface: Some(surface),
-        };
-        let surface = restore.surface.as_mut().expect("a taken surface");
-        let (width, height) = surface.size();
-        let window_rect = Rect::new(0, 0, width as i32, height as i32);
-        surface.with_canvas_at(window_rect, dpi, |canvas| {
-            xui_core::theme::look::paint_background(canvas, window_rect, window_rect, &theme);
-        });
-        // GL content is one painter among many, exactly as in the windowed
-        // backend; the offscreen backend has no GPU, so it paints the widget's
-        // software fallback: window-level content as the base layer, node-level
-        // content at its node's bounds.
-        if let Some(gl) = &gl {
-            gl.paint_window(surface, dpi, &theme);
-        }
-        let nodes = self.nodes.borrow();
-        let paints: Vec<Draw> = nodes
-            .iter()
-            .filter(|(id, node)| node.window == window && effectively_visible(&nodes, *id))
-            .filter_map(|(id, node)| {
-                let painter = node.painter.clone();
-                let has_gl = gl.as_ref().is_some_and(|gl| gl.has_node(*id));
-                if painter.is_none() && !has_gl {
-                    return None;
-                }
-                let bounds = absolute_bounds(&nodes, *id)?;
-                let clip = ancestor_clip(&nodes, *id);
-                if let Some(clip) = clip
-                    && intersect(bounds, clip).is_empty()
-                {
-                    return None;
-                }
-                Some(Draw {
-                    id: *id,
-                    bounds,
-                    clip,
-                    painter,
-                })
-            })
-            .collect();
-        drop(nodes);
-        for draw in paints {
-            if let Some(painter) = draw.painter {
-                surface.with_canvas_over_parents(draw.bounds, dpi, |canvas| {
-                    if let Some(clip) = draw.clip {
-                        canvas.push_clip(clip);
-                    }
-                    painter(canvas);
-                });
-            }
-            if let Some(gl) = &gl {
-                gl.paint_node(draw.id, surface, draw.bounds, draw.clip, dpi, &theme);
-            }
-        }
-        let image = surface.to_image();
-        drop(restore);
-        Some(image)
     }
 
     /// Installs `widget` as `window`'s GL content. The offscreen backend has no
@@ -346,6 +203,7 @@ impl OffscreenBackend {
         if let Some(entry) = self.windows.borrow_mut().get_mut(&window.raw()) {
             entry.gl.set_window(widget);
         }
+        self.invalidate_window(window);
     }
 
     /// Removes `window`'s GL content.
@@ -354,6 +212,7 @@ impl OffscreenBackend {
         if let Some(entry) = self.windows.borrow_mut().get_mut(&window.raw()) {
             entry.gl.clear_window();
         }
+        self.invalidate_window(window);
     }
 
     /// Installs `widget` as the GL content of the node `id`, painted through its
@@ -363,108 +222,35 @@ impl OffscreenBackend {
     /// The `winit-backend` feature (with it the [`GlWidget`] seam) is required.
     #[cfg(feature = "winit-backend")]
     pub fn set_gl_content_on<W: crate::gl::GlWidget + 'static>(&self, id: WidgetId, widget: W) {
-        let window = self
-            .nodes
-            .borrow()
-            .iter()
-            .find(|(node_id, _)| *node_id == id)
-            .map(|(_, node)| node.window);
+        let window = self.nodes.borrow().window_of(id);
         if let Some(window) = window
             && let Some(entry) = self.windows.borrow_mut().get_mut(&window.raw())
         {
             entry.gl.set_node(id, widget);
+            self.invalidate_window(window);
         }
     }
 
     /// Removes the GL content of the node `id`.
     #[cfg(feature = "winit-backend")]
     pub fn clear_gl_content_on(&self, id: WidgetId) {
-        let window = self
-            .nodes
-            .borrow()
-            .iter()
-            .find(|(node_id, _)| *node_id == id)
-            .map(|(_, node)| node.window);
+        let window = self.nodes.borrow().window_of(id);
         if let Some(window) = window
             && let Some(entry) = self.windows.borrow_mut().get_mut(&window.raw())
         {
             entry.gl.clear_node(id);
+            self.invalidate_window(window);
         }
-    }
-
-    /// Delivers a positionless event to the focused node of `window`.
-    fn inject_to_focus(&self, window: WindowId, event: &Event) -> bool {
-        let Some(target) = *self.focused.borrow() else {
-            return false;
-        };
-        let in_window = self
-            .nodes
-            .borrow()
-            .iter()
-            .any(|(id, node)| *id == target && node.window == window);
-        if !in_window {
-            return false;
-        }
-        let sink = self
-            .windows
-            .borrow()
-            .get(&window.raw())
-            .and_then(|entry| entry.sink.clone());
-        sink.is_some_and(|sink| sink.deliver(target, event))
-    }
-
-    /// Records `id` as the node with keyboard focus.
-    pub(super) fn set_focus(&self, id: WidgetId) {
-        *self.focused.borrow_mut() = Some(id);
     }
 
     /// Forgets the focus when its node is gone.
     pub(super) fn forget_focus_if_gone(&self) {
         let mut focused = self.focused.borrow_mut();
         if let Some(id) = *focused
-            && !self.nodes.borrow().iter().any(|(node, _)| *node == id)
+            && !self.nodes.borrow().contains(id)
         {
             *focused = None;
         }
-    }
-
-    /// Delivers `event` as a window system would, returning whether it was
-    /// consumed. A pointer event goes to the topmost node under its position,
-    /// and a captured node receives every pointer move and release, even
-    /// outside its bounds. An event without a position (a key or a character)
-    /// goes to the focused node in `window`, if any.
-    pub fn inject(&self, window: WindowId, event: Event) -> bool {
-        let Some((x, y)) = event.position() else {
-            return self.inject_to_focus(window, &event);
-        };
-        let captured = *self.captured.borrow();
-        let target = match captured {
-            Some(id) => {
-                let nodes = self.nodes.borrow();
-                let abs = absolute_bounds(&nodes, id);
-                abs.map(|abs| (id, x - abs.left, y - abs.top))
-            }
-            None => {
-                let nodes = self.nodes.borrow();
-                nodes.iter().rev().find_map(|(id, node)| {
-                    if node.window != window {
-                        return None;
-                    }
-                    let abs = hit_bounds(&nodes, *id, x, y)?;
-                    Some((*id, x - abs.left, y - abs.top))
-                })
-            }
-        };
-        let Some((target, lx, ly)) = target else {
-            return false;
-        };
-        let sink = self
-            .windows
-            .borrow()
-            .get(&window.raw())
-            .and_then(|entry| entry.sink.clone());
-        let event = translate(event, lx, ly);
-        sink.is_some_and(|sink| sink.deliver(target, &event))
     }
 
     /// The dots-per-inch `window` is rendered at.
@@ -476,10 +262,6 @@ impl OffscreenBackend {
     }
 
     fn with_node<R>(&self, id: WidgetId, f: impl FnOnce(&mut Node) -> R) -> Option<R> {
-        self.nodes
-            .borrow_mut()
-            .iter_mut()
-            .find(|(node_id, _)| *node_id == id)
-            .map(|(_, node)| f(node))
+        self.nodes.borrow_mut().get_mut(id).map(f)
     }
 }

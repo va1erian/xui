@@ -29,6 +29,11 @@ use xui_core::widget::scrollbar::{self, Orientation, Scroll};
 /// the node's corner and clips to it, then works in node-local coordinates, as
 /// the mouse events do. On a canvas that honours the contract the bounds already
 /// sit at the origin and this is a no-op.
+///
+/// The frame is stroked outside that clip. A stroke is centred on the edge of
+/// its rectangle, so under a clip of the same rectangle it would lose the half
+/// that lies outside, and the frame would be a half-weight line (and gone on
+/// the side the scrollbar covers).
 pub(crate) fn paint(
     canvas: &mut dyn Canvas,
     state: &EditorState,
@@ -40,19 +45,45 @@ pub(crate) fn paint(
     canvas.save();
     canvas.set_translation(origin.left as f32, origin.top as f32);
     canvas.push_clip(area);
-    paint_local(canvas, state, theme, xui_theme, area);
+    let viewport = paint_local(canvas, state, theme, xui_theme, area);
+    canvas.pop_clip();
+    paint_frame(canvas, state, theme, xui_theme, area);
+    // Last, so the popup overlaps the scrollbars and the border it may reach.
+    canvas.push_clip(area);
+    popup::paint(canvas, state, theme, &viewport);
     canvas.pop_clip();
     canvas.restore();
 }
 
-/// Draws `state` into `bounds`, the node's area at the canvas origin.
-fn paint_local(
+/// The border, in the focus colour while the editor has the focus, and the
+/// accent outline of a form editor's selection.
+fn paint_frame(
     canvas: &mut dyn Canvas,
     state: &EditorState,
     theme: &EditorTheme,
     xui_theme: &Theme,
     bounds: Rect,
 ) {
+    let border = if state.focused {
+        theme.border_focused
+    } else {
+        theme.border
+    };
+    canvas.stroke_rect(bounds, border, 1.0);
+    if state.selected {
+        canvas.stroke_rect(bounds, xui_theme.accent, 2.0);
+    }
+}
+
+/// Draws `state` into `bounds`, the node's area at the canvas origin, and
+/// returns the viewport it laid out (everything but the frame and the popup).
+fn paint_local(
+    canvas: &mut dyn Canvas,
+    state: &EditorState,
+    theme: &EditorTheme,
+    xui_theme: &Theme,
+    bounds: Rect,
+) -> Viewport {
     let dpi = canvas.dpi();
     let style = state.options.font.style(theme.text);
     let measured = canvas.measure_text(CELL_PROBE, &style);
@@ -95,18 +126,7 @@ fn paint_local(
     paint_caret(canvas, state, theme, &viewport, first_line, last_line);
 
     paint_scrollbars(canvas, state, &viewport, first_line, first_col, xui_theme);
-
-    let border = if state.focused {
-        theme.border_focused
-    } else {
-        theme.border
-    };
-    canvas.stroke_rect(bounds, border, 1.0);
-    if state.selected {
-        canvas.stroke_rect(bounds, xui_theme.accent, 2.0);
-    }
-    // Last, so the popup overlaps the scrollbars and the border it may reach.
-    popup::paint(canvas, state, theme, &viewport);
+    viewport
 }
 
 /// The current line's highlight, behind the text.

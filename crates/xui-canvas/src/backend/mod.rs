@@ -30,14 +30,13 @@ use winit::raw_window_handle::{
 };
 use winit::window::Window;
 
-use xui_core::backend::{
-    Cursor, Decorations, Painter, ParentRef, PlatformSpec, WidgetId, WindowId,
-};
+use xui_core::backend::{Cursor, Decorations, PlatformSpec, WidgetId, WindowId};
 use xui_core::router::WidgetHost;
-use xui_core::{Dip, Image, Rect, Theme};
+use xui_core::{Dip, Image, Theme};
 
-use crate::geometry::{self, GeometryNode};
+use crate::geometry;
 use crate::gl::{GlWidget, RendererState};
+use crate::scene::{Node, Scene};
 use crate::text_layout::CosmicShaper;
 
 /// A cloneable window handle for `softbuffer`. `winit::Window` is not `Clone`,
@@ -71,43 +70,6 @@ const DEFAULT_DPI: u32 = 96;
 pub(crate) enum UserEvent {
     /// Deliver [`xui_core::backend::Event::Wake`] to a window.
     Wake(WindowId),
-}
-
-/// One node the front layer created.
-pub(crate) struct Node {
-    pub(crate) window: WindowId,
-    pub(crate) parent: ParentRef,
-    pub(crate) bounds: Rect,
-    pub(crate) visible: bool,
-    pub(crate) enabled: bool,
-    pub(crate) text: String,
-    pub(crate) painter: Option<Painter>,
-    /// Whether a press that starts here drags the whole window.
-    pub(crate) drag_region: bool,
-    /// A clip on this node's descendants, in the node's own coordinate space.
-    pub(crate) clip: Option<Rect>,
-}
-
-impl GeometryNode for Node {
-    fn parent(&self) -> ParentRef {
-        self.parent
-    }
-
-    fn bounds(&self) -> Rect {
-        self.bounds
-    }
-
-    fn clip(&self) -> Option<Rect> {
-        self.clip
-    }
-
-    fn visible(&self) -> bool {
-        self.visible
-    }
-
-    fn enabled(&self) -> bool {
-        self.enabled
-    }
 }
 
 /// The per-window state.
@@ -181,7 +143,7 @@ impl WindowState {
 /// State every backend method shares with the event-loop handler.
 pub(crate) struct Shared {
     pub(crate) windows: RefCell<HashMap<u64, WindowState>>,
-    pub(crate) nodes: RefCell<Vec<(WidgetId, Node)>>,
+    pub(crate) nodes: RefCell<Scene>,
     pub(crate) cursors: RefCell<HashMap<u64, Cursor>>,
     /// The node the pointer is captured by, if any: pointer moves and releases
     /// go to it even outside its bounds.
@@ -206,16 +168,7 @@ impl Shared {
         x: i32,
         y: i32,
     ) -> Option<(WidgetId, i32, i32)> {
-        let nodes = self.nodes.borrow();
-        for (id, node) in nodes.iter().rev() {
-            if node.window != window {
-                continue;
-            }
-            if let Some(abs) = geometry::hit_bounds(&nodes, *id, x, y) {
-                return Some((*id, x - abs.left, y - abs.top));
-            }
-        }
-        None
+        geometry::hit_test(&self.nodes.borrow(), window, x, y)
     }
 
     /// The point `(x, y)`, in window coordinates, translated into `id`'s own
@@ -230,11 +183,16 @@ impl Shared {
     pub(crate) fn is_drag_region(&self, id: WidgetId) -> bool {
         self.nodes
             .borrow()
-            .iter()
-            .any(|(node_id, node)| *node_id == id && node.drag_region)
+            .get(id)
+            .is_some_and(|node| node.drag_region)
     }
 
-    /// Sends `event` to the sink of `window`.
+    /// Sends `event` to the sink of `window`, then marks `target`'s place
+    /// stale when the event is one that can change how it looks (an input
+    /// event, a focus or capture change, a leave), so a widget that forgets to
+    /// invalidate cannot leave old pixels behind, and asks for a frame. The
+    /// sink's answer does not matter: it is `true` only when a widget mapped the
+    /// event to a message.
     pub(crate) fn deliver(
         &self,
         window: WindowId,
@@ -246,7 +204,21 @@ impl Shared {
             .borrow()
             .get(&window.raw())
             .and_then(|state| state.sink.clone());
-        sink.is_some_and(|sink| sink.deliver(target, event))
+        let handled = sink.is_some_and(|sink| sink.deliver(target, event));
+        if !target.is_none()
+            && crate::scene::event_marks_target(event)
+            && self.nodes.borrow_mut().invalidate(target)
+        {
+            self.request_redraw(window);
+        }
+        handled
+    }
+
+    /// Marks the whole of `window` stale and requests a frame of it: a
+    /// resize, a DPI or theme change, or GL content that came or went.
+    pub(crate) fn invalidate_window(&self, window: WindowId) {
+        self.nodes.borrow_mut().invalidate_window(window);
+        self.request_redraw(window);
     }
 
     /// Requests a repaint of `window`.
@@ -284,7 +256,7 @@ impl WinitBackend {
         WinitBackend {
             shared: Rc::new(Shared {
                 windows: RefCell::new(HashMap::new()),
-                nodes: RefCell::new(Vec::new()),
+                nodes: RefCell::new(Scene::new()),
                 cursors: RefCell::new(HashMap::new()),
                 captured: RefCell::new(None),
                 timers: RefCell::new(HashMap::new()),
@@ -320,23 +292,21 @@ impl WinitBackend {
     }
 
     fn with_node(&self, id: WidgetId, f: impl FnOnce(&mut Node)) {
-        if let Some((_, node)) = self
-            .shared
-            .nodes
-            .borrow_mut()
-            .iter_mut()
-            .find(|(node_id, _)| *node_id == id)
-        {
+        if let Some(node) = self.shared.nodes.borrow_mut().get_mut(id) {
             f(node);
         }
     }
 
+    /// Asks for a frame of the window of node `id` when `damaged`: a change
+    /// that marked pixels stale is shown without waiting for the next
+    /// invalidate.
+    fn redraw_if(&self, damaged: bool, id: WidgetId) {
+        if damaged && let Some(window) = self.window_of(id) {
+            self.shared.request_redraw(window);
+        }
+    }
+
     fn window_of(&self, id: WidgetId) -> Option<WindowId> {
-        self.shared
-            .nodes
-            .borrow()
-            .iter()
-            .find(|(node_id, _)| *node_id == id)
-            .map(|(_, node)| node.window)
+        self.shared.nodes.borrow().window_of(id)
     }
 }

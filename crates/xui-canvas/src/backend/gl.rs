@@ -32,7 +32,7 @@ impl WinitBackend {
                 state.renderer.with_gl(|gl| previous.gl_teardown(gl));
             }
         }
-        self.shared.request_redraw(window);
+        self.shared.invalidate_window(window);
     }
 
     /// Removes `window`'s window-level GPU content, releasing its GPU resources
@@ -50,7 +50,7 @@ impl WinitBackend {
         {
             state.renderer.with_gl(|gl| widget.gl_teardown(gl));
         }
-        self.shared.request_redraw(window);
+        self.shared.invalidate_window(window);
     }
 
     /// Installs `widget` as the GPU-rendered content of the node `id`.
@@ -69,7 +69,7 @@ impl WinitBackend {
                 state.renderer.with_gl(|gl| previous.gl_teardown(gl));
             }
         }
-        self.shared.request_redraw(window);
+        self.shared.invalidate_window(window);
     }
 
     /// Removes the GPU content of node `id`, releasing its GPU resources with
@@ -89,7 +89,7 @@ impl WinitBackend {
         {
             state.renderer.with_gl(|gl| widget.gl_teardown(gl));
         }
-        self.shared.request_redraw(window);
+        self.shared.invalidate_window(window);
     }
 
     /// Runs `window`'s GL widgets' teardown with its context current, if it has
@@ -118,6 +118,6 @@ impl WinitBackend {
     /// Schedules a repaint of `window`. Use it for window-level GL content,
     /// which has no node to invalidate.
     pub fn request_redraw(&self, window: WindowId) {
-        self.shared.request_redraw(window);
+        self.shared.invalidate_window(window);
     }
 }

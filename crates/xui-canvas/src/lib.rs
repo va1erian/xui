@@ -25,11 +25,13 @@
 
 mod canvas;
 mod clock;
+mod compositor;
 mod geometry;
 mod image_cache;
 mod offscreen;
 mod paint;
 mod region;
+mod scene;
 pub mod snapshot;
 mod text;
 mod text_layout;
@@ -50,6 +52,7 @@ pub use clock::MonotonicClock;
 #[cfg(feature = "winit-backend")]
 pub use gl::{GlError, GlSurface, GlWidget};
 pub use offscreen::OffscreenBackend;
+pub use offscreen::PresentedFrame;
 pub use region::Region;
 pub use text::{add_font, measure as measure_text, set_default_family, set_default_font};
 
@@ -92,7 +95,7 @@ impl RgbaImage {
 pub struct Surface {
     pixmap: Pixmap,
     images: image_cache::ImageCache,
-    /// The pixels of the last [`Surface::paint_region`], kept for the next.
+    /// The scratch pixmap of [`Surface::paint_region`], kept for the next.
     scratch: Vec<u8>,
 }
 

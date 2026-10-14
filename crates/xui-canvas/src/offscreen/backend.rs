@@ -15,7 +15,8 @@ use xui_core::{Rect, Theme};
 
 use crate::text_layout::CosmicShaper;
 
-use super::{Node, OffscreenBackend};
+use super::OffscreenBackend;
+use crate::scene::Node;
 
 impl Backend for OffscreenBackend {
     fn run(&self) -> i32 {
@@ -46,9 +47,7 @@ impl Backend for OffscreenBackend {
 
     fn close_window(&self, window: WindowId) {
         self.windows.borrow_mut().remove(&window.raw());
-        self.nodes
-            .borrow_mut()
-            .retain(|(_, node)| node.window != window);
+        self.nodes.borrow_mut().remove_window(window);
     }
 
     fn set_window_icon(&self, window: WindowId, icon: &Image) {
@@ -71,50 +70,23 @@ impl Backend for OffscreenBackend {
             ParentRef::Widget(widget) => self
                 .nodes
                 .borrow()
-                .iter()
-                .find(|(id, _)| *id == widget)
-                .map(|(_, node)| node.window)
-                .ok_or(xui_core::backend::BackendError::CreateFailed("parent node"))?,
+                .window_of(widget)
+                .ok_or(BackendError::CreateFailed("parent node"))?,
         };
         if !self.windows.borrow().contains_key(&window.raw()) {
-            return Err(xui_core::backend::BackendError::CreateFailed("window"));
+            return Err(BackendError::CreateFailed("window"));
         }
         let id = WidgetId::from_raw(OffscreenBackend::allocate(&self.next_widget));
-        self.nodes.borrow_mut().push((
-            id,
-            Node {
-                window,
-                parent,
-                bounds: spec.bounds,
-                visible: spec.visible,
-                enabled: spec.enabled,
-                text: spec.text.clone(),
-                painter: None,
-                clip: None,
-            },
-        ));
+        let mut node = Node::new(window, parent, spec.bounds);
+        node.visible = spec.visible;
+        node.enabled = spec.enabled;
+        node.text = spec.text.clone();
+        self.nodes.borrow_mut().insert(id, node);
         Ok(id)
     }
 
     fn destroy(&self, id: WidgetId) {
-        let mut nodes = self.nodes.borrow_mut();
-        nodes.retain(|(node_id, _)| *node_id != id);
-        // Cascade: drop any node whose parent chain no longer exists.
-        loop {
-            let gone: Vec<WidgetId> = nodes
-                .iter()
-                .filter(|(_, node)| match node.parent {
-                    ParentRef::Window(window) => !self.windows.borrow().contains_key(&window.raw()),
-                    ParentRef::Widget(parent) => !nodes.iter().any(|(id, _)| *id == parent),
-                })
-                .map(|(id, _)| *id)
-                .collect();
-            if gone.is_empty() {
-                break;
-            }
-            nodes.retain(|(id, _)| !gone.contains(id));
-        }
-        drop(nodes);
+        self.nodes.borrow_mut().remove(id);
         self.forget_focus_if_gone();
     }
 
@@ -123,11 +95,10 @@ impl Backend for OffscreenBackend {
         {
             let mut nodes = self.nodes.borrow_mut();
             for (id, rect) in moves {
-                if let Some((_, node)) = nodes.iter_mut().find(|(node_id, _)| node_id == id) {
-                    if node.bounds.size() != rect.size() {
-                        resized.push((*id, *rect));
-                    }
-                    node.bounds = *rect;
+                if let Some(previous) = nodes.set_bounds(*id, *rect)
+                    && previous.size() != rect.size()
+                {
+                    resized.push((*id, *rect));
                 }
             }
         }
@@ -153,7 +124,7 @@ impl Backend for OffscreenBackend {
     }
 
     fn set_visible(&self, id: WidgetId, visible: bool) {
-        self.with_node(id, |node| node.visible = visible);
+        self.nodes.borrow_mut().set_visible(id, visible);
     }
 
     fn set_enabled(&self, id: WidgetId, enabled: bool) {
@@ -161,7 +132,7 @@ impl Backend for OffscreenBackend {
     }
 
     fn set_clip(&self, id: WidgetId, rect: Option<Rect>) {
-        self.with_node(id, |node| node.clip = rect);
+        self.nodes.borrow_mut().set_clip(id, rect);
     }
 
     fn set_capture(&self, id: WidgetId) {
@@ -173,64 +144,49 @@ impl Backend for OffscreenBackend {
         let Some(id) = previous else {
             return;
         };
-        let window = self
-            .nodes
-            .borrow()
-            .iter()
-            .find(|(node_id, _)| *node_id == id)
-            .map(|(_, node)| node.window);
-        let Some(window) = window else {
-            return;
-        };
-        let sink = self
-            .windows
-            .borrow()
-            .get(&window.raw())
-            .and_then(|entry| entry.sink.clone());
-        if let Some(sink) = sink {
-            sink.deliver(id, &Event::CaptureChanged);
+        let window = self.nodes.borrow().window_of(id);
+        if let Some(window) = window {
+            self.deliver(window, id, &Event::CaptureChanged);
         }
     }
 
     fn raise(&self, id: WidgetId) {
-        let mut nodes = self.nodes.borrow_mut();
-        if let Some(at) = nodes.iter().position(|(node_id, _)| *node_id == id) {
-            let entry = nodes.remove(at);
-            nodes.push(entry);
-        }
+        self.nodes.borrow_mut().raise(id);
     }
 
     fn focus(&self, id: WidgetId) {
-        self.set_focus(id);
+        self.focus_node(id);
     }
 
     fn set_text(&self, id: WidgetId, text: &str) {
-        self.with_node(id, |node| node.text = text.to_string());
+        self.nodes.borrow_mut().set_text(id, text);
     }
 
     fn text(&self, id: WidgetId) -> String {
         self.nodes
             .borrow()
-            .iter()
-            .find(|(node_id, _)| *node_id == id)
-            .map(|(_, node)| node.text.clone())
+            .get(id)
+            .map(|node| node.text.clone())
             .unwrap_or_default()
     }
 
-    fn invalidate(&self, _id: WidgetId) {}
+    fn invalidate(&self, id: WidgetId) {
+        self.nodes.borrow_mut().invalidate(id);
+    }
 
-    fn invalidate_rect(&self, _id: WidgetId, _rect: Rect) {}
+    fn invalidate_rect(&self, id: WidgetId, rect: Rect) {
+        self.nodes.borrow_mut().invalidate_rect(id, rect);
+    }
 
     fn set_painter(&self, id: WidgetId, painter: Painter) {
-        self.with_node(id, |node| node.painter = Some(painter));
+        self.nodes.borrow_mut().set_painter(id, painter);
     }
 
     fn bounds(&self, id: WidgetId) -> Rect {
         self.nodes
             .borrow()
-            .iter()
-            .find(|(node_id, _)| *node_id == id)
-            .map_or(Rect::default(), |(_, node)| node.bounds)
+            .get(id)
+            .map_or(Rect::default(), |node| node.bounds)
     }
 
     fn measure_text(&self, text: &str, style: &TextStyle, dpi: u32) -> TextMetrics {
@@ -270,6 +226,8 @@ impl Backend for OffscreenBackend {
         if let Some(entry) = self.windows.borrow_mut().get_mut(&window.raw()) {
             entry.theme = *theme;
         }
+        // Every painter reads the live theme.
+        self.nodes.borrow_mut().invalidate_window(window);
     }
 
     fn prefers_reduced_motion(&self) -> bool {

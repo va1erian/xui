@@ -127,10 +127,21 @@ impl ApplicationHandler<UserEvent> for App<'_> {
                     event_loop.exit();
                 }
             }
+            // A window that was hidden or shown again has to be handed the
+            // whole frame: the OS may have discarded what it showed.
+            WindowEvent::Occluded(_) => {
+                if let Some(real) = self.windows.get_mut(&raw) {
+                    real.buffer_stale = true;
+                }
+            }
             WindowEvent::Resized(size) => {
                 if let Some(state) = self.shared.windows.borrow_mut().get_mut(&raw) {
                     state.size = (size.width.max(1), size.height.max(1));
                 }
+                self.shared
+                    .nodes
+                    .borrow_mut()
+                    .invalidate_window(Self::window_id(raw));
                 self.shared.deliver(
                     Self::window_id(raw),
                     WidgetId::NONE,
@@ -158,6 +169,10 @@ impl ApplicationHandler<UserEvent> for App<'_> {
                 {
                     state.size = (size.width.max(1), size.height.max(1));
                 }
+                self.shared
+                    .nodes
+                    .borrow_mut()
+                    .invalidate_window(Self::window_id(raw));
                 // `winit` gives only the scale factor, not the OS's suggested
                 // window rectangle, so the suggestion is empty and the app
                 // re-lays-out from `Ui::dpi` instead.

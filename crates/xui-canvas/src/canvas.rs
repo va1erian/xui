@@ -41,10 +41,17 @@ pub struct SkiaCanvas<'a> {
     clips: Vec<Clip>,
     mask: Option<Mask>,
     saved: Vec<(f32, f32, f32)>,
-    /// The surface position of the pixmap's top-left pixel: `(0, 0)` over a
-    /// whole surface, the region's corner over a [`Region`](crate::Region)'s
-    /// scratch pixmap. Painters keep drawing in surface coordinates.
-    pub(crate) origin: (i32, i32),
+    /// The part of the surface a [`Region`](crate::Region) repaints, when the
+    /// pixmap is a whole-surface scratch: pixels outside it are never copied
+    /// back, so nothing is gained by drawing there. Rectangle fills, text and
+    /// unscaled images are trimmed to it for speed (exactly: the same pixels
+    /// inside it); every other shape is drawn whole, in the surface's own
+    /// coordinates, so it comes out as a whole-surface paint draws it.
+    pub(crate) scissor: Option<Rect>,
+    /// The most the painter may draw: set by the compositor to the reach of
+    /// the node. It limits like an outermost rectangular clip, strictly: a
+    /// shape that leaves it is cut by a mask, as one that leaves a clip is.
+    pub(crate) reach: Option<Rect>,
     /// Painted over its ancestors' pixels ([`Canvas::composites_parents`]).
     pub(crate) over_parents: bool,
 }
@@ -67,7 +74,8 @@ impl<'a> SkiaCanvas<'a> {
             clips: Vec::new(),
             mask: None,
             saved: Vec::new(),
-            origin: (0, 0),
+            scissor: None,
+            reach: None,
             over_parents: false,
         }
     }
@@ -91,7 +99,7 @@ impl Canvas for SkiaCanvas<'_> {
     }
 
     fn fill_rect(&mut self, rect: Rect, color: Color) {
-        if let Some(path) = rect_path(self.rect(rect)) {
+        if let Some(path) = rect_path(self.scissored(self.rect(rect))) {
             self.fill(&path, solid_shader(to_skia(color)));
         }
     }
@@ -162,7 +170,7 @@ impl Canvas for SkiaCanvas<'_> {
     }
 
     fn fill_rect_rgba(&mut self, rect: Rect, color: Rgba) {
-        if let Some(path) = rect_path(self.rect(rect)) {
+        if let Some(path) = rect_path(self.scissored(self.rect(rect))) {
             self.fill(&path, solid_shader(to_skia_rgba(color)));
         }
     }
@@ -238,7 +246,7 @@ impl Canvas for SkiaCanvas<'_> {
     }
 
     fn fill_rect_linear(&mut self, rect: Rect, gradient: &LinearGradient) {
-        if let Some(path) = rect_path(self.rect(rect))
+        if let Some(path) = rect_path(self.scissored(self.rect(rect)))
             && let Some(shader) = linear_shader(
                 self.point(gradient.start),
                 self.point(gradient.end),
@@ -250,7 +258,7 @@ impl Canvas for SkiaCanvas<'_> {
     }
 
     fn fill_rect_radial(&mut self, rect: Rect, gradient: &RadialGradient) {
-        if let Some(path) = rect_path(self.rect(rect))
+        if let Some(path) = rect_path(self.scissored(self.rect(rect)))
             && let Some(shader) = radial_shader(
                 self.point(gradient.center),
                 gradient.radius_x * self.scale,
@@ -263,7 +271,7 @@ impl Canvas for SkiaCanvas<'_> {
     }
 
     fn draw_text(&mut self, text: &str, rect: Rect, style: &TextStyle) {
-        let rect = self.to_pixmap(self.map_rect(rect));
+        let rect = self.map_rect(rect);
         let clip = self.clip_bounds();
         let dpi = self.dpi;
         crate::text::draw(
@@ -274,7 +282,7 @@ impl Canvas for SkiaCanvas<'_> {
             dpi,
             crate::text::GlyphClip {
                 bounds: clip,
-                mask: self.mask.as_ref(),
+                mask: geometry::pixel_mask(&self.clips, &self.mask),
             },
         );
     }
@@ -290,9 +298,7 @@ impl Canvas for SkiaCanvas<'_> {
         else {
             return;
         };
-        let (ox, oy) = self.origin;
         let origin = self.point(origin);
-        let origin = Point::new(origin.x - ox, origin.y - oy);
         let clip = self.clip_bounds();
         crate::text_layout::draw_layout(
             self.pixmap,
@@ -301,7 +307,7 @@ impl Canvas for SkiaCanvas<'_> {
             color,
             crate::text::GlyphClip {
                 bounds: clip,
-                mask: self.mask.as_ref(),
+                mask: geometry::pixel_mask(&self.clips, &self.mask),
             },
         );
     }
@@ -314,10 +320,7 @@ impl Canvas for SkiaCanvas<'_> {
         // Cropped, not squashed: only the source sub-rectangle under the clip
         // is drawn, at the full-size scale, so the image's left region stays at
         // the left edge when the right half is clipped away.
-        let visible = self
-            .clips
-            .last()
-            .map_or(dest, |clip| intersect(dest, clip.bounds()));
+        let visible = self.limit().map_or(dest, |limit| intersect(dest, limit));
         if visible.is_empty() {
             return;
         }
@@ -331,11 +334,11 @@ impl Canvas for SkiaCanvas<'_> {
         // An unscaled draw (a page's pictures, a tiled background, a cached
         // backdrop) is a row copy: tiny-skia's pattern pipeline costs tens of
         // nanoseconds a pixel even when it samples 1:1.
-        if self.mask.is_none()
+        if geometry::pixel_mask(&self.clips, &self.mask).is_none()
             && dest.width() as u32 == pixmap.width()
             && dest.height() as u32 == pixmap.height()
         {
-            let (dest, visible) = (self.to_pixmap(dest), self.to_pixmap(visible));
+            let visible = self.scissored(visible);
             blit::unscaled(self.pixmap, pixmap, uploaded.opaque, dest, visible);
             return;
         }
@@ -343,7 +346,7 @@ impl Canvas for SkiaCanvas<'_> {
         // rectangle; the filled source is only the visible slice of that map.
         let scale_x = dest.width() as f32 / image.width() as f32;
         let scale_y = dest.height() as f32 / image.height() as f32;
-        let at = self.to_pixmap(dest);
+        let at = dest;
         let transform =
             Transform::from_row(scale_x, 0.0, 0.0, scale_y, at.left as f32, at.top as f32);
         let source = sk_rect(Rect::new(
@@ -363,8 +366,12 @@ impl Canvas for SkiaCanvas<'_> {
             anti_alias: true,
             ..Paint::default()
         };
-        self.pixmap
-            .fill_rect(source, &paint, transform, self.mask.as_ref());
+        self.pixmap.fill_rect(
+            source,
+            &paint,
+            transform,
+            geometry::pixel_mask(&self.clips, &self.mask),
+        );
     }
 
     fn push_clip(&mut self, rect: Rect) {

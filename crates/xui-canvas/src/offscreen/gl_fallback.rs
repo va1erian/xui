@@ -6,7 +6,7 @@
 //! headlessly.
 //!
 //! With the `winit-backend` feature off there is no `GlWidget` seam at all, so
-//! this is a zero-sized placeholder whose methods do nothing; the offscreen
+//! this is a zero-sized placeholder whose content paints nothing; the offscreen
 //! painter then compiles without the windowed modules.
 
 #[cfg(feature = "winit-backend")]
@@ -19,25 +19,22 @@ use xui_core::backend::Canvas as _;
 use xui_core::backend::WidgetId;
 use xui_core::{Rect, Theme};
 
-use crate::Surface;
+use crate::Region;
+use crate::compositor::Content;
 #[cfg(feature = "winit-backend")]
 use crate::gl::GlWidget;
 
 #[cfg(feature = "winit-backend")]
 pub(super) struct GlContent {
-    width: i32,
-    height: i32,
     window: Option<Rc<dyn GlWidget>>,
     nodes: HashMap<u64, Rc<dyn GlWidget>>,
 }
 
 #[cfg(feature = "winit-backend")]
 impl GlContent {
-    /// Empty GL content for a window of `width` x `height` logical pixels.
-    pub(super) fn new(width: i32, height: i32) -> GlContent {
+    /// Empty GL content.
+    pub(super) fn new() -> GlContent {
         GlContent {
-            width,
-            height,
             window: None,
             nodes: HashMap::new(),
         }
@@ -67,8 +64,6 @@ impl GlContent {
     /// paint can re-enter the backend without the window map staying borrowed.
     pub(super) fn snapshot(&self) -> GlSnapshot {
         GlSnapshot {
-            width: self.width,
-            height: self.height,
             window: self.window.clone(),
             nodes: self
                 .nodes
@@ -83,32 +78,32 @@ impl GlContent {
 /// borrow is released.
 #[cfg(feature = "winit-backend")]
 pub(super) struct GlSnapshot {
-    width: i32,
-    height: i32,
     window: Option<Rc<dyn GlWidget>>,
     nodes: Vec<(u64, Rc<dyn GlWidget>)>,
 }
 
 #[cfg(feature = "winit-backend")]
-impl GlSnapshot {
-    /// Paints the window-level widget's software fallback as the base layer.
-    pub(super) fn paint_window(&self, surface: &mut Surface, dpi: u32, theme: &Theme) {
-        if let Some(widget) = &self.window {
-            let bounds = Rect::new(0, 0, self.width, self.height);
-            surface.with_canvas_at(bounds, dpi, |canvas| widget.paint(canvas, bounds, theme));
-        }
-    }
-
-    /// Whether node `id` has GL content.
-    pub(super) fn has_node(&self, id: WidgetId) -> bool {
+impl Content for GlSnapshot {
+    fn has_node(&self, id: WidgetId) -> bool {
         self.nodes.iter().any(|(raw, _)| *raw == id.raw())
     }
 
+    fn is_live(&self) -> bool {
+        self.window.is_some() || !self.nodes.is_empty()
+    }
+
+    /// Paints the window-level widget's software fallback as the base layer.
+    fn paint_window(&self, region: &mut Region<'_>, window: Rect, dpi: u32, theme: &Theme) {
+        if let Some(widget) = &self.window {
+            region.with_canvas_at(window, dpi, |canvas| widget.paint(canvas, window, theme));
+        }
+    }
+
     /// Paints node `id`'s software fallback at `bounds`, clipped to `clip`.
-    pub(super) fn paint_node(
+    fn paint_node(
         &self,
+        region: &mut Region<'_>,
         id: WidgetId,
-        surface: &mut Surface,
         bounds: Rect,
         clip: Option<Rect>,
         dpi: u32,
@@ -117,7 +112,7 @@ impl GlSnapshot {
         let Some((_, widget)) = self.nodes.iter().find(|(raw, _)| *raw == id.raw()) else {
             return;
         };
-        surface.with_canvas_at(bounds, dpi, |canvas| {
+        region.with_canvas_at(bounds, dpi, |canvas| {
             if let Some(clip) = clip {
                 canvas.push_clip(clip);
             }
@@ -133,8 +128,8 @@ pub(super) struct GlContent;
 
 #[cfg(not(feature = "winit-backend"))]
 impl GlContent {
-    /// Empty GL content; `width`/`height` are unused without the seam.
-    pub(super) fn new(_width: i32, _height: i32) -> GlContent {
+    /// Empty GL content.
+    pub(super) fn new() -> GlContent {
         GlContent
     }
 
@@ -149,20 +144,20 @@ impl GlContent {
 pub(super) struct GlSnapshot;
 
 #[cfg(not(feature = "winit-backend"))]
-impl GlSnapshot {
-    /// Paints nothing.
-    pub(super) fn paint_window(&self, _surface: &mut Surface, _dpi: u32, _theme: &Theme) {}
-
-    /// Never has content.
-    pub(super) fn has_node(&self, _id: WidgetId) -> bool {
+impl Content for GlSnapshot {
+    fn has_node(&self, _id: WidgetId) -> bool {
+        false
+    }
+    fn is_live(&self) -> bool {
         false
     }
 
-    /// Paints nothing.
-    pub(super) fn paint_node(
+    fn paint_window(&self, _region: &mut Region<'_>, _window: Rect, _dpi: u32, _theme: &Theme) {}
+
+    fn paint_node(
         &self,
+        _region: &mut Region<'_>,
         _id: WidgetId,
-        _surface: &mut Surface,
         _bounds: Rect,
         _clip: Option<Rect>,
         _dpi: u32,

@@ -169,7 +169,9 @@ impl<M: 'static> NumberField<M> {
                 if event.is_input() && (ui.is_design_mode() || !s.enabled.get()) {
                     return None;
                 }
-                let (mut redraw, mut changed, mut commit) = (false, false, false);
+                let (mut changed, mut commit) = (false, false);
+                // Every arm that handles the event decides whether it repaints.
+                let redraw;
                 let apply = |new: f64| {
                     let changed = (new - s.value.get()).abs() > f64::EPSILON;
                     s.value.set(new);
@@ -183,7 +185,10 @@ impl<M: 'static> NumberField<M> {
                 };
                 let step_by = |delta: f64| apply(s.clamp(s.value.get() + delta * s.step.get()));
                 match event {
-                    Event::SetFocus => s.focused.set(true),
+                    Event::SetFocus => {
+                        s.focused.set(true);
+                        redraw = true;
+                    }
                     Event::KillFocus => {
                         s.focused.set(false);
                         changed = commit_text();

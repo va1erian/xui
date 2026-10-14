@@ -72,6 +72,51 @@
 
 ### Additions
 
+- **The canvas backends repaint only what changed.** `WinitBackend` and
+  `OffscreenBackend` share one compositor and keep each window's frame between
+  frames. A move, resize, show, hide, raise, destroy, clip, text or painter
+  change marks the old and new places of the node (and everything inside it),
+  an input event (a press, a release, a wheel step, a key, a character, a
+  focus or capture change, the pointer leaving; not a plain pointer move)
+  marks the node it was delivered to, handled or not (the random-input cost:
+  mean damage about 49.8k px per frame against 24.0k with no rule), and
+  `invalidate_rect`, which was ignored, is honoured; the window repaints only
+  that damage (a list of at most eight rectangles; a resize, DPI or theme
+  change and GL content repaint the whole window) and the windowed backend
+  hands `softbuffer` only the repainted rows when `Buffer::age() == 1`,
+  converting the whole frame otherwise (always, on X11, where an expose cannot
+  be told from a redraw). An idle frame paints nothing and allocates nothing;
+  at 1080p, with a card of about 30 widgets, an idle frame went from about 4 to
+  6 ms to 0 ms and a card moved by one pixel from about 4 to 6 ms to about
+  0.4 ms on the flat themes and about 2.6 ms on Midnight (release,
+  `damage_bench`, a 20-thread desktop CPU; machine dependent).
+  **A painter cannot draw outside its reach**: its bounds, trimmed to its
+  ancestors' clips and grown by an overdraw margin of 8 design units (8 px at
+  96 DPI, 12 at 144). The compositor clips every painter to it, in a frame of
+  damage and of the whole window alike, so a label whose text overflows its
+  node by more than the margin, or a shadow, is cut there (in every canvas
+  frame, not only in repaints of damage); a widget that has to draw further
+  out must give its node bounds that cover it. Lines, outlines and glows are
+  now cut by a rectangular clip as fills are (they were not, so a scrolled
+  checkbox's glow showed above its viewport). A stroke is centred on the edge
+  of its rectangle, so a frame stroked under a clip of that same rectangle
+  loses its outer half: the scroll view, the code editor and the paint canvas
+  draw theirs outside their clip, and a widget that frames itself must too. For
+  painters that stay within their reach the frames are bit-for-bit those of a
+  whole-window repaint: the differential tests compare them after every step
+  of seeded random operation sequences (at 96, 120, 144 and 192 DPI) and of
+  scripted sessions of the real widgets on the light, dark and Midnight
+  themes. `OffscreenBackend::inject` now delivers what the windowed backend
+  delivers (`MouseLeave` to the node the pointer left, `KillFocus` and
+  `SetFocus` on a press and on `Backend::focus`), so a snapshot of a focused
+  widget shows what a window shows (a focus ring and caret, the active
+  selection colour), and `Edit` and `NumberField` repaint on a focus change.
+  New API: `OffscreenBackend::present` lends the frame and the rectangles
+  repainted without a copy, `PresentedFrame`, and
+  `OffscreenBackend::invalidate_window` for a test that changed what a painter
+  draws behind the backend's back; `render` returns the image it did, for
+  painters inside their reach. The winit present path is compile-checked, not
+  run. See [Backends](docs/backends.md#repainting-only-what-changed).
 - **A portable motion foundation, and the reduced-motion setting.**
   `xui_core::motion` adds `Easing` (linear, quadratic and cubic in/out/in-out,
   and the Windows Phone Toolkit's `ExpoIn`/`ExpoOut` with an `exponent`,

@@ -141,12 +141,19 @@ fn paint_text(
         canvas.fill_rect(Rect::new(from, inner.top, to, inner.bottom), highlight);
     }
     canvas.draw_text(value, inner, style);
-    if state.focused.get() {
-        let x = text_x(left, caret_width, dpi, 0);
-        draw_caret(canvas, x, inner.top, inner.bottom, theme.text);
-    }
     canvas.restore();
     canvas.pop_clip();
+
+    // The caret is not under the clip: a caret before the first character is
+    // a one pixel line centred on the clip's own left edge, and the clip would
+    // cut its outer half. It stays inside the field's padding either way.
+    if state.focused.get() {
+        canvas.save();
+        canvas.set_translation(-(scroll as f32), 0.0);
+        let x = text_x(left, caret_width, dpi, 0);
+        draw_caret(canvas, x, inner.top, inner.bottom, theme.text);
+        canvas.restore();
+    }
 }
 
 /// Draws the caret as a one-pixel vertical line.

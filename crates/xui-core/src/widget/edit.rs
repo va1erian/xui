@@ -160,8 +160,14 @@ impl<M: 'static> Edit<M> {
                 let mut changed = false;
                 let mut redraw = false;
                 match event {
-                    Event::SetFocus => focused.set(true),
-                    Event::KillFocus => focused.set(false),
+                    Event::SetFocus => {
+                        focused.set(true);
+                        redraw = true;
+                    }
+                    Event::KillFocus => {
+                        focused.set(false);
+                        redraw = true;
+                    }
                     Event::MouseDown {
                         x,
                         button: MouseButton::Left,

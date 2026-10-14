@@ -60,6 +60,10 @@ impl App<'_> {
                 state.size = metrics.0;
                 state.window = Some(Rc::clone(&window));
             }
+            self.shared
+                .nodes
+                .borrow_mut()
+                .invalidate_window(xui_core::backend::WindowId::from_raw(raw));
             self.set_dpi(raw, metrics.1);
             self.windows.insert(raw, RealWindow::new());
             // Build the primary window's app now that DPI is known, before the
@@ -184,11 +188,14 @@ fn rescale_nodes(shared: &Shared, raw: u64, ratio: f32) {
     if (ratio - 1.0).abs() < f32::EPSILON {
         return;
     }
-    for (_, node) in shared.nodes.borrow_mut().iter_mut() {
+    let mut nodes = shared.nodes.borrow_mut();
+    for node in nodes.nodes_mut() {
         if node.window.raw() == raw {
             node.bounds = scale_rect(node.bounds, ratio);
         }
     }
+    // Every node moved: the whole window is stale.
+    nodes.invalidate_window(xui_core::backend::WindowId::from_raw(raw));
 }
 
 #[cfg(test)]

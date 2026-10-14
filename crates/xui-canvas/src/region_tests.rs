@@ -184,14 +184,126 @@ fn a_region_repaint_of_widgets_is_pixel_identical_inside_and_keeps_the_rest() {
     check_regions(widgets, 0);
 }
 
-/// tiny-skia clips a slanted or curved edge that leaves the pixmap by
-/// re-sloping it from the clip point, so an anti-aliased pixel on such an edge
-/// can differ by a step or two of its 4x4 supersampling (16 levels of 255 a
-/// step, times the colour contrast), as it does in tiny-skia's own tiled
-/// drawing.
+/// tiny-skia re-slopes a slanted or curved edge that leaves its pixmap, which
+/// moves the anti-aliased pixels along it (a hairline by most of a pixel). The
+/// canvas rasterises such a shape whole, so a region still matches a
+/// whole-surface paint to the last bit.
 #[test]
-fn a_region_repaint_of_slanted_edges_stays_within_two_coverage_steps() {
-    check_regions(slanted, 32);
+fn a_region_repaint_of_slanted_and_curved_edges_is_pixel_identical() {
+    check_regions(slanted, 0);
+}
+
+/// A small deterministic generator (xorshift64*), so the random scenes below
+/// are the same on every run and every platform.
+struct Rng(u64);
+
+impl Rng {
+    fn next(&mut self) -> u64 {
+        self.0 ^= self.0 >> 12;
+        self.0 ^= self.0 << 25;
+        self.0 ^= self.0 >> 27;
+        self.0.wrapping_mul(0x2545_F491_4F6C_DD1D)
+    }
+
+    fn range(&mut self, low: i32, high: i32) -> i32 {
+        low + (self.next() % (high - low) as u64) as i32
+    }
+
+    fn color(&mut self) -> Color {
+        Color::rgb(
+            self.range(0, 256) as u8,
+            self.range(0, 256) as u8,
+            self.range(0, 256) as u8,
+        )
+    }
+}
+
+/// Six random shapes of every curved or slanted kind, some partly off the
+/// surface, some under a rounded clip.
+fn random_shapes(canvas: &mut dyn Canvas, seed: u64) {
+    let mut rng = Rng(seed.wrapping_mul(0x9E37_79B9_7F4A_7C15) | 1);
+    canvas.clear(Color::rgb(240, 240, 240));
+    for _ in 0..8 {
+        let left = rng.range(-12, 150);
+        let top = rng.range(-12, 100);
+        let rect = Rect::new(left, top, left + rng.range(8, 80), top + rng.range(8, 60));
+        let color = rng.color();
+        let rounded = rng.range(0, 3) == 0;
+        if rounded {
+            canvas.push_clip_rounded(
+                Rect::new(rect.left - 4, rect.top - 4, rect.right, rect.bottom),
+                [Corner::uniform(rng.range(3, 14) as f32); 4],
+            );
+        }
+        let alpha = Rgba::with_alpha(color.r, color.g, color.b, 170);
+        match rng.range(0, 7) {
+            0 => canvas.fill_rounded_rect(rect, rng.range(2, 12) as f32, color),
+            1 => canvas.stroke_rounded_rect(rect, rng.range(2, 12) as f32, color, 1.0),
+            2 => canvas.fill_ellipse(Point::new(left + 10, top + 9), 9.5, 7.25, color),
+            3 => canvas.stroke_ellipse_stroked(
+                Point::new(left + 12, top + 12),
+                11.0,
+                11.0,
+                alpha,
+                &Stroke::new(1.5),
+            ),
+            4 => canvas.draw_line(
+                Point::new(rect.left, rect.top),
+                Point::new(rect.right, rect.bottom),
+                color,
+                1.0,
+            ),
+            5 => canvas.fill_polygon(
+                &[
+                    Point::new(rect.left, rect.bottom),
+                    Point::new(rect.right, rect.top + 3),
+                    Point::new(rect.left + 20, rect.top),
+                ],
+                color,
+            ),
+            _ => canvas.fill_rounded_rect_corners(rect, [Corner::new(7.5, 4.0); 4], alpha),
+        }
+        if rounded {
+            canvas.pop_clip();
+        }
+    }
+}
+
+/// Region repaints of random curved scenes match whole-surface paints in
+/// every pixel. 96 seeds, four regions each (more with `XUI_REGION_SEEDS`).
+#[test]
+fn random_curved_scenes_repaint_identically_in_any_region() {
+    let seeds: u64 = std::env::var("XUI_REGION_SEEDS")
+        .ok()
+        .and_then(|value| value.parse().ok())
+        .unwrap_or(96);
+    let whole = Rect::new(0, 0, W as i32, H as i32);
+    for seed in 1..=seeds {
+        let mut full = Surface::new(W, H);
+        full.fill(PAPER);
+        full.with_canvas_at(whole, 96, |c| random_shapes(c, seed));
+        let mut rng = Rng(seed ^ 0xDEAD_BEEF);
+        for _ in 0..4 {
+            let left = rng.range(-10, 120);
+            let top = rng.range(-10, 90);
+            let region = Rect::new(left, top, left + rng.range(6, 90), top + rng.range(6, 70));
+            let mut surface = Surface::new(W, H);
+            surface.fill(PAPER);
+            surface.paint_region(region, |r| {
+                r.with_canvas_at(whole, 96, |c| random_shapes(c, seed));
+            });
+            for y in region.top.max(0)..region.bottom.min(H as i32) {
+                for x in region.left.max(0)..region.right.min(W as i32) {
+                    let at = (y as usize * W as usize + x as usize) * 4;
+                    assert_eq!(
+                        surface.pixels()[at..at + 4],
+                        full.pixels()[at..at + 4],
+                        "seed {seed}, region {region:?}, pixel ({x}, {y})"
+                    );
+                }
+            }
+        }
+    }
 }
 
 #[test]
