@@ -66,6 +66,11 @@ pub enum BuildError {
         /// The node that used it.
         node: String,
     },
+    /// The form exceeds a limit of the format (its depth, a control array's
+    /// size, a length): building it could exhaust memory or the stack.
+    /// [`Form::validate`] reports the same problem.
+    #[error("the form exceeds a limit: {0}")]
+    Limit(String),
     /// The backend could not create a widget.
     #[error(transparent)]
     Backend(#[from] BackendError),
@@ -209,6 +214,10 @@ pub struct Described<M: 'static> {
 
 /// Describes `form` as the `arrange` builders Rust code uses, wiring events
 /// through `binder`.
+///
+/// A form that exceeds a limit of the format (see
+/// [`MAX_DEPTH`](crate::MAX_DEPTH)) is refused with [`BuildError::Limit`]
+/// rather than built, whether or not it was validated.
 pub fn describe<M: 'static>(
     ui: &Ui<M>,
     form: &Form,
@@ -216,6 +225,9 @@ pub fn describe<M: 'static>(
     binder: &dyn Binder<M>,
     options: BuildOptions,
 ) -> Result<Described<M>, BuildError> {
+    if let Some(breach) = crate::model::breaches(form).into_iter().next() {
+        return Err(BuildError::Limit(breach.message));
+    }
     let catalog = Rc::new(Catalog::xui());
     let mut walk = tree::Walk::new(ui, Rc::clone(&catalog), factories, binder, options);
     let layout = walk.content(&form.root)?;

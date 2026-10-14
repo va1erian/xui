@@ -42,6 +42,16 @@
   otherwise rarely needed now. `group(..)` returns a `GroupBuild` (bindable)
   instead of an `Entry`; `Insets::apply` keeps the result inside the rect
   when the insets are larger than it.
+- **`xui-form`: a form nests at most `MAX_DEPTH` (16) levels, and
+  `Form::to_ron` returns a `Result`.** The reader and the writer share the
+  limit, so a form that is written always loads again. `load` reports a
+  deeper node at its line and column; `to_ron` returns
+  `WriteError::TooDeep` (or `WriteError::Unwritable`) instead of panicking or
+  writing a file `load` rejects; `Form::validate` reports it and `describe`
+  returns the new `BuildError::Limit`. `migrate::from_v1` re-loads its own
+  output and returns the new `MigrateError::Write` when it does not match.
+  Callers of `to_ron` handle the error; forms nested between 17 and about 30
+  levels, which loaded before depending on their shape, no longer load.
 
 ### Additions
 
@@ -333,6 +343,10 @@
 
 ### Fixes
 
+- `xui-form`: `Form::to_ron` no longer panics near RON's recursion limit
+  (40 nested v1 panels migrated to a panic, 20 to a file `check` rejected),
+  and a hand-written form at the same depth is read and written alike. The
+  deserialiser's stack use is bounded by the depth limit.
 - `ColorPicker` now hit-tests in its own coordinates. Pointer events arrive relative to the node while `Ui::bounds` is relative to the parent, and the picker compared the two, so a picker not at the top-left of its container ignored every click and never showed hover. The same applied to the swatch grid inside `ColorPanel`.
 - `xui-code-editor` now paints text when the highlighter emits no tokens
   (`PlainText`, the default). Previously `paint` drew only token spans, so a

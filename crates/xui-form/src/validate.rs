@@ -69,6 +69,14 @@ impl Form {
                 format!("`{}` is not a valid form name", self.name),
             ));
         }
+        out.extend(crate::model::breaches(self).into_iter().map(|breach| {
+            Diagnostic::new(
+                Severity::Error,
+                breach.node.as_deref(),
+                Some(breach.property),
+                breach.message,
+            )
+        }));
         self.root.walk(&mut |node, parent| {
             check_place(node, parent, &mut out);
             check_layout(node, &mut out);

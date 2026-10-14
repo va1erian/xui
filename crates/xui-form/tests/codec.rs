@@ -22,7 +22,7 @@ const CANONICAL: &str = r#"Form(title: "Hello", size: (360, 160), root: Column(g
 #[test]
 fn a_canonical_form_round_trips_byte_for_byte() {
     let form = load(CANONICAL).expect("the form loads");
-    assert_eq!(form.to_ron(), CANONICAL);
+    assert_eq!(form.to_ron().expect("it writes"), CANONICAL);
     assert_eq!(format(CANONICAL).expect("it formats"), CANONICAL);
 }
 
@@ -44,7 +44,7 @@ fn defaults_are_omitted_and_lengths_keep_their_fraction() {
         panic!("the root is a column");
     };
     assert_eq!(column.gap, Length(2.5));
-    let text = form.to_ron();
+    let text = form.to_ron().expect("it writes");
     assert!(text.contains("gap: 2.5,"), "{text}");
     assert!(text.contains("Label()"), "an all-default label: {text}");
     assert!(text.contains("size: (320, 200)"), "{text}");

@@ -6,6 +6,10 @@
 //! Writing is canonical and byte-stable: one fixed [`PrettyConfig`], fields in
 //! declaration order and defaults omitted, so formatting a formatted file
 //! changes nothing. Comments are not kept.
+//!
+//! Reading and writing share one limit ([`MAX_DEPTH`]), so a form that
+//! [`Form::to_ron`] writes always [`load`]s again, and one that cannot be
+//! read back is not written: `to_ron` reports it.
 
 use std::fmt;
 
@@ -13,15 +17,18 @@ use ron::extensions::Extensions;
 use ron::ser::PrettyConfig;
 use ron::{Options, error::SpannedError};
 
-use crate::model::Form;
+use crate::model::{Form, MAX_DEPTH, RECURSION_LIMIT, depth_message};
 use crate::suggest::closest;
 
 /// The RON options every form is read and written with: newtype variants
-/// unwrapped (`Button(text: "OK")`, not `Button((text: "OK"))`) and options
-/// written without `Some(..)`.
+/// unwrapped (`Button(text: "OK")`, not `Button((text: "OK"))`), options
+/// written without `Some(..)`, and a recursion limit that only [`MAX_DEPTH`]
+/// is stricter than (the reader and the writer count RON levels differently,
+/// so RON's own default is not the form's limit).
 pub(crate) fn options() -> Options {
     Options::default()
         .with_default_extension(Extensions::UNWRAP_VARIANT_NEWTYPES | Extensions::IMPLICIT_SOME)
+        .with_recursion_limit(RECURSION_LIMIT)
 }
 
 /// The fixed pretty-printing configuration of a saved form: each node on one
@@ -47,22 +54,53 @@ pub fn load(text: &str) -> Result<Form, LoadError> {
     }
     options()
         .from_str(text)
-        .map_err(|error| LoadError::from_ron(&error))
+        .map_err(|error| LoadError::from_ron(&error, text))
 }
 
 /// Formats `.lfm` text canonically: [`load`] then [`Form::to_ron`].
 pub fn format(text: &str) -> Result<String, LoadError> {
-    Ok(load(text)?.to_ron())
+    // A form that loaded is within every limit, so it writes; were it not,
+    // the failure is reported like any other.
+    load(text)?.to_ron().map_err(|error| LoadError {
+        message: error.to_string(),
+        line: 1,
+        column: 1,
+        suggestion: None,
+    })
+}
+
+/// A form that cannot be written as `.lfm` text, because [`load`] would not
+/// read the text back.
+#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
+pub enum WriteError {
+    /// The tree nests deeper than [`MAX_DEPTH`].
+    #[error("the form nests {depth} levels deep; at most {MAX_DEPTH} are allowed")]
+    TooDeep {
+        /// How deep the tree nests.
+        depth: usize,
+    },
+    /// A value cannot be written as a valid `.lfm` value, such as a length
+    /// that is not finite.
+    #[error("the form cannot be written: {0}")]
+    Unwritable(String),
 }
 
 impl Form {
     /// The form as canonical `.lfm` text, ending with a newline.
-    pub fn to_ron(&self) -> String {
+    ///
+    /// A text that is written is a text [`load`] reads back to an equal form.
+    /// A form that could not be read back (nested deeper than [`MAX_DEPTH`])
+    /// is an error, never a panic and never a file that does not load.
+    pub fn to_ron(&self) -> Result<String, WriteError> {
+        let depth = self.root.depth();
+        if depth > MAX_DEPTH {
+            return Err(WriteError::TooDeep { depth });
+        }
         let mut text = options()
             .to_string_pretty(self, pretty())
-            .expect("a form always serialises");
+            .map_err(|error| WriteError::Unwritable(error.to_string()))?;
         text.push('\n');
-        text
+        Ok(text)
     }
 }
 
@@ -88,7 +126,7 @@ pub struct LoadError {
 }
 
 impl LoadError {
-    fn from_ron(error: &SpannedError) -> LoadError {
+    fn from_ron(error: &SpannedError, text: &str) -> LoadError {
         use ron::error::Error;
         let suggestion = match &error.code {
             Error::NoSuchStructField {
@@ -99,10 +137,15 @@ impl LoadError {
             } => closest(found, expected.iter().copied()).map(str::to_owned),
             _ => None,
         };
+        let (mut line, mut column) = (error.span.start.line, error.span.start.col);
+        if matches!(&error.code, Error::Message(message) if *message == depth_message()) {
+            // The reader stops before the node that is one level too deep.
+            (line, column) = crate::locate::next_token(text, line, column);
+        }
         LoadError {
             message: error.code.to_string(),
-            line: error.span.start.line,
-            column: error.span.start.col,
+            line,
+            column,
             suggestion,
         }
     }

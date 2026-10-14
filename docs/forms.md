@@ -39,11 +39,18 @@ Form(title: "Hello", size: (360, 160), root: Column(gap: 8, padding: 16, childre
   `End`, `Stretch`), `span` (in a `Grid`), and `at: (x, y, width, height)`
   with `anchor` (`TopLeft`, …, `BottomRight`, `StretchHorizontal`,
   `StretchVertical`, `Fill`) in an `Absolute` layout.
-- **Defaults are omitted.** Every field has a default and a field equal to
-  it is never written. `Form::to_ron` writes one canonical layout (a fixed
-  `PrettyConfig`: a node per line, its children below it), so a saved file is
-  byte-stable and `xui-form fmt` of a formatted file changes nothing.
-  Comments are not kept.
+- **Defaults are omitted.** Every field has a default and a node's field
+  equal to it is not written (the form's `size` and `root` always are).
+  `Form::to_ron` writes one canonical layout (a fixed `PrettyConfig`: a node
+  per line, its children below it), so a saved file is byte-stable and
+  `xui-form fmt` of a formatted file changes nothing. Comments are not kept.
+- **Depth.** A tree nests at most `MAX_DEPTH` (16) levels, the root node
+  being level 1; a `Group`'s or `Panel`'s content and a `Tabs` page's
+  content are each a level below the container. `load` and `Form::to_ron`
+  use the same limit, so a form that is written always loads again: a
+  deeper tree is a located load error, and `to_ron` returns
+  `WriteError::TooDeep` rather than a file that does not load. `validate`
+  reports it too, and `describe` refuses to build it.
 - **Control arrays.** `Button(name: "digit", array: 10, text: "{index}")` is
   ten buttons, `digit[0]` to `digit[9]`; `{index}` in a text becomes the
   element's index. Elements placed apart are written one by one with

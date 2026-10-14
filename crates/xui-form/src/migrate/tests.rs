@@ -89,7 +89,7 @@ fn rectangles_in_rows_and_columns_become_a_grid() {
         ));
     }
     let form = from_v1(&text).expect("the form converts").form;
-    let ron = form.to_ron();
+    let ron = form.to_ron().expect("the migrated form writes");
     assert!(ron.contains("Grid("), "{ron}");
     let Node::Grid(grid) = &form.root else {
         panic!("aligned rectangles make a grid: {ron}");
@@ -120,4 +120,72 @@ fn bad_input_is_an_error() {
     assert!(matches!(from_v1("not toml ["), Err(MigrateError::Toml(_))));
     let unknown = "format = 1\n[window]\nname = \"f\"\n[[node]]\nkind = \"Gauge\"\nname = \"g\"\n";
     assert!(matches!(from_v1(unknown), Err(MigrateError::Node { .. })));
+}
+
+/// A format-1 form of `containers` panels, each inside the one before, with a
+/// button in the innermost.
+fn nested_panels(containers: usize) -> String {
+    let mut text = String::from(
+        "format = 1
+[window]
+name = \"deep\"
+width = 200
+height = 200
+",
+    );
+    for level in 0..containers {
+        text.push_str(&format!(
+            "[[node]]
+kind = \"Panel\"
+name = \"panel_{level}\"
+left = 4
+top = 4
+width = 180
+height = 180
+"
+        ));
+        if level > 0 {
+            text.push_str(&format!(
+                "parent = \"panel_{}\"
+",
+                level - 1
+            ));
+        }
+    }
+    text.push_str(&format!(
+        "[[node]]
+kind = \"Button\"
+name = \"ok\"
+parent = \"panel_{}\"
+left = 4
+top = 4
+",
+        containers - 1
+    ));
+    text
+}
+
+#[test]
+fn nesting_up_to_the_limit_converts_and_loads_back() {
+    // Each container takes two levels (itself and its content's layout), the
+    // window's own layout is the first: seven containers and a button fill
+    // the sixteen levels a form may nest.
+    let migration = from_v1(&nested_panels(7)).expect("seven nested panels convert");
+    assert_eq!(migration.form.root.depth(), crate::MAX_DEPTH);
+    let text = migration.form.to_ron().expect("it writes");
+    assert_eq!(crate::load(&text).expect("it loads"), migration.form);
+}
+
+#[test]
+fn nesting_past_the_limit_is_an_error_naming_the_node() {
+    let error = from_v1(&nested_panels(8)).expect_err("eight nested panels are too deep");
+    let MigrateError::Node { node, message } = &error else {
+        panic!("a node is named: {error:?}");
+    };
+    assert_eq!(node, "panel_7");
+    assert!(message.contains("too deeply"), "{message}");
+
+    // A hostile chain is refused as early, without walking all of it.
+    let error = from_v1(&nested_panels(3_000)).expect_err("3000 nested panels are too deep");
+    assert!(matches!(error, MigrateError::Node { .. }), "{error:?}");
 }

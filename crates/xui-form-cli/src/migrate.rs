@@ -20,7 +20,10 @@ pub(crate) fn run(mut args: Args) -> Outcome {
     for note in &migration.notes {
         eprintln!("{file}: note: {note}");
     }
-    let converted = migration.form.to_ron();
+    let converted = migration
+        .form
+        .to_ron()
+        .map_err(|error| Failure::Fatal(format!("{file}: {error}")))?;
     match out {
         Some(out) => args::write(out.as_ref(), &converted)?,
         None => print!("{converted}"),

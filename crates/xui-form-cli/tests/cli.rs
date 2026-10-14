@@ -26,6 +26,10 @@ fn stdout(output: &Output) -> String {
     String::from_utf8_lossy(&output.stdout).into_owned()
 }
 
+fn stderr(output: &Output) -> String {
+    String::from_utf8_lossy(&output.stderr).into_owned()
+}
+
 /// Writes `text` to `dir/name` and returns the path as a string.
 fn file(dir: &Path, name: &str, text: &str) -> String {
     let path = dir.join(name);
@@ -147,6 +151,43 @@ fn migrate_converts_a_format_one_form() {
     );
     let check = xui_form(&["check", &out.to_string_lossy()]);
     assert!(check.status.success(), "{}", stdout(&check));
+}
+
+#[test]
+fn migrate_refuses_a_form_nested_too_deep_and_writes_nothing() {
+    let dir = scratch("migrate-deep");
+    let mut v1 = String::from(
+        "format = 1
+[window]
+name = \"deep\"
+",
+    );
+    for level in 0..9 {
+        v1.push_str(&format!(
+            "[[node]]
+kind = \"Panel\"
+name = \"panel_{level}\"
+width = 180
+height = 180
+"
+        ));
+        if level > 0 {
+            v1.push_str(&format!(
+                "parent = \"panel_{}\"
+",
+                level - 1
+            ));
+        }
+    }
+    let source = file(&dir, "deep.lfm", &v1);
+    let out = dir.join("deep-v2.lfm");
+    let output = xui_form(&["migrate", &source, "--out", &out.to_string_lossy()]);
+    assert_eq!(output.status.code(), Some(1));
+    let message = stderr(&output);
+    assert!(message.contains("node `panel_7`"), "{message}");
+    assert!(message.contains("too deeply"), "{message}");
+    assert!(stdout(&output).is_empty(), "nothing is printed");
+    assert!(!out.exists(), "nothing is written");
 }
 
 #[test]

@@ -9,7 +9,7 @@
 
 use serde::Deserialize;
 
-use crate::model::{Absolute, Form, Length, Node};
+use crate::model::{Absolute, Form, Length, MAX_DEPTH, Node};
 
 mod grid;
 
@@ -36,6 +36,10 @@ pub enum MigrateError {
         /// What went wrong.
         message: String,
     },
+    /// The converted form could not be written, or the text written did not
+    /// load back to the same form. Nothing is reported as converted then.
+    #[error("the converted form cannot be written: {0}")]
+    Write(String),
 }
 
 /// One `[[node]]` of a format-1 form.
@@ -101,7 +105,7 @@ pub fn from_v1(text: &str) -> Result<Migration, MigrateError> {
         nodes: &v1.nodes,
         notes: Vec::new(),
     };
-    let root = converter.level(None, size)?;
+    let root = converter.level(None, size, 1)?;
     if let Some(orphan) = v1.nodes.iter().find(|node| {
         node.parent
             .as_ref()
@@ -123,10 +127,28 @@ pub fn from_v1(text: &str) -> Result<Migration, MigrateError> {
             .unwrap_or(true),
         root,
     };
+    verify(&form)?;
     Ok(Migration {
         form,
         notes: converter.notes,
     })
+}
+
+/// Writes `form` and reads the text back: a conversion is only reported as
+/// done when what it produced is a file that loads, to the same form.
+fn verify(form: &Form) -> Result<(), MigrateError> {
+    let text = form
+        .to_ron()
+        .map_err(|error| MigrateError::Write(error.to_string()))?;
+    match crate::load(&text) {
+        Ok(loaded) if loaded == *form => Ok(()),
+        Ok(_) => Err(MigrateError::Write(
+            "the text written reads back as a different form".to_owned(),
+        )),
+        Err(error) => Err(MigrateError::Write(format!(
+            "the text written does not load: {error}"
+        ))),
+    }
 }
 
 /// The state of one conversion.
@@ -137,8 +159,17 @@ struct Converter<'a> {
 
 impl Converter<'_> {
     /// The children of `parent` (the window for `None`), designed at `size`:
-    /// a grid when they line up, an absolute layout otherwise.
-    fn level(&mut self, parent: Option<&str>, size: (i64, i64)) -> Result<Node, MigrateError> {
+    /// a grid when they line up, an absolute layout otherwise. The layout is
+    /// `depth` levels down the tree.
+    fn level(
+        &mut self,
+        parent: Option<&str>,
+        size: (i64, i64),
+        depth: usize,
+    ) -> Result<Node, MigrateError> {
+        if depth > MAX_DEPTH {
+            return Err(too_deep(parent.unwrap_or_default()));
+        }
         let children: Vec<&V1Node> = self
             .nodes
             .iter()
@@ -159,7 +190,7 @@ impl Converter<'_> {
                 if cell.span > 1 {
                     fields.insert("span".into(), toml::Value::Integer(cell.span as i64));
                 }
-                nodes.push((cell.order, self.node(child, fields)?));
+                nodes.push((cell.order, self.node(child, fields, depth + 1)?));
             }
             nodes.sort_by_key(|(order, _)| *order);
             return Ok(Node::Grid(
@@ -176,7 +207,7 @@ impl Converter<'_> {
             {
                 fields.insert("anchor".into(), toml::Value::String(pascal(anchor)));
             }
-            nodes.push(self.node(child, fields)?);
+            nodes.push(self.node(child, fields, depth + 1)?);
         }
         Ok(Node::Absolute(Absolute {
             size: Some((Length(size.0 as f32), Length(size.1 as f32))),
@@ -185,8 +216,17 @@ impl Converter<'_> {
         }))
     }
 
-    /// One node with its placement `fields`, its content converted.
-    fn node(&mut self, v1: &V1Node, mut fields: toml::Table) -> Result<Node, MigrateError> {
+    /// One node with its placement `fields`, its content converted. The node
+    /// is `depth` levels down the tree.
+    fn node(
+        &mut self,
+        v1: &V1Node,
+        mut fields: toml::Table,
+        depth: usize,
+    ) -> Result<Node, MigrateError> {
+        if depth > MAX_DEPTH {
+            return Err(too_deep(&v1.name));
+        }
         let kind = match v1.kind.as_str() {
             "GroupBox" => "Group",
             other => other,
@@ -221,14 +261,27 @@ impl Converter<'_> {
         let (.., width, height) = rect(v1);
         match &mut node {
             Node::Group(group) => {
-                *group.content = self.level(Some(&v1.name), (width, height))?;
+                *group.content = self.level(Some(&v1.name), (width, height), depth + 1)?;
             }
             Node::Panel(panel) => {
-                *panel.content = self.level(Some(&v1.name), (width, height))?;
+                *panel.content = self.level(Some(&v1.name), (width, height), depth + 1)?;
             }
             _ => {}
         }
         Ok(node)
+    }
+}
+
+/// The error for a node nested more deeply than format 2 can hold: a form
+/// nests at most [`MAX_DEPTH`] levels, and a container takes two of them (the
+/// container and the layout of its content).
+fn too_deep(node: &str) -> MigrateError {
+    MigrateError::Node {
+        node: node.to_owned(),
+        message: format!(
+            "is nested too deeply for format 2: a form nests at most {MAX_DEPTH} levels, \
+             and each container takes two"
+        ),
     }
 }
 

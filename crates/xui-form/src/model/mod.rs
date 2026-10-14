@@ -23,24 +23,29 @@
 //! )
 //! ```
 //!
-//! Every field has a default and a default is never written, so a file says
-//! only what differs.
+//! Every field has a default and a node's field equal to it is not written,
+//! so a file says only what differs (the form's own `size` and `root` are
+//! always written). A tree nests at most [`MAX_DEPTH`] levels.
 //!
 //! [`Catalog`]: crate::Catalog
 
 use std::collections::BTreeMap;
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::value::Value;
 
 mod containers;
+mod limits;
 pub(crate) mod macros;
 mod prop;
+mod repr;
 mod types;
 mod widgets;
 
 pub use containers::{Absolute, Grid, Group, Page, Panel, Stack, Tabs};
+pub use limits::MAX_DEPTH;
+pub(crate) use limits::{RECURSION_LIMIT, breaches, depth_message};
 pub use prop::PropType;
 pub use types::{Align, Anchor, Length, Orientation, Track};
 pub use widgets::{
@@ -89,7 +94,9 @@ fn is_true(value: &bool) -> bool {
 }
 
 /// One node of a form's tree.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+///
+/// Reading counts the nodes it is inside and stops at [`MAX_DEPTH`].
+#[derive(Clone, Debug, PartialEq)]
 pub enum Node {
     /// Entries left to right.
     Row(Stack),
@@ -140,6 +147,19 @@ pub enum Node {
 impl Default for Node {
     fn default() -> Node {
         Node::Column(Stack::default())
+    }
+}
+
+impl Serialize for Node {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        repr::NodeDef::serialize(self, serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for Node {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Node, D::Error> {
+        let _level = limits::Level::enter()?;
+        repr::NodeDef::deserialize(deserializer)
     }
 }
 
@@ -215,19 +235,15 @@ impl Node {
     }
 
     /// Calls `visit` on this node and every node below it, parents first,
-    /// with the layout each one is a child of (`None` for the root).
+    /// with the layout each one is a child of (`None` for the root). The walk
+    /// does not recurse, so a tree of any depth is visited.
     pub fn walk<'a>(&'a self, visit: &mut dyn FnMut(&'a Node, Option<&'a Node>)) {
-        fn go<'a>(
-            node: &'a Node,
-            parent: Option<&'a Node>,
-            visit: &mut dyn FnMut(&'a Node, Option<&'a Node>),
-        ) {
+        let mut pending = vec![(self, None)];
+        while let Some((node, parent)) = pending.pop() {
             visit(node, parent);
-            for child in node.children() {
-                go(child, Some(node), visit);
-            }
+            let children = node.children();
+            pending.extend(children.into_iter().rev().map(|child| (child, Some(node))));
         }
-        go(self, None, visit);
     }
 }
 
