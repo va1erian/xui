@@ -9,7 +9,9 @@ use xui_core::backend::{Corner, PathPlacement, PathSeg, Stroke};
 use xui_core::geometry::{Point, Rect};
 
 use super::SkiaCanvas;
-use crate::paint::{Clip, FILL_RULE, intersect, paint, sk_rect, skia_stroke, solid_shader};
+use crate::paint::{
+    Clip, FILL_RULE, intersect, paint, rect_path, sk_rect, skia_stroke, solid_shader,
+};
 
 impl SkiaCanvas<'_> {
     pub(super) fn point(&self, point: Point) -> Point {
@@ -103,11 +105,28 @@ impl SkiaCanvas<'_> {
     /// written, so a small clip costs its own size, not the surface's.
     fn build_mask(&self) -> Option<Mask> {
         let (width, height) = (self.pixmap.width(), self.pixmap.height());
+        let surface = Rect::new(0, 0, width as i32, height as i32);
         let mut mask = Mask::new(width, height)?;
         // The rectangle outside which the mask is zero, once a clip set it.
         let mut reach: Option<Rect> = None;
         for clip in &self.clips {
-            let Some(path) = clip.path() else {
+            let path = match clip {
+                // A rectangular clip only matters where the surface is, so it
+                // is trimmed to it: that changes no pixel, and keeps a clip as
+                // large as the integer range from being dropped by the
+                // rasteriser as too big for its arithmetic (which would cut
+                // everything away).
+                Clip::Rect(rect) => {
+                    let trimmed = intersect(*rect, surface);
+                    if trimmed.is_empty() && !rect.is_empty() {
+                        // Wholly outside the surface: nothing is inside it.
+                        return Mask::new(width, height);
+                    }
+                    rect_path(trimmed)
+                }
+                Clip::Rounded(..) => clip.path(),
+            };
+            let Some(path) = path else {
                 continue;
             };
             let bounds = mask_reach(&path, width, height);
@@ -131,7 +150,7 @@ impl SkiaCanvas<'_> {
     /// Rebuilds the clip mask after a push/pop. A rounded clip always needs
     /// one; a purely rectangular clip is trimmed by intersecting each shape's
     /// rectangle, which is exact for rectangles and cheaper, so it waits for
-    /// [`SkiaCanvas::ensure_mask`] rather than allocating a mask per push.
+    /// [`SkiaCanvas::clip_mask_for`] rather than allocating a mask per push.
     pub(super) fn rebuild_mask(&mut self) {
         let rounded = self
             .clips
@@ -140,19 +159,47 @@ impl SkiaCanvas<'_> {
         self.mask = if rounded { self.build_mask() } else { None };
     }
 
-    /// Ensures a mask exists for a shape the cheap rectangle intersection
-    /// cannot trim (an ellipse or polygon). A rounded clip already has one.
-    pub(super) fn ensure_mask(&mut self) {
-        if self.mask.is_none() && !self.clips.is_empty() {
+    /// Makes sure a shape with these device-space `bounds`, `grow` pixels wider
+    /// for a stroke, is cut by the active clips: when it reaches outside the
+    /// innermost clip a mask is built (a rounded clip already has one). A shape
+    /// inside the clip needs no mask, so a painter that stays in its clip pays
+    /// nothing.
+    ///
+    /// Every shape goes through [`SkiaCanvas::fill`] or [`SkiaCanvas::stroke`],
+    /// which call this, so no outline, line or glow can leave a rectangular
+    /// clip. (The rectangle fills trim their geometry to the clip instead,
+    /// which a stroke cannot: its outline is wider than its path.)
+    fn clip_mask_for(&mut self, bounds: tiny_skia::Rect, grow: f32) {
+        if self.mask.is_none() && self.reaches_outside_clip(bounds, grow) {
             self.mask = self.build_mask();
         }
     }
 
+    /// Whether a shape with these device-space `bounds`, `grow` pixels wider,
+    /// lies partly outside the innermost clip.
+    fn reaches_outside_clip(&self, bounds: tiny_skia::Rect, grow: f32) -> bool {
+        let Some(clip) = self.clips.last() else {
+            return false;
+        };
+        let clip = clip.bounds();
+        let shape = Rect::new(
+            (bounds.left() - grow).floor() as i32,
+            (bounds.top() - grow).floor() as i32,
+            (bounds.right() + grow).ceil() as i32,
+            (bounds.bottom() + grow).ceil() as i32,
+        );
+        shape.left < clip.left
+            || shape.top < clip.top
+            || shape.right > clip.right
+            || shape.bottom > clip.bottom
+    }
+
     /// Fills `path`, whose coordinates are already in device space (the
     /// transform is applied by [`SkiaCanvas::rect`]/[`SkiaCanvas::point`]),
-    /// shifted onto the pixmap by [`SkiaCanvas::shift`].
+    /// cut by the active clips.
     pub(super) fn fill(&mut self, path: &Path, shader: Shader<'static>) {
         let paint = paint(shader);
+        self.clip_mask_for(path.bounds(), 0.0);
         let mask = self.mask.as_ref();
         self.pixmap
             .fill_path(path, &paint, FILL_RULE, Transform::identity(), mask);
@@ -161,6 +208,16 @@ impl SkiaCanvas<'_> {
     pub(super) fn stroke(&mut self, path: &Path, color: tiny_skia::Color, stroke: &Stroke) {
         let paint = paint(solid_shader(color));
         let stroke = skia_stroke(stroke, self.scale);
+        // The outline can lie a miter length from the path. Only a path near
+        // the clip's edge is worth the outline's own bounds, which are what
+        // decide whether it leaves the clip.
+        let loose = stroke.width * stroke.miter_limit.max(1.0) + 1.0;
+        if self.mask.is_none() && self.reaches_outside_clip(path.bounds(), loose) {
+            let outline = path
+                .stroke(&stroke, 1.0)
+                .map_or(path.bounds(), |outline| outline.bounds());
+            self.clip_mask_for(outline, 1.0);
+        }
         let mask = self.mask.as_ref();
         self.pixmap
             .stroke_path(path, &paint, &stroke, Transform::identity(), mask);
@@ -191,10 +248,10 @@ impl SkiaCanvas<'_> {
 fn mask_reach(path: &Path, width: u32, height: u32) -> Rect {
     let bounds = path.bounds();
     let reach = Rect::new(
-        bounds.left().floor() as i32 - 1,
-        bounds.top().floor() as i32 - 1,
-        bounds.right().ceil() as i32 + 1,
-        bounds.bottom().ceil() as i32 + 1,
+        (bounds.left().floor() as i32).saturating_sub(1),
+        (bounds.top().floor() as i32).saturating_sub(1),
+        (bounds.right().ceil() as i32).saturating_add(1),
+        (bounds.bottom().ceil() as i32).saturating_add(1),
     );
     intersect(reach, Rect::new(0, 0, width as i32, height as i32))
 }
@@ -225,4 +282,13 @@ fn multiply(mask: &mut Mask, next: &Mask, held: Rect, reach: Rect) {
             mask.data_mut()[at] = value;
         }
     }
+}
+
+/// The coverage mask text and images are cut by: only a rounded clip's. A
+/// rectangular clip is applied to them by trimming their bounds, which is exact
+/// and keeps the faster paths (an unscaled image is a row copy); the mask a
+/// shape crossing a rectangular clip built is for paths.
+pub(super) fn pixel_mask<'a>(clips: &[Clip], mask: &'a Option<Mask>) -> Option<&'a Mask> {
+    let rounded = clips.iter().any(|clip| matches!(clip, Clip::Rounded(..)));
+    if rounded { mask.as_ref() } else { None }
 }

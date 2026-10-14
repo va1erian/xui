@@ -295,3 +295,71 @@ fn a_clipped_image_is_cropped_not_squashed() {
         "the clipped-away half is not squeezed in"
     );
 }
+
+/// A rounded clip under a rectangular clip as large as the integer range: the
+/// rectangle the mask is built over saturates instead of overflowing.
+#[test]
+fn a_rounded_clip_under_a_clip_as_big_as_the_integer_range_does_not_overflow() {
+    let mut surface = Surface::new(64, 64);
+    surface.fill(Color::rgb(0, 0, 0));
+    surface.with_canvas(Rect::new(0, 0, 64, 64), |canvas| {
+        canvas.push_clip(Rect::new(0, 0, i32::MAX, i32::MAX));
+        canvas.push_clip_rounded(Rect::new(4, 4, 60, 60), [Corner::uniform(8.0); 4]);
+        canvas.fill_rect(Rect::new(0, 0, 64, 64), Color::rgb(200, 0, 0));
+    });
+    let image = surface.to_image();
+    assert_eq!(
+        image.pixel(30, 30),
+        Some([200, 0, 0, 255]),
+        "inside the clip"
+    );
+    assert_eq!(image.pixel(1, 1), Some([0, 0, 0, 255]), "outside it");
+    assert_eq!(
+        image.pixel(4, 4),
+        Some([0, 0, 0, 255]),
+        "the rounded corner is cut away"
+    );
+}
+
+/// Lines, outlines and glows are cut by a rectangular clip, as fills are: a
+/// stroke is not trimmed like a rectangle (its outline is wider than its path),
+/// so it is cut by the clip's mask.
+#[test]
+fn a_stroke_crossing_a_rectangular_clip_is_cut_by_it() {
+    let clip = Rect::new(20, 20, 60, 60);
+    let draw = |canvas: &mut crate::SkiaCanvas<'_>| {
+        canvas.push_clip(clip);
+        canvas.draw_line(
+            xui_core::geometry::Point::new(0, 40),
+            xui_core::geometry::Point::new(99, 40),
+            Color::rgb(255, 0, 0),
+            3.0,
+        );
+        canvas.stroke_ellipse(
+            xui_core::geometry::Point::new(40, 40),
+            50.0,
+            50.0,
+            Color::rgb(0, 255, 0),
+            3.0,
+        );
+        canvas.stroke_rect(clip, Color::rgb(0, 0, 255), 4.0);
+        canvas.pop_clip();
+    };
+    let mut surface = Surface::new(100, 100);
+    surface.fill(Color::rgb(0, 0, 0));
+    surface.with_canvas(Rect::new(0, 0, 100, 100), draw);
+    let image = surface.to_image();
+    for y in 0..100u32 {
+        for x in 0..100u32 {
+            let inside = (20..60).contains(&x) && (20..60).contains(&y);
+            if !inside {
+                assert_eq!(image.pixel(x, y), Some([0, 0, 0, 255]), "({x}, {y})");
+            }
+        }
+    }
+    assert_eq!(
+        image.pixel(40, 40),
+        Some([255, 0, 0, 255]),
+        "the line is drawn"
+    );
+}

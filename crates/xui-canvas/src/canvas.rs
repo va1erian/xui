@@ -112,7 +112,6 @@ impl Canvas for SkiaCanvas<'_> {
         let Some(path) = self.ellipse_path(center, radius_x, radius_y) else {
             return;
         };
-        self.ensure_mask();
         self.fill(&path, solid_shader(to_skia(color)));
     }
 
@@ -129,7 +128,6 @@ impl Canvas for SkiaCanvas<'_> {
         }
         builder.close();
         if let Some(path) = builder.finish() {
-            self.ensure_mask();
             self.fill(&path, solid_shader(to_skia(color)));
         }
     }
@@ -215,7 +213,6 @@ impl Canvas for SkiaCanvas<'_> {
 
     fn fill_path(&mut self, path: &[PathSeg], at: PathPlacement, color: Rgba) {
         if let Some(path) = self.placed_path(path, at) {
-            self.ensure_mask();
             self.fill(&path, solid_shader(to_skia_rgba(color)));
         }
     }
@@ -228,14 +225,12 @@ impl Canvas for SkiaCanvas<'_> {
         if let Some(path) = self.placed_path(path, at)
             && let Some(shader) = linear_shader_f(start, end, gradient.stops)
         {
-            self.ensure_mask();
             self.fill(&path, shader);
         }
     }
 
     fn stroke_path(&mut self, path: &[PathSeg], at: PathPlacement, color: Rgba, stroke: &Stroke) {
         if let Some(path) = self.placed_path(path, at) {
-            self.ensure_mask();
             self.stroke(&path, to_skia_rgba(color), stroke);
         }
     }
@@ -277,7 +272,7 @@ impl Canvas for SkiaCanvas<'_> {
             dpi,
             crate::text::GlyphClip {
                 bounds: clip,
-                mask: self.mask.as_ref(),
+                mask: geometry::pixel_mask(&self.clips, &self.mask),
             },
         );
     }
@@ -302,7 +297,7 @@ impl Canvas for SkiaCanvas<'_> {
             color,
             crate::text::GlyphClip {
                 bounds: clip,
-                mask: self.mask.as_ref(),
+                mask: geometry::pixel_mask(&self.clips, &self.mask),
             },
         );
     }
@@ -332,7 +327,7 @@ impl Canvas for SkiaCanvas<'_> {
         // An unscaled draw (a page's pictures, a tiled background, a cached
         // backdrop) is a row copy: tiny-skia's pattern pipeline costs tens of
         // nanoseconds a pixel even when it samples 1:1.
-        if self.mask.is_none()
+        if geometry::pixel_mask(&self.clips, &self.mask).is_none()
             && dest.width() as u32 == pixmap.width()
             && dest.height() as u32 == pixmap.height()
         {
@@ -364,8 +359,12 @@ impl Canvas for SkiaCanvas<'_> {
             anti_alias: true,
             ..Paint::default()
         };
-        self.pixmap
-            .fill_rect(source, &paint, transform, self.mask.as_ref());
+        self.pixmap.fill_rect(
+            source,
+            &paint,
+            transform,
+            geometry::pixel_mask(&self.clips, &self.mask),
+        );
     }
 
     fn push_clip(&mut self, rect: Rect) {
