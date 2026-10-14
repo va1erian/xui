@@ -76,8 +76,8 @@
   `OffscreenBackend` share one compositor and keep each window's frame between
   frames. A move, resize, show, hide, raise, destroy, clip, text or painter
   change marks the old and new places of the node (and everything inside it),
-  an input event (a press, a key, a focus or capture change, the pointer
-  leaving) marks the node it was delivered to once handled, and
+  an input event the node consumed (a press, a key; a focus or capture change
+  and the pointer leaving always) marks the node it was delivered to, and
   `invalidate_rect`, which was ignored, is honoured; the window repaints only
   that damage (a list of at most eight rectangles; a resize, DPI or theme
   change and GL content repaint the whole window) and the windowed backend
@@ -96,8 +96,10 @@
   frame, not only in repaints of damage); a widget that has to draw further
   out must give its node bounds that cover it. Lines, outlines and glows are
   now cut by a rectangular clip as fills are (they were not, so a scrolled
-  checkbox's glow showed above its viewport; a frame stroked on the very edge
-  of its clip, a scroll view's, loses the half that was outside it). For
+  checkbox's glow showed above its viewport). A stroke is centred on the edge
+  of its rectangle, so a frame stroked under a clip of that same rectangle
+  loses its outer half: the scroll view, the code editor and the paint canvas
+  draw theirs outside their clip, and a widget that frames itself must too. For
   painters that stay within their reach the frames are bit-for-bit those of a
   whole-window repaint: the differential tests compare them after every step
   of seeded random operation sequences (at 96, 120, 144 and 192 DPI) and of

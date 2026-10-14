@@ -204,7 +204,7 @@ impl Shared {
             .and_then(|state| state.sink.clone());
         let handled = sink.is_some_and(|sink| sink.deliver(target, event));
         if !target.is_none()
-            && crate::scene::event_marks_target(event)
+            && crate::scene::event_marks_target(event, handled)
             && self.nodes.borrow_mut().invalidate(target)
         {
             self.request_redraw(window);

@@ -250,3 +250,43 @@ fn a_node_with_no_area_marks_the_place_of_its_corner() {
     scene.set_painter(id, painter());
     assert_eq!(taken(&mut scene), [grown(Rect::new(30, 30, 31, 31))]);
 }
+
+#[test]
+fn input_marks_its_target_only_when_consumed_and_focus_always() {
+    use xui_core::backend::Event;
+    use xui_core::message::{Key, Modifiers, MouseButton};
+
+    let press = Event::MouseDown {
+        x: 1,
+        y: 1,
+        button: MouseButton::Left,
+        modifiers: Modifiers::NONE,
+    };
+    let key = Event::KeyDown {
+        key: Key::A,
+        modifiers: Modifiers::NONE,
+        repeat: 1,
+        system: false,
+    };
+    for event in [&press, &key, &Event::Char('a')] {
+        assert!(event_marks_target(event, true), "{event:?} consumed");
+        assert!(!event_marks_target(event, false), "{event:?} not consumed");
+    }
+    // State the node holds whether or not it consumed the event.
+    for event in [
+        &Event::SetFocus,
+        &Event::KillFocus,
+        &Event::MouseLeave,
+        &Event::CaptureChanged,
+    ] {
+        assert!(event_marks_target(event, false), "{event:?}");
+    }
+    // The commonest event marks nothing, consumed or not.
+    let motion = Event::MouseMove {
+        x: 1,
+        y: 1,
+        modifiers: Modifiers::NONE,
+    };
+    assert!(!event_marks_target(&motion, true));
+    assert!(!event_marks_target(&motion, false));
+}

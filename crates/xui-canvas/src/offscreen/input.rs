@@ -25,7 +25,7 @@ impl OffscreenBackend {
             .get(&window.raw())
             .and_then(|entry| entry.sink.clone());
         let handled = sink.is_some_and(|sink| sink.deliver(target, event));
-        if !target.is_none() && event_marks_target(event) {
+        if !target.is_none() && event_marks_target(event, handled) {
             self.nodes.borrow_mut().invalidate(target);
         }
         handled

@@ -151,13 +151,19 @@ of rectangles. A change to a node says which window pixels it can have changed:
   change and `invalidate` the node's own place;
 - `invalidate_rect(node, rect)` marks `rect`, in the node's coordinates,
   trimmed to what its ancestors' clips show;
-- **an input event delivered to a node** (a press, a release, a wheel step, a
-  key or character, a focus change, a capture change, the pointer leaving)
-  marks the node's place once the event has been handled, so a widget that
-  forgets to invalidate itself cannot leave its old pixels behind. A plain
-  pointer move is not marked: hover changes arrive as the widget's own
+- **an input event delivered to a node** marks the node's place after the
+  delivery, so a widget that forgets to invalidate itself cannot leave its old
+  pixels behind. A press, a release, a wheel step, a key or a character marks
+  it only when the node consumed the event (one nobody consumed changed
+  nothing, and would repaint a control for every keystroke that goes nowhere);
+  a focus change, a capture change and the pointer leaving mark it always. A
+  plain pointer move is not marked: hover changes arrive as the widget's own
   invalidate and as the `MouseLeave` of the node the pointer left, and marking
-  every control the pointer crosses would repaint it for a pixel of movement;
+  every control the pointer crosses would repaint it for a pixel of movement.
+  Over the demos in a random input session this rule repaints about half as
+  much again as no rule at all (24k to 36k px per frame; marking every
+  delivered event would have doubled it), and is the net under a widget that
+  forgets;
 - a window **resize**, a **DPI** or **theme** change and GL content marks the
   whole window, the fallback that is always correct.
 

@@ -217,31 +217,41 @@ impl Scene {
 }
 
 /// Whether delivering `event` to a node can change how the node looks without
-/// the node saying so: an input event, a focus change, a capture change or a
-/// leave. The backends mark the target's place stale after delivering one, so a
-/// widget that forgets to invalidate cannot leave stale pixels behind.
+/// the node saying so: an input event it consumed, a focus change, a capture
+/// change or a leave. The backends mark the target's place stale after
+/// delivering one, so a widget that forgets to invalidate cannot leave stale
+/// pixels behind.
+///
+/// `handled` is whether the node consumed the event. A press, a release, a
+/// wheel step, a key or a character that no node consumed (a key with no
+/// binding, a wheel over a node that does not scroll) changed nothing, and
+/// marking it would repaint a control for every keystroke that goes nowhere
+/// (marking every delivered event doubled the area the demos repainted in a
+/// random session; marking only the consumed ones, half as much again as none). The
+/// focus, capture and leave events are state the node holds whether or not it
+/// consumed them, so they always mark.
 ///
 /// A plain `MouseMove` is left out: it is by far the commonest event, hover
 /// changes arrive as `MouseLeave` (and as the widget's own invalidate), and
 /// marking every node a pointer crosses would repaint a whole control for a
 /// pixel of movement.
-pub(crate) fn event_marks_target(event: &xui_core::backend::Event) -> bool {
+pub(crate) fn event_marks_target(event: &xui_core::backend::Event, handled: bool) -> bool {
     use xui_core::backend::Event;
-    matches!(
-        event,
+    match event {
+        Event::MouseLeave
+        | Event::CaptureChanged
+        | Event::SetFocus
+        | Event::KillFocus
+        | Event::TextChanged => true,
         Event::MouseDown { .. }
-            | Event::MouseUp { .. }
-            | Event::MouseDoubleClick { .. }
-            | Event::MouseWheel { .. }
-            | Event::MouseLeave
-            | Event::CaptureChanged
-            | Event::KeyDown { .. }
-            | Event::KeyUp { .. }
-            | Event::Char(_)
-            | Event::TextChanged
-            | Event::SetFocus
-            | Event::KillFocus
-    )
+        | Event::MouseUp { .. }
+        | Event::MouseDoubleClick { .. }
+        | Event::MouseWheel { .. }
+        | Event::KeyDown { .. }
+        | Event::KeyUp { .. }
+        | Event::Char(_) => handled,
+        _ => false,
+    }
 }
 
 #[cfg(test)]

@@ -226,7 +226,10 @@ impl SkiaCanvas<'_> {
             let outline = path
                 .stroke(&stroke, 1.0)
                 .map_or(path.bounds(), |outline| outline.bounds());
-            self.clip_mask_for(outline, 1.0);
+            // The outline's bounds are already exact: no pixel outside the
+            // whole pixels around them gets coverage, so a line that ends on
+            // the clip's edge needs no mask (which would change its rounding).
+            self.clip_mask_for(outline, 0.0);
         }
         let mask = self.mask.as_ref();
         self.pixmap
