@@ -6,16 +6,19 @@ use common::{build_failure, form, with_form};
 use xui_form::model::{Absolute, Grid, Group, Label, Node, Page, Panel, Stack, Tabs};
 use xui_form::{BuildOptions, Catalog, Form, MAX_ARRAY, MAX_DEPTH, WriteError, format, load};
 
-/// The kinds that nest a node, one of each shape of nesting: a child list, a
-/// container's content and a page's content.
-const KINDS: [&str; 6] = ["Column", "Grid", "Absolute", "Panel", "Group", "Tabs"];
+/// Every kind that nests a node: a child list (`children`), a container's
+/// content (`content`) and a tab control's pages (`pages`). A test checks the
+/// list against the catalog, so a kind that nests cannot be left out.
+const KINDS: [&str; 8] = [
+    "Row", "Column", "Wrap", "Grid", "Absolute", "Panel", "Group", "Tabs",
+];
 
 /// A form's text: `depth` levels of `kind` nested, ending in a label, with
 /// each node starting on a line of its own (the node at level `k` is on line
 /// `k + 1`).
 fn nested_text(kind: &str, depth: usize) -> String {
     let (open, close) = match kind {
-        "Column" | "Grid" | "Absolute" => (format!("{kind}(children: ["), "])"),
+        "Row" | "Column" | "Wrap" | "Grid" | "Absolute" => (format!("{kind}(children: ["), "])"),
         "Panel" | "Group" => (format!("{kind}(content: "), ")"),
         "Tabs" => (
             "Tabs(pages: [Page(title: \"t\", content: ".to_owned(),
@@ -46,6 +49,14 @@ fn nested_tree(kind: &str, depth: usize) -> Form {
     let mut node = Node::Label(Label::default());
     for _ in 1..depth {
         node = match kind {
+            "Row" => Node::Row(Stack {
+                children: vec![node],
+                ..Stack::default()
+            }),
+            "Wrap" => Node::Wrap(Stack {
+                children: vec![node],
+                ..Stack::default()
+            }),
             "Column" => Node::Column(Stack {
                 children: vec![node],
                 ..Stack::default()
@@ -319,4 +330,64 @@ fn omitted_content_is_no_level() {
     text.push_str(&"])".repeat(MAX_DEPTH - 1));
     text.push(')');
     assert!(load(&text).is_err());
+}
+
+#[test]
+fn every_kind_that_holds_nodes_is_in_the_chain_tests() {
+    // The shapes of nesting a node may be spelt with. A kind that accepts one
+    // of them nests, and must be in `KINDS`.
+    let catalog = Catalog::xui();
+    let kinds = catalog
+        .kinds()
+        .map(str::to_owned)
+        .chain(catalog.layouts().iter().map(|layout| layout.kind.clone()));
+    let mut nesting = Vec::new();
+    for kind in kinds {
+        let shapes = [
+            format!("{kind}(children: [Label()])"),
+            format!("{kind}(content: Label())"),
+            format!("{kind}(pages: [Page(content: Label())])"),
+        ];
+        if shapes
+            .iter()
+            .any(|shape| load(&format!("Form(root: {shape})")).is_ok())
+        {
+            nesting.push(kind);
+        }
+    }
+    nesting.sort();
+    let mut listed: Vec<String> = KINDS.iter().map(|kind| (*kind).to_owned()).collect();
+    listed.sort();
+    assert_eq!(nesting, listed);
+}
+
+#[test]
+fn a_chain_at_the_limit_fits_a_mebibyte_of_stack() {
+    // The bound that justifies `MAX_DEPTH`: a debug build reads, writes,
+    // validates and builds the deepest form of every kind in the 1 MiB of a
+    // Windows main thread (about 520 to 780 KiB to load, and building adds a
+    // few hundred KiB at its own peak). A thread of that size overflows, and
+    // takes the test run with it, when a change breaks the bound.
+    let worker = std::thread::Builder::new()
+        .name("one mebibyte".to_owned())
+        .stack_size(1 << 20)
+        .spawn(|| {
+            for kind in KINDS {
+                let text = nested_text(kind, MAX_DEPTH);
+                let form = load(&text).unwrap_or_else(|error| panic!("{kind}: {error}"));
+                let written = form
+                    .to_ron()
+                    .unwrap_or_else(|error| panic!("{kind}: {error}"));
+                assert_eq!(load(&written).as_ref(), Ok(&form), "{kind}");
+                assert!(!mentions_depth(&form), "{kind}");
+                with_form(&form, BuildOptions::default(), |_| ());
+
+                let tree = nested_tree(kind, MAX_DEPTH);
+                assert!(!mentions_depth(&tree), "{kind}");
+                assert!(tree.to_ron().is_ok(), "{kind}");
+                with_form(&tree, BuildOptions::default(), |_| ());
+            }
+        })
+        .expect("the thread starts");
+    worker.join().expect("every chain fits in a mebibyte");
 }

@@ -33,7 +33,7 @@ pub(crate) fn options() -> Options {
 
 /// The fixed pretty-printing configuration of a saved form: each node on one
 /// line, a node's children one per line below it.
-fn pretty() -> PrettyConfig {
+pub(crate) fn pretty() -> PrettyConfig {
     PrettyConfig::new()
         .struct_names(true)
         .compact_structs(true)
