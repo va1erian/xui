@@ -107,8 +107,10 @@ impl Drop for SurfaceRestore<'_> {
 
 /// A backend that renders into a software surface.
 ///
-/// It reports no reduced-motion preference whatever the machine's setting, so a
-/// headless render is the same everywhere.
+/// It reports no reduced-motion preference by default, whatever the machine's
+/// setting, so a headless render is the same everywhere. A test that exercises
+/// the reduced-motion path sets it with
+/// [`OffscreenBackend::set_prefers_reduced_motion`].
 pub struct OffscreenBackend {
     windows: RefCell<HashMap<u64, OffscreenWindow>>,
     nodes: RefCell<Vec<(WidgetId, Node)>>,
@@ -128,6 +130,9 @@ pub struct OffscreenBackend {
     /// Work to do when the loop "runs": a scripted session for a headless
     /// render, taken and executed once by `Backend::run`.
     run_hook: RefCell<Option<Box<dyn FnOnce()>>>,
+    /// What `Backend::prefers_reduced_motion` answers; `false` unless a test
+    /// scripts it with [`OffscreenBackend::set_prefers_reduced_motion`].
+    prefers_reduced_motion: std::cell::Cell<bool>,
 }
 
 impl Default for OffscreenBackend {
@@ -150,6 +155,7 @@ impl OffscreenBackend {
             text: OnceCell::new(),
             dpi: DEFAULT_DPI,
             run_hook: RefCell::new(None),
+            prefers_reduced_motion: std::cell::Cell::new(false),
         }
     }
 
@@ -167,6 +173,15 @@ impl OffscreenBackend {
     /// while its window is still open, then returns.
     pub fn set_run_hook(&self, hook: impl FnOnce() + 'static) {
         *self.run_hook.borrow_mut() = Some(Box::new(hook));
+    }
+
+    /// Scripts the answer to
+    /// [`Backend::prefers_reduced_motion`](xui_core::backend::Backend::prefers_reduced_motion),
+    /// so a headless test or render can exercise an app's reduced-motion path.
+    /// It is `false` until set: the offscreen backend never reads the
+    /// machine's setting, which keeps a headless render deterministic.
+    pub fn set_prefers_reduced_motion(&self, reduced: bool) {
+        self.prefers_reduced_motion.set(reduced);
     }
 
     /// The last icon set on `window` with

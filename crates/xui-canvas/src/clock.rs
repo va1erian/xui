@@ -13,6 +13,13 @@ use xui_core::motion::Clock;
 /// driver on a desktop gets real time from this, and a test or a headless run
 /// uses [`ManualClock`](xui_core::motion::ManualClock) instead. `Instant` is
 /// monotonic, so successive readings never go backwards.
+///
+/// # Not for `wasm32-unknown-unknown`
+///
+/// [`Instant::now`] panics on `wasm32-unknown-unknown`, which has no system
+/// clock, so creating or reading this clock there panics. A web build reads the
+/// browser's clock itself (`performance.now()`) and implements
+/// [`Clock`](xui_core::motion::Clock) over that.
 #[derive(Clone, Copy, Debug)]
 pub struct MonotonicClock {
     origin: Instant,
