@@ -76,8 +76,10 @@
   `OffscreenBackend` share one compositor and keep each window's frame between
   frames. A move, resize, show, hide, raise, destroy, clip, text or painter
   change marks the old and new places of the node (and everything inside it),
-  an input event the node consumed (a press, a key; a focus or capture change
-  and the pointer leaving always) marks the node it was delivered to, and
+  an input event (a press, a release, a wheel step, a key, a character, a
+  focus or capture change, the pointer leaving; not a plain pointer move)
+  marks the node it was delivered to, handled or not (the random-input cost:
+  mean damage about 49.8k px per frame against 24.0k with no rule), and
   `invalidate_rect`, which was ignored, is honoured; the window repaints only
   that damage (a list of at most eight rectangles; a resize, DPI or theme
   change and GL content repaint the whole window) and the windowed backend

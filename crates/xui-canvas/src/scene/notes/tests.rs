@@ -252,7 +252,7 @@ fn a_node_with_no_area_marks_the_place_of_its_corner() {
 }
 
 #[test]
-fn input_marks_its_target_only_when_consumed_and_focus_always() {
+fn every_input_and_focus_event_marks_its_target_but_a_pointer_move() {
     use xui_core::backend::Event;
     use xui_core::message::{Key, Modifiers, MouseButton};
 
@@ -268,25 +268,23 @@ fn input_marks_its_target_only_when_consumed_and_focus_always() {
         repeat: 1,
         system: false,
     };
-    for event in [&press, &key, &Event::Char('a')] {
-        assert!(event_marks_target(event, true), "{event:?} consumed");
-        assert!(!event_marks_target(event, false), "{event:?} not consumed");
-    }
-    // State the node holds whether or not it consumed the event.
     for event in [
+        &press,
+        &key,
+        &Event::Char('a'),
         &Event::SetFocus,
         &Event::KillFocus,
         &Event::MouseLeave,
         &Event::CaptureChanged,
     ] {
-        assert!(event_marks_target(event, false), "{event:?}");
+        assert!(event_marks_target(event), "{event:?}");
     }
-    // The commonest event marks nothing, consumed or not.
+    // The commonest event marks nothing: a hover arrives as the widget's own
+    // invalidate and as the `MouseLeave` of the node the pointer left.
     let motion = Event::MouseMove {
         x: 1,
         y: 1,
         modifiers: Modifiers::NONE,
     };
-    assert!(!event_marks_target(&motion, true));
-    assert!(!event_marks_target(&motion, false));
+    assert!(!event_marks_target(&motion));
 }

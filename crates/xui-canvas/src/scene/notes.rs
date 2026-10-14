@@ -217,41 +217,43 @@ impl Scene {
 }
 
 /// Whether delivering `event` to a node can change how the node looks without
-/// the node saying so: an input event it consumed, a focus change, a capture
-/// change or a leave. The backends mark the target's place stale after
-/// delivering one, so a widget that forgets to invalidate cannot leave stale
-/// pixels behind.
+/// the node saying so: a press, a release, a wheel step, a key, a character, a
+/// focus change, a capture change or the pointer leaving. The backends mark the
+/// target's place stale after delivering one, whether or not the node reported
+/// the event handled, so a widget that changes its paint and forgets to
+/// invalidate cannot leave stale pixels behind.
 ///
-/// `handled` is whether the node consumed the event. A press, a release, a
-/// wheel step, a key or a character that no node consumed (a key with no
-/// binding, a wheel over a node that does not scroll) changed nothing, and
-/// marking it would repaint a control for every keystroke that goes nowhere
-/// (marking every delivered event doubled the area the demos repainted in a
-/// random session; marking only the consumed ones, half as much again as none). The
-/// focus, capture and leave events are state the node holds whether or not it
-/// consumed them, so they always mark.
+/// "Handled" is not a reliable signal: a host reports it only when the widget's
+/// mapper returned a message, and a widget that repaints in response to a key
+/// and returns none has consumed the event all the same. Stale pixels are a
+/// correctness bug and extra damage is a cost, so the rule does not look at it.
 ///
 /// A plain `MouseMove` is left out: it is by far the commonest event, hover
 /// changes arrive as `MouseLeave` (and as the widget's own invalidate), and
 /// marking every node a pointer crosses would repaint a whole control for a
 /// pixel of movement.
-pub(crate) fn event_marks_target(event: &xui_core::backend::Event, handled: bool) -> bool {
+///
+/// The cost, in a random input session over the 43 demos: mean damage about
+/// 49.8k px per frame, against 24.0k with no rule. At 1080p, with a card of
+/// about 30 widgets, a repainted card is about 0.4 ms on a light theme and
+/// about 2.4 ms on Midnight (release, `damage_bench`).
+pub(crate) fn event_marks_target(event: &xui_core::backend::Event) -> bool {
     use xui_core::backend::Event;
-    match event {
-        Event::MouseLeave
-        | Event::CaptureChanged
-        | Event::SetFocus
-        | Event::KillFocus
-        | Event::TextChanged => true,
+    matches!(
+        event,
         Event::MouseDown { .. }
-        | Event::MouseUp { .. }
-        | Event::MouseDoubleClick { .. }
-        | Event::MouseWheel { .. }
-        | Event::KeyDown { .. }
-        | Event::KeyUp { .. }
-        | Event::Char(_) => handled,
-        _ => false,
-    }
+            | Event::MouseUp { .. }
+            | Event::MouseDoubleClick { .. }
+            | Event::MouseWheel { .. }
+            | Event::MouseLeave
+            | Event::CaptureChanged
+            | Event::KeyDown { .. }
+            | Event::KeyUp { .. }
+            | Event::Char(_)
+            | Event::TextChanged
+            | Event::SetFocus
+            | Event::KillFocus
+    )
 }
 
 #[cfg(test)]

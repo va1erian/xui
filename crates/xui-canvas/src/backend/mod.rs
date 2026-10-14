@@ -190,7 +190,9 @@ impl Shared {
     /// Sends `event` to the sink of `window`, then marks `target`'s place
     /// stale when the event is one that can change how it looks (an input
     /// event, a focus or capture change, a leave), so a widget that forgets to
-    /// invalidate cannot leave old pixels behind, and asks for a frame.
+    /// invalidate cannot leave old pixels behind, and asks for a frame. The
+    /// sink's answer does not matter: it is `true` only when a widget mapped the
+    /// event to a message.
     pub(crate) fn deliver(
         &self,
         window: WindowId,
@@ -204,7 +206,7 @@ impl Shared {
             .and_then(|state| state.sink.clone());
         let handled = sink.is_some_and(|sink| sink.deliver(target, event));
         if !target.is_none()
-            && crate::scene::event_marks_target(event, handled)
+            && crate::scene::event_marks_target(event)
             && self.nodes.borrow_mut().invalidate(target)
         {
             self.request_redraw(window);

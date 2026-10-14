@@ -152,18 +152,20 @@ of rectangles. A change to a node says which window pixels it can have changed:
 - `invalidate_rect(node, rect)` marks `rect`, in the node's coordinates,
   trimmed to what its ancestors' clips show;
 - **an input event delivered to a node** marks the node's place after the
-  delivery, so a widget that forgets to invalidate itself cannot leave its old
-  pixels behind. A press, a release, a wheel step, a key or a character marks
-  it only when the node consumed the event (one nobody consumed changed
-  nothing, and would repaint a control for every keystroke that goes nowhere);
-  a focus change, a capture change and the pointer leaving mark it always. A
-  plain pointer move is not marked: hover changes arrive as the widget's own
-  invalidate and as the `MouseLeave` of the node the pointer left, and marking
-  every control the pointer crosses would repaint it for a pixel of movement.
-  Over the demos in a random input session this rule repaints about half as
-  much again as no rule at all (24k to 36k px per frame; marking every
-  delivered event would have doubled it), and is the net under a widget that
-  forgets;
+  delivery, whether or not the node reported it handled, so a widget that
+  forgets to invalidate itself cannot leave its old pixels behind. A press, a
+  release, a wheel step, a key, a character, a focus change, a capture change
+  and the pointer leaving all mark it. "Handled" is not consulted: a host
+  reports it only when the widget's mapper returned a message, and a widget
+  that repaints in response to a key and returns none has consumed it all the
+  same (a stale pixel is a correctness bug, extra damage a cost). A plain pointer
+  move is not marked: hover changes arrive as the widget's own invalidate and
+  as the `MouseLeave` of the node the pointer left, and marking every control
+  the pointer crosses would repaint it for a pixel of movement. The cost, in a
+  random input session over the 43 demos, is a mean damage of about 49.8k px
+  per frame against 24.0k with no rule; at 1080p a repainted card of about 30
+  widgets costs about 0.4 ms on a light theme and about 2.4 ms on Midnight
+  (release, `damage_bench`);
 - a window **resize**, a **DPI** or **theme** change and GL content marks the
   whole window, the fallback that is always correct.
 

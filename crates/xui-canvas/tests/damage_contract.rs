@@ -9,9 +9,11 @@ use std::rc::{Rc, Weak};
 
 use xui_canvas::OffscreenBackend;
 use xui_core::backend::{
-    Backend, NodeKind, NodeSpec, Painter, ParentRef, PlatformSpec, WidgetId, WindowId,
+    Backend, Event, NodeKind, NodeSpec, Painter, ParentRef, PlatformSpec, WidgetId, WindowId,
 };
 use xui_core::geometry::{Point, Rect};
+use xui_core::message::{Key, Modifiers};
+use xui_core::router::WidgetHost;
 use xui_core::{Color, Dip, Theme};
 
 const W: i32 = 400;
@@ -551,4 +553,94 @@ fn a_zero_sized_and_an_off_window_node_cost_nothing_and_break_nothing() {
     backend.apply_moves(window, &[(empty, Rect::new(40, 40, 40, 40))]);
     backend.invalidate(outside);
     assert!(backend.render(window).is_some());
+}
+
+/// A widget host that changes what its node paints in response to a key and
+/// reports the event not handled, as a widget whose mapper returns no message
+/// does (a host answers `true` only when a message was mapped).
+struct Recolour {
+    color: Rc<Cell<Color>>,
+}
+
+impl WidgetHost for Recolour {
+    fn deliver(&self, _target: WidgetId, event: &Event) -> bool {
+        if matches!(event, Event::KeyDown { .. }) {
+            self.color.set(Color::rgb(0, 160, 0));
+        }
+        false
+    }
+}
+
+#[test]
+fn a_key_that_changes_a_paint_and_returns_no_message_is_repainted() {
+    let backend = OffscreenBackend::new();
+    let window = window(&backend);
+    let color = Rc::new(Cell::new(Color::rgb(200, 0, 0)));
+    let id = node(&backend, window, Rect::new(10, 10, 60, 40));
+    let shown = Rc::clone(&color);
+    backend.set_painter(
+        id,
+        Rc::new(move |canvas| {
+            let bounds = canvas.bounds();
+            canvas.fill_rect(bounds, shown.get());
+        }),
+    );
+    backend.set_event_sink(
+        window,
+        Rc::new(Recolour {
+            color: Rc::clone(&color),
+        }),
+    );
+    backend.focus(id);
+    // The first frame, then an idle one: nothing is pending.
+    damage(&backend, window);
+    assert!(damage(&backend, window).is_empty(), "nothing is pending");
+
+    let handled = backend.inject(
+        window,
+        Event::KeyDown {
+            key: Key::A,
+            modifiers: Modifiers::NONE,
+            repeat: 1,
+            system: false,
+        },
+    );
+    assert!(!handled, "the host reported no message");
+    let (rects, pixel) = backend
+        .present(window, |frame| {
+            let at = (20 * frame.width as usize + 20) * 4;
+            (frame.damage.to_vec(), frame.pixels[at..at + 3].to_vec())
+        })
+        .unwrap();
+    assert!(!rects.is_empty(), "the key's target was marked stale");
+    assert_eq!(pixel, [0, 160, 0], "and shows its new colour");
+}
+
+#[test]
+fn a_pointer_move_over_a_node_marks_nothing() {
+    let backend = OffscreenBackend::new();
+    let window = window(&backend);
+    let id = node(&backend, window, Rect::new(10, 10, 60, 40));
+    backend.set_painter(
+        id,
+        Rc::new(|canvas| {
+            let bounds = canvas.bounds();
+            canvas.fill_rect(bounds, Color::rgb(200, 0, 0));
+        }),
+    );
+    damage(&backend, window);
+    for x in [20, 21, 22] {
+        backend.inject(
+            window,
+            Event::MouseMove {
+                x,
+                y: 20,
+                modifiers: Modifiers::NONE,
+            },
+        );
+    }
+    assert!(
+        damage(&backend, window).is_empty(),
+        "a pointer move repaints no control: hover is the widget's own invalidate"
+    );
 }
