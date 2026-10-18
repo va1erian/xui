@@ -138,9 +138,12 @@ impl<K: Copy> Item<K> {
     /// its sizing fixes keeps its extent and the other follows the ratio, the
     /// width leading when both are fixed; the box then shrinks, never grows,
     /// to stay within its caps and the constraints. A ratio that is not finite
-    /// and positive is ignored. In an [`absolute`](Group::absolute) group an
-    /// [`at`](Self::at) position wins; an entry with no position sits at its
-    /// natural size, which the ratio shapes.
+    /// and positive is ignored; one far from 1 (1e-30, 1e30) saturates the
+    /// layout arithmetic like any size from a file, shrinking the node to zero
+    /// on one axis, which the layout report warns about. In an
+    /// [`absolute`](Group::absolute) group an [`at`](Self::at) position wins;
+    /// an entry with no position sits at its natural size, which the ratio
+    /// shapes.
     pub fn aspect(mut self, ratio: f32) -> Item<K> {
         self.aspect = (ratio.is_finite() && ratio > 0.0).then_some(ratio);
         self

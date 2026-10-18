@@ -70,7 +70,7 @@ fn layout_fields_the_parent_ignores_are_warnings() {
         r#"Form(root: Column(children: [
             Button(name: "a", at: (0, 0, 10, 10), anchor: Fill, span: 2),
             Absolute(children: [
-                Label(name: "loose"),
+                Label(name: "loose", aspect: 2.0),
                 Label(name: "sized", at: (0, 0, 10, 10), aspect: 2.0),
             ]),
             Grid(),
@@ -81,6 +81,14 @@ fn layout_fields_the_parent_ignores_are_warnings() {
     assert!(has(&found, Severity::Warning, "`span` only spans"));
     assert!(has(&found, Severity::Warning, "`at` is missing"));
     assert!(has(&found, Severity::Warning, "`aspect` is ignored"));
+    assert_eq!(
+        found
+            .iter()
+            .filter(|diagnostic| diagnostic.property.as_deref() == Some("aspect"))
+            .count(),
+        1,
+        "only the positioned entry warns: {found:?}"
+    );
     assert!(has(&found, Severity::Error, "needs at least one column"));
 }
 
