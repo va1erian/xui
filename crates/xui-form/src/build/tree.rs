@@ -258,6 +258,9 @@ fn placed<M: 'static>(
     if let Some(height) = place.max_height {
         entry = entry.max_height(height.dip());
     }
+    if let Some(ratio) = place.aspect {
+        entry = entry.aspect(ratio);
+    }
     if let Some(align) = place.align {
         entry = entry.align(align.into());
     }

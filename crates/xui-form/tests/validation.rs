@@ -69,7 +69,7 @@ fn layout_fields_the_parent_ignores_are_warnings() {
     let found = diagnostics(
         r#"Form(root: Column(children: [
             Button(name: "a", at: (0, 0, 10, 10), anchor: Fill, span: 2),
-            Absolute(children: [Label(name: "loose")]),
+            Absolute(children: [Label(name: "loose", aspect: 2.0)]),
             Grid(),
         ]))"#,
     );
@@ -77,6 +77,7 @@ fn layout_fields_the_parent_ignores_are_warnings() {
     assert!(has(&found, Severity::Warning, "`anchor` only anchors"));
     assert!(has(&found, Severity::Warning, "`span` only spans"));
     assert!(has(&found, Severity::Warning, "`at` is missing"));
+    assert!(has(&found, Severity::Warning, "`aspect` is ignored"));
     assert!(has(&found, Severity::Error, "needs at least one column"));
 }
 
@@ -325,6 +326,20 @@ fn a_length_out_of_range_is_an_error_on_a_form_that_was_never_read() {
         Severity::Error,
         "the window's size: NaN is not a length"
     ));
+}
+
+#[test]
+fn an_aspect_that_is_not_finite_and_positive_is_an_error() {
+    use xui_form::model::{Node, Stack};
+    let form = xui_form::Form {
+        root: Node::Column(Stack {
+            aspect: Some(0.0),
+            ..Stack::default()
+        }),
+        ..xui_form::Form::default()
+    };
+    let found = form.validate(&Catalog::xui());
+    assert!(has(&found, Severity::Error, "`aspect`: 0.0 is not a ratio"));
 }
 
 #[test]

@@ -72,6 +72,14 @@
 
 ### Additions
 
+- **A layout entry can keep a width-to-height ratio.** `.aspect(16.0 / 9.0)`
+  (on any entry, in any container but `absolute()`, which places by `at` and
+  `anchor`) keeps the entry at the largest ratio-correct size that fits the
+  space it is given, within its caps: the axis its sizing fixes keeps its
+  extent and the other follows the ratio, otherwise the cross extent follows
+  the main one. A `.lfm` form has the same `aspect` layout field (finite and
+  positive; setting it inside an `Absolute` layout warns), and
+  `xui-form schema --json` reports it.
 - **The canvas backends repaint only what changed.** `WinitBackend` and
   `OffscreenBackend` share one compositor and keep each window's frame between
   frames. A move, resize, show, hide, raise, destroy, clip, text or painter

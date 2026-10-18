@@ -201,6 +201,9 @@ impl<M: 'static> Layout<M> {
             if let Some(height) = entry.max_height {
                 item = item.max_height(height);
             }
+            if let Some(ratio) = entry.aspect {
+                item = item.aspect(ratio);
+            }
             if let Some([x, y, width, height]) = entry.at {
                 item = item.at(x, y, width, height);
             }

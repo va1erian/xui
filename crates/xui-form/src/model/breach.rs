@@ -29,6 +29,11 @@ pub(crate) fn length_fits(length: Length) -> bool {
     length.0.is_finite() && length.0.abs() <= MAX_LENGTH
 }
 
+/// Whether `ratio` is one the format allows: finite and positive.
+pub(crate) fn ratio_fits(ratio: f32) -> bool {
+    ratio.is_finite() && ratio > 0.0
+}
+
 /// What is wrong with a length, as a sentence fragment.
 pub(crate) fn length_message(value: f32) -> String {
     format!(
@@ -82,6 +87,14 @@ pub(crate) fn breaches(form: &Form) -> Vec<Breach> {
                     format!("`{property}`: {}", length_message(length.0)),
                 );
             }
+        }
+        if let Some(ratio) = node.place().aspect
+            && !ratio_fits(ratio)
+        {
+            breach(
+                "aspect",
+                format!("`aspect`: {ratio:?} is not a ratio: it must be finite and positive"),
+            );
         }
         if let Some(widget) = node.widget() {
             array_breaches(node, widget, &mut breach);

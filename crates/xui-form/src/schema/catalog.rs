@@ -27,12 +27,13 @@ impl Default for Catalog {
 }
 
 /// The names of the layout fields every node has.
-const LAYOUT_FIELDS: [&str; 9] = [
+const LAYOUT_FIELDS: [&str; 10] = [
     "fill",
     "width",
     "height",
     "max_width",
     "max_height",
+    "aspect",
     "align",
     "span",
     "at",

@@ -89,7 +89,8 @@ A few things to notice:
   widget is created; `handle.get()` reaches it from `update`. `ui.root` keeps
   everything else alive as long as the window.
 - **Sizing and placement.** `.fill(weight)`, `.fixed(n)`, `.min(n)`,
-  `.width(n)`, `.height(n)`, `.max_width(n)`, `.align(Align::Center)` and, in a
+  `.width(n)`, `.height(n)`, `.max_width(n)`, `.aspect(16.0 / 9.0)`,
+  `.align(Align::Center)` and, in a
   `grid([Track::Auto, Track::Fill(1)])`, `.span(columns)`. Numbers are design
   units (`Dip`). `spacer()` is an empty flexible gap; `group(title, layout)`
   frames a layout and `tabs().page(title, layout)` pages them.

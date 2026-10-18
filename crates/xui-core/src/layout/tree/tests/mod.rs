@@ -1,5 +1,6 @@
 //! Pure tree-to-rects tests: no backend and no widget, only keyed leaves.
 
+mod aspect;
 mod containers;
 
 use super::*;

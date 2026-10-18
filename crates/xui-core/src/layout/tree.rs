@@ -315,9 +315,9 @@ fn align_both(area: Rect, size: Size, (x, y): (Align, Align)) -> Rect {
     Rect::new(left, top, right, bottom)
 }
 
-/// `rect` with each axis narrowed to the item's caps and exact size, kept
-/// where its alignment on that axis says (a stretched item keeps its start
-/// edge).
+/// `rect` with each axis narrowed to the item's caps and exact size, then to
+/// its [`aspect`](Item::aspect) ratio, kept where its alignment on that axis
+/// says (a stretched item keeps its start edge).
 fn clamp_to_caps<K: Copy>(item: &Item<K>, rect: Rect, (x, y): (Align, Align), dpi: u32) -> Rect {
     let start = |align: Align| {
         if align == Align::Stretch {
@@ -341,5 +341,50 @@ fn clamp_to_caps<K: Copy>(item: &Item<K>, rect: Rect, (x, y): (Align, Align), dp
             rect = Rect::new(rect.left, top, rect.right, bottom);
         }
     }
+    if let Some(ratio) = item.aspect_ratio() {
+        let size = ratio_inside(rect.width().max(0), rect.height().max(0), ratio);
+        rect = align_both(rect, size, (start(x), start(y)));
+    }
     rect
+}
+
+/// The largest size at `ratio` (width / height) that fits inside
+/// `width` × `height`.
+fn ratio_inside(width: i32, height: i32, ratio: f32) -> Size {
+    if width <= 0 || height <= 0 {
+        return Size::new(0, 0);
+    }
+    if (width as f32) > (height as f32) * ratio {
+        let fitted = ((height as f32) * ratio).round();
+        Size::new((fitted as i32).clamp(0, width), height)
+    } else {
+        let fitted = ((width as f32) / ratio).round();
+        Size::new(width, (fitted as i32).clamp(0, height))
+    }
+}
+
+/// A `ratio`-wide size `width` wide, shrunk to stay within `cap_width` and
+/// `cap_height`.
+fn ratio_from_width(ratio: f32, width: i32, cap_width: i32, cap_height: i32) -> Size {
+    let width = width.clamp(0, cap_width.max(0));
+    let height = ((width as f32) / ratio).round();
+    if height <= cap_height.max(0) as f32 {
+        Size::new(width, height.max(0.0) as i32)
+    } else {
+        ratio_from_height(ratio, cap_height.max(0), cap_width, cap_height)
+    }
+}
+
+/// A `ratio`-wide size `height` tall, shrunk to stay within `cap_width` and
+/// `cap_height`.
+fn ratio_from_height(ratio: f32, height: i32, cap_width: i32, cap_height: i32) -> Size {
+    let height = height.clamp(0, cap_height.max(0));
+    let width = ((height as f32) * ratio).round();
+    if width <= cap_width.max(0) as f32 {
+        Size::new(width.max(0.0) as i32, height)
+    } else {
+        let width = cap_width.max(0);
+        let fitted = ((width as f32) / ratio).round();
+        Size::new(width, (fitted as i32).clamp(0, cap_height.max(0)))
+    }
 }

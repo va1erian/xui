@@ -19,6 +19,7 @@ struct Spec {
     align: Option<Align>,
     at: (f32, f32, f32, f32),
     anchor: Anchor,
+    aspect: Option<f32>,
 }
 
 fn align_strategy() -> impl Strategy<Value = Option<Align>> {
@@ -65,13 +66,15 @@ fn spec_strategy() -> impl Strategy<Value = Spec> {
             0.0f32..200.0,
         ),
         anchor_strategy(),
+        prop::option::of(0.25f32..4.0),
     )
-        .prop_map(|(natural, sizing, align, at, anchor)| Spec {
+        .prop_map(|(natural, sizing, align, at, anchor, aspect)| Spec {
             natural,
             sizing,
             align,
             at,
             anchor,
+            aspect,
         })
 }
 
@@ -96,6 +99,9 @@ fn fill(group: Group<usize>, specs: &[Spec], gap: f32, margin: f32) -> Group<usi
                 .anchor(spec.anchor);
             if let Some(align) = spec.align {
                 item = item.align(align);
+            }
+            if let Some(ratio) = spec.aspect {
+                item = item.aspect(ratio);
             }
             group.push(item)
         },

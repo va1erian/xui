@@ -29,6 +29,9 @@ macro_rules! node {
                 max_width: Option<$crate::model::Length> = None,
                 /// At most this tall, in design units.
                 max_height: Option<$crate::model::Length> = None,
+                /// The width-to-height ratio (`width / height`), kept when the
+                /// entry is placed. Must be finite and positive.
+                aspect: Option<f32> = None,
                 /// Where the entry sits across its parent's main axis (in a grid,
                 /// within its cell), instead of the parent's `align`.
                 align: Option<$crate::model::Align> = None,
@@ -57,6 +60,7 @@ macro_rules! node {
                     height: self.height,
                     max_width: self.max_width,
                     max_height: self.max_height,
+                    aspect: self.aspect,
                     align: self.align,
                     span: self.span,
                     at: self.at,

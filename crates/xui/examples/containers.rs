@@ -2,6 +2,8 @@
 //! chips that breaks into lines as the window narrows, a `scroll()` of
 //! settings, an `overlay()` badge over a card, and a `group()` hidden as one
 //! unit. Labels change length as you click, and the layout follows on its own.
+//! A `panel().aspect(..)` keeps its width-to-height ratio as the window
+//! resizes.
 //!
 //! Run with:
 //!
@@ -89,6 +91,17 @@ fn main() -> Result<()> {
                             .fill(1),
                     ))
                     .fill(1),
+                row()
+                    .gap(12)
+                    .children((
+                        panel(column().padding(8).child(label("16:9 preview")))
+                            .aspect(16.0 / 9.0)
+                            .fill(1),
+                        panel(column().padding(8).child(label("Square")))
+                            .aspect(1.0)
+                            .fixed(96),
+                    ))
+                    .fixed(120),
             )),
         )?;
         Ok(demo)
