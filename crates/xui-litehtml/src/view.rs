@@ -9,7 +9,7 @@ use std::sync::{Arc, Mutex};
 
 use xui_core::Color;
 use xui_core::app::Ui;
-use xui_core::backend::{NodeKind, NodeSpec, Result};
+use xui_core::backend::{NodeKind, NodeSpec, Result, WidgetId};
 use xui_core::geometry::Rect;
 use xui_core::widget::Control;
 
@@ -125,6 +125,12 @@ impl<M: Send + 'static> HtmlView<M> {
             widget,
             images,
         })
+    }
+
+    /// The view's node, for the APIs that take a
+    /// [`WidgetId`](xui_core::backend::WidgetId) (focus, visibility).
+    pub fn id(&self) -> WidgetId {
+        self.control.id()
     }
 
     /// Sets how `http(s)` images are fetched, or `None` (the default) to leave

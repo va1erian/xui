@@ -156,6 +156,8 @@ impl<M: Send + 'static> BlitzViewBuilder<M> {
     }
 
     /// Creates the view at `bounds` (device pixels) and starts its engine.
+    /// The bounds may be `Rect::default()` when an `xui_core::arrange` layout
+    /// places the view: the layout moves and resizes it.
     pub fn build(self, ui: &Ui<M>, bounds: Rect) -> Result<BlitzView<M>> {
         let scale = ui.dpi() as f32 / 96.0;
         let size = (bounds.width().max(1) as u32, bounds.height().max(1) as u32);
@@ -266,6 +268,10 @@ impl<M: Send + 'static> BlitzViewBuilder<M> {
 /// A web page laid out and drawn by Blitz on the view's own engine thread,
 /// shown through the portable canvas.
 ///
+/// The view fills whatever slot an `xui_core::arrange` layout gives it, or the
+/// bounds the app sets with [`set_bounds`](Self::set_bounds); it has no
+/// natural size of its own.
+///
 /// `on_frame` is the app message that says the engine drew a new frame
 /// (posted through a `Proxy`, so the UI thread never blocks); the app answers
 /// it by calling [`BlitzView::update`]. Events reach the app through the
@@ -312,7 +318,7 @@ impl<M: Send + 'static> BlitzView<M> {
     /// Lays the scrollbar along the right edge of a view of `bounds`; the
     /// bar is a child of the view's node, so it is placed in the view's own
     /// coordinates.
-    fn place_bar(&self, bounds: Rect) {
+    pub(crate) fn place_bar(&self, bounds: Rect) {
         let width = scrollbar::THICKNESS.to_px(self.ui.dpi()).value();
         let (w, h) = (bounds.width(), bounds.height());
         self.bar.set_track(width, h);

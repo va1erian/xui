@@ -72,6 +72,12 @@
 
 ### Additions
 
+- **The HTML views are placeable.** `xui-blitz::BlitzView` and
+  `xui-litehtml::HtmlView` implement `Placeable`: a layout gives them their
+  slot (`build(|ui| ...)` with `Rect::default()`), the view re-renders at that
+  size, and a `BlitzView`'s scrollbar follows its right edge. Like the code
+  editor and the rich-text editor they report no natural size of their own,
+  so give them a `fill(1)` or a fixed size.
 - **A layout entry can keep a width-to-height ratio.** `.aspect(16.0 / 9.0)`
   (on any entry, in any container but `absolute()`, which places by `at` and
   `anchor`) keeps the entry at the largest ratio-correct size that fits the
