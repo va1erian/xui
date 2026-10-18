@@ -249,7 +249,8 @@ fn the_arrow_keys_nudge_the_divider() {
 fn the_position_property_round_trips() {
     let (_backend, _core, ui) = setup();
     let split = Split::column(&ui, Rect::new(0, 0, 100, 300)).unwrap();
-    assert!(split.set_property("position", Value::Float(80.0)));
+    assert!(split.set_property("position", Value::Dip(dip(80.0))));
     assert!((split.position().value() - 80.0).abs() < 0.01);
-    assert_eq!(split.property("position"), Some(Value::Float(80.0)));
+    assert_eq!(split.property("position"), Some(Value::Dip(dip(80.0))));
+    assert_eq!(split.schema()[0].ty, crate::property::PropertyType::Dip);
 }

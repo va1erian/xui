@@ -123,6 +123,25 @@ impl IconSize {
             IconSize::Large => Dip(48.0),
         }
     }
+
+    /// The name a property reports it as (`"small"`, `"medium"`, `"large"`).
+    pub const fn name(self) -> &'static str {
+        match self {
+            IconSize::Small => "small",
+            IconSize::Medium => "medium",
+            IconSize::Large => "large",
+        }
+    }
+
+    /// The size `name` names, or `None` for an unknown one.
+    pub fn from_name(name: &str) -> Option<IconSize> {
+        match name {
+            "small" => Some(IconSize::Small),
+            "medium" => Some(IconSize::Medium),
+            "large" => Some(IconSize::Large),
+            _ => None,
+        }
+    }
 }
 
 #[cfg(test)]

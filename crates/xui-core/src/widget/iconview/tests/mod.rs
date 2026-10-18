@@ -128,3 +128,28 @@ fn shift() -> Modifiers {
         ..Modifiers::NONE
     }
 }
+
+#[test]
+fn the_icon_size_property_round_trips() {
+    use crate::property::{Properties, PropertyType, Value};
+    let (_backend, _core, ui) = setup();
+    let view = view(&ui, 4);
+    assert_eq!(
+        view.property("icon_size"),
+        Some(Value::Enum("large".to_owned())),
+        "the default is the large XP tile"
+    );
+    assert!(view.set_property("icon_size", Value::Enum("small".to_owned())));
+    assert_eq!(view.icon_size(), IconSize::Small);
+    assert!(
+        !view.set_property("icon_size", Value::Enum("huge".to_owned())),
+        "an unknown size is refused"
+    );
+    assert_eq!(view.icon_size(), IconSize::Small);
+    let schema = view.schema();
+    assert_eq!(schema[1].name, "icon_size");
+    assert_eq!(
+        schema[1].ty,
+        PropertyType::Enum(&["small", "medium", "large"])
+    );
+}
