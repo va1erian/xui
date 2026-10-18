@@ -6,9 +6,11 @@
 //!
 //! **Render, scroll, resize, DPI, links, text selection, copy, keyboard.** It
 //! was extracted from esMail's `litehtml-view-d2d`. [`HtmlView`] is a
-//! custom-painted portable node: the app gives it bounds and maps its
-//! [`HtmlViewEvent`]s to its own `Msg`. The crate has no platform code: Ctrl+C
-//! raises [`HtmlViewEvent::CopyRequested`] for the app to put on its clipboard.
+//! custom-painted portable node that fills whatever slot an
+//! `xui_core::arrange` layout gives it (or the bounds the app sets with
+//! [`HtmlView::set_bounds`]) and maps its [`HtmlViewEvent`]s to the app's
+//! `Msg`. The crate has no platform code: Ctrl+C raises
+//! [`HtmlViewEvent::CopyRequested`] for the app to put on its clipboard.
 //!
 //! # Design
 //!
@@ -59,6 +61,7 @@ mod geom;
 mod links;
 mod list;
 mod paint;
+mod place;
 mod selection;
 mod text;
 mod text_runs;

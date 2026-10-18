@@ -36,6 +36,7 @@ mod engine;
 mod fetch;
 mod fonts;
 mod net;
+mod place;
 mod view;
 mod widget;
 
