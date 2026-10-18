@@ -94,28 +94,89 @@ fn a_wrap_keeps_the_ratio_per_item() {
 }
 
 #[test]
-fn an_absolute_group_ignores_the_ratio() {
-    let tree = Group::absolute().push(
+fn a_box_fixed_on_both_axes_shrinks_to_the_ratio_within_them() {
+    let tree = Group::row().push(
+        Item::leaf(0)
+            .size(Some(dip(100.0)), Some(dip(30.0)))
+            .aspect(2.0),
+    );
+    let placed = tree.compute(Rect::new(0, 0, 200, 100), 96, &leaf(&[(0, 10, 10)], &[]));
+    assert_eq!(
+        rects(&placed),
+        [Rect::new(0, 0, 60, 30)],
+        "the height cap shrinks the width to keep the ratio"
+    );
+}
+
+#[test]
+fn an_absolute_group_shapes_an_unpositioned_item_but_a_position_wins() {
+    let unpositioned = Group::absolute().push(Item::leaf(0).aspect(2.0));
+    let placed = unpositioned.compute(Rect::new(0, 0, 200, 100), 96, &leaf(&[(0, 10, 10)], &[]));
+    assert_eq!(
+        rects(&placed),
+        [Rect::new(0, 0, 20, 10)],
+        "no position: the natural size follows the ratio"
+    );
+
+    let positioned = Group::absolute().push(
         Item::leaf(0)
             .at(dip(10.0), dip(10.0), dip(80.0), dip(80.0))
             .aspect(2.0),
     );
-    let placed = tree.compute(Rect::new(0, 0, 200, 100), 96, &leaf(&[], &[]));
-    assert_eq!(rects(&placed), [Rect::new(10, 10, 90, 90)]);
+    let placed = positioned.compute(Rect::new(0, 0, 200, 100), 96, &leaf(&[], &[]));
+    assert_eq!(
+        rects(&placed),
+        [Rect::new(10, 10, 90, 90)],
+        "at wins over the ratio"
+    );
 }
 
 #[test]
 fn a_ratio_that_is_not_finite_and_positive_is_ignored() {
     let tree = Group::row()
         .push(Item::leaf(0).aspect(0.0).align(Align::Start))
-        .push(Item::leaf(1).aspect(f32::NAN).align(Align::Start));
+        .push(Item::leaf(1).aspect(f32::NAN).align(Align::Start))
+        .push(Item::leaf(2).aspect(f32::NEG_INFINITY).align(Align::Start));
     let placed = tree.compute(
         Rect::new(0, 0, 200, 100),
         96,
-        &leaf(&[(0, 30, 20), (1, 40, 10)], &[]),
+        &leaf(&[(0, 30, 20), (1, 40, 10), (2, 10, 10)], &[]),
     );
     assert_eq!(
         rects(&placed),
-        [Rect::new(0, 0, 30, 20), Rect::new(30, 0, 70, 10)]
+        [
+            Rect::new(0, 0, 30, 20),
+            Rect::new(30, 0, 70, 10),
+            Rect::new(70, 0, 80, 10)
+        ]
+    );
+}
+
+#[test]
+fn an_extreme_ratio_saturates_without_panicking() {
+    let tree = Group::row()
+        .push(Item::leaf(0).aspect(1.0e-30).align(Align::Start))
+        .push(Item::leaf(1).aspect(1.0e30).align(Align::Start))
+        .push(Item::leaf(2).aspect(f32::INFINITY).align(Align::Start));
+    let placed = tree.compute(
+        Rect::new(0, 0, 200, 100),
+        96,
+        &leaf(&[(0, 10, 10), (1, 10, 10), (2, 10, 10)], &[]),
+    );
+    assert_eq!(placed.len(), 3);
+    for (key, rect) in &placed {
+        assert!(
+            rect.left >= 0 && rect.top >= 0 && rect.right <= 200 && rect.bottom <= 100,
+            "item {key} at {rect:?} escapes the area"
+        );
+        assert!(
+            rect.width() >= 0 && rect.height() >= 0,
+            "item {key}: {rect:?}"
+        );
+    }
+    assert_eq!(
+        placed[2].1,
+        Rect::new(10, 0, 20, 10),
+        "an infinite ratio is ignored: {placed:?}"
     );
 }

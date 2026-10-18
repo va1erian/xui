@@ -63,6 +63,15 @@ fn a_font_override_reaches_the_measure_and_the_property() {
         [("text", PropertyType::Text), ("font", PropertyType::Font)]
     );
 
+    let title = Label::new(&ui, Rect::new(0, 0, 120, 30), "Big")
+        .unwrap()
+        .title();
+    assert!(title.set_property("font", Value::Font(Font::new(Dip(18.0)))));
+    assert!(
+        title.current_font().bold,
+        "a title stays bold under a regular override"
+    );
+
     label.set_font(None);
     assert_eq!(
         label.current_font(),

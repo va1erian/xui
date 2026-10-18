@@ -1,8 +1,9 @@
 //! A re-flow that changes nothing costs the backend nothing: no move batch,
-//! no repaint (va1erian/xui#277).
+//! no repaint (va1erian/xui#277); a layout that never settles is bounded.
 
 use super::{bounds, settle, setup};
-use crate::arrange::{Handle, button, label, row};
+use crate::arrange::{Handle, build, button, column, label, row};
+use crate::geometry::Rect;
 use crate::widget::{Button, HasText, Label};
 
 #[test]
@@ -72,4 +73,49 @@ fn every_text_setter_ignores_the_text_already_shown() {
     bar.set_text(status, "Busy");
     assert_eq!(backend.invalidations(), repaints + 5, "one repaint each");
     assert_eq!(bar.text(status).as_deref(), Some("Busy"));
+}
+
+/// A widget whose `placed` dirties the layout again every time.
+struct Restless(crate::backend::WidgetId);
+
+impl crate::widget::Placeable<u32> for Restless {
+    fn id(&self) -> crate::backend::WidgetId {
+        self.0
+    }
+
+    fn measure(
+        &self,
+        _ui: &crate::app::Ui<u32>,
+        _constraints: crate::layout::Constraints,
+    ) -> crate::geometry::Size {
+        crate::geometry::Size::new(10, 10)
+    }
+
+    fn placed(&self, ui: &crate::app::Ui<u32>, _rect: Rect) {
+        ui.invalidate_layout();
+    }
+}
+
+#[test]
+fn a_layout_that_never_settles_gets_a_bounded_number_of_deferred_passes() {
+    let (backend, window, ui, _runtime) = setup();
+    let node = crate::widget::Control::new(
+        &ui,
+        &crate::backend::NodeSpec::new(crate::backend::NodeKind::Custom, Rect::default()),
+    )
+    .unwrap();
+    let id = node.id();
+    let _mounted = ui
+        .mount(column().child(build(move |_| Ok(Restless(id)))))
+        .unwrap();
+    backend.pump_wakes(window);
+
+    // One change; the passes run when the event that made it is handled.
+    // Still dirty, the flush asks for a wake, and only those requested wakes
+    // are delivered: each runs another flush, three in a row at most.
+    ui.invalidate_layout();
+    settle(&backend, window);
+    assert_eq!(backend.pump_wakes(window), 3, "bounded deferred passes");
+    assert_eq!(backend.pump_wakes(window), 0, "and then it stops");
+    drop(node);
 }

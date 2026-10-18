@@ -69,7 +69,6 @@
   goes on); `migrate` validates what it converted and refuses a result
   `check` would reject. `ValueType::accepts` refuses a float that is not
   finite, so a script write of `NaN` is a type mismatch.
-
 - **`Split`'s `position` property is a `Dip`.** It was a `Float`; the generic
   property surface now has a design-unit type.
 
@@ -99,13 +98,13 @@
   editor and the rich-text editor they report no natural size of their own,
   so give them a `fill(1)` or a fixed size.
 - **A layout entry can keep a width-to-height ratio.** `.aspect(16.0 / 9.0)`
-  (on any entry, in any container but `absolute()`, which places by `at` and
-  `anchor`) keeps the entry at the largest ratio-correct size that fits the
-  space it is given, within its caps: the axis its sizing fixes keeps its
-  extent and the other follows the ratio, otherwise the cross extent follows
-  the main one. A `.lfm` form has the same `aspect` layout field (finite and
-  positive; setting it inside an `Absolute` layout warns), and
-  `xui-form schema --json` reports it.
+  (on any entry) keeps the entry at the largest ratio-correct size that fits
+  the space it is given, within its caps: the axis its sizing fixes keeps its
+  extent and the other follows the ratio, the width leading when both are
+  fixed. In an `absolute()` layout an `at(..)` position wins; an entry with no
+  position sits at its natural size, which the ratio shapes. A `.lfm` form has
+  the same `aspect` layout field (finite and positive; setting it beside an
+  `at` warns), and `xui-form schema --json` reports it.
 - **The canvas backends repaint only what changed.** `WinitBackend` and
   `OffscreenBackend` share one compositor and keep each window's frame between
   frames. A move, resize, show, hide, raise, destroy, clip, text or painter

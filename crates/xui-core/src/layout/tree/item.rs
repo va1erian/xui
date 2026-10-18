@@ -135,13 +135,12 @@ impl<K: Copy> Item<K> {
     }
 
     /// Keeps the item at a width-to-height ratio (`width / height`): the axis
-    /// its sizing fixes keeps its extent and the other follows the ratio (the
-    /// width when both are fixed); otherwise the cross extent follows the
-    /// main one. The item is the largest ratio-correct size that fits the
-    /// space it is given, within its caps. A ratio that is not finite and
-    /// positive is ignored. An [`absolute`](Group::absolute) group places by
-    /// [`at`](Self::at) and [`anchor`](Self::anchor) instead, so it ignores
-    /// the ratio.
+    /// its sizing fixes keeps its extent and the other follows the ratio, the
+    /// width leading when both are fixed; the box then shrinks, never grows,
+    /// to stay within its caps and the constraints. A ratio that is not finite
+    /// and positive is ignored. In an [`absolute`](Group::absolute) group an
+    /// [`at`](Self::at) position wins; an entry with no position sits at its
+    /// natural size, which the ratio shapes.
     pub fn aspect(mut self, ratio: f32) -> Item<K> {
         self.aspect = (ratio.is_finite() && ratio > 0.0).then_some(ratio);
         self

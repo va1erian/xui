@@ -69,7 +69,10 @@ fn layout_fields_the_parent_ignores_are_warnings() {
     let found = diagnostics(
         r#"Form(root: Column(children: [
             Button(name: "a", at: (0, 0, 10, 10), anchor: Fill, span: 2),
-            Absolute(children: [Label(name: "loose", aspect: 2.0)]),
+            Absolute(children: [
+                Label(name: "loose"),
+                Label(name: "sized", at: (0, 0, 10, 10), aspect: 2.0),
+            ]),
             Grid(),
         ]))"#,
     );

@@ -96,9 +96,9 @@ pub trait LayoutExt<M: 'static>: IntoEntry<M> + Sized {
 
     /// Keeps the entry at a width-to-height ratio (`width / height`), the
     /// largest ratio-correct size that fits the space it is given: the axis
-    /// its sizing fixes keeps its extent and the other follows the ratio,
-    /// otherwise the cross extent follows the main one. `absolute()` ignores
-    /// it: there, [`at`](Self::at) and [`anchor`](Self::anchor) win.
+    /// its sizing fixes keeps its extent and the other follows the ratio, the
+    /// width leading when both are fixed. In an `absolute()` layout an
+    /// `at(..)` position wins.
     fn aspect(self, ratio: f32) -> Entry<M> {
         let mut entry = self.into_entry();
         entry.aspect = (ratio.is_finite() && ratio > 0.0).then_some(ratio);

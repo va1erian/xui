@@ -117,7 +117,7 @@ jobs:
         with:
           name: snapshots
           path: target/snapshots/
-          if-no-files-found: error
+          if-no-files-found: warn
 
   # The same portable guarantee on macOS (the future home of a native backend).
   cross-check-macos:

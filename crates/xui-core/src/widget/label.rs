@@ -151,12 +151,17 @@ impl<M: 'static> Label<M> {
         self.control.invalidate_layout();
     }
 
-    /// The label's font as painted: its override, or the kind's theme style.
+    /// The font the label paints in: its override, merged with the kind's
+    /// weight (a title or a caption stays bold), or the kind's theme font.
     pub fn current_font(&self) -> Font {
-        self.font
-            .borrow()
-            .clone()
-            .unwrap_or_else(|| self.kind.get().font())
+        let kind = self.kind.get();
+        match &*self.font.borrow() {
+            Some(font) => Font {
+                bold: font.bold || kind.font().bold,
+                ..font.clone()
+            },
+            None => kind.font(),
+        }
     }
 
     /// The size of the label's text as painted, at `dpi`: a title's larger
