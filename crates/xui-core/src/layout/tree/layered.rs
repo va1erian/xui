@@ -51,5 +51,8 @@ pub(super) fn measure<K: Copy>(
         .fold(Size::new(0, 0), |acc, size| {
             Size::new(acc.width.max(size.width), acc.height.max(size.height))
         });
-    Size::new(size.width + margins.width, size.height + margins.height)
+    Size::new(
+        size.width.saturating_add(margins.width),
+        size.height.saturating_add(margins.height),
+    )
 }

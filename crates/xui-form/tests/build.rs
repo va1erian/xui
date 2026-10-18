@@ -95,6 +95,25 @@ fn an_aspect_entry_keeps_its_ratio_in_the_layout() {
 }
 
 #[test]
+fn an_extreme_aspect_ratio_saturates_instead_of_panicking() {
+    // A form's ratio is bounded only as finite and positive, so a ratio past
+    // the layout arithmetic must saturate. The tabs measure their content
+    // unbounded, which is the path that used to overflow.
+    let extreme = form(
+        r#"Form(
+            size: (400, 300),
+            root: Column(children: [
+                Tabs(pages: [Page(title: "One", content: Row(padding: 4, children: [
+                    Label(name: "a", text: "a", width: 10, aspect: 1e-9),
+                ]))]),
+            ]),
+        )"#,
+    );
+    let bounds = with_form(&extreme, BuildOptions::default(), |live| live.bounds("a"));
+    assert!(bounds.is_some(), "the form builds with a saturating ratio");
+}
+
+#[test]
 fn an_absolute_layout_anchors_to_a_larger_window() {
     let grown = with_form_sized(
         &form(PINNED),

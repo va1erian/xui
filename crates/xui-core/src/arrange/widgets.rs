@@ -10,6 +10,7 @@
 
 use super::{Build, build};
 use crate::icon::IconRef;
+use crate::property::Font;
 use crate::widget::{
     Button, CheckBox, ColumnWidth, ComboBox, Edit, HasText, Hyperlink, Label, ListView,
     MultilineEdit, NumberField, ProgressBar, Separator, Slider, StatusBar, ToggleButton,
@@ -30,6 +31,11 @@ impl<M: 'static> Build<Label<M>, M> {
     /// Styles the label as a secondary caption.
     pub fn caption(self) -> Build<Label<M>, M> {
         self.then(Label::caption)
+    }
+
+    /// Paints the label in `font` instead of the kind's theme style.
+    pub fn font(self, font: Font) -> Build<Label<M>, M> {
+        self.then(move |label| label.font(font))
     }
 }
 
