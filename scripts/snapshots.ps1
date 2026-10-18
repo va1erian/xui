@@ -7,6 +7,10 @@
   software backend (XUI_SNAPSHOT makes each one save <example>-light.png and
   <example>-dark.png and exit).
 
+  Each example also runs with XUI_LAYOUT_REPORT, and its layout report must
+  have no warning: an example whose layout clips, overlaps or truncates fails
+  the run.
+
 .PARAMETER Out
   The directory to write to; defaults to target/snapshots.
 #>
@@ -17,8 +21,10 @@ $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
 New-Item -ItemType Directory -Force $Out | Out-Null
 $Out = (Resolve-Path $Out).Path
-# Only existing PNGs are removed; a real failure (a locked file) still stops.
+# Only existing PNGs and logs are removed; a real failure (a locked file)
+# still stops.
 Get-ChildItem -Path $Out -Filter *.png -File | Remove-Item -Force
+Get-ChildItem -Path $Out -Filter *.log -File | Remove-Item -Force
 
 cargo build -q -p xui --features canvas,rhai --examples
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -31,11 +37,14 @@ foreach ($file in Get-ChildItem "crates/xui/examples/controls/*.rs") {
 }
 
 $env:XUI_SNAPSHOT = $Out
+$env:XUI_LAYOUT_REPORT = "1"
 $failed = @()
 foreach ($name in $examples) {
     $exe = Join-Path $bin "$name.exe"
+    $log = Join-Path $Out "$name.log"
+    $err = Join-Path $Out "$name.err.log"
     # A demo that hangs must fail the run, not stall it.
-    $process = Start-Process -FilePath $exe -PassThru -NoNewWindow
+    $process = Start-Process -FilePath $exe -PassThru -NoNewWindow -RedirectStandardOutput $log -RedirectStandardError $err
     # Reading the handle makes the exit code available after a NoNewWindow start.
     $null = $process.Handle
     if (-not $process.WaitForExit(120000)) {
@@ -45,8 +54,18 @@ foreach ($name in $examples) {
     } elseif ($process.ExitCode -ne 0) {
         $failed += $name
         Write-Host "FAIL $name"
+        Get-Content $log -Tail 20 -ErrorAction SilentlyContinue | ForEach-Object { Write-Host $_ }
     } else {
-        Write-Host "ok   $name"
+        $marker = Select-String -Path $log -Pattern '^XUI_LAYOUT_WARNINGS:(\d+)' -ErrorAction SilentlyContinue | Select-Object -Last 1
+        $warnings = if ($marker) { $marker.Matches[0].Groups[1].Value } else { $null }
+        if ($warnings -eq "0") {
+            Remove-Item $log, $err -Force -ErrorAction SilentlyContinue
+            Write-Host "ok   $name"
+        } else {
+            $failed += $name
+            Write-Host "FAIL $name (layout warnings: $(if ($null -ne $warnings) { $warnings } else { 'none reported' }))"
+            Select-String -Path $log -Pattern '^\s*! ' -ErrorAction SilentlyContinue | ForEach-Object { Write-Host $_.Line }
+        }
     }
 }
 
