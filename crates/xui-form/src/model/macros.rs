@@ -30,7 +30,9 @@ macro_rules! node {
                 /// At most this tall, in design units.
                 max_height: Option<$crate::model::Length> = None,
                 /// The width-to-height ratio (`width / height`), kept when the
-                /// entry is placed. Must be finite and positive.
+                /// entry is placed. Must be finite and positive; an extreme one
+                /// saturates the layout, which the layout report warns about as
+                /// a zero size.
                 aspect: Option<f32> = None,
                 /// Where the entry sits across its parent's main axis (in a grid,
                 /// within its cell), instead of the parent's `align`.

@@ -35,13 +35,13 @@ impl Kind {
     /// The style the label paints (and is measured) in: the kind's theme
     /// style with the label's [`Font`] override, if any, applied.
     fn style(self, theme: &crate::theme::Theme, font: Option<&Font>) -> TextStyle {
-        let (color, size, bold) = match self {
-            Kind::Body => (theme.text, TEXT_SIZE, false),
-            Kind::Title => (theme.text, TITLE_SIZE, true),
-            Kind::Caption => (theme.text_secondary, CAPTION_SIZE, true),
+        let base = self.font();
+        let color = match self {
+            Kind::Body | Kind::Title => theme.text,
+            Kind::Caption => theme.text_secondary,
         };
-        let size = font.map_or(size, |font| font.size);
-        let bold = bold || font.is_some_and(|font| font.bold);
+        let size = font.map_or(base.size, |font| font.size);
+        let bold = base.bold || font.is_some_and(|font| font.bold);
         let mut style = TextStyle::new(color, size);
         if bold {
             style = style.bold();

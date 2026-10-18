@@ -72,6 +72,17 @@ fn a_font_override_reaches_the_measure_and_the_property() {
         "a title stays bold under a regular override"
     );
 
+    let caption = Label::new(&ui, Rect::new(0, 0, 120, 30), "cap")
+        .unwrap()
+        .caption();
+    assert!(caption.current_font().bold, "a caption is bold by default");
+    assert!(caption.set_property("font", Value::Font(Font::new(Dip(10.0)).italic())));
+    let caption_font = caption.current_font();
+    assert!(
+        caption_font.bold && caption_font.italic,
+        "a caption stays bold under an italic override: {caption_font:?}"
+    );
+
     label.set_font(None);
     assert_eq!(
         label.current_font(),

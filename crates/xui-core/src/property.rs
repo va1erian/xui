@@ -40,7 +40,7 @@ pub enum PropertyType {
 /// One property's schema: what a designer needs to present it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct PropertyInfo {
-    /// The stable property name, as [`Properties::properties`] reports it.
+    /// The stable property name, as [`Properties::property`] takes it.
     pub name: &'static str,
     /// The value's type.
     pub ty: PropertyType,
