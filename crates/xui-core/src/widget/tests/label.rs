@@ -28,3 +28,45 @@ fn changing_a_labels_text_repaints_it() {
         "the new text was painted: {ops:?}"
     );
 }
+
+#[test]
+fn a_font_override_reaches_the_measure_and_the_property() {
+    use crate::property::{Font, PropertyType};
+    use crate::units::Dip;
+
+    let (_backend, _core, ui) = setup();
+    let label = Label::new(&ui, Rect::new(0, 0, 120, 30), "hello").unwrap();
+    let small = label.text_size(&ui, 96);
+    assert_eq!(
+        label.property("font"),
+        Some(Value::Font(Font::new(Dip(12.0)))),
+        "the body font is reported before any override"
+    );
+
+    assert!(label.set_property("font", Value::Font(Font::new(Dip(24.0)).bold())));
+    assert_eq!(label.current_font(), Font::new(Dip(24.0)).bold());
+    let large = label.text_size(&ui, 96);
+    assert!(
+        large.width > small.width && large.height > small.height,
+        "24 DIP measures bigger than 12: {small:?} then {large:?}"
+    );
+    assert!(
+        !label.set_property("font", Value::Text("no".to_owned())),
+        "a mismatched value is refused"
+    );
+    assert_eq!(
+        label
+            .schema()
+            .iter()
+            .map(|info| (info.name, info.ty))
+            .collect::<Vec<_>>(),
+        [("text", PropertyType::Text), ("font", PropertyType::Font)]
+    );
+
+    label.set_font(None);
+    assert_eq!(
+        label.current_font(),
+        Font::new(Dip(12.0)),
+        "clearing the override returns to the kind's theme font"
+    );
+}

@@ -70,8 +70,20 @@
   `check` would reject. `ValueType::accepts` refuses a float that is not
   finite, so a script write of `NaN` is a type mismatch.
 
+- **`Split`'s `position` property is a `Dip`.** It was a `Float`; the generic
+  property surface now has a design-unit type.
+
 ### Additions
 
+- **The property surface is typed and described.** `xui_core::property::Value`
+  gains `Enum`, `Color`, `Font`, `Dip` and `Image` (with a `Font` type and
+  accessors), and `Properties::schema()` returns one `PropertyInfo` per
+  property — its `PropertyType`, category, description and whether it is
+  read-only — so a designer can build the right editor. `Label` gains a font
+  override (`font(..)`, `set_font(..)`, `current_font()`, reported as a `Font`
+  property: `Font.Size`/`Bold` on a label, G17's v1), `ColorPicker` reports
+  its `color`, `IconView` reports `icon_size`, and `Split` reports `position`
+  as a `Dip`.
 - **The HTML views are placeable.** `xui-blitz::BlitzView` and
   `xui-litehtml::HtmlView` implement `Placeable`: a layout gives them their
   slot (`build(|ui| ...)` with `Rect::default()`), the view re-renders at that

@@ -37,8 +37,11 @@ created directly, since they are not placed in a layout.
 - **Design values are `Dip`.** Sizes and gaps given to layouts (`.width(120)`,
   `.gap(8)`) are design units, scaled to the window's DPI.
 - **`Properties`.** Most widgets expose a `Properties` surface
-  (`property(name)`, `set_property(name, value)`) for generic tooling; it is not
-  the primary API.
+  (`property(name)`, `set_property(name, value)`, `schema()`) for generic
+  tooling: a value is typed (`Bool`, `Integer`, `Float`, `Text`, `Enum`,
+  `Color`, `Font`, `Dip`, `Image`) and `schema()` describes each property
+  (its type, category, description and whether it is read-only) for a
+  designer's editors. It is not the primary API.
 - **Models are borrowed.** `ListModel`, `TreeModel` and `GridModel` return
   borrowed data, so painting allocates nothing per visible item.
 
@@ -48,7 +51,7 @@ created directly, since they are not placed in a layout.
 
 | Widget | Builder | Notable API |
 |---|---|---|
-| `Label<M>` | `label(text)`, `.title()`, `.caption()` | `HasText` (`text`/`set_text`), `set_selected` |
+| `Label<M>` | `label(text)`, `.title()`, `.caption()`, `.font(..)` | `HasText` (`text`/`set_text`), `font`/`set_font`/`current_font`, `set_selected` |
 | `Hyperlink<M>` | `hyperlink(text)` | `on_click(Fn() -> Option<M>)` |
 | `FlowText<M>` | `flow_text().run(..)` | `run(Run<M>)`, `separator(&str)`, `preferred_height(Dip)`; runs are `Run::normal/weak/link`, with per-run `on_click` |
 | `Icon` | enum | `draw_icon(canvas, Icon, rect, color, dpi)`; `Icon::{Plus, Minus, Close, Check, ChevronDown, ChevronUp, Search, More}` |

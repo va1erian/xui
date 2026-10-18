@@ -11,7 +11,7 @@ use super::bar;
 use super::model::{IconModel, IconSize};
 use crate::backend::WidgetId;
 use crate::geometry::Point;
-use crate::property::{Properties, Property, Value};
+use crate::property::{Properties, Property, PropertyInfo, PropertyType, Value};
 use crate::widget::CellData;
 use crate::widget::SelectionMode;
 
@@ -232,12 +232,21 @@ impl<M: 'static> IconView<M> {
     }
 }
 
+/// The names [`IconSize`] reports as a property, in display order.
+const ICON_SIZES: &[&str] = &["small", "medium", "large"];
+
 impl<M: 'static> Properties for IconView<M> {
     fn properties(&self) -> Vec<Property> {
-        vec![Property {
-            name: "selected",
-            value: Value::Integer(self.selected().map_or(-1, |index| index as i64)),
-        }]
+        vec![
+            Property {
+                name: "selected",
+                value: Value::Integer(self.selected().map_or(-1, |index| index as i64)),
+            },
+            Property {
+                name: "icon_size",
+                value: Value::Enum(self.icon_size().name().to_owned()),
+            },
+        ]
     }
 
     fn set_property(&self, name: &str, value: Value) -> bool {
@@ -246,7 +255,23 @@ impl<M: 'static> Properties for IconView<M> {
                 self.select((index >= 0).then_some(index as usize));
                 true
             }
+            ("icon_size", Value::Enum(name)) => match IconSize::from_name(&name) {
+                Some(size) => {
+                    self.set_icon_size(size);
+                    true
+                }
+                None => false,
+            },
             _ => false,
         }
+    }
+
+    fn schema(&self) -> Vec<PropertyInfo> {
+        vec![
+            PropertyInfo::new("selected", PropertyType::Integer)
+                .described("Data", "The selected tile, or -1 for none."),
+            PropertyInfo::new("icon_size", PropertyType::Enum(ICON_SIZES))
+                .described("Appearance", "The icon size: small, medium or large."),
+        ]
     }
 }

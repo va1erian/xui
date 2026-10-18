@@ -21,6 +21,7 @@ use crate::backend::{Canvas, Event, NodeKind, NodeSpec, Result};
 use crate::geometry::{Point, Rect, Size};
 use crate::layout::Constraints;
 use crate::message::{Key, MouseButton};
+use crate::property::{Properties, Property, PropertyInfo, PropertyType, Value};
 use crate::theme::look::{self, backdrop};
 use crate::units::Dip;
 
@@ -225,6 +226,37 @@ impl<M: 'static> ColorPicker<M> {
 
 /// The natural side of one swatch cell.
 const CELL: Dip = Dip(32.0);
+
+impl<M: 'static> Properties for ColorPicker<M> {
+    /// The selected colour, or nothing while none is selected.
+    fn properties(&self) -> Vec<Property> {
+        self.color()
+            .map(|color| {
+                vec![Property {
+                    name: "color",
+                    value: Value::Color(color),
+                }]
+            })
+            .unwrap_or_default()
+    }
+
+    fn set_property(&self, name: &str, value: Value) -> bool {
+        match (name, value) {
+            ("color", Value::Color(color)) => {
+                self.select(color);
+                true
+            }
+            _ => false,
+        }
+    }
+
+    fn schema(&self) -> Vec<PropertyInfo> {
+        vec![
+            PropertyInfo::new("color", PropertyType::Color)
+                .described("Appearance", "The selected colour."),
+        ]
+    }
+}
 
 impl<M: 'static> Placeable<M> for ColorPicker<M> {
     fn id(&self) -> crate::backend::WidgetId {

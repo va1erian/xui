@@ -200,3 +200,19 @@ fn the_selected_check_is_not_stretched_on_a_wide_swatch() {
         "the check stretched to {span_x}x{span_y} on the wide swatch"
     );
 }
+
+#[test]
+fn the_color_property_round_trips() {
+    use crate::property::{Properties, PropertyType, Value};
+    let (_backend, _core, ui) = setup();
+    let picker = ColorPicker::new(&ui, Rect::new(0, 0, 120, 40), &colors()).unwrap();
+    assert_eq!(picker.property("color"), None, "nothing is selected yet");
+    assert!(picker.set_property("color", Value::Color(colors()[1])));
+    assert_eq!(picker.color(), Some(colors()[1]));
+    assert_eq!(picker.property("color"), Some(Value::Color(colors()[1])));
+    assert!(
+        !picker.set_property("color", Value::Text("red".to_owned())),
+        "a mismatched value is refused"
+    );
+    assert_eq!(picker.schema()[0].ty, PropertyType::Color);
+}
