@@ -228,7 +228,8 @@ impl<M: 'static> ColorPicker<M> {
 const CELL: Dip = Dip(32.0);
 
 impl<M: 'static> Properties for ColorPicker<M> {
-    /// The selected colour, or nothing while none is selected.
+    /// The selected colour, or nothing while none is selected (the schema
+    /// still reports the property, so a designer shows its editor).
     fn properties(&self) -> Vec<Property> {
         self.color()
             .map(|color| {

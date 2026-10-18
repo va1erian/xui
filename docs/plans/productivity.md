@@ -38,30 +38,25 @@ works on four levers:
 
 ## Progress (2026-10-18)
 
-Checked against xui `e9d4ede` (2026-10-14), lazyOS `47d212e` (2026-10-18) and
-LazyRAD `b24f9ee` (2026-10-14).
+Checked against xui `e9d4ede` (2026-10-14) plus the branch that completes
+W1.2, W1.7, W3.4 and W1.9/W6.3; lazyOS `47d212e` (2026-10-18) and LazyRAD
+`b24f9ee` (2026-10-14).
 
 | Workstream | State |
 |---|---|
-| W1 layout engine v2 | Landed except the `aspect` ratio (W1.2) and the HTML views' `measure` (W1.7). |
+| W1 layout engine v2 | Landed, the `aspect` ratio and the HTML views' `measure` included. |
 | W2 construction API | Landed. Value-carrying events take the enum constructor (`on_change(Msg::Draft)`) rather than a separate `on_change_map`; `Control::new`/`Control::set_bounds` stay public as the custom-widget path. |
-| W3 forms and script | Landed in xui (`xui::form`, `xui::script`, RON format 2, control arrays, the CLI). `Value` lacks `Font`, `Dip` and `Image` (W3.4). LazyRAD still builds its own format-1 `crates/xui-form` and `crates/xui-rhai`; adopting xui's is its M8–M11. |
+| W3 forms and script | Landed in xui (`xui::form`, `xui::script`, RON format 2, control arrays, the CLI, and a `Value` widened with `Enum`, `Color`, `Font`, `Dip` and `Image`). LazyRAD still builds its own format-1 `crates/xui-form` and `crates/xui-rhai`; adopting xui's is its M8–M11. |
 | W4 designer on layouts | Hot reload landed (`lazyrad-player --watch`). The tree designer and format-2 adoption are not started. |
 | W5 lazyOS boilerplate | The scaffolder (`tools/xui/new_app.py`), the rhai-first rule and the pin check (`tools/xui/check_pin.py`) landed. `hidpi::rect` is deleted; `design_rect` remains in Counter, sysmon and fabricmon. No `lazyos_app` macro yet. |
-| W6 generation speed | Headless-first, `xui-form schema --json` and `docs/cookbook.md` landed. Missing: the `xui-app` skill, the `xui-core` feature gates, and a CI "no layout warnings" assertion. |
+| W6 generation speed | Headless-first, `xui-form schema --json`, `docs/cookbook.md`, the `xui-app` skill and the CI no-warnings check landed. Missing: the `xui-core` feature gates. |
 
 M1–M4 are done in xui; what is left, in order:
 
-1. **W1.2** — the `aspect` ratio on a layout entry.
-2. **W1.7** — `measure` for `xui-blitz::BlitzView` and
-   `xui-litehtml::HtmlView`.
-3. **W3.4** — `Value::{Font, Dip, Image}` and their `ValueType`s.
-4. **W1.9 / W6.3** — a CI assertion that no example's layout report warns, and
-   the `xui-app` skill.
-5. **M5 across the other repos** — LazyRAD adopts `xui::form`/`xui::script`
+1. **M5 across the other repos** — LazyRAD adopts `xui::form`/`xui::script`
    and the tree designer; lazyOS gains `lazyos_app`; `check_pin.py` drops
    `emusic` and `lazyrad-os` from `LAGGING` once LazyRAD moves.
-6. **W6.2** — feature-gate `xui-core`'s colour picker, file dialog and HTML,
+2. **W6.2** — feature-gate `xui-core`'s colour picker, file dialog and HTML,
    if the build cost still warrants it.
 
 
@@ -142,11 +137,8 @@ repo that owns it.
 
 The foundation. Everything else builds on it.
 
-**State (2026-10-18):** 1 and 3–9 done (`measure` in
-`widget/placeable.rs`; grid, wrap, scroll, stack, overlay and absolute in
-`arrange/layout.rs`; automatic relayout and the layout report in `arrange/`).
-Left: 2 (no `aspect` ratio) and 7 (`xui-blitz::BlitzView` and
-`xui-litehtml::HtmlView` are not `Placeable`).
+**State (2026-10-18):** done. 2's `aspect` ratio and 7's `BlitzView`/`HtmlView`
+`measure` landed in the branch that refreshed this plan.
 
 1. **Measure/arrange protocol.** Replace `Placeable::natural_size` with
    `measure(&self, ui, Constraints) -> Size` and `arrange(rect)`.
@@ -229,10 +221,12 @@ custom-widget path.
 
 ### W3: One declarative form format [xui + rad]
 
-**State (2026-10-18):** 1–3, 5 and 6 done in xui (RON format 2 and the CLI in
-#296/#305; `xui-form`/`xui-script` moved in `ede6e5a`). Left: 4 (`Font`,
-`Dip`, `Image`). LazyRAD still builds its own format-1 `crates/xui-form` and
-`crates/xui-rhai`; adopting xui's format 2 is its M8–M11.
+**State (2026-10-18):** 1–6 done in xui (RON format 2 and the CLI in
+#296/#305; `xui-form`/`xui-script` moved in `ede6e5a`; 4's `Value` widened
+with `Enum`, `Color`, `Font`, `Dip` and `Image`, a `Font` type,
+`Properties::schema()` and real reporters). LazyRAD still builds its own
+format-1 `crates/xui-form` and `crates/xui-rhai`; adopting xui's format 2 is
+its M8–M11.
 
 1. **Move `xui-form` into xui** as `xui::form`, behind feature `form`. This
    is what LazyRAD designed it for. LazyRAD then depends on it.
@@ -339,9 +333,9 @@ connect, theme, unbind and the failure markers, but apps still print their own
 
 ### W6: Generation and iteration speed [all]
 
-**State (2026-10-18):** 1, 3 (the cookbook) and 4 done. Left: 2 (no
-`xui-core` feature gates; CI is about 5–10 min with `Swatinem/rust-cache`) and
-the `xui-app` skill in 3.
+**State (2026-10-18):** 1, 3 (the cookbook and the `xui-app` skill) and 4 done,
+and the snapshots scripts fail on a layout warning. Left: 2 (no `xui-core`
+feature gates; CI is about 5–10 min with `Swatinem/rust-cache`).
 
 1. **Verify headlessly first.**
    - Agents verify layout with `xui-form render` or
@@ -380,8 +374,7 @@ M4  W3.1-3.6, W6.1, W6.4             form + script in xui, RON lfm v2 + migrate,
 M5  W4.1-4.4, W5.4, W6.2-6.3         designer on layouts, hot reload, rhai-first, build speed
 ```
 
-M1–M4 are done in xui as of 2026-10-18 (with the leftovers listed under
-[Progress](#progress-2026-10-18)); M5 is in progress across LazyRAD and
+M1–M4 are done in xui as of 2026-10-18; M5 is in progress across LazyRAD and
 lazyOS.
 
 The single pin moves to M1 because breaking changes land quickly and three

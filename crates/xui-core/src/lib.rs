@@ -44,7 +44,7 @@ pub use icon::{IconRef, Lucide, draw_icon};
 pub use image::{Image, ImageError};
 pub use layout::{Anchor, Dock, DockLayout, Insets, Stack, StackDirection, StackSlot, anchored};
 pub use message::{HitTest, Key, Modifiers, MouseButton};
-pub use property::{Properties, Property, Value};
+pub use property::{Font, Properties, Property, PropertyInfo, PropertyType, Value};
 pub use router::{Router, WidgetHost};
 pub use theme::{Theme, Themed};
 pub use units::{Dip, Px, dip};

@@ -36,10 +36,10 @@ pub(super) fn check_place(node: &Node, parent: Option<&Node>, out: &mut Vec<Diag
             "is missing: the entry sits at its natural size in the corner",
         ));
     }
-    if in_absolute && place.aspect.is_some() {
+    if in_absolute && place.at.is_some() && place.aspect.is_some() {
         out.push(warn(
             "aspect",
-            "is ignored by an `Absolute` layout: `at` and `anchor` place the entry",
+            "is ignored by an `at` position: the entry is placed at the size `at` gives",
         ));
     }
     if place.span.is_some() && !in_grid {
