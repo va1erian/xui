@@ -2,7 +2,8 @@
 //! caps and constraints, and an absolute group ignores the ratio.
 
 use super::{leaf, rects};
-use crate::geometry::Rect;
+use crate::geometry::{Rect, Size};
+use crate::layout::Insets;
 use crate::layout::tree::{Align, Group, Item, Sizing};
 use crate::units::dip;
 
@@ -178,5 +179,35 @@ fn an_extreme_ratio_saturates_without_panicking() {
         placed[2].1,
         Rect::new(10, 0, 20, 10),
         "an infinite ratio is ignored: {placed:?}"
+    );
+}
+
+#[test]
+fn an_extreme_ratio_saturates_an_unbounded_measure() {
+    // A ratio past the arithmetic saturates the measured extent; the sums that
+    // add a container's margins must not overflow (a form's ratio is only
+    // bounded as finite and positive).
+    let margins = Insets::new(dip(4.0), dip(4.0), dip(4.0), dip(4.0));
+
+    let row = Group::row().margins(margins).push(
+        Item::leaf(0)
+            .sized(Sizing::Width(dip(10.0)))
+            .aspect(1.0e-30),
+    );
+    assert_eq!(
+        row.preferred_size(96, &leaf(&[(0, 10, 10)], &[])),
+        Size::new(8, i32::MAX),
+        "a tiny ratio saturates the cross extent"
+    );
+
+    let layered = Group::layered().margins(margins).push(
+        Item::leaf(0)
+            .sized(Sizing::Height(dip(10.0)))
+            .aspect(1.0e30),
+    );
+    assert_eq!(
+        layered.preferred_size(96, &leaf(&[(0, 10, 10)], &[])),
+        Size::new(i32::MAX, 8),
+        "a huge ratio saturates the main extent"
     );
 }

@@ -318,6 +318,25 @@ fn button_builders_set_an_icon_and_a_tooltip() {
 }
 
 #[test]
+fn a_label_builder_sets_a_font() {
+    use crate::property::Font;
+    use crate::units::dip;
+
+    let (_backend, _window, ui, _runtime) = setup();
+    let caption = Handle::<Label<u32>>::new();
+    let _mounted = ui
+        .mount(
+            column().child(
+                label("Caption")
+                    .font(Font::new(dip(18.0)).bold())
+                    .bind(&caption),
+            ),
+        )
+        .unwrap();
+    assert_eq!(caption.get().current_font(), Font::new(dip(18.0)).bold());
+}
+
+#[test]
 fn the_layout_report_warns_of_a_check_box_too_narrow_for_its_text() {
     let (_backend, _window, ui, _runtime) = setup();
     ui.root(column().child(crate::arrange::checkbox("A long check box caption").width(40)))

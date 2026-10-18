@@ -39,7 +39,8 @@ impl<M: 'static> Placeable<M> for Tabs<M> {
             });
         Size::new(
             page.width,
-            page.height + STRIP.to_px(constraints.dpi).value(),
+            page.height
+                .saturating_add(STRIP.to_px(constraints.dpi).value()),
         )
     }
 

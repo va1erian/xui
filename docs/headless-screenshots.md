@@ -188,6 +188,14 @@ A demo joins the gallery by starting with `xui::app(..).run(..)`:
 `XUI_BACKEND=offscreen` runs headless without saving. `xui_canvas::snapshot::Gallery` parses the variables. With
 neither set, a demo behaves exactly as before.
 
+`XUI_LAYOUT_REPORT=1` makes the same run print `Ui::layout_report()` — the
+tree with every rect — and a last line `XUI_LAYOUT_WARNINGS:<n>`. A warning is
+a line whose first non-space character is `!`: a node clipped by its parent,
+a visible widget of zero size, text too narrow for its widget, or siblings
+that overlap in a row, column, grid or wrap. `scripts/snapshots.*` set it and
+fail on a warning, so every example's layout is checked in CI; read the `!`
+lines instead of a screenshot when the question is "did it lay out".
+
 ## Headless versus real windows
 
 Headless snapshots use the software renderer, so they do **not** show native

@@ -57,7 +57,8 @@ fn main() -> Result<()> {
 - **Map events by value.** `Msg: Clone`; `on_click(Msg::Save)`,
   `on_toggle(Msg::On)`, `on_select(Msg::Pick)`, and for events that carry a
   value pass the enum constructor: `on_change(Msg::Name)` where
-  `Msg::Name(String)`. The closure form (`on_click(|| ...)`) stays available.
+  `Msg::Name(String)`. The closure form (`on_click_with(|| ...)`) stays
+  available.
 - **Size only what must not be natural.** `fill(weight)` takes the leftover
   space, `fixed(n)`/`width(n)`/`height(n)` pin a size, `max_width(n)`/
   `max_height(n)` cap one, `aspect(16.0 / 9.0)` keeps a width-to-height ratio.

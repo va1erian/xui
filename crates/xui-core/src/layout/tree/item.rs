@@ -139,8 +139,9 @@ impl<K: Copy> Item<K> {
     /// width leading when both are fixed; the box then shrinks, never grows,
     /// to stay within its caps and the constraints. A ratio that is not finite
     /// and positive is ignored; one far from 1 (1e-30, 1e30) saturates the
-    /// layout arithmetic like any size from a file, shrinking the node to zero
-    /// on one axis, which the layout report warns about. In an
+    /// layout arithmetic like any size from a file: the measured extent reaches
+    /// the largest `i32`, and a bounded placement shrinks the node to zero on
+    /// one axis, which the layout report warns about. In an
     /// [`absolute`](Group::absolute) group an [`at`](Self::at) position wins;
     /// an entry with no position sits at its natural size, which the ratio
     /// shapes.
@@ -223,14 +224,18 @@ impl<K: Copy> Item<K> {
                 let px = |value: Dip| value.to_px(constraints.dpi).value();
                 let insets = frame.content;
                 Size::new(
-                    frame
-                        .natural
-                        .width
-                        .max(inner.width + px(insets.left) + px(insets.right)),
-                    frame
-                        .natural
-                        .height
-                        .max(inner.height + px(insets.top) + px(insets.bottom)),
+                    frame.natural.width.max(
+                        inner
+                            .width
+                            .saturating_add(px(insets.left))
+                            .saturating_add(px(insets.right)),
+                    ),
+                    frame.natural.height.max(
+                        inner
+                            .height
+                            .saturating_add(px(insets.top))
+                            .saturating_add(px(insets.bottom)),
+                    ),
                 )
             }
         }

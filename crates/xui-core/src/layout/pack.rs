@@ -73,7 +73,7 @@ pub(crate) fn strip(naturals: &[Size], edges: PackEdges, vertical: bool) -> Size
         }
         cross = cross.max(item_cross.max(0));
     }
-    cross += edges.cross.max(0);
+    cross = cross.saturating_add(edges.cross.max(0));
     let main = i32::try_from(main).unwrap_or(i32::MAX);
     if vertical {
         Size::new(cross, main)

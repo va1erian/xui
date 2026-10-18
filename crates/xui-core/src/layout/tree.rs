@@ -216,7 +216,10 @@ impl<K: Copy> Group<K> {
     fn margin_size(&self, dpi: u32) -> Size {
         let px = |value: Dip| value.to_px(dpi).value().max(0);
         let m = self.margins;
-        Size::new(px(m.left) + px(m.right), px(m.top) + px(m.bottom))
+        Size::new(
+            px(m.left).saturating_add(px(m.right)),
+            px(m.top).saturating_add(px(m.bottom)),
+        )
     }
 }
 
