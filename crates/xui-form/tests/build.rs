@@ -77,6 +77,24 @@ const PINNED: &str = r#"Form(
 )"#;
 
 #[test]
+fn an_aspect_entry_keeps_its_ratio_in_the_layout() {
+    let bounds = with_form(
+        &form(
+            r#"Form(
+                size: (400, 300),
+                root: Column(padding: 8, gap: 8, children: [
+                    Label(name: "title", text: "Preview", height: 20),
+                    Panel(name: "canvas", aspect: 2.0, fill: 1),
+                ]),
+            )"#,
+        ),
+        BuildOptions::default(),
+        |live| live.bounds("canvas"),
+    );
+    assert_eq!(bounds, Some(Rect::new(8, 36, 392, 228)));
+}
+
+#[test]
 fn an_absolute_layout_anchors_to_a_larger_window() {
     let grown = with_form_sized(
         &form(PINNED),

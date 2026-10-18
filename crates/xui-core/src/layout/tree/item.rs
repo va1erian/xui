@@ -2,7 +2,10 @@
 
 //! [`Item`]: one entry of a [`Group`] with its sizing and placement.
 
-use super::{Align, Constraints, Group, LeafFn, Out, Sizing, main, with_main};
+use super::{
+    Align, Constraints, Group, LeafFn, Out, Sizing, main, ratio_from_height, ratio_from_width,
+    with_main,
+};
 use crate::geometry::{Rect, Size};
 use crate::layout::{Anchor, Placement, StackDirection};
 use crate::units::Dip;
@@ -19,6 +22,8 @@ pub struct Item<K> {
     pub(super) size: [Option<Dip>; 2],
     pub(super) max_width: Option<Dip>,
     pub(super) max_height: Option<Dip>,
+    /// The width-to-height ratio, if the item keeps one.
+    pub(super) aspect: Option<f32>,
     pub(super) span: usize,
     pub(super) at: Option<[Dip; 4]>,
     pub(super) anchor: Anchor,
@@ -43,6 +48,7 @@ impl<K: Copy> Item<K> {
             size: [None, None],
             max_width: None,
             max_height: None,
+            aspect: None,
             span: 1,
             at: None,
             anchor: Anchor::TopLeft,
@@ -126,6 +132,24 @@ impl<K: Copy> Item<K> {
     pub fn max_height(mut self, height: Dip) -> Item<K> {
         self.max_height = Some(height);
         self
+    }
+
+    /// Keeps the item at a width-to-height ratio (`width / height`): the axis
+    /// its sizing fixes keeps its extent and the other follows the ratio (the
+    /// width when both are fixed); otherwise the cross extent follows the
+    /// main one. The item is the largest ratio-correct size that fits the
+    /// space it is given, within its caps. A ratio that is not finite and
+    /// positive is ignored. An [`absolute`](Group::absolute) group places by
+    /// [`at`](Self::at) and [`anchor`](Self::anchor) instead, so it ignores
+    /// the ratio.
+    pub fn aspect(mut self, ratio: f32) -> Item<K> {
+        self.aspect = (ratio.is_finite() && ratio > 0.0).then_some(ratio);
+        self
+    }
+
+    /// The item's width-to-height ratio, if it keeps one.
+    pub(super) fn aspect_ratio(&self) -> Option<f32> {
+        self.aspect
     }
 
     /// In a grid, makes the item cover `columns` columns (at least one).
@@ -235,7 +259,13 @@ impl<K: Copy> Item<K> {
                 with_main(direction, content, main_extent)
             }
         };
-        self.capped(sized, dpi)
+        let sized = self.capped(sized, dpi);
+        if matches!(self.sizing, Sizing::Fill(_)) {
+            // A fill item's main extent is the parent's to give; the ratio
+            // applies where the item is placed.
+            return sized;
+        }
+        self.with_aspect(sized, direction, constraints)
     }
 
     /// The item's own size within `constraints` in a group with no main axis
@@ -249,8 +279,41 @@ impl<K: Copy> Item<K> {
         leaf: LeafFn<'_, K>,
     ) -> Size {
         match self.sizing {
-            Sizing::Fill(_) => self.capped(self.measure(constraints, leaf), constraints.dpi),
+            Sizing::Fill(_) => {
+                let size = self.capped(self.measure(constraints, leaf), constraints.dpi);
+                self.with_aspect(size, direction, constraints)
+            }
             _ => self.natural(direction, constraints, leaf),
+        }
+    }
+
+    /// Applies the item's [`aspect`](Item::aspect): the axis its sizing fixes
+    /// keeps its extent and the other follows the ratio (the width when both
+    /// are fixed); otherwise the cross extent follows the main one. The
+    /// result stays within the item's caps and the constraints.
+    fn with_aspect(&self, size: Size, direction: StackDirection, constraints: Constraints) -> Size {
+        let Some(ratio) = self.aspect else {
+            return size;
+        };
+        let dpi = constraints.dpi;
+        let px = |value: Dip| value.to_px(dpi).value().max(0);
+        let cap = |axis: usize, from_constraints: Option<i32>| match (
+            from_constraints,
+            self.max_size(axis),
+        ) {
+            (Some(a), Some(b)) => a.min(px(b)),
+            (Some(a), None) => a,
+            (None, Some(b)) => px(b),
+            (None, None) => i32::MAX,
+        };
+        let cap_width = cap(0, constraints.max_width);
+        let cap_height = cap(1, constraints.max_height);
+        let named_width = self.size[0].is_some() || matches!(self.sizing, Sizing::Width(_));
+        let named_height = self.size[1].is_some() || matches!(self.sizing, Sizing::Height(_));
+        if named_width || (!named_height && direction == StackDirection::Horizontal) {
+            ratio_from_width(ratio, size.width.max(0), cap_width, cap_height)
+        } else {
+            ratio_from_height(ratio, size.height.max(0), cap_width, cap_height)
         }
     }
 

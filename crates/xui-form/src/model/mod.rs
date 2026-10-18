@@ -264,6 +264,8 @@ pub struct Place {
     pub max_width: Option<Length>,
     /// A maximum height.
     pub max_height: Option<Length>,
+    /// A width-to-height ratio (`width / height`), finite and positive.
+    pub aspect: Option<f32>,
     /// The entry's own alignment.
     pub align: Option<Align>,
     /// In a grid, the columns covered.

@@ -35,10 +35,11 @@ Form(title: "Hello", size: (360, 160), root: Column(gap: 8, padding: 16, childre
   `RadioGroup`, `ComboBox`, `ListView` and `Separator`. Each has `name`, its
   properties, `visible` and `enabled`.
 - **Layout fields**, on every node: `fill` (a share of the leftover space),
-  `width`, `height`, `max_width`, `max_height`, `align` (`Start`, `Center`,
-  `End`, `Stretch`), `span` (in a `Grid`), and `at: (x, y, width, height)`
-  with `anchor` (`TopLeft`, …, `BottomRight`, `StretchHorizontal`,
-  `StretchVertical`, `Fill`) in an `Absolute` layout.
+  `width`, `height`, `max_width`, `max_height`, `aspect` (the width-to-height
+  ratio, finite and positive; ignored in an `Absolute` layout), `align`
+  (`Start`, `Center`, `End`, `Stretch`), `span` (in a `Grid`), and
+  `at: (x, y, width, height)` with `anchor` (`TopLeft`, …, `BottomRight`,
+  `StretchHorizontal`, `StretchVertical`, `Fill`) in an `Absolute` layout.
 - **Defaults are omitted.** Every field has a default and a node's field
   equal to it is not written (the form's `size` and `root` always are).
   `Form::to_ron` writes one canonical layout (a fixed `PrettyConfig`: a node
