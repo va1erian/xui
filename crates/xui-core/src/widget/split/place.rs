@@ -44,9 +44,9 @@ impl<M: 'static> Placeable<M> for Split<M> {
         let divider = DIVIDER.to_px(constraints.dpi).value();
         let (along, across) = sizes.iter().fold((divider, 0), |(along, across), size| {
             if self.shared.horizontal {
-                (along + size.width, across.max(size.height))
+                (along.saturating_add(size.width), across.max(size.height))
             } else {
-                (along + size.height, across.max(size.width))
+                (along.saturating_add(size.height), across.max(size.width))
             }
         });
         if self.shared.horizontal {

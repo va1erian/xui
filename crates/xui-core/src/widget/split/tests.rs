@@ -254,3 +254,25 @@ fn the_position_property_round_trips() {
     assert_eq!(split.property("position"), Some(Value::Dip(dip(80.0))));
     assert_eq!(split.schema()[0].ty, crate::property::PropertyType::Dip);
 }
+
+#[test]
+fn a_pane_with_a_saturating_ratio_does_not_overflow_the_measure() {
+    use crate::arrange::{LayoutExt, column, label};
+    use crate::layout::Constraints;
+    use crate::widget::Placeable;
+
+    let (_backend, _core, ui) = setup();
+    let split = Split::column(&ui, Rect::new(0, 0, 100, 300)).unwrap();
+    split
+        .set_layouts(
+            column().child(label("x").width(10).aspect(1.0e-9)),
+            column(),
+        )
+        .unwrap();
+    let measured = split.measure(&ui, Constraints::unbounded(96));
+    assert_eq!(
+        measured.height,
+        i32::MAX,
+        "the pane saturates instead of overflowing"
+    );
+}
