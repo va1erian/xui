@@ -79,7 +79,9 @@ pub enum Value {
     Font(Font),
     /// A length in design units (a split's divider).
     Dip(Dip),
-    /// A picture (a picture widget's content).
+    /// A picture (a picture widget's content). No xui-core widget reports one
+    /// yet: it is the typed home for a picture widget's property, so a
+    /// designer's image editor has one.
     Image(Image),
 }
 
@@ -188,7 +190,6 @@ pub enum PropertyType {
     /// A picture (a picture editor).
     Image,
 }
-
 /// One property's schema: what a designer needs to present it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct PropertyInfo {

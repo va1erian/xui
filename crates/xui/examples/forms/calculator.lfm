@@ -1,4 +1,4 @@
-Form(name: "calculator", title: "Calculator", size: (240, 196), root: Grid(columns: [
+Form(name: "calculator", title: "Calculator", size: (320, 260), root: Grid(columns: [
     Fill(1),
     Fill(1),
     Fill(1),

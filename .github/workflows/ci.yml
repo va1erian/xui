@@ -64,6 +64,10 @@ jobs:
       - run: cargo run -p xui --features canvas --example widgets
         env:
           XUI_DEMO_AUTOCLOSE_MS: "4000"
+      # Every example's layout report must be warning-free: the same headless
+      # run that renders the snapshots fails on a clipped, overlapping or
+      # truncated layout.
+      - run: scripts/snapshots.ps1
 
   # The backend-agnostic core must build and its headless tests pass on Linux,
   # proving the front layer has no Win32 dependency. The whole workspace is
@@ -90,8 +94,9 @@ jobs:
       - run: cargo check -p xui-blitz --no-default-features --target x86_64-unknown-linux-musl
 
   # Every example rendered headlessly, light and dark, so each PR has a
-  # screenshot set to look at without a desktop or the sandbox. Not a required
-  # check: it publishes images, it does not gate the merge.
+  # screenshot set to look at without a desktop or the sandbox. It also fails
+  # on a layout report warning; the test job runs the same check as a gate, and
+  # the images are uploaded even when it fails.
   snapshots:
     runs-on: ubuntu-latest
     # It runs code from the PR, so it gets a read-only token and no persisted
@@ -108,6 +113,7 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: scripts/snapshots.sh
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: snapshots
           path: target/snapshots/

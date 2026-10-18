@@ -75,6 +75,7 @@ impl Launch {
         run_app(backend, self.spec, move |ui| match make(ui) {
             Ok(app) => {
                 autoclose(ui);
+                layout_report(ui);
                 Launched::Running(app)
             }
             Err(error) => {
@@ -108,6 +109,31 @@ fn autoclose<M: 'static>(ui: &Ui<M>) {
     });
 }
 
+/// Prints the layout report and its warning count when `XUI_LAYOUT_REPORT` is
+/// set, so a headless run (a snapshot, a CI step) can assert that no layout
+/// warns. The count is the last line, `XUI_LAYOUT_WARNINGS:<n>`.
+fn layout_report<M: 'static>(ui: &Ui<M>) {
+    if std::env::var_os("XUI_LAYOUT_REPORT").is_none() {
+        return;
+    }
+    let report = ui.layout_report();
+    let warnings = layout_warnings(&report);
+    print!("{report}");
+    if !report.is_empty() && !report.ends_with('\n') {
+        println!();
+    }
+    println!("XUI_LAYOUT_WARNINGS:{warnings}");
+}
+
+/// The number of warnings in a layout report: its `! ` lines, whatever their
+/// indentation (a node's own line may hold a `!` in its text).
+fn layout_warnings(report: &str) -> usize {
+    report
+        .lines()
+        .filter(|line| line.trim_start().starts_with("! "))
+        .count()
+}
+
 /// The app `make` built, or nothing when it failed.
 enum Launched<A> {
     Running(A),
@@ -121,5 +147,26 @@ impl<A: App> App for Launched<A> {
         if let Launched::Running(app) = self {
             app.update(msg, ui);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::layout_warnings;
+
+    #[test]
+    fn warnings_are_the_bang_lines_of_a_report() {
+        let report = "\
+layout in the window, at 0,0 size 400x300
+  column at 0,0 size 400x300
+    Label \"! loud\" at 8,8 size 40x28
+    Button \"OK\" at 8,36 size 0x0
+      ! zero size
+    Label \"x\" at 8,64 size 10x28
+      ! text truncated: needs 90px wide
+";
+        assert_eq!(layout_warnings(report), 2);
+        assert_eq!(layout_warnings("layout in the window\n  column\n"), 0);
+        assert_eq!(layout_warnings(""), 0);
     }
 }

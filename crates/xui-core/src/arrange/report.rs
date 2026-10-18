@@ -46,8 +46,10 @@ pub(super) fn write<M: 'static>(state: &State<M>, out: &mut String) {
         {
             warnings.push(format!("text truncated: needs {needs}px wide"));
         }
+        // Each warning is a line of its own, so a reader (or a script) finds
+        // one without parsing the node's text.
         for warning in warnings {
-            let _ = write!(out, "  ! {warning}");
+            let _ = write!(out, "\n{indent}  ! {warning}");
         }
         out.push('\n');
     }

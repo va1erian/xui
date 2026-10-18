@@ -75,6 +75,14 @@
 
 ### Additions
 
+- **A layout report's warnings are lines of their own, and CI checks them.**
+  `Ui::layout_report()` writes each `!` warning on its own line under the
+  node it is about, so a reader (or a script) finds one without parsing a
+  node's text, which may hold a `!` of its own. `XUI_LAYOUT_REPORT=1` prints
+  the report and a last `XUI_LAYOUT_WARNINGS:<n>` line from a headless run,
+  and `scripts/snapshots.ps1`/`.sh` fail on a warning: every example's layout
+  is checked headlessly (the `containers` overlay had no room left and the
+  calculator's keypad was narrower than a button, both fixed).
 - **The property surface is typed and described.** `xui_core::property::Value`
   gains `Enum`, `Color`, `Font`, `Dip` and `Image` (with a `Font` type and
   accessors), and `Properties::schema()` returns one `PropertyInfo` per

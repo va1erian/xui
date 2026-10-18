@@ -52,7 +52,7 @@ const TAGS: [&str; 9] = [
 ];
 
 fn main() -> Result<()> {
-    xui::app("Containers").size(560, 420).run(|ui| {
+    xui::app("Containers").size(560, 520).run(|ui| {
         let demo = Demo::default();
         let chips: Vec<Entry<Msg>> = TAGS
             .iter()
