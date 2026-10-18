@@ -1,6 +1,7 @@
 # Plan: developer and agent productivity (xui × LazyRAD × lazyOS)
 
-Status: **draft** · Owners: xui, LazyRAD, lazyOS · 2026-10-04
+Status: **draft** · Owners: xui, LazyRAD, lazyOS · 2026-10-04 · Progress
+refreshed 2026-10-18: M1–M4 landed in xui, M5 open.
 
 ## Goal
 
@@ -19,7 +20,7 @@ works on four levers:
    compiles to check it. Prefer interpreted forms and Rhai where they fit.
    Verify headlessly.
 
-## Where we are (baseline)
+## Where we were (baseline, 2026-10-04)
 
 | Fact | Evidence |
 |---|---|
@@ -34,6 +35,35 @@ works on four levers:
 | `xui-form` and `xui-rhai` were written to move into xui. Rhai apps need no Rust compile; F5 spawns `lazyrad-player`. | LazyRAD `PLAN.md`, `crates/xui-rhai` |
 | A new lazyOS app also needs a `build.rs` switch, a `run_demo.py` flag, a launcher test and a manifest with traced permissions. | `lazyos/AGENTS.md` |
 | Build cost: the xui CI job takes about 16 min, and the xui-app musl build about 5.5 min. Three repos pin xui at different revs. | `lazyos/docs/perf/xui-ci-runner-plan.md` |
+
+## Progress (2026-10-18)
+
+Checked against xui `e9d4ede` (2026-10-14), lazyOS `47d212e` (2026-10-18) and
+LazyRAD `b24f9ee` (2026-10-14).
+
+| Workstream | State |
+|---|---|
+| W1 layout engine v2 | Landed except the `aspect` ratio (W1.2) and the HTML views' `measure` (W1.7). |
+| W2 construction API | Landed. Value-carrying events take the enum constructor (`on_change(Msg::Draft)`) rather than a separate `on_change_map`; `Control::new`/`Control::set_bounds` stay public as the custom-widget path. |
+| W3 forms and script | Landed in xui (`xui::form`, `xui::script`, RON format 2, control arrays, the CLI). `Value` lacks `Font`, `Dip` and `Image` (W3.4). LazyRAD still builds its own format-1 `crates/xui-form` and `crates/xui-rhai`; adopting xui's is its M8–M11. |
+| W4 designer on layouts | Hot reload landed (`lazyrad-player --watch`). The tree designer and format-2 adoption are not started. |
+| W5 lazyOS boilerplate | The scaffolder (`tools/xui/new_app.py`), the rhai-first rule and the pin check (`tools/xui/check_pin.py`) landed. `hidpi::rect` is deleted; `design_rect` remains in Counter, sysmon and fabricmon. No `lazyos_app` macro yet. |
+| W6 generation speed | Headless-first, `xui-form schema --json` and `docs/cookbook.md` landed. Missing: the `xui-app` skill, the `xui-core` feature gates, and a CI "no layout warnings" assertion. |
+
+M1–M4 are done in xui; what is left, in order:
+
+1. **W1.2** — the `aspect` ratio on a layout entry.
+2. **W1.7** — `measure` for `xui-blitz::BlitzView` and
+   `xui-litehtml::HtmlView`.
+3. **W3.4** — `Value::{Font, Dip, Image}` and their `ValueType`s.
+4. **W1.9 / W6.3** — a CI assertion that no example's layout report warns, and
+   the `xui-app` skill.
+5. **M5 across the other repos** — LazyRAD adopts `xui::form`/`xui::script`
+   and the tree designer; lazyOS gains `lazyos_app`; `check_pin.py` drops
+   `emusic` and `lazyrad-os` from `LAGGING` once LazyRAD moves.
+6. **W6.2** — feature-gate `xui-core`'s colour picker, file dialog and HTML,
+   if the build cost still warrants it.
+
 
 ## Target shape
 
@@ -112,6 +142,12 @@ repo that owns it.
 
 The foundation. Everything else builds on it.
 
+**State (2026-10-18):** 1 and 3–9 done (`measure` in
+`widget/placeable.rs`; grid, wrap, scroll, stack, overlay and absolute in
+`arrange/layout.rs`; automatic relayout and the layout report in `arrange/`).
+Left: 2 (no `aspect` ratio) and 7 (`xui-blitz::BlitzView` and
+`xui-litehtml::HtmlView` are not `Placeable`).
+
 1. **Measure/arrange protocol.** Replace `Placeable::natural_size` with
    `measure(&self, ui, Constraints) -> Size` and `arrange(rect)`.
    `Constraints` carries min and max per axis. Natural sizes come from the
@@ -156,6 +192,10 @@ containers (`stack()`, `overlay()`) assert z-order instead.
 
 ### W2: Construction API without `ui` or rects [xui]
 
+**State (2026-10-18):** done. `on_change_map` landed as the enum-constructor
+form (`on_change(Msg::Draft)`); `Control::new`/`set_bounds` stay public as the
+custom-widget path.
+
 1. **Widget builders.** `Button::new("OK")` returns a description. The
    widget is realised when it is mounted. This removes the `ui` argument, the
    `Rect` and the per-widget `Result`. Errors surface once, from `root`/`mount`.
@@ -188,6 +228,11 @@ containers (`stack()`, `overlay()`) assert z-order instead.
      demo.
 
 ### W3: One declarative form format [xui + rad]
+
+**State (2026-10-18):** 1–3, 5 and 6 done in xui (RON format 2 and the CLI in
+#296/#305; `xui-form`/`xui-script` moved in `ede6e5a`). Left: 4 (`Font`,
+`Dip`, `Image`). LazyRAD still builds its own format-1 `crates/xui-form` and
+`crates/xui-rhai`; adopting xui's format 2 is its M8–M11.
 
 1. **Move `xui-form` into xui** as `xui::form`, behind feature `form`. This
    is what LazyRAD designed it for. LazyRAD then depends on it.
@@ -233,6 +278,10 @@ containers (`stack()`, `overlay()`) assert z-order instead.
 
 ### W4: LazyRAD designer on layouts [rad]
 
+**State (2026-10-18):** 4 done (`lazyrad-player --watch` reloads forms and
+scripts). 1–3 not started; the designer still edits the format-1 `FormDoc` by
+coordinates.
+
 1. The designer surface edits a layout tree, not only coordinates.
    - Drop onto a container to insert a child; drag to reorder.
    - The property grid shows the layout props (`fill`, `align`, `span`).
@@ -248,6 +297,14 @@ containers (`stack()`, `overlay()`) assert z-order instead.
      largest win for iteration time.
 
 ### W5: lazyOS app boilerplate [os]
+
+**State (2026-10-18):** 2, 4 and 5 done, 5 differently (`tools/xui/check_pin.py`
+checks every manifest and lockfile; no `xui-rev.toml`, and `emusic` and
+`lazyrad-os` are held in `LAGGING` until LazyRAD moves). 3 mostly done:
+`hidpi::rect` is deleted and the apps use layouts, but `design_rect` remains in
+Counter, sysmon and fabricmon. 1 not done: `xui_app::launch::run` wraps
+connect, theme, unbind and the failure markers, but apps still print their own
+`UP`/`QUIT` markers.
 
 1. **`lazyos_app` crate (in `xui-app`).** `lazyos_app::main!(App)` or
    `lazyos_app::run(spec, init)` wraps connect, theme, the first-frame marker,
@@ -281,6 +338,10 @@ containers (`stack()`, `overlay()`) assert z-order instead.
      lazyOS `main`.
 
 ### W6: Generation and iteration speed [all]
+
+**State (2026-10-18):** 1, 3 (the cookbook) and 4 done. Left: 2 (no
+`xui-core` feature gates; CI is about 5–10 min with `Swatinem/rust-cache`) and
+the `xui-app` skill in 3.
 
 1. **Verify headlessly first.**
    - Agents verify layout with `xui-form render` or
@@ -319,6 +380,10 @@ M4  W3.1-3.6, W6.1, W6.4             form + script in xui, RON lfm v2 + migrate,
 M5  W4.1-4.4, W5.4, W6.2-6.3         designer on layouts, hot reload, rhai-first, build speed
 ```
 
+M1–M4 are done in xui as of 2026-10-18 (with the leftovers listed under
+[Progress](#progress-2026-10-18)); M5 is in progress across LazyRAD and
+lazyOS.
+
 The single pin moves to M1 because breaking changes land quickly and three
 repos have to follow them together. M3 is one coordinated change: the xui PR
 that deletes the rect constructors and the lazyOS PRs that migrate the last
@@ -326,16 +391,17 @@ apps land against the same rev.
 
 ## Success metrics
 
-| Metric | Today | Target |
-|---|---|---|
-| Lines for the label demo | 60 (+136 support) | ≤ 25, no support file |
-| lazyOS Counter | 116 | ≤ 35 |
-| Calculator `.lfm` + `.rhai` | 159 + 65 | ≤ 45 + 25 |
-| lazyOS apps placing widgets by hand | ~15 / 20 | 0 (custom painters use `absolute()`) |
-| Apps that re-flow correctly on resize and at 2× | ~5 | all |
-| Files touched to add a lazyOS app | ~6, by hand | 1 command |
-| Agent loop "edit form → see result" | rebuild + QEMU, minutes | `xui-form render`, < 2 s |
-| Incremental rebuild of one xui-app bin | minutes | < 20 s |
+| Metric | Baseline (2026-10-04) | Now (2026-10-18) | Target |
+|---|---|---|---|
+| Lines for the label demo | 60 (+136 support) | 50, no support | ≤ 25, no support file |
+| lazyOS Counter | 116 | 109 | ≤ 35 |
+| Calculator `.lfm` + `.rhai` | 159 + 65 | 24 + 34 | ≤ 45 + 25 |
+| lazyOS apps placing widgets by hand | ~15 / 20 | ~2–3 (custom painters) | 0 (custom painters use `absolute()`) |
+| Apps that re-flow correctly on resize and at 2× | ~5 | not measured | all |
+| Files touched to add a lazyOS app | ~6, by hand | 1 command (`tools/xui/new_app.py`) | 1 command |
+| Agent loop "edit form → see result" | rebuild + QEMU, minutes | `xui-form render`, headless | < 2 s |
+| Incremental rebuild of one xui-app bin | minutes | not measured | < 20 s |
+| xui CI job | ~16 min | ~5–10 min | (the runner plan) |
 
 ## Risks
 
