@@ -214,6 +214,10 @@ impl Backend for HeadlessBackend {
         self.state.borrow_mut().focused = Some(id);
     }
 
+    fn focus_holder(&self, _window: WindowId) -> Option<WidgetId> {
+        self.state.borrow().focused
+    }
+
     fn set_text(&self, id: WidgetId, text: &str) {
         if let Some(node) = self.state.borrow_mut().nodes.get_mut(&id.raw()) {
             node.text = text.to_string();

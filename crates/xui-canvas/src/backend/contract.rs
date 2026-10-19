@@ -154,6 +154,7 @@ impl Backend for WinitBackend {
         node.visible = spec.visible;
         node.enabled = spec.enabled;
         node.text = spec.text.clone();
+        node.popup = spec.popup;
         self.shared.nodes.borrow_mut().insert(id, node);
         Ok(id)
     }
@@ -255,6 +256,14 @@ impl Backend for WinitBackend {
         }
         self.shared
             .deliver(window, id, &xui_core::backend::Event::SetFocus);
+    }
+
+    fn focus_holder(&self, window: WindowId) -> Option<WidgetId> {
+        self.shared
+            .windows
+            .borrow()
+            .get(&window.raw())
+            .and_then(|state| state.focused)
     }
 
     fn set_text(&self, id: WidgetId, text: &str) {

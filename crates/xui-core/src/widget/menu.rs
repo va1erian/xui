@@ -167,6 +167,10 @@ struct Runtime<M: 'static> {
     pub(super) on_toggle: ToggleMapper<M>,
     /// The bar's node, when this menu has one.
     pub(super) bar: Cell<Option<WidgetId>>,
+    /// Set while the menu moves the keyboard focus between its own nodes, so
+    /// the `KillFocus` that move sends is not taken for the user clicking away
+    /// (for a backend that cannot say who holds the focus afterwards).
+    pub(super) moving_focus: Cell<bool>,
 }
 
 impl<M: 'static> Runtime<M> {
@@ -180,6 +184,7 @@ impl<M: 'static> Runtime<M> {
             on_select: RefCell::new(None),
             on_toggle: RefCell::new(None),
             bar: Cell::new(None),
+            moving_focus: Cell::new(false),
         })
     }
 }

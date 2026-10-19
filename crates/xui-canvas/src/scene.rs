@@ -47,6 +47,9 @@ pub(crate) struct Node {
     pub(crate) drag_region: bool,
     /// A clip on this node's descendants, in the node's own coordinate space.
     pub(crate) clip: Option<Rect>,
+    /// Whether the node is a transient popup surface, which a press outside it
+    /// dismisses by taking the keyboard focus from it.
+    pub(crate) popup: bool,
 }
 
 impl Node {
@@ -63,6 +66,7 @@ impl Node {
             #[cfg(feature = "winit-backend")]
             drag_region: false,
             clip: None,
+            popup: false,
         }
     }
 }

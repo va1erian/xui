@@ -3,8 +3,9 @@
 //! Input into an offscreen window, delivered as the windowed backend delivers
 //! it: the pointer leaving a node tells that node (`MouseLeave`), a press moves
 //! the keyboard focus to the node it lands on (`KillFocus` to the old holder,
-//! `SetFocus` to the new one), and `Backend::focus` does the same, so a test
-//! sees the focus rings, carets and hover states of a real session.
+//! `SetFocus` to the new one; a press on bare window takes it from a popup),
+//! and `Backend::focus` does the same, so a test sees the focus rings, carets
+//! and hover states of a real session.
 
 use xui_core::backend::{Event, WidgetId, WindowId};
 
@@ -31,14 +32,13 @@ impl OffscreenBackend {
         handled
     }
 
-    /// Delivers a positionless event to the focused node of `window`.
+    /// Delivers a positionless event to the focused node of `window`, or to no
+    /// node when none is focused there, so the app's shortcut hook still sees
+    /// a key.
     fn inject_to_focus(&self, window: WindowId, event: &Event) -> bool {
-        let Some(target) = *self.focused.borrow() else {
-            return false;
-        };
-        if self.nodes.borrow().window_of(target) != Some(window) {
-            return false;
-        }
+        let target = (*self.focused.borrow())
+            .filter(|target| self.nodes.borrow().window_of(*target) == Some(window))
+            .unwrap_or(WidgetId::NONE);
         self.deliver(window, target, event)
     }
 
@@ -61,6 +61,26 @@ impl OffscreenBackend {
         let window = self.nodes.borrow().window_of(previous);
         if let Some(window) = window {
             self.deliver(window, previous, &Event::KillFocus);
+        }
+    }
+
+    /// A press on bare window, where no node can take the focus: a popup
+    /// surface of `window` that holds it loses it (`KillFocus`), as a press
+    /// outside the popup dismisses it. Any other holder keeps the focus.
+    fn dismiss_popup_focus(&self, window: WindowId) {
+        let popup = {
+            let nodes = self.nodes.borrow();
+            let mut focused = self.focused.borrow_mut();
+            let popup = focused.filter(|id| {
+                nodes.window_of(*id) == Some(window) && nodes.get(*id).is_some_and(|n| n.popup)
+            });
+            if popup.is_some() {
+                *focused = None;
+            }
+            popup
+        };
+        if let Some(popup) = popup {
+            self.deliver(window, popup, &Event::KillFocus);
         }
     }
 
@@ -119,6 +139,13 @@ impl OffscreenBackend {
             self.set_hover(window, target.map(|(id, _, _)| id));
         }
         let Some((target, lx, ly)) = target else {
+            if matches!(
+                event,
+                Event::MouseDown { .. } | Event::MouseDoubleClick { .. }
+            ) && captured.is_none()
+            {
+                self.dismiss_popup_focus(window);
+            }
             return false;
         };
         if matches!(

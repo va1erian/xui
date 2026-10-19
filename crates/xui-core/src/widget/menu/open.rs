@@ -5,6 +5,7 @@
 //! Popups are pooled, one node per nesting level, and shown/hidden through the
 //! backend the way [`ComboBox`](super::ComboBox) shows its list.
 
+use std::cell::Cell;
 use std::rc::Rc;
 
 use super::{Level, Open, Runtime, layout, model};
@@ -95,7 +96,7 @@ fn open_level<M: 'static>(rt: &Rc<Runtime<M>>, path: Vec<usize>, origin: Rect) {
     rt.ui.apply_moves(&[(id, bounds)]);
     rt.ui.set_visible(id, true);
     rt.ui.raise(id);
-    rt.ui.focus(id);
+    focus_node(rt, id);
     rt.ui.invalidate(id);
 }
 
@@ -177,9 +178,48 @@ pub(super) fn redraw<M: 'static>(rt: &Runtime<M>) {
 /// Focuses the popup open at `depth` and repaints it.
 pub(super) fn focus_level<M: 'static>(rt: &Runtime<M>, depth: usize) {
     if let Some(id) = rt.pool.borrow().get(depth).copied() {
-        rt.ui.focus(id);
+        focus_node(rt, id);
         rt.ui.invalidate(id);
     }
+}
+
+/// Restores [`Runtime::moving_focus`] when a focus move ends, even by a panic.
+struct FocusMove<'a> {
+    flag: &'a Cell<bool>,
+    previous: bool,
+}
+
+impl Drop for FocusMove<'_> {
+    fn drop(&mut self) {
+        self.flag.set(self.previous);
+    }
+}
+
+/// Gives the keyboard focus to one of the menu's own nodes.
+///
+/// The node losing the focus is told `KillFocus`, which [`dismiss`] reads as
+/// the user clicking elsewhere; the guard marks this move as the menu's own.
+pub(super) fn focus_node<M: 'static>(rt: &Runtime<M>, id: WidgetId) {
+    let _move = FocusMove {
+        previous: rt.moving_focus.replace(true),
+        flag: &rt.moving_focus,
+    };
+    rt.ui.focus(id);
+}
+
+/// Closes the menu because a popup or the bar lost the keyboard focus, unless
+/// it went to another of the menu's own nodes (a press on the bar, or on a
+/// parent level while a submenu holds it) or the menu moved it itself.
+pub(super) fn dismiss<M: 'static>(rt: &Runtime<M>) {
+    if rt.moving_focus.get() {
+        return;
+    }
+    let holder = rt.ui.focus_holder();
+    let own = |id| rt.bar.get() == Some(id) || rt.pool.borrow().contains(&id);
+    if holder.is_some_and(own) {
+        return;
+    }
+    close_all(rt);
 }
 
 /// Repaints the popup open at `depth`.

@@ -7,7 +7,8 @@ use std::rc::Rc;
 
 use super::model::{self, Kind, Node};
 use super::open::{
-    close_all, close_levels_from, focus_level, invalidate_level, level_path, open_bar, open_submenu,
+    close_all, close_levels_from, dismiss, focus_level, focus_node, invalidate_level, level_path,
+    open_bar, open_submenu,
 };
 use super::{MenuId, Runtime, layout};
 use crate::backend::Event;
@@ -46,13 +47,21 @@ pub(super) fn bar<M: 'static>(rt: &Rc<Runtime<M>>, event: &Event) -> Option<M> {
             ..
         } => {
             if let Some(index) = layout::title_at(&rt.model.borrow(), *x, dpi) {
-                rt.ui.focus(bar);
+                focus_node(rt, bar);
                 if rt.view.borrow().bar_open == Some(index) {
                     close_all(rt);
                 } else {
                     open_bar(rt, index);
                 }
+            } else if rt.view.borrow().bar_open.is_some() {
+                // A press on the bar's empty area is outside every menu; the
+                // focus it takes would otherwise strand the open popup.
+                close_all(rt);
             }
+            None
+        }
+        Event::KillFocus => {
+            dismiss(rt);
             None
         }
         Event::KeyDown {
@@ -73,6 +82,10 @@ pub(super) fn popup<M: 'static>(rt: &Rc<Runtime<M>>, depth: usize, event: &Event
     }
     let _ = rt.view.borrow().levels.get(depth)?;
     match event {
+        Event::KillFocus => {
+            dismiss(rt);
+            None
+        }
         Event::MouseMove { y, .. } => {
             if let Some(index) = row_at(rt, depth, *y) {
                 hover(rt, depth, index);
@@ -123,7 +136,7 @@ fn popup_key<M: 'static>(rt: &Rc<Runtime<M>>, depth: usize, key: Key) -> Option<
             if depth == 0 {
                 close_all(rt);
                 if let Some(bar) = rt.bar.get() {
-                    rt.ui.focus(bar);
+                    focus_node(rt, bar);
                 }
             } else {
                 close_levels_from(rt, depth);
