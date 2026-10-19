@@ -463,7 +463,8 @@
   where no node can take the focus (bare window, a drag region, the resize
   frame) now takes it from a popup surface that holds it, and from no other
   holder. New `Backend::focus_holder` (defaulted to `None`) names the node that
-  holds the focus.
+  holds the focus. A left press on a
+  menu bar's empty area now also closes its open menu, on every backend.
 
 - `xui-form` format 2 hardening (the minors of the first review): a length
   is finite and within `MAX_LENGTH` (32768) design units, so `load` rejects
