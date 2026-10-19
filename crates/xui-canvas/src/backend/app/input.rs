@@ -91,6 +91,21 @@ impl App<'_> {
         }
     }
 
+    /// Takes the keyboard focus from its holder, who is told `KillFocus`: a
+    /// press on bare window, where no node can take it.
+    fn clear_focus(&self, raw: u64) {
+        let previous = self
+            .shared
+            .windows
+            .borrow_mut()
+            .get_mut(&raw)
+            .and_then(|state| state.focused.take());
+        if let Some(previous) = previous {
+            self.shared
+                .deliver(Self::window_id(raw), previous, &Event::KillFocus);
+        }
+    }
+
     /// Shows the cursor requested for the node under the pointer.
     pub(super) fn apply_cursor(&self, raw: u64, target: Option<WidgetId>) {
         let icon = match target {
@@ -178,6 +193,9 @@ impl App<'_> {
             None => self.shared.hit_test(window, x, y),
         };
         let Some((id, lx, ly)) = target else {
+            if state == ElementState::Pressed && captured.is_none() {
+                self.clear_focus(raw);
+            }
             return;
         };
         // A left-button press on a drag region moves the whole window, as a

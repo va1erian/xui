@@ -95,7 +95,7 @@ fn open_level<M: 'static>(rt: &Rc<Runtime<M>>, path: Vec<usize>, origin: Rect) {
     rt.ui.apply_moves(&[(id, bounds)]);
     rt.ui.set_visible(id, true);
     rt.ui.raise(id);
-    rt.ui.focus(id);
+    focus_node(rt, id);
     rt.ui.invalidate(id);
 }
 
@@ -177,9 +177,30 @@ pub(super) fn redraw<M: 'static>(rt: &Runtime<M>) {
 /// Focuses the popup open at `depth` and repaints it.
 pub(super) fn focus_level<M: 'static>(rt: &Runtime<M>, depth: usize) {
     if let Some(id) = rt.pool.borrow().get(depth).copied() {
-        rt.ui.focus(id);
+        focus_node(rt, id);
         rt.ui.invalidate(id);
     }
+}
+
+/// Gives the keyboard focus to one of the menu's own nodes.
+///
+/// The node losing the focus is told `KillFocus`, which [`dismiss`] reads as
+/// the user clicking elsewhere; the guard marks this move as the menu's own.
+pub(super) fn focus_node<M: 'static>(rt: &Runtime<M>, id: WidgetId) {
+    rt.moving_focus.set(true);
+    rt.ui.focus(id);
+    rt.moving_focus.set(false);
+}
+
+/// Closes the menu because a popup or the bar lost the keyboard focus to
+/// something outside it (a click elsewhere), leaving a note of which bar title
+/// was open for a press on that title to read.
+pub(super) fn dismiss<M: 'static>(rt: &Runtime<M>) {
+    if rt.moving_focus.get() {
+        return;
+    }
+    rt.dismissed.set(rt.view.borrow().bar_open);
+    close_all(rt);
 }
 
 /// Repaints the popup open at `depth`.

@@ -3,8 +3,9 @@
 //! Input into an offscreen window, delivered as the windowed backend delivers
 //! it: the pointer leaving a node tells that node (`MouseLeave`), a press moves
 //! the keyboard focus to the node it lands on (`KillFocus` to the old holder,
-//! `SetFocus` to the new one), and `Backend::focus` does the same, so a test
-//! sees the focus rings, carets and hover states of a real session.
+//! `SetFocus` to the new one; a press on bare window takes it from the holder),
+//! and `Backend::focus` does the same, so a test sees the focus rings, carets
+//! and hover states of a real session.
 
 use xui_core::backend::{Event, WidgetId, WindowId};
 
@@ -64,6 +65,16 @@ impl OffscreenBackend {
         }
     }
 
+    /// A press on bare window, where no node can take the focus: the holder
+    /// loses it (`KillFocus`) and nothing has it.
+    fn blur_on_press(&self) {
+        let previous = self.focused.borrow_mut().take();
+        let window = previous.and_then(|id| self.nodes.borrow().window_of(id));
+        if let (Some(previous), Some(window)) = (previous, window) {
+            self.deliver(window, previous, &Event::KillFocus);
+        }
+    }
+
     /// The press of a pointer button on `id`: a window system focuses the node
     /// it lands on before the node sees the press, and a node that already has
     /// the focus is not told again.
@@ -119,6 +130,13 @@ impl OffscreenBackend {
             self.set_hover(window, target.map(|(id, _, _)| id));
         }
         let Some((target, lx, ly)) = target else {
+            if matches!(
+                event,
+                Event::MouseDown { .. } | Event::MouseDoubleClick { .. }
+            ) && captured.is_none()
+            {
+                self.blur_on_press();
+            }
             return false;
         };
         if matches!(

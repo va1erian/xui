@@ -167,6 +167,13 @@ struct Runtime<M: 'static> {
     pub(super) on_toggle: ToggleMapper<M>,
     /// The bar's node, when this menu has one.
     pub(super) bar: Cell<Option<WidgetId>>,
+    /// Set while the menu moves the keyboard focus between its own nodes, so
+    /// the `KillFocus` that move sends is not taken for the user clicking away.
+    pub(super) moving_focus: Cell<bool>,
+    /// The bar title whose menu the last focus loss dismissed. The press that
+    /// caused it may be on that same title, which must then toggle the menu
+    /// closed rather than reopen it.
+    pub(super) dismissed: Cell<Option<usize>>,
 }
 
 impl<M: 'static> Runtime<M> {
@@ -180,6 +187,8 @@ impl<M: 'static> Runtime<M> {
             on_select: RefCell::new(None),
             on_toggle: RefCell::new(None),
             bar: Cell::new(None),
+            moving_focus: Cell::new(false),
+            dismissed: Cell::new(None),
         })
     }
 }
