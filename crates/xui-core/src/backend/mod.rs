@@ -283,11 +283,13 @@ pub trait Backend {
     fn focus(&self, id: WidgetId);
 
     /// The node that holds the keyboard focus in `window` now, or `None` when
-    /// none does or the backend cannot tell.
+    /// none does or the backend cannot tell (the default).
     ///
-    /// A backend that delivers `KillFocus` reports the new holder from inside
-    /// that delivery, so a widget losing the focus can tell a move to one of
-    /// its own nodes from one to somewhere else.
+    /// A backend that reports it does so from inside a `KillFocus` delivery,
+    /// so a widget losing the focus can tell a move to one of its own nodes
+    /// from one to somewhere else. A widget must still cover a backend that
+    /// answers `None` on its own (the Win32 backend does), as the menu does
+    /// with its own-move guard.
     fn focus_holder(&self, window: WindowId) -> Option<WidgetId> {
         let _ = window;
         None

@@ -14,6 +14,11 @@ use xui_core::backend::{Backend, Event, PlatformSpec, WindowId};
 use xui_core::message::{Key, Modifiers, MouseButton};
 use xui_core::widget::{Menu, MenuId};
 
+thread_local! {
+    /// How many times the app's key hook saw Enter on this test's thread.
+    static SHORTCUTS: Cell<u32> = const { Cell::new(0) };
+}
+
 struct Demo;
 
 impl App for Demo {
@@ -69,6 +74,13 @@ fn session(script: impl FnOnce(&OffscreenBackend, WindowId, &Menu<()>) + 'static
         run,
         PlatformSpec::new("menu dismiss").size(Dip(320.0), Dip(240.0)),
         move |ui| {
+            // The app is built after this closure returns, so count in the hook.
+            ui.on_key(|key, _| {
+                if key == Key::RETURN {
+                    SHORTCUTS.with(|count| count.set(count.get() + 1));
+                }
+                None
+            });
             let menu = Handle::new();
             ui.root(
                 absolute()
@@ -180,6 +192,27 @@ fn clicking_bare_window_leaves_a_normal_focus_holder_alone() {
             backend.focus_holder(window),
             holder,
             "only a popup loses the focus to a press on bare window"
+        );
+    });
+}
+
+#[test]
+fn shortcuts_still_work_after_a_click_on_bare_window_dismissed_a_menu() {
+    session(|backend, window, menu| {
+        press(backend, window, 5, 14);
+        press(backend, window, 250, 200);
+        assert!(!menu.is_open());
+        assert_eq!(
+            backend.focus_holder(window),
+            None,
+            "nothing holds the focus"
+        );
+
+        key(backend, window, Key::RETURN);
+        assert_eq!(
+            SHORTCUTS.with(Cell::get),
+            1,
+            "the app's shortcut hook still sees keys with no focused node"
         );
     });
 }

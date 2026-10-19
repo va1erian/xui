@@ -283,3 +283,19 @@ fn a_press_on_another_title_switches_to_its_menu() {
     assert!(menu.is_open(), "the other title's menu opened");
     assert_eq!(menu.rt.view.borrow().bar_open, Some(1));
 }
+
+#[test]
+fn pressing_the_bars_empty_area_closes_the_open_menu() {
+    let (_backend, core, ui) = setup();
+    let menu = sample_bar(&ui);
+    let bar = menu.id().unwrap();
+    let runtime = Runtime::primary(core, TestApp(Rc::new(RefCell::new(Vec::new()))));
+
+    runtime.deliver(bar, &down(5, 14));
+    assert!(menu.is_open());
+    runtime.deliver(bar, &down(250, 14));
+    assert!(
+        !menu.is_open(),
+        "the empty part of the bar is outside the menu"
+    );
+}

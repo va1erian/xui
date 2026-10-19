@@ -53,6 +53,10 @@ pub(super) fn bar<M: 'static>(rt: &Rc<Runtime<M>>, event: &Event) -> Option<M> {
                 } else {
                     open_bar(rt, index);
                 }
+            } else if rt.view.borrow().bar_open.is_some() {
+                // A press on the bar's empty area is outside every menu; the
+                // focus it takes would otherwise strand the open popup.
+                close_all(rt);
             }
             None
         }

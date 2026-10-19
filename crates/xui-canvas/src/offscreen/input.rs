@@ -32,14 +32,13 @@ impl OffscreenBackend {
         handled
     }
 
-    /// Delivers a positionless event to the focused node of `window`.
+    /// Delivers a positionless event to the focused node of `window`, or to no
+    /// node when none is focused there, so the app's shortcut hook still sees
+    /// a key.
     fn inject_to_focus(&self, window: WindowId, event: &Event) -> bool {
-        let Some(target) = *self.focused.borrow() else {
-            return false;
-        };
-        if self.nodes.borrow().window_of(target) != Some(window) {
-            return false;
-        }
+        let target = (*self.focused.borrow())
+            .filter(|target| self.nodes.borrow().window_of(*target) == Some(window))
+            .unwrap_or(WidgetId::NONE);
         self.deliver(window, target, event)
     }
 

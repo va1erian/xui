@@ -275,9 +275,9 @@ impl App<'_> {
             .borrow()
             .get(&raw)
             .and_then(|state| state.focused);
-        let Some(id) = focused else {
-            return;
-        };
+        // With no focused node the keys still reach the app, which offers them
+        // to its shortcut hook (a menu accelerator works wherever focus sits).
+        let id = focused.unwrap_or(WidgetId::NONE);
         let pressed = state == ElementState::Pressed;
         for event in key_events(pressed, repeat, logical, text, self.modifiers) {
             self.shared.deliver(window, id, &event);
