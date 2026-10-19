@@ -137,6 +137,11 @@ impl<M: 'static> Ui<M> {
         self.core.backend().focus(id);
     }
 
+    /// The node that holds the keyboard focus now, if the backend can tell.
+    pub fn focus_holder(&self) -> Option<WidgetId> {
+        self.core.backend().focus_holder(self.core.window())
+    }
+
     /// Replaces a node's text, and marks the layouts dirty: the node's
     /// natural size may follow its text.
     pub fn set_text(&self, id: WidgetId, text: &str) {

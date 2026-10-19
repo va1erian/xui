@@ -49,7 +49,7 @@ the platform (winit + softbuffer/tiny-skia · Win32 · a headless surface)
 - **Nodes** — `create`/`destroy` (destroy cascades), `apply_moves` (batched so a
   relayout does not flicker), `set_visible`/`set_enabled`, `raise`,
   `set_drag_region`, `set_cursor`, `set_clip`, `set_capture`/`release_capture`,
-  `focus`, `set_text`/`text`, `bounds`, `invalidate`/`invalidate_rect`,
+  `focus`/`focus_holder`, `set_text`/`text`, `bounds`, `invalidate`/`invalidate_rect`,
   `set_painter`.
 - **Text** — `measure_text`, `text_shaper`/`layout_text` (a `Send + Sync` shaper
   a worker can use), `dpi`, `client_rect`.

@@ -3,7 +3,7 @@
 //! Input into an offscreen window, delivered as the windowed backend delivers
 //! it: the pointer leaving a node tells that node (`MouseLeave`), a press moves
 //! the keyboard focus to the node it lands on (`KillFocus` to the old holder,
-//! `SetFocus` to the new one; a press on bare window takes it from the holder),
+//! `SetFocus` to the new one; a press on bare window takes it from a popup),
 //! and `Backend::focus` does the same, so a test sees the focus rings, carets
 //! and hover states of a real session.
 
@@ -65,13 +65,23 @@ impl OffscreenBackend {
         }
     }
 
-    /// A press on bare window, where no node can take the focus: the holder
-    /// loses it (`KillFocus`) and nothing has it.
-    fn blur_on_press(&self) {
-        let previous = self.focused.borrow_mut().take();
-        let window = previous.and_then(|id| self.nodes.borrow().window_of(id));
-        if let (Some(previous), Some(window)) = (previous, window) {
-            self.deliver(window, previous, &Event::KillFocus);
+    /// A press on bare window, where no node can take the focus: a popup
+    /// surface of `window` that holds it loses it (`KillFocus`), as a press
+    /// outside the popup dismisses it. Any other holder keeps the focus.
+    fn dismiss_popup_focus(&self, window: WindowId) {
+        let popup = {
+            let nodes = self.nodes.borrow();
+            let mut focused = self.focused.borrow_mut();
+            let popup = focused.filter(|id| {
+                nodes.window_of(*id) == Some(window) && nodes.get(*id).is_some_and(|n| n.popup)
+            });
+            if popup.is_some() {
+                *focused = None;
+            }
+            popup
+        };
+        if let Some(popup) = popup {
+            self.deliver(window, popup, &Event::KillFocus);
         }
     }
 
@@ -135,7 +145,7 @@ impl OffscreenBackend {
                 Event::MouseDown { .. } | Event::MouseDoubleClick { .. }
             ) && captured.is_none()
             {
-                self.blur_on_press();
+                self.dismiss_popup_focus(window);
             }
             return false;
         };

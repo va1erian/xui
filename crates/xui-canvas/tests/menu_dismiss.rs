@@ -1,7 +1,7 @@
-//! A menu closes when the user clicks outside it, on the backend a custom OS
-//! such as LazyOS uses: the press moves the keyboard focus off the open popup,
-//! and the popup treats that as a dismissal. The menu's own focus moves (to
-//! its popups as it opens, to a submenu) are not.
+//! A menu closes when the user clicks outside it, on the canvas backend: the
+//! press moves the keyboard focus off the open popup, and the popup treats that
+//! as a dismissal. Focus moves that stay inside the menu (to its popups as it opens, to a submenu, back to
+//! a parent level, to the bar) are not.
 
 use std::cell::Cell;
 use std::rc::Rc;
@@ -127,6 +127,25 @@ fn opening_a_submenu_does_not_dismiss_the_menu() {
 }
 
 #[test]
+fn pressing_a_parent_row_while_a_submenu_is_open_keeps_the_menu() {
+    session(|backend, window, menu| {
+        press(backend, window, 5, 14);
+        // Down to "More" and Right: the submenu popup holds the focus.
+        key(backend, window, Key::DOWN);
+        key(backend, window, Key::DOWN);
+        key(backend, window, Key::RIGHT);
+
+        // A press on the "More" row takes the focus back to the parent popup:
+        // the focus stays inside the menu, so the menu stays open.
+        press(backend, window, 60, 27 + 5 + 24 + 12);
+        assert!(
+            menu.is_open(),
+            "the press on the parent level was not outside"
+        );
+    });
+}
+
+#[test]
 fn clicking_the_open_title_toggles_the_menu_closed() {
     session(|backend, window, menu| {
         press(backend, window, 5, 14);
@@ -146,5 +165,21 @@ fn clicking_empty_window_area_closes_the_menu() {
 
         press(backend, window, 250, 200);
         assert!(!menu.is_open(), "a click on bare window dismissed it");
+    });
+}
+
+#[test]
+fn clicking_bare_window_leaves_a_normal_focus_holder_alone() {
+    session(|backend, window, _menu| {
+        press(backend, window, 50, 135);
+        let holder = backend.focus_holder(window);
+        assert!(holder.is_some(), "the button took the focus");
+
+        press(backend, window, 250, 200);
+        assert_eq!(
+            backend.focus_holder(window),
+            holder,
+            "only a popup loses the focus to a press on bare window"
+        );
     });
 }

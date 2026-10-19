@@ -81,6 +81,7 @@ impl Backend for OffscreenBackend {
         node.visible = spec.visible;
         node.enabled = spec.enabled;
         node.text = spec.text.clone();
+        node.popup = spec.popup;
         self.nodes.borrow_mut().insert(id, node);
         Ok(id)
     }
@@ -156,6 +157,11 @@ impl Backend for OffscreenBackend {
 
     fn focus(&self, id: WidgetId) {
         self.focus_node(id);
+    }
+
+    fn focus_holder(&self, window: WindowId) -> Option<WidgetId> {
+        let holder = (*self.focused.borrow())?;
+        (self.nodes.borrow().window_of(holder) == Some(window)).then_some(holder)
     }
 
     fn set_text(&self, id: WidgetId, text: &str) {

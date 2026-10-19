@@ -204,8 +204,13 @@ widgets (see [Development](development.md#property-tests)).
 delivers: a move onto another node tells the node it left (`MouseLeave`), a
 press moves the keyboard focus to the node it lands on (`KillFocus` to the old
 holder, `SetFocus` to the new one) before the node sees the press, and
-`Backend::focus` tells both holders. A session driven headlessly therefore
-shows the focus rings, carets and hover states of a real one.
+`Backend::focus` tells both holders, and `Backend::focus_holder` names the new
+one from inside that `KillFocus` (a menu uses it to tell the focus moving to its
+bar or another level from the user clicking away). A press where no node can
+take the focus (bare window, a drag region, the resize frame) takes it from a
+popup surface that holds it and from no other holder, so a menu closes on a
+click outside it while an edit keeps typing. A session driven headlessly
+therefore shows the focus rings, carets and hover states of a real one.
 
 **Presenting.** A window keeps its frame between frames, and a frame with no
 damage paints nothing and allocates nothing. The windowed backend hands

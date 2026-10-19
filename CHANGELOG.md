@@ -456,12 +456,14 @@
 ### Fixes
 
 - Menus close when the user clicks outside them on the canvas backends (the
-  one LazyOS uses): a bar menu, its submenus and a context menu now dismiss on
-  the `KillFocus` a press elsewhere sends to the open popup, and the menu's own
-  focus moves (to a popup or submenu as it opens) are exempt. Pressing the open
-  bar title still toggles its menu closed. A press on bare window, where no
-  node can take the focus, now blurs the focused node on `xui-canvas`
-  (`App` and `OffscreenBackend`), as a window system does.
+  ones LazyOS uses): a bar menu, its submenus and a context menu dismiss on the
+  `KillFocus` a press elsewhere sends to the open popup, unless the focus went
+  to another node of the menu (the bar, a parent level) or the menu moved it
+  itself. Pressing the open bar title still toggles its menu closed. A press
+  where no node can take the focus (bare window, a drag region, the resize
+  frame) now takes it from a popup surface that holds it, and from no other
+  holder. New `Backend::focus_holder` (defaulted to `None`) names the node that
+  holds the focus.
 
 - `xui-form` format 2 hardening (the minors of the first review): a length
   is finite and within `MAX_LENGTH` (32768) design units, so `load` rejects

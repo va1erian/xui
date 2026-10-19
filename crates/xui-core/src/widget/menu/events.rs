@@ -23,9 +23,6 @@ pub(super) fn bar<M: 'static>(rt: &Rc<Runtime<M>>, event: &Event) -> Option<M> {
     let dpi = rt.ui.dpi();
     match event {
         Event::MouseMove { x, .. } => {
-            // Reaching a title takes a pointer move, so a dismissal noted
-            // before it is not the press that follows.
-            rt.dismissed.set(None);
             let index = layout::title_at(&rt.model.borrow(), *x, dpi);
             if rt.view.borrow().bar_hover != index {
                 rt.view.borrow_mut().bar_hover = index;
@@ -51,12 +48,9 @@ pub(super) fn bar<M: 'static>(rt: &Rc<Runtime<M>>, event: &Event) -> Option<M> {
         } => {
             if let Some(index) = layout::title_at(&rt.model.borrow(), *x, dpi) {
                 focus_node(rt, bar);
-                // The press moved the focus off this title's open popup, which
-                // already closed the menu: that press is the one that closes it.
-                let dismissed = rt.dismissed.take() == Some(index);
                 if rt.view.borrow().bar_open == Some(index) {
                     close_all(rt);
-                } else if !dismissed {
+                } else {
                     open_bar(rt, index);
                 }
             }

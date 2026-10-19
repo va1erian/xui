@@ -179,6 +179,11 @@ impl Shared {
         Some((x - abs.left, y - abs.top))
     }
 
+    /// Whether the node `id` is a transient popup surface.
+    pub(crate) fn is_popup(&self, id: WidgetId) -> bool {
+        self.nodes.borrow().get(id).is_some_and(|node| node.popup)
+    }
+
     /// Whether the node `id` is marked as a window-drag region.
     pub(crate) fn is_drag_region(&self, id: WidgetId) -> bool {
         self.nodes

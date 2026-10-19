@@ -282,6 +282,17 @@ pub trait Backend {
     /// Gives a node the keyboard focus.
     fn focus(&self, id: WidgetId);
 
+    /// The node that holds the keyboard focus in `window` now, or `None` when
+    /// none does or the backend cannot tell.
+    ///
+    /// A backend that delivers `KillFocus` reports the new holder from inside
+    /// that delivery, so a widget losing the focus can tell a move to one of
+    /// its own nodes from one to somewhere else.
+    fn focus_holder(&self, window: WindowId) -> Option<WidgetId> {
+        let _ = window;
+        None
+    }
+
     /// Replaces a node's text.
     fn set_text(&self, id: WidgetId, text: &str);
 

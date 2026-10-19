@@ -91,18 +91,21 @@ impl App<'_> {
         }
     }
 
-    /// Takes the keyboard focus from its holder, who is told `KillFocus`: a
-    /// press on bare window, where no node can take it.
-    fn clear_focus(&self, raw: u64) {
-        let previous = self
-            .shared
-            .windows
-            .borrow_mut()
-            .get_mut(&raw)
-            .and_then(|state| state.focused.take());
-        if let Some(previous) = previous {
+    /// Takes the keyboard focus from a popup surface that holds it, who is told
+    /// `KillFocus`: a press where no node can take the focus (bare window, a
+    /// drag region, the resize frame) is a press outside the popup. Any other
+    /// holder keeps the focus, so typing carries on after such a press.
+    fn dismiss_popup_focus(&self, raw: u64) {
+        let popup = {
+            let mut windows = self.shared.windows.borrow_mut();
+            windows
+                .get_mut(&raw)
+                .filter(|state| state.focused.is_some_and(|id| self.shared.is_popup(id)))
+                .and_then(|state| state.focused.take())
+        };
+        if let Some(popup) = popup {
             self.shared
-                .deliver(Self::window_id(raw), previous, &Event::KillFocus);
+                .deliver(Self::window_id(raw), popup, &Event::KillFocus);
         }
     }
 
@@ -182,6 +185,7 @@ impl App<'_> {
             && let Some(direction) = self.resize_direction_at(raw, x, y)
             && let Some(handle) = self.window_handle(raw)
         {
+            self.dismiss_popup_focus(raw);
             let _ = handle.drag_resize_window(direction);
             return;
         }
@@ -194,7 +198,7 @@ impl App<'_> {
         };
         let Some((id, lx, ly)) = target else {
             if state == ElementState::Pressed && captured.is_none() {
-                self.clear_focus(raw);
+                self.dismiss_popup_focus(raw);
             }
             return;
         };
@@ -206,6 +210,7 @@ impl App<'_> {
             && self.shared.is_drag_region(id)
             && let Some(handle) = self.window_handle(raw)
         {
+            self.dismiss_popup_focus(raw);
             let _ = handle.drag_window();
             return;
         }

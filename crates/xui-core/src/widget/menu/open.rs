@@ -5,6 +5,7 @@
 //! Popups are pooled, one node per nesting level, and shown/hidden through the
 //! backend the way [`ComboBox`](super::ComboBox) shows its list.
 
+use std::cell::Cell;
 use std::rc::Rc;
 
 use super::{Level, Open, Runtime, layout, model};
@@ -182,24 +183,42 @@ pub(super) fn focus_level<M: 'static>(rt: &Runtime<M>, depth: usize) {
     }
 }
 
+/// Restores [`Runtime::moving_focus`] when a focus move ends, even by a panic.
+struct FocusMove<'a> {
+    flag: &'a Cell<bool>,
+    previous: bool,
+}
+
+impl Drop for FocusMove<'_> {
+    fn drop(&mut self) {
+        self.flag.set(self.previous);
+    }
+}
+
 /// Gives the keyboard focus to one of the menu's own nodes.
 ///
 /// The node losing the focus is told `KillFocus`, which [`dismiss`] reads as
 /// the user clicking elsewhere; the guard marks this move as the menu's own.
 pub(super) fn focus_node<M: 'static>(rt: &Runtime<M>, id: WidgetId) {
-    rt.moving_focus.set(true);
+    let _move = FocusMove {
+        previous: rt.moving_focus.replace(true),
+        flag: &rt.moving_focus,
+    };
     rt.ui.focus(id);
-    rt.moving_focus.set(false);
 }
 
-/// Closes the menu because a popup or the bar lost the keyboard focus to
-/// something outside it (a click elsewhere), leaving a note of which bar title
-/// was open for a press on that title to read.
+/// Closes the menu because a popup or the bar lost the keyboard focus, unless
+/// it went to another of the menu's own nodes (a press on the bar, or on a
+/// parent level while a submenu holds it) or the menu moved it itself.
 pub(super) fn dismiss<M: 'static>(rt: &Runtime<M>) {
     if rt.moving_focus.get() {
         return;
     }
-    rt.dismissed.set(rt.view.borrow().bar_open);
+    let holder = rt.ui.focus_holder();
+    let own = |id| rt.bar.get() == Some(id) || rt.pool.borrow().contains(&id);
+    if holder.is_some_and(own) {
+        return;
+    }
     close_all(rt);
 }
 
