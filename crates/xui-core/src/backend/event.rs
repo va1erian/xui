@@ -74,6 +74,18 @@ pub enum Event {
     },
     /// The cursor left the widget.
     MouseLeave,
+    /// Relative pointer motion while the pointer is locked (see
+    /// `Backend::set_pointer_lock`), in raw device pixels: not scaled by DPI
+    /// and not clamped to the window.
+    PointerDelta {
+        /// Horizontal motion; positive is right.
+        dx: i32,
+        /// Vertical motion; positive is down.
+        dy: i32,
+    },
+    /// The pointer lock ended without the node asking: focus or activation
+    /// was lost, `Esc` was pressed, or the backend could not keep the grab.
+    PointerLockLost,
     /// Another window took the mouse capture.
     CaptureChanged,
     /// A key went down.
@@ -180,6 +192,8 @@ impl Event {
                 | Event::MouseDoubleClick { .. }
                 | Event::MouseWheel { .. }
                 | Event::MouseLeave
+                | Event::PointerDelta { .. }
+                | Event::PointerLockLost
                 | Event::CaptureChanged
                 | Event::KeyDown { .. }
                 | Event::KeyUp { .. }

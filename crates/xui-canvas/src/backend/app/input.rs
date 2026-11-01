@@ -127,6 +127,10 @@ impl App<'_> {
 
     pub(super) fn cursor_moved(&mut self, raw: u64, x: f64, y: f64) {
         self.cursor = (x, y);
+        // A locked pointer reports relative motion instead of positions.
+        if self.shared.pointer_lock.borrow().is_some() {
+            return;
+        }
         let window = Self::window_id(raw);
         let (x, y) = (x as i32, y as i32);
         // A captured node keeps receiving moves (and the cursor) even outside

@@ -357,3 +357,22 @@ fn a_headless_layout_baseline_is_three_quarters_of_a_line() {
     let layout = backend.layout_text("hi", &FontSpec::new(dip(16.0)), f32::INFINITY, 96);
     assert_eq!(layout.baseline(), layout.height() * 3.0 / 4.0);
 }
+
+#[test]
+fn the_pointer_lock_is_recorded_and_only_its_owner_releases_it() {
+    let backend = HeadlessBackend::new();
+    let window = backend.open_window(&PlatformSpec::new("lock")).unwrap();
+    let a = backend
+        .create(ParentRef::Window(window), &node(NodeKind::Container))
+        .unwrap();
+    let b = backend
+        .create(ParentRef::Window(window), &node(NodeKind::Container))
+        .unwrap();
+
+    backend.set_pointer_lock(a, true);
+    assert_eq!(backend.pointer_lock(), Some(a));
+    backend.set_pointer_lock(b, false);
+    assert_eq!(backend.pointer_lock(), Some(a));
+    backend.set_pointer_lock(a, false);
+    assert_eq!(backend.pointer_lock(), None);
+}

@@ -74,6 +74,7 @@ struct State {
     quit: bool,
     focused: Option<WidgetId>,
     captured: Option<WidgetId>,
+    pointer_lock: Option<WidgetId>,
     moves: u32,
     invalidations: u32,
     windows: HashMap<u64, SinkWindow>,
@@ -105,6 +106,7 @@ impl HeadlessBackend {
                 quit: false,
                 focused: None,
                 captured: None,
+                pointer_lock: None,
                 moves: 0,
                 invalidations: 0,
                 windows: HashMap::new(),
@@ -231,6 +233,11 @@ impl HeadlessBackend {
             .nodes
             .get(&id.raw())
             .is_some_and(|node| node.popup)
+    }
+
+    /// The node that currently holds the pointer lock, if any.
+    pub fn pointer_lock(&self) -> Option<WidgetId> {
+        self.state.borrow().pointer_lock
     }
 
     /// The node the pointer is currently captured by, if any.

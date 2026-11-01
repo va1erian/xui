@@ -20,7 +20,7 @@ use std::rc::Rc;
 use std::time::Instant;
 
 use winit::application::ApplicationHandler;
-use winit::event::WindowEvent;
+use winit::event::{DeviceEvent, DeviceId, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 
 use xui_core::backend::{Event, TimerId, WidgetId, WindowId};
@@ -206,7 +206,18 @@ impl ApplicationHandler<UserEvent> for App<'_> {
                     win: state.super_key(),
                 };
             }
+            WindowEvent::Focused(false) => self.shared.unlock_pointer(true),
             WindowEvent::KeyboardInput { event, .. } => {
+                if event.state.is_pressed()
+                    && matches!(
+                        event.logical_key,
+                        winit::keyboard::Key::Named(winit::keyboard::NamedKey::Escape)
+                    )
+                    && self.shared.pointer_lock.borrow().is_some()
+                {
+                    self.shared.unlock_pointer(true);
+                    return;
+                }
                 self.keyboard_input(
                     raw,
                     event.state,
@@ -216,6 +227,24 @@ impl ApplicationHandler<UserEvent> for App<'_> {
                 );
             }
             _ => {}
+        }
+    }
+
+    fn device_event(&mut self, _: &ActiveEventLoop, _: DeviceId, event: DeviceEvent) {
+        let DeviceEvent::MouseMotion { delta: (dx, dy) } = event else {
+            return;
+        };
+        let locked = *self.shared.pointer_lock.borrow();
+        let Some(id) = locked else {
+            return;
+        };
+        let window = self.shared.nodes.borrow().window_of(id);
+        if let Some(window) = window {
+            let (dx, dy) = (dx.round() as i32, dy.round() as i32);
+            if dx != 0 || dy != 0 {
+                self.shared
+                    .deliver(window, id, &Event::PointerDelta { dx, dy });
+            }
         }
     }
 

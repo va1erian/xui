@@ -132,6 +132,16 @@ impl<M: 'static> Ui<M> {
         self.core.backend().release_capture();
     }
 
+    /// Locks or unlocks the pointer for `id`, for mouse-look in a custom
+    /// node. While locked the cursor is hidden and confined and the node gets
+    /// `Event::PointerDelta` (raw device pixels) instead of absolute moves;
+    /// buttons, wheel and keys still arrive as usual. The backend ends the
+    /// lock on focus loss, `Esc` and node removal, sending
+    /// `Event::PointerLockLost`.
+    pub fn set_pointer_lock(&self, id: WidgetId, locked: bool) {
+        self.core.backend().set_pointer_lock(id, locked);
+    }
+
     /// Gives a node the keyboard focus.
     pub fn focus(&self, id: WidgetId) {
         self.core.backend().focus(id);
