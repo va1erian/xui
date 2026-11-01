@@ -464,6 +464,8 @@
 
 ### Fixes
 
+- `xui-canvas` now delivers `Key::F5` to `Key::F12`; its keymap stopped at F4,
+  so those keys never reached the app.
 - `xui-canvas` no longer panics with `RefCell already borrowed` when a window's
   scale factor changes (moving it between monitors), and a captured-pointer
   move no longer holds the capture borrow while the handler runs.
