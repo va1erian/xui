@@ -205,9 +205,19 @@ mod tests {
             Some(Key::ESCAPE)
         );
         assert_eq!(virtual_key(&WinitKey::Named(NamedKey::F1)), Some(Key::F1));
-        assert_eq!(virtual_key(&WinitKey::Named(NamedKey::F5)), Some(Key::F5));
-        assert_eq!(virtual_key(&WinitKey::Named(NamedKey::F7)), Some(Key::F7));
-        assert_eq!(virtual_key(&WinitKey::Named(NamedKey::F12)), Some(Key::F12));
+        for (named, key) in [
+            (NamedKey::F5, Key::F5),
+            (NamedKey::F6, Key::F6),
+            (NamedKey::F7, Key::F7),
+            (NamedKey::F8, Key::F8),
+            (NamedKey::F9, Key::F9),
+            (NamedKey::F10, Key::F10),
+            (NamedKey::F11, Key::F11),
+            (NamedKey::F12, Key::F12),
+        ] {
+            assert_eq!(virtual_key(&WinitKey::Named(named)), Some(key));
+        }
+        assert_eq!(virtual_key(&WinitKey::Named(NamedKey::F13)), None);
     }
 
     #[test]
