@@ -158,13 +158,16 @@ impl ApplicationHandler<UserEvent> for App<'_> {
                 // `winit` may report the scale change before the matching
                 // `Resized`, so adopt the fresh backing size now; the next
                 // frame then presents at the new DPI.
-                if let Some(size) = self
+                // The size is read in its own statement so the shared `Ref`
+                // is dropped before `borrow_mut`.
+                let inner = self
                     .shared
                     .windows
                     .borrow()
                     .get(&raw)
                     .and_then(|state| state.window.clone())
-                    .map(|window| window.inner_size())
+                    .map(|window| window.inner_size());
+                if let Some(size) = inner
                     && let Some(state) = self.shared.windows.borrow_mut().get_mut(&raw)
                 {
                     state.size = (size.width.max(1), size.height.max(1));

@@ -455,6 +455,9 @@
 
 ### Fixes
 
+- `xui-canvas` no longer panics with `RefCell already borrowed` when a window's
+  scale factor changes (moving it between monitors), and a captured-pointer
+  move no longer holds the capture borrow while the handler runs.
 - Menus close when the user clicks outside them on the canvas backends (the
   ones LazyOS uses): a bar menu, its submenus and a context menu dismiss on the
   `KillFocus` a press elsewhere sends to the open popup, unless the focus went

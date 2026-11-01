@@ -131,7 +131,9 @@ impl App<'_> {
         let (x, y) = (x as i32, y as i32);
         // A captured node keeps receiving moves (and the cursor) even outside
         // its bounds, so a drag survives leaving it.
-        if let Some(captured) = *self.shared.captured.borrow() {
+        // Copied out first: the handler may take or release capture.
+        let captured = *self.shared.captured.borrow();
+        if let Some(captured) = captured {
             if let Some((lx, ly)) = self.shared.local_point(captured, x, y) {
                 self.shared.deliver(
                     window,
