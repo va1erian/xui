@@ -83,8 +83,9 @@ pub enum Event {
         /// Vertical motion; positive is down.
         dy: i32,
     },
-    /// The pointer lock ended without the node asking: focus or activation
-    /// was lost, `Esc` was pressed, or the backend could not keep the grab.
+    /// The pointer lock ended without the node asking: focus was lost or
+    /// `Esc` was pressed. A lock the backend cannot take (no OS window yet, or
+    /// no grab available) simply never starts, and no `PointerDelta` arrives.
     PointerLockLost,
     /// Another window took the mouse capture.
     CaptureChanged,

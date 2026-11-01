@@ -75,6 +75,10 @@ impl Backend for WinitBackend {
     }
 
     fn close_window(&self, window: WindowId) {
+        let locked = *self.shared.pointer_lock.borrow();
+        if locked.is_some_and(|id| self.window_of(id) == Some(window)) {
+            self.shared.unlock_pointer(false);
+        }
         self.teardown_window_gl(window);
         self.shared.windows.borrow_mut().remove(&window.raw());
         self.shared.nodes.borrow_mut().remove_window(window);

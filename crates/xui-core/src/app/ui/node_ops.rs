@@ -136,8 +136,8 @@ impl<M: 'static> Ui<M> {
     /// node. While locked the cursor is hidden and confined and the node gets
     /// `Event::PointerDelta` (raw device pixels) instead of absolute moves;
     /// buttons, wheel and keys still arrive as usual. The backend ends the
-    /// lock on focus loss, `Esc` and node removal, sending
-    /// `Event::PointerLockLost`.
+    /// lock on focus loss, `Esc`, node removal and window close, sending
+    /// `Event::PointerLockLost` for the first two.
     pub fn set_pointer_lock(&self, id: WidgetId, locked: bool) {
         self.core.backend().set_pointer_lock(id, locked);
     }
