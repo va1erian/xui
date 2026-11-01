@@ -74,6 +74,15 @@
 
 ### Additions
 
+- **Pointer lock for mouse-look.** `Ui::set_pointer_lock(id, bool)` hides and
+  grabs the cursor and delivers `Event::PointerDelta { dx, dy }` (raw device
+  pixels) to the node; buttons, wheel and keys still arrive. The backend ends
+  the lock on focus loss, `Esc`, node removal and window close, sending
+  `Event::PointerLockLost` for the first two; buttons and the wheel go to the
+  locked node. `Backend::set_pointer_lock` defaults to a no-op.
+  Implemented on `xui-canvas` (`Locked`, falling back to `Confined`); the
+  offscreen and headless backends record it. `xui-win32` is not yet covered.
+
 - **A layout report's warnings are lines of their own, and CI checks them.**
   `Ui::layout_report()` writes each `!` warning on its own line under the
   node it is about, so a reader (or a script) finds one without parsing a

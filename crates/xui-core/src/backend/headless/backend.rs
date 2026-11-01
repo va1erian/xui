@@ -206,6 +206,15 @@ impl Backend for HeadlessBackend {
         self.state.borrow_mut().captured = Some(id);
     }
 
+    fn set_pointer_lock(&self, id: WidgetId, locked: bool) {
+        let mut state = self.state.borrow_mut();
+        if locked {
+            state.pointer_lock = Some(id);
+        } else if state.pointer_lock == Some(id) {
+            state.pointer_lock = None;
+        }
+    }
+
     fn release_capture(&self) {
         self.state.borrow_mut().captured = None;
     }

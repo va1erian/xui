@@ -279,6 +279,17 @@ pub trait Backend {
     /// backend that does not capture may ignore it.
     fn release_capture(&self) {}
 
+    /// Locks (`true`) or unlocks the pointer for `id`: the cursor is hidden
+    /// and confined, and the node receives [`Event::PointerDelta`] instead of
+    /// absolute moves. A backend releases the lock itself on focus loss,
+    /// `Esc`, node removal and window close; focus loss and `Esc` send
+    /// [`Event::PointerLockLost`]. Buttons and the wheel go to `id` while the
+    /// lock lasts. A backend without
+    /// support may ignore it.
+    fn set_pointer_lock(&self, id: WidgetId, locked: bool) {
+        let _ = (id, locked);
+    }
+
     /// Gives a node the keyboard focus.
     fn focus(&self, id: WidgetId);
 
