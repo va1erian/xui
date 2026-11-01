@@ -41,7 +41,9 @@ impl Shared {
             let _ = handle.set_cursor_grab(CursorGrabMode::None);
             handle.set_cursor_visible(true);
         }
-        if notify && let Some(window) = self.nodes.borrow().window_of(id) {
+        // Looked up first so the `nodes` borrow is gone when the handler runs.
+        let window = self.nodes.borrow().window_of(id);
+        if notify && let Some(window) = window {
             self.deliver(window, id, &Event::PointerLockLost);
         }
     }
