@@ -251,8 +251,10 @@ fn a_modal_window_runs_its_own_loop_until_it_closes() {
     let closer = Rc::new(Cell::new(None::<TimerId>));
     let watchdog = Rc::new(Cell::new(None::<TimerId>));
     let timed_out = Rc::new(Cell::new(false));
+    let closed_by_timer = Rc::new(Cell::new(false));
 
     struct Closer {
+        closed_by_timer: Rc<Cell<bool>>,
         backend: Rc<D2dBackend>,
         window: WindowId,
         closer: Rc<Cell<Option<TimerId>>>,
@@ -265,6 +267,9 @@ fn a_modal_window_runs_its_own_loop_until_it_closes() {
                 if Some(*id) == self.watchdog.get() {
                     self.timed_out.set(true);
                 }
+                if Some(*id) == self.closer.get() {
+                    self.closed_by_timer.set(true);
+                }
                 if Some(*id) == self.closer.get() || Some(*id) == self.watchdog.get() {
                     self.backend.close_window(self.window);
                 }
@@ -275,6 +280,7 @@ fn a_modal_window_runs_its_own_loop_until_it_closes() {
     backend.set_event_sink(
         modal,
         Rc::new(Closer {
+            closed_by_timer: Rc::clone(&closed_by_timer),
             backend: Rc::clone(&backend),
             window: modal,
             closer: Rc::clone(&closer),
@@ -291,6 +297,10 @@ fn a_modal_window_runs_its_own_loop_until_it_closes() {
     backend.close_window(owner);
 
     assert!(result.is_ok());
+    assert!(
+        closed_by_timer.get(),
+        "run_modal returned before the modal window closed itself"
+    );
     assert!(
         !timed_out.get(),
         "the modal loop did not end when its window closed"
