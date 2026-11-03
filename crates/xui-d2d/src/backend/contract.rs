@@ -221,7 +221,8 @@ impl Backend for D2dBackend {
     }
 
     fn set_capture(&self, id: WidgetId) {
-        self.shared.captured.set(Some(id));
+        // Capture first: taking it from another window of ours sends that window
+        // `WM_CAPTURECHANGED`, which must not see the new owner as lost.
         if let Some(hwnd) = self
             .shared
             .window_of(id)
@@ -229,6 +230,7 @@ impl Backend for D2dBackend {
         {
             sys::capture(hwnd);
         }
+        self.shared.captured.set(Some(id));
     }
 
     fn release_capture(&self) {

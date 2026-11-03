@@ -3,11 +3,11 @@
 //! Decoding window messages into portable events.
 
 use windows::Win32::UI::WindowsAndMessaging::{
-    WM_ACTIVATE, WM_CHAR, WM_CLOSE, WM_DESTROY, WM_DPICHANGED, WM_ERASEBKGND, WM_KEYDOWN, WM_KEYUP,
-    WM_LBUTTONDBLCLK, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MBUTTONDBLCLK, WM_MBUTTONDOWN, WM_MBUTTONUP,
-    WM_MOUSEHWHEEL, WM_MOUSEMOVE, WM_MOUSEWHEEL, WM_PAINT, WM_RBUTTONDBLCLK, WM_RBUTTONDOWN,
-    WM_RBUTTONUP, WM_SETCURSOR, WM_SIZE, WM_SYSKEYDOWN, WM_SYSKEYUP, WM_TIMER, WM_XBUTTONDBLCLK,
-    WM_XBUTTONDOWN, WM_XBUTTONUP,
+    WM_ACTIVATE, WM_CAPTURECHANGED, WM_CHAR, WM_CLOSE, WM_DESTROY, WM_DPICHANGED, WM_ERASEBKGND,
+    WM_KEYDOWN, WM_KEYUP, WM_LBUTTONDBLCLK, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MBUTTONDBLCLK,
+    WM_MBUTTONDOWN, WM_MBUTTONUP, WM_MOUSEHWHEEL, WM_MOUSEMOVE, WM_MOUSEWHEEL, WM_PAINT,
+    WM_RBUTTONDBLCLK, WM_RBUTTONDOWN, WM_RBUTTONUP, WM_SETCURSOR, WM_SIZE, WM_SYSKEYDOWN,
+    WM_SYSKEYUP, WM_TIMER, WM_XBUTTONDBLCLK, WM_XBUTTONDOWN, WM_XBUTTONUP,
 };
 use xui_core::backend::{Event, WidgetId, WindowId};
 use xui_core::message::MouseButton;
@@ -151,6 +151,20 @@ impl Shared {
                 );
                 None
             }
+            WM_CAPTURECHANGED => {
+                // Windows took the capture (a modal window, alt-tab, a disabled
+                // owner) without the widget asking: tell it, or it would keep
+                // every pointer event.
+                let lost = self
+                    .captured
+                    .get()
+                    .filter(|id| self.window_of(*id) == Some(window));
+                if let Some(id) = lost {
+                    self.captured.set(None);
+                    self.deliver(window, id, &Event::CaptureChanged);
+                }
+                Some(0)
+            }
             WM_WAKE => {
                 self.deliver(window, WidgetId::NONE, &Event::Wake);
                 Some(0)
@@ -159,12 +173,9 @@ impl Shared {
                 .deliver(window, WidgetId::NONE, &Event::Close)
                 .then_some(0),
             WM_DESTROY => {
-                let primary = self
-                    .windows
-                    .borrow()
-                    .get(&window.raw())
-                    .is_some_and(|w| w.primary);
-                if primary {
+                // A window Windows destroyed on its own (an unhandled close) is
+                // forgotten here, so a modal loop waiting on it ends.
+                if self.release(window).is_some_and(|state| state.primary) {
                     window::post_quit(self.exit_code.get());
                 }
                 None
@@ -200,7 +211,7 @@ impl Shared {
         if let Some(state) = self.windows.borrow_mut().get_mut(&window.raw()) {
             state.dpi = dpi;
         }
-        let suggested = window::apply_suggested_rect(hwnd, msg.lparam);
+        let suggested = window::apply_suggested_rect(hwnd, msg)?;
         self.invalidate_window(window);
         self.deliver(
             window,

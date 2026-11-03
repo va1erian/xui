@@ -10,8 +10,9 @@
 //! keeps itself, exactly as on the software backend, so the same widgets look
 //! and behave the same and none of them costs a window handle.
 //!
-//! Every module but `sys` forbids `unsafe`; the raw Win32, Direct2D and
-//! DirectWrite calls are isolated there behind a safe API.
+//! Every module under `backend/` forbids `unsafe` (the crate root cannot, since
+//! `sys` needs it); the raw Win32, Direct2D and DirectWrite calls are isolated in
+//! `sys` behind a safe API.
 
 mod backend;
 mod sys;

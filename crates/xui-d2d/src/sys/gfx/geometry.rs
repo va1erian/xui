@@ -166,15 +166,16 @@ unsafe fn arc(sink: &ID2D1GeometrySink, x: f32, y: f32, radii: (f32, f32)) {
 }
 
 impl Target {
-    /// Clips to `geometry` (anti-aliased) until [`Target::pop_layer`].
-    pub(crate) fn push_clip_geometry(&self, geometry: &Geometry) {
+    /// Clips to `geometry` (anti-aliased) until [`Target::pop_layer`]. Returns
+    /// whether a layer was pushed; `false` leaves the clip stack untouched.
+    pub(crate) fn push_clip_geometry(&self, geometry: &Geometry) -> bool {
         // SAFETY: inside a frame. The layer outlives its push (it is kept on
         // `layers` until the pop); the mask field is a borrowed reference held
         // through `ManuallyDrop` and released explicitly after the call, which
         // is how the C-style struct expects its COM pointer to be handled.
         unsafe {
             let Ok(layer) = self.rt.CreateLayer(None) else {
-                return;
+                return false;
             };
             let params = D2D1_LAYER_PARAMETERS {
                 contentBounds: D2D_RECT_F {
@@ -193,6 +194,7 @@ impl Target {
             self.rt.PushLayer(&params, &layer);
             drop(ManuallyDrop::into_inner(params.geometricMask));
             self.layers.borrow_mut().push(layer);
+            true
         }
     }
 

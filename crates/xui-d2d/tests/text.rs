@@ -40,3 +40,27 @@ fn selection_rects_cover_the_selected_text_only() {
     assert!(rects[0].width() > 0 && (rects[0].width() as f32) < shaped.width());
     assert!(shaped.selection_rects(3, 3).is_empty());
 }
+
+#[test]
+fn a_layout_and_the_shaper_work_from_another_thread() {
+    let backend = D2dBackend::new();
+    let shaper = backend.text_shaper();
+    let on_main = layout("worker", f32::INFINITY);
+    let (width, hit) = std::thread::spawn(move || {
+        let made = shaper.layout("worker", &FontSpec::new(Dip(14.0)), f32::INFINITY, 96);
+        (made.width(), on_main.hit_test_point(1.0, 2.0).byte_index)
+    })
+    .join()
+    .unwrap();
+    assert!(width > 0.0);
+    assert_eq!(hit, 0);
+}
+
+#[test]
+fn the_first_baseline_of_wrapped_text_is_the_first_lines() {
+    let one = layout("alpha", f32::INFINITY);
+    let wrapped = layout("alpha beta gamma delta epsilon", 60.0);
+    assert!(wrapped.height() > one.height());
+    assert!(wrapped.baseline() > 0.0);
+    assert!((wrapped.baseline() - one.baseline()).abs() < 1.0);
+}

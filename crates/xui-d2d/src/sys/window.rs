@@ -1,6 +1,7 @@
 //! Top-level windows: the window class, the message trampoline and the
 //! operations the backend needs on a window.
 
+use std::cell::Cell;
 use std::rc::Rc;
 
 use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, POINT, RECT, WPARAM};
@@ -19,12 +20,11 @@ use windows::Win32::UI::Input::KeyboardAndMouse::{
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     CREATESTRUCTW, CS_DBLCLKS, CW_USEDEFAULT, CreateWindowExW, DefWindowProcW, DestroyWindow,
-    DispatchMessageW, GWLP_USERDATA, GetClientRect, GetMessageW, GetWindowLongPtrW, HMENU,
-    IDC_ARROW, IDC_HAND, IDC_IBEAM, IDC_SIZENESW, IDC_SIZENS, IDC_SIZENWSE, IDC_SIZEWE, IDC_WAIT,
-    IsZoomed, KillTimer, LoadCursorW, MSG, PostMessageW, PostQuitMessage, RegisterClassExW,
-    SW_MAXIMIZE, SW_MINIMIZE, SW_RESTORE, SW_SHOW, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOZORDER,
-    SetCursor, SetTimer, SetWindowLongPtrW, SetWindowPos, SetWindowTextW, ShowWindow,
-    TranslateMessage, WINDOW_EX_STYLE, WM_APP, WM_NCCREATE, WM_NCDESTROY, WNDCLASSEXW,
+    GWLP_USERDATA, GetClientRect, GetWindowLongPtrW, HMENU, IDC_ARROW, IDC_HAND, IDC_IBEAM,
+    IDC_SIZENESW, IDC_SIZENS, IDC_SIZENWSE, IDC_SIZEWE, IDC_WAIT, IsZoomed, KillTimer, LoadCursorW,
+    PostMessageW, RegisterClassExW, SW_MAXIMIZE, SW_MINIMIZE, SW_RESTORE, SW_SHOW, SWP_NOACTIVATE,
+    SWP_NOMOVE, SWP_NOZORDER, SetCursor, SetTimer, SetWindowLongPtrW, SetWindowPos, SetWindowTextW,
+    ShowWindow, WINDOW_EX_STYLE, WM_APP, WM_DPICHANGED, WM_NCCREATE, WM_NCDESTROY, WNDCLASSEXW,
     WS_MAXIMIZEBOX, WS_OVERLAPPEDWINDOW, WS_THICKFRAME,
 };
 use windows::core::{HSTRING, PCWSTR, w};
@@ -57,7 +57,7 @@ pub(crate) type Handler = Rc<dyn Fn(Hwnd, Msg) -> Option<isize>>;
 /// The message `post_wake` posts, handled as `Event::Wake`.
 pub(crate) const WM_WAKE: u32 = WM_APP + 1;
 
-const CLASS: PCWSTR = w!("xui_d2d_window");
+pub(super) const CLASS: PCWSTR = w!("xui_d2d_window");
 
 /// Makes the process per-monitor DPI aware (v2). Idempotent; a second call
 /// fails harmlessly.
@@ -67,24 +67,43 @@ pub(crate) fn init() {
     let _ = unsafe { SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2) };
 }
 
+/// What the window procedure owns for one window: the handler, and whether the
+/// procedure has adopted this slot yet (on `WM_NCCREATE`).
+///
+/// `create` keeps its own `Rc` to the slot, so on a failed creation it can tell
+/// whether the procedure took the slot's other reference (and will release it
+/// on `WM_NCDESTROY`) or never saw the window.
+struct Slot {
+    handler: Handler,
+    adopted: Cell<bool>,
+}
+
 unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
     if msg == WM_NCCREATE {
         // SAFETY: for WM_NCCREATE, `lparam` points to the CREATESTRUCTW whose
-        // `lpCreateParams` is the boxed handler `create` passed.
+        // `lpCreateParams` is the `Rc<Slot>` raw pointer `create` passed.
         let params = unsafe { (*(lparam.0 as *const CREATESTRUCTW)).lpCreateParams };
-        // SAFETY: `hwnd` is the window being created.
-        unsafe { SetWindowLongPtrW(hwnd, GWLP_USERDATA, params as isize) };
+        // A window made without a slot (the clipboard's message window) has no
+        // handler: its messages take the default procedure.
+        if !params.is_null() {
+            // SAFETY: `params` is a live `Slot` (see above); marking it adopted
+            // before storing it means `create` sees the procedure owns a
+            // reference.
+            unsafe { (*(params as *const Slot)).adopted.set(true) };
+            // SAFETY: `hwnd` is the window being created.
+            unsafe { SetWindowLongPtrW(hwnd, GWLP_USERDATA, params as isize) };
+        }
     }
-    // SAFETY: the user data is either 0 or the `Box<Handler>` stored above,
-    // which lives until WM_NCDESTROY below.
-    let slot = unsafe { GetWindowLongPtrW(hwnd, GWLP_USERDATA) } as *const Handler;
+    // SAFETY: the user data is either 0 or the `Rc<Slot>` raw pointer stored
+    // above, whose reference this procedure releases on WM_NCDESTROY below.
+    let slot = unsafe { GetWindowLongPtrW(hwnd, GWLP_USERDATA) } as *const Slot;
     if slot.is_null() {
         // SAFETY: forwarding the message this procedure received.
         return unsafe { DefWindowProcW(hwnd, msg, wparam, lparam) };
     }
     // SAFETY: `slot` is live (see above); the clone keeps the handler alive
     // across a re-entrant destroy of this window.
-    let handler = unsafe { (*slot).clone() };
+    let handler = unsafe { Rc::clone(&(*slot).handler) };
     let result = handler(
         Hwnd(hwnd.0 as isize),
         Msg {
@@ -95,10 +114,11 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
     );
     if msg == WM_NCDESTROY {
         // SAFETY: the last message for this window; nothing reads the slot
-        // once the user data is cleared, and the box came from `create`.
+        // once the user data is cleared, and this releases the one reference
+        // the procedure took from `create`.
         unsafe {
             SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0);
-            drop(Box::from_raw(slot as *mut Handler));
+            drop(Rc::from_raw(slot));
         }
     }
     match result {
@@ -108,7 +128,7 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
     }
 }
 
-fn register_class() {
+pub(super) fn register_class() {
     // SAFETY: registers a class whose procedure is `wndproc`; registering the
     // same class twice fails harmlessly, which is what makes this idempotent.
     unsafe {
@@ -142,11 +162,19 @@ pub(crate) fn create(
     if !resizable {
         style &= !(WS_THICKFRAME | WS_MAXIMIZEBOX);
     }
-    let params = Box::into_raw(Box::new(handler));
+    // SAFETY: a plain module-handle query.
+    let instance = unsafe { GetModuleHandleW(None) }.ok()?;
+    let slot = Rc::new(Slot {
+        handler,
+        adopted: Cell::new(false),
+    });
+    // The procedure's reference: released by it on WM_NCDESTROY, or below if
+    // it never saw the window.
+    let params = Rc::into_raw(Rc::clone(&slot));
     // SAFETY: creates a window of the class registered above. `params` is the
-    // boxed handler `wndproc` stores on WM_NCCREATE and frees on WM_NCDESTROY.
+    // `Rc<Slot>` reference `wndproc` adopts on WM_NCCREATE and releases on
+    // WM_NCDESTROY.
     let created = unsafe {
-        let instance = GetModuleHandleW(None).ok()?;
         CreateWindowExW(
             WINDOW_EX_STYLE(0),
             CLASS,
@@ -163,10 +191,13 @@ pub(crate) fn create(
         )
     };
     let Ok(hwnd) = created else {
-        // SAFETY: creation failed, so WM_NCCREATE never stored the box (or
-        // WM_NCDESTROY already freed it when it did); a failed
-        // `CreateWindowExW` before WM_NCCREATE is the case reclaimed here.
-        unsafe { drop(Box::from_raw(params)) };
+        if !slot.adopted.get() {
+            // SAFETY: the procedure never adopted the slot, so the reference
+            // `params` carries is still ours to release. When it did adopt
+            // it, the system has sent (or will send) WM_NCDESTROY for the
+            // half-built window and the procedure releases it there.
+            unsafe { drop(Rc::from_raw(params)) };
+        }
         return None;
     };
     let hwnd = Hwnd(hwnd.0 as isize);
@@ -384,25 +415,6 @@ pub(crate) fn modifiers() -> Modifiers {
     }
 }
 
-/// Pumps messages until `WM_QUIT`, returning its exit code.
-pub(crate) fn run_loop() -> i32 {
-    let mut msg = MSG::default();
-    // SAFETY: the standard message loop on the thread that owns the windows.
-    unsafe {
-        while GetMessageW(&mut msg, None, 0, 0).as_bool() {
-            let _ = TranslateMessage(&msg);
-            DispatchMessageW(&msg);
-        }
-    }
-    msg.wParam.0 as i32
-}
-
-/// Ends [`run_loop`] with `code`.
-pub(crate) fn post_quit(code: i32) {
-    // SAFETY: posts WM_QUIT to this thread's queue.
-    unsafe { PostQuitMessage(code) };
-}
-
 /// Runs `draw` with the rectangle that needs repainting, inside a
 /// `BeginPaint`/`EndPaint` pair that also marks the window valid.
 pub(crate) fn paint(hwnd: Hwnd, draw: impl FnOnce(Rect)) {
@@ -420,12 +432,15 @@ pub(crate) fn paint(hwnd: Hwnd, draw: impl FnOnce(Rect)) {
     let _ = unsafe { EndPaint(hwnd.raw(), &ps) };
 }
 
-/// Moves the window to the rectangle Windows suggests in `WM_DPICHANGED`'s
-/// `lparam`, and returns it.
-pub(crate) fn apply_suggested_rect(hwnd: Hwnd, lparam: isize) -> Rect {
+/// Moves the window to the rectangle Windows suggests in a `WM_DPICHANGED`
+/// message, and returns it. `None` for any other message.
+pub(crate) fn apply_suggested_rect(hwnd: Hwnd, msg: Msg) -> Option<Rect> {
+    if msg.id != WM_DPICHANGED {
+        return None;
+    }
     // SAFETY: for WM_DPICHANGED, `lparam` points to a RECT valid for the
     // duration of the message.
-    let suggested = unsafe { *(lparam as *const RECT) };
+    let suggested = unsafe { *(msg.lparam as *const RECT) };
     // SAFETY: a plain window move on a window of this thread.
     let _ = unsafe {
         SetWindowPos(
@@ -438,27 +453,12 @@ pub(crate) fn apply_suggested_rect(hwnd: Hwnd, lparam: isize) -> Rect {
             SWP_NOZORDER | SWP_NOACTIVATE,
         )
     };
-    Rect::new(
+    Some(Rect::new(
         suggested.left,
         suggested.top,
         suggested.right,
         suggested.bottom,
-    )
+    ))
 }
 
-/// Pumps messages while `keep_going` holds, for a modal window's own loop. A
-/// `WM_QUIT` ends it and is re-posted so the outer loop sees it too.
-pub(crate) fn run_nested(keep_going: impl Fn() -> bool) {
-    let mut msg = MSG::default();
-    // SAFETY: the standard message loop on the thread that owns the windows.
-    unsafe {
-        while keep_going() {
-            if !GetMessageW(&mut msg, None, 0, 0).as_bool() {
-                PostQuitMessage(msg.wParam.0 as i32);
-                break;
-            }
-            let _ = TranslateMessage(&msg);
-            DispatchMessageW(&msg);
-        }
-    }
-}
+pub(crate) use super::pump::{post_quit, run_loop, run_nested};

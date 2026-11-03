@@ -24,7 +24,7 @@ and runs the unmodified cookbook demo on it.
 - **Drawing** is an `ID2D1HwndRenderTarget` at 96 DPI (one unit is one pixel),
   retaining contents so a partial repaint only draws the update rectangle. The
   `Canvas` trait maps almost one-to-one: rounded rects, ellipses, path
-  geometry, gradients, layer clips, bitmaps (premultiplied, cached by image id).
+  geometry, gradients, layer clips, bitmaps (premultiplied, cached by image id within a 96 MiB budget per window, oldest evicted first).
   Rectangles are rounded to whole pixels as `SkiaCanvas` does.
 - **Text** is DirectWrite. `DwShaper`/`DwLayout` implement `TextShaper` and
   `TextLayout` (hit testing and selection rectangles, with the UTF-8/UTF-16
@@ -41,10 +41,10 @@ strip, `panic=abort`), release, Windows x64:
 
 | | `xui-canvas` | `xui-d2d` |
 |---|---|---|
-| size-optimised exe | 2,798,592 B (2.67 MiB) | **489,472 B (0.47 MiB)** |
-| default `--release` exe | 4,531,712 B | **905,216 B** |
+| size-optimised exe | 2,798,592 B (2.67 MiB) | **501,760 B (0.48 MiB)** |
+| default `--release` exe | 4,531,712 B | **929,792 B** |
 | crates in the dependency tree | 105 | `xui-core` (14) plus `windows` |
-| backend source (no tests) | ~8.6k lines | ~3.8k lines |
+| backend source (no tests) | ~8.6k lines | ~4.1k lines |
 
 `xui-core` plus the cookbook widgets with a stub backend is 389,632 B, so the
 Direct2D backend adds about 0.1 MB, against about 2.4 MB for the canvas stack
@@ -66,16 +66,19 @@ Not covered (each is a follow-up, not a blocker):
   window always has a system frame.
 - **IME composition** (`WM_IME_*`) and **UI Automation**: CJK input and screen
   readers.
-- **Native file dialog, modal loop, `capture`, pointer lock, window icon,
-  `GlWidget`.** The portable file dialog already covers the first.
+- **`capture`, pointer lock, window icon, `GlWidget`.**
 - **Damage tracking is Windows' update region only.** The canvas backend's
   scene damage list is not reused, so every `WM_PAINT` replans all nodes.
   Sharing `scene.rs`, `compositor.rs` and the damage code needs them pulled out
   of `xui-canvas` (they have no `tiny-skia` use, except that the compositor
   draws into its `Surface`).
-- **Per-draw allocations:** each `draw_text` builds a DirectWrite layout; gradient
-  brushes and non-uniform rounded-rect geometries are created per draw. A layout
-  cache keyed on text, font and box would remove the first.
+- **Per-draw allocations in the paint path (avoidable, deferred):** each `draw_text`
+  builds a DirectWrite layout (plus a UTF-16 `Vec` and a format-cache key); each
+  gradient fill creates a stop collection and a brush; `fill_polygon` and
+  non-uniform rounded rectangles build a path geometry; each rounded clip creates
+  a layer. A layout cache keyed on text, font and box, and cached layers and
+  geometries, would remove them. `AGENTS.md` asks that these be called out; they
+  are here and in the PR description.
 - **Text metrics differ from `cosmic-text`**, so layouts differ by a pixel or
   two between backends. Headless snapshots still use the software backend.
 - Not measured: frame time. No light/dark screenshot pair beyond one light
@@ -83,11 +86,7 @@ Not covered (each is a follow-up, not a blocker):
 
 ## Verified
 
-`cargo fmt`, `cargo clippy --all-targets -- -D warnings` clean for `xui-d2d`;
-6 scene unit tests and 3 DirectWrite tests pass on the host; the real-window
-test (`tests/window.rs`: paints a node, fires timers, ends on its own timer)
-passes in Windows Sandbox, as does the cookbook example, which rendered
-correctly there. The rest of the workspace was not re-run.
+`cargo fmt --all --check`, `cargo check --all-targets` and `cargo clippy --all-targets -- -D warnings` are clean. The 34 tests of `xui-d2d` pass in Windows Sandbox with the default parallelism: 18 unit tests (scene, input order, capture loss, Tab, dialog filters), 5 DirectWrite tests (no window), 4 clipboard tests, 4 native file-dialog tests, and 3 real-window tests (paints and timers, the pixel test of the reach clip and of a leaked clip, and a modal window). The cookbook example and the miniscent editor rendered correctly there. The rest of the workspace ran in the sandbox too: the only failing binaries (`deps`, `cookbook_doc`, `examples_use_layouts`, `files`, `cli`, `icons` of `xui-core`) read source files by path and fail there for want of a checkout; they pass on the host, and none involves this crate.
 
 ## Recommendation
 
@@ -120,3 +119,25 @@ fat LTO, one codegen unit):
 The 2.1 MB saved is the same ~2.4 MB the cookbook showed for the winit/tiny-skia
 stack; the editor itself is dominated by `wgpu`, Blitz/Stylo and its own code,
 so the relative saving is 10%, not 83%.
+
+## Review
+
+An independent review (a fresh agent, given the diff and the claims to verify, not
+the author's verdict) found one Critical issue and several Major ones; all were
+fixed: a possible double free of the window handler when `CreateWindowExW` fails
+after `WM_NCCREATE`; a doctest that did not compile; a mouse capture Windows
+could take away without the widget being told (`WM_CAPTURECHANGED` is now
+reported); an unbounded clipboard read and leaked clipboard blocks; a file filter
+with no extensions (now `*.*`) and a default extension applied to an open; and
+missing tests (now: pointer, focus, capture and Tab order; capture loss; clipboard;
+modal loop; a pixel test of the reach clip and of a leaked clip; a layout used from
+another thread). Running the clipboard test in parallel found one more real bug the review had not: `OpenClipboard(NULL)` lets several threads open the clipboard at once, so one thread's `EmptyClipboard` freed data another was reading (heap corruption). It now opens with a hidden message-only owner window per thread. Also fixed from the Minor list: an unbalanced layer pop, the key
+repeat count, the first baseline of wrapped text, windows destroyed by Windows
+itself, the primary-window flag, and a missing-ancestor clip.
+
+Still open, by design: the per-draw allocations above, a test that a missing file
+is refused when it must exist (the refusal is the Common Item Dialog's own modal
+message box, which a helper thread cannot dismiss reliably), a test of the image
+cache budget (needs a Direct2D target without a window), `WM_SYSCHAR` (unverified
+beeping on Alt+letter), and a panic in app code unwinding through the window
+procedure, which aborts.

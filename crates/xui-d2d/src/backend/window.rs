@@ -38,7 +38,8 @@ impl Shared {
         .ok_or(BackendError::CreateFailed("window"))?;
         let theme = system_theme();
         window::set_dark_title_bar(hwnd, theme.is_dark);
-        let primary = self.windows.borrow().is_empty();
+        // The first window ever opened is the primary one, whatever has closed since.
+        let primary = id.raw() == 1;
         self.windows.borrow_mut().insert(
             id.raw(),
             WindowState {
@@ -57,7 +58,9 @@ impl Shared {
         Ok(id)
     }
 
-    pub(super) fn close(&self, window: WindowId) {
+    /// Forgets `window`: its nodes, timers and capture, and its entry. Returns
+    /// the entry, if the window was still known.
+    pub(super) fn release(&self, window: WindowId) -> Option<WindowState> {
         if self.captured.get().and_then(|id| self.window_of(id)) == Some(window) {
             self.captured.set(None);
         }
@@ -65,8 +68,11 @@ impl Shared {
         self.timers
             .borrow_mut()
             .retain(|_, owner| *owner != window.raw());
-        let state = self.windows.borrow_mut().remove(&window.raw());
-        if let Some(state) = state {
+        self.windows.borrow_mut().remove(&window.raw())
+    }
+
+    pub(super) fn close(&self, window: WindowId) {
+        if let Some(state) = self.release(window) {
             window::destroy(state.hwnd);
         }
     }

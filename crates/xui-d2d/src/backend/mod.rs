@@ -23,6 +23,9 @@ mod paint;
 mod scene;
 mod window;
 
+#[cfg(test)]
+mod input_tests;
+
 use scene::Scene;
 
 /// What the backend keeps for one top-level window.
@@ -64,13 +67,24 @@ pub(crate) struct Shared {
 /// Create it with [`D2dBackend::new`] and hand it to `xui_core::app`:
 ///
 /// ```no_run
-/// # use std::rc::Rc;
-/// # use xui_core::prelude::*;
-/// # struct App0; impl App for App0 { type Msg = (); fn update(&mut self, _: (), _: &mut Ui<()>) {} }
-/// xui_core::app("Hello")
-///     .backend(Rc::new(xui_d2d::D2dBackend::new()))
-///     .run(|ui| { ui.root(label("Hello"))?; Ok(App0) })
-/// # ;
+/// use std::rc::Rc;
+/// use xui_core::prelude::*;
+///
+/// struct Hello;
+///
+/// impl App for Hello {
+///     type Msg = ();
+///     fn update(&mut self, _msg: (), _ui: &mut Ui<()>) {}
+/// }
+///
+/// fn main() -> Result<()> {
+///     xui_core::app("Hello")
+///         .backend(Rc::new(xui_d2d::D2dBackend::new()))
+///         .run(|ui| {
+///             ui.root(column().padding(16).child(label("Hello, world")))?;
+///             Ok(Hello)
+///         })
+/// }
 /// ```
 pub struct D2dBackend {
     shared: Rc<Shared>,

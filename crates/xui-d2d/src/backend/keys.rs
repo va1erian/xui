@@ -28,7 +28,7 @@ impl Shared {
         let event = Event::KeyDown {
             key,
             modifiers,
-            repeat: (msg.lparam & 0xFFFF) as u16,
+            repeat: repeat_of(msg),
             system,
         };
         // An unhandled system key (Alt+F4, Alt+Space) is left to Windows.
@@ -99,4 +99,12 @@ impl Shared {
         };
         self.focus_node(next);
     }
+}
+
+/// The portable repeat count: 1 for a fresh press, 2 for an auto-repeat. Windows
+/// reports a count of 1 for each auto-repeated message, so the repeat is read
+/// from bit 30 of `lparam` (the key was already down), as the software backend
+/// reports it.
+pub(super) fn repeat_of(msg: Msg) -> u16 {
+    if msg.lparam & (1 << 30) != 0 { 2 } else { 1 }
 }

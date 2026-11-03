@@ -161,9 +161,12 @@ impl Scene {
         let mut clip: Option<Rect> = None;
         let mut parent = self.get(id)?.parent;
         while let ParentRef::Widget(parent_id) = parent {
-            let ancestor = self.get(parent_id)?;
-            if let Some(local) = ancestor.clip {
-                let origin = self.absolute_bounds(parent_id)?;
+            let Some(ancestor) = self.get(parent_id) else {
+                break;
+            };
+            if let Some(local) = ancestor.clip
+                && let Some(origin) = self.absolute_bounds(parent_id)
+            {
                 let rect = Rect::new(
                     origin.left + local.left,
                     origin.top + local.top,

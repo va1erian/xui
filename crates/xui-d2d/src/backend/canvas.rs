@@ -283,11 +283,10 @@ impl Canvas for D2dCanvas {
 
     fn push_clip_rounded(&mut self, rect: Rect, corners: [Corner; 4]) {
         match Geometry::rounded_rect(self.rect(rect), self.corners(corners)) {
-            Some(geometry) => {
-                self.target.push_clip_geometry(&geometry);
+            Some(geometry) if self.target.push_clip_geometry(&geometry) => {
                 self.clips.push(Clip::Layer);
             }
-            None => self.push_clip(rect),
+            _ => self.push_clip(rect),
         }
     }
 

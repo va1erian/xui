@@ -31,10 +31,11 @@ unsafe impl<T> Sync for Guarded<T> {}
 
 /// The distance from the top of `layout` to its first line's baseline.
 pub(super) fn first_baseline(layout: &IDWriteTextLayout) -> f32 {
-    let mut lines = [DWRITE_LINE_METRICS::default()];
     let mut count = 0;
-    // SAFETY: the buffer holds one entry and `count` is a valid out-pointer;
-    // a text with more lines reports an error but fills the first entry.
+    // SAFETY: a first call with no buffer reports how many lines there are.
+    let _ = unsafe { layout.GetLineMetrics(None, &mut count) };
+    let mut lines = vec![DWRITE_LINE_METRICS::default(); count.max(1) as usize];
+    // SAFETY: the buffer holds `count` entries and `count` is a valid out-pointer.
     let _ = unsafe { layout.GetLineMetrics(Some(&mut lines), &mut count) };
     lines[0].baseline
 }
