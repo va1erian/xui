@@ -4,16 +4,15 @@
 //! cargo run -p xui-icons --example gallery [out-dir]
 //! ```
 //!
-//! It writes `icons-<style>-dark.png` and `icons-<style>-light.png` into
-//! `out-dir` (default `target/snapshots`) for the style this build compiles:
-//! add `--features aero` for the glossy one. No window opens.
+//! It writes `icons-village-dark.png` and `icons-village-light.png` into
+//! `out-dir` (default `target/snapshots`). No window opens.
 
 use std::path::PathBuf;
 
 use xui_canvas::Surface;
 use xui_core::image::Image;
 use xui_core::{Color, Rect};
-use xui_icons::{Icon, Palette, STYLE, Style, draw};
+use xui_icons::{Icon, Palette, draw};
 
 const COLUMNS: i32 = 6;
 const CELL: i32 = 112;
@@ -42,11 +41,7 @@ fn render(background: Color) -> Result<Image, Box<dyn std::error::Error>> {
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let out = PathBuf::from(std::env::args().nth(1).unwrap_or("target/snapshots".into()));
     std::fs::create_dir_all(&out)?;
-    let style = match STYLE {
-        Style::GlobalVillage => "village",
-        Style::Aero => "aero",
-    };
-    render(Color::hex(0x23_1C_5C))?.save_png(out.join(format!("icons-{style}-dark.png")))?;
-    render(Color::hex(0xF3_EE_E0))?.save_png(out.join(format!("icons-{style}-light.png")))?;
+    render(Color::hex(0x23_1C_5C))?.save_png(out.join("icons-village-dark.png"))?;
+    render(Color::hex(0xF3_EE_E0))?.save_png(out.join("icons-village-light.png"))?;
     Ok(())
 }

@@ -89,8 +89,6 @@ XUI_LAYOUT_REPORT=1 XUI_SNAPSHOT=target/shots cargo run --example demo
   `XUI_LAYOUT_WARNINGS:<n>`. **Read the `!` lines**: they name a clipped,
   zero-size, overlapping or text-truncated node. A clean layout has none;
   `scripts/snapshots.ps1` (or `.sh`) renders every example and fails on one.
-- `xui-form check|render file.lfm` validates or renders a `.lfm` form
-  headlessly; `--report` prints its layout report.
 
 ## Where to look
 
@@ -99,6 +97,4 @@ XUI_LAYOUT_REPORT=1 XUI_SNAPSHOT=target/shots cargo run --example demo
   `crates/xui/examples/cookbook.rs`.
 - `docs/getting-started.md` — the app shape, backend choice, snapshots.
 - `docs/widgets.md` — the widget catalogue with each builder's API.
-- `docs/forms.md` + `docs/` — `.lfm` forms and `xui::script` (Rhai) when the
-  app is data, not Rust.
 - `crates/xui/examples/controls/*.rs` — one runnable demo per widget.
