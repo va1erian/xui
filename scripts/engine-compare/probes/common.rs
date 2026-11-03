@@ -16,7 +16,7 @@ use xui_core::Dip;
 use xui_core::app::{App, Ui};
 use xui_core::backend::Result;
 
-/// Where a probe's page is. (The baseline probe never fails.)
+/// Where a probe's page is. (The baseline and litehtml probes never fail.)
 #[allow(dead_code)]
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Load {

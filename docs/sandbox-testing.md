@@ -23,6 +23,7 @@ You install nothing else. The sandbox doesn't need Rust or Visual Studio.
 ```powershell
 scripts\sandbox\run.ps1                                        # every test
 scripts\sandbox\run.ps1 -CargoArgs '--test','slider' -TestArgs 'drag'
+scripts\sandbox\run.ps1 -CargoArgs '--features','wgc'
 scripts\sandbox\run.ps1 -Env @{ WIN32UI_SLIDER_SHOTS = 'C:\stage\out' }  # screenshots land in target\sandbox\sandbox-stage\out
 ```
 

@@ -10,6 +10,9 @@
 //! - `canvas` (default) is the cross-platform software backend, [`xui_canvas`]
 //!   (a `winit` window + `tiny-skia` rendering). Builds and runs on every
 //!   platform.
+//! - `d2d` is the Windows-only backend, [`xui_win32`]: native window chrome
+//!   with Direct2D/DirectWrite painting (GDI fallback), for apps that want
+//!   higher fidelity or performance on Windows specifically.
 //! - `icons` adds [`xui_icons`], the optional Global Village icon set.
 //! - `rich-text` adds [`xui_rich_text`], the editable rich-text widget.
 //! - `form` adds [`form`], declarative `.lfm` forms built into widgets.
@@ -54,3 +57,6 @@ pub use xui_form as form;
 /// form.
 #[cfg(feature = "rhai")]
 pub use xui_script as script;
+
+#[cfg(all(feature = "d2d", windows))]
+pub use xui_win32;

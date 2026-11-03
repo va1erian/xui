@@ -4,7 +4,8 @@
 renderer: no window, no display, no GPU and no Windows Sandbox. It works on
 Windows, Linux and macOS, so it runs in `cargo test` and on CI.
 
-It shows what **xui paints**. Native window chrome and DWM materials are not part of it; see
+It shows what **xui paints**. Native window chrome, DWM materials and the
+Win32 backend's own rendering are not part of it; see
 [Headless versus real windows](#headless-versus-real-windows).
 
 ## Rendering a window in a test
@@ -199,7 +200,9 @@ lines instead of a screenshot when the question is "did it lay out".
 
 Headless snapshots use the software renderer, so they do **not** show native
 window chrome, caption buttons, DWM backdrop materials, native menus or dialogs,
-For those, capture a real window inside Windows Sandbox as described in
+or anything only the Win32 (Direct2D) backend draws. For those, capture a real
+window: `Windows.Graphics.Capture` through the `capture` example or
+`Window::capture_composited`, run inside Windows Sandbox as described in
 [sandbox-testing.md](sandbox-testing.md). Use headless for "what does this
 widget look like, and did it clip"; use a real window for "does it look right
 in the OS".

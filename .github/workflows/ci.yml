@@ -19,8 +19,8 @@ env:
 
 jobs:
   # Formatting and lints run in parallel with the tests. Clippy is a superset of
-  # `cargo check`, so no separate check step; `--all-features` covers every
-  # feature (the umbrella's default already includes canvas).
+  # `cargo check`, so no separate check step; `--all-features` covers the d2d,
+  # canvas and wgc backends (the umbrella's default already includes canvas).
   lint:
     runs-on: windows-latest
     steps:
@@ -36,8 +36,8 @@ jobs:
       - run: cargo clippy --all-targets --all-features -- -D warnings
 
   # The full toolkit on Windows: the platform backend, every widget and every UI
-  # test (windows are allowed on a runner). The all-features test pass runs in
-  # `coverage`, so it is not repeated here.
+  # test (windows are allowed on a runner). The all-features test pass (d2d +
+  # canvas + wgc) runs in `coverage`, so it is not repeated here.
   test:
     runs-on: windows-latest
     steps:

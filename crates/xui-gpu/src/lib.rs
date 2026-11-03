@@ -2,8 +2,8 @@
 
 //! The shared OpenGL seam between xui's backends.
 //!
-//! Platform context creation stays in the backend — `glutin` in
-//! `xui-canvas` — behind the opaque [`GlContext`] handle. This
+//! Platform context creation stays in each backend — WGL in `xui-win32`,
+//! `glutin` in `xui-canvas` — behind the opaque [`GlContext`] handle. This
 //! crate owns the surface lifecycle in terms of that handle: resize, DPI,
 //! [`begin_frame`](GlSurface::begin_frame)/[`end_frame`](GlSurface::end_frame)
 //! for a window-backed frame, and

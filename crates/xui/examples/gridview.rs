@@ -4,7 +4,7 @@
 //! Run with:
 //!
 //! ```text
-//! cargo run -p xui --features canvas --example gridview
+//! XUI_BACKEND=canvas cargo run -p xui --features canvas --example gridview
 //! ```
 //!
 //! `XUI_LIST_THEME=dark` starts on the dark palette and `XUI_DEMO_AUTOCLOSE_MS`

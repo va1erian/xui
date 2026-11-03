@@ -1,0 +1,56 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Renderer comparison</title>
+<style>
+  body { font-family: sans-serif; margin: 16px; color: #1d2330; background: #ffffff; }
+  h1 { font-size: 26px; margin: 0 0 8px; color: #24427a; }
+  h2 { font-size: 18px; margin: 18px 0 6px; border-bottom: 2px solid #c8d3e6; }
+  p { line-height: 1.4; margin: 6px 0; }
+  .note { background: #fff6d6; border: 1px solid #e3c766; border-left: 6px solid #d9a400; padding: 6px 10px; }
+  .row { display: flex; gap: 8px; }
+  .row div { flex: 1; padding: 8px; color: #ffffff; text-align: center; }
+  .a { background: #3f6fc4; } .b { background: #2f9e6a; } .c { background: #c4553f; }
+  table { border-collapse: collapse; margin-top: 4px; }
+  th, td { border: 1px solid #8a96ab; padding: 3px 8px; }
+  th { background: #e4e9f2; }
+  .float { float: right; width: 90px; height: 60px; margin: 0 0 6px 10px; background: #e9d6f5; border: 2px dashed #8a4fb3; }
+  .pill { display: inline-block; padding: 2px 8px; margin-right: 4px; background: #dfe8ff; border: 1px solid #7d97d8; }
+  input { width: 160px; }
+  pre { background: #f2f4f8; padding: 6px; font-family: monospace; }
+</style>
+</head>
+<body>
+<h1>Renderer comparison</h1>
+<p>The same page, laid out by <b>litehtml</b> and by <b>NetSurf</b>, painted
+by one painter with one text shaper. Accents: &eacute;&agrave;&uuml;&ccedil; &euro; &mdash; &ldquo;quotes&rdquo;.</p>
+<p class="note">A note box with a thick left border, to compare box borders and padding.</p>
+
+<h2>Flexbox</h2>
+<div class="row"><div class="a">one</div><div class="b">two</div><div class="c">three</div></div>
+
+<h2>Floats and inline blocks</h2>
+<div class="float"></div>
+<p>This paragraph wraps around a dashed float on the right. <i>Italic</i>,
+<b>bold</b>, <u>underlined</u> and <s>struck</s> text, a <a href="#bottom">link</a>,
+and <code>inline code</code> all sit on lines that must break the same way.</p>
+<p><span class="pill">alpha</span><span class="pill">beta</span><span class="pill">gamma</span></p>
+
+<h2>Lists and tables</h2>
+<ul><li>First item</li><li>Second item with more words in it</li></ul>
+<ol><li>Numbered</li><li>Also numbered</li></ol>
+<table>
+<tr><th>Engine</th><th>Licence</th><th>CSS</th></tr>
+<tr><td>litehtml</td><td>BSD</td><td>var(), flexbox</td></tr>
+<tr><td>NetSurf</td><td>GPL-2.0</td><td>calc(), flexbox</td></tr>
+</table>
+
+<h2>Forms and code</h2>
+<p><input type="text" value="a text field"> <input type="submit" value="Go"></p>
+<pre>fn main() {
+    println!("hello");
+}</pre>
+<p id="bottom">End of the page.</p>
+</body>
+</html>

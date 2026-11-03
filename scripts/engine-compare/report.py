@@ -1,5 +1,5 @@
 """Builds the comparison from run.sh's and reference.py's output: a side-by-side
-PNG per fixture (browser | Blitz), a similarity score
+PNG per fixture (browser | Blitz | NetSurf | litehtml), a similarity score
 against the browser and a summary in JSON for the report page.
 
 Usage: python report.py [out-dir]   (default target/engine-compare)
@@ -22,8 +22,8 @@ from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent.parent
-COLUMNS = ["browser", "blitz"]
-LABELS = {"browser": "Chrome (reference)", "blitz": "Blitz"}
+COLUMNS = ["browser", "blitz", "netsurf", "litehtml"]
+LABELS = {"browser": "Chrome (reference)", "blitz": "Blitz", "netsurf": "NetSurf", "litehtml": "litehtml"}
 
 
 def load(path: Path, size):

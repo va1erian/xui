@@ -1,0 +1,6 @@
+#include <winres.h>
+
+// The umbrella crate's examples get the same Common Controls v6 + per-monitor-v2
+// DPI manifest the Win32 backend's own examples and tests embed, so a gallery
+// built here shows the modern themed controls too.
+CREATEPROCESS_MANIFEST_RESOURCE_ID RT_MANIFEST "../xui-win32/win32ui.manifest"

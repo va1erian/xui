@@ -1,5 +1,5 @@
-//! A gallery of the portable `xui-core` widgets on the software (tiny-skia)
-//! backend.
+//! A gallery of the portable `xui-core` widgets that runs on either backend,
+//! so you can compare the native controls with the software (tiny-skia) path.
 //!
 //! Run with:
 //!
@@ -7,7 +7,11 @@
 //! cargo run -p xui --features canvas --example widgets
 //! ```
 //!
-//! `XUI_DEMO_AUTOCLOSE_MS` makes it quit itself, for headless smoke runs.
+//! `XUI_BACKEND=canvas` starts on the software backend instead of the native
+//! one; the **Renderer** button starts a fresh process on the other backend
+//! (`winit` allows one event loop per process, so it cannot be restarted in
+//! place). `XUI_DEMO_AUTOCLOSE_MS` makes it quit itself, and
+//! `XUI_AUTOSWITCH_MS` clicks the button for it, both for headless smoke runs.
 //! `XUI_SNAPSHOT=<dir>` saves a light and a dark screenshot instead of
 //! opening a window. `XUI_GALLERY_THEME=dark`, `XUI_GALLERY_MENU`,
 //! `XUI_GALLERY_CONTEXT`, `XUI_GALLERY_DIALOG` and `XUI_GALLERY_TOOLTIP`
@@ -16,9 +20,47 @@
 mod menus;
 mod page;
 
+use std::cell::Cell;
+use std::rc::Rc;
+
 use xui::prelude::*;
 use xui_core::widget::{Dialog, DialogAction, Tooltip};
-use xui_core::{Color, Properties, Value};
+use xui_core::{Color, Properties, TimerId, Value};
+
+/// Which backend the gallery runs on.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Renderer {
+    /// The native Win32 backend (where available).
+    Native,
+    /// The cross-platform software backend (winit + tiny-skia).
+    Canvas,
+}
+
+impl Renderer {
+    fn label(self) -> &'static str {
+        match self {
+            Renderer::Native => "native",
+            Renderer::Canvas => "skia",
+        }
+    }
+
+    fn other(self) -> Renderer {
+        match self {
+            Renderer::Native => Renderer::Canvas,
+            Renderer::Canvas => Renderer::Native,
+        }
+    }
+
+    fn env_value(self) -> &'static str {
+        match self {
+            Renderer::Native => "native",
+            Renderer::Canvas => "canvas",
+        }
+    }
+}
+
+/// Whether the gallery can switch backends (it needs both to be compiled in).
+const CAN_SWITCH: bool = cfg!(all(feature = "d2d", windows));
 
 #[derive(Clone)]
 enum Msg {
@@ -50,10 +92,13 @@ enum Msg {
     Panel(Color),
     DialogOpen,
     DialogAction(DialogAction),
+    Switch,
 }
 
 struct Gallery {
     parts: page::Parts,
+    renderer: Renderer,
+    switch: Rc<Cell<Option<Renderer>>>,
     context: Menu<Msg>,
     dialog: Dialog<Msg>,
     _tips: [Tooltip<Msg>; 2],
@@ -112,6 +157,11 @@ impl App for Gallery {
                 ui.set_theme(if dark { Theme::dark() } else { Theme::light() });
                 format!("theme: {}", if dark { "dark" } else { "light" })
             }
+            Msg::Switch => {
+                self.switch.set(Some(self.renderer.other()));
+                ui.quit();
+                return;
+            }
         };
         let status = self.parts.status.get();
         status.set_text(0, "Ready");
@@ -125,12 +175,26 @@ fn show_context(menu: &Menu<Msg>, ui: &Ui<Msg>, x: f32, y: f32) {
     menu.show_context(at(x), at(y));
 }
 
-fn main() -> Result<()> {
-    xui::app("xui widgets").size(1296, 664).run(move |ui| {
+/// Starts a timer when the environment variable `name` holds milliseconds.
+fn timer_from_env(ui: &Ui<Msg>, name: &str) -> Option<TimerId> {
+    let millis = std::env::var(name).ok()?.parse::<u32>().ok()?;
+    Some(ui.set_timer(millis))
+}
+
+fn run(renderer: Renderer, switch: Rc<Cell<Option<Renderer>>>) -> Result<()> {
+    let title = format!("xui widgets ({})", renderer.label());
+    xui::app(title).size(1296, 664).run(move |ui| {
         let gallery_env = |name: &str| std::env::var(name).is_ok();
         let dark = std::env::var("XUI_GALLERY_THEME").as_deref() == Ok("dark");
+        let switch_label = CAN_SWITCH.then(|| {
+            format!(
+                "Renderer: {} → {}",
+                renderer.label(),
+                renderer.other().label()
+            )
+        });
         let parts = page::Parts::default();
-        ui.root(page::page(&parts, dark))?;
+        ui.root(page::page(&parts, switch_label, dark))?;
         if dark {
             ui.set_theme(Theme::dark());
         }
@@ -154,11 +218,18 @@ fn main() -> Result<()> {
             Tooltip::attach(ui, parts.bar.get().id(), "Scan progress")?,
         ];
 
+        let switch_at = if CAN_SWITCH {
+            timer_from_env(ui, "XUI_AUTOSWITCH_MS")
+        } else {
+            None
+        };
         // A screenshot cannot press a button: open the dialog from a timer
         // once the window is live.
         let dialog_at = gallery_env("XUI_GALLERY_DIALOG").then(|| ui.set_timer(500));
         ui.on_timer(move |fired| {
-            if dialog_at == Some(fired) {
+            if switch_at == Some(fired) {
+                Some(Msg::Switch)
+            } else if dialog_at == Some(fired) {
                 Some(Msg::DialogOpen)
             } else {
                 None
@@ -173,9 +244,39 @@ fn main() -> Result<()> {
 
         Ok(Gallery {
             parts,
+            renderer,
+            switch,
             context,
             dialog,
             _tips: tips,
         })
     })
+}
+
+fn main() -> Result<()> {
+    let renderer = match std::env::var("XUI_BACKEND").as_deref() {
+        Ok("canvas") => Renderer::Canvas,
+        _ if xui_canvas::snapshot::Gallery::from_env().offscreen() => Renderer::Canvas,
+        _ => Renderer::Native,
+    };
+    let switch = Rc::new(Cell::new(None));
+    run(renderer, Rc::clone(&switch))?;
+    if let Some(next) = switch.get() {
+        relaunch(next);
+    }
+    Ok(())
+}
+
+/// Starts a fresh process on `renderer`. `winit` allows only one `EventLoop`
+/// per process on desktop, so the software backend cannot be torn down and
+/// rebuilt in place; a child process gives each backend its own loop.
+fn relaunch(renderer: Renderer) {
+    let Ok(exe) = std::env::current_exe() else {
+        return;
+    };
+    let _ = std::process::Command::new(exe)
+        .env("XUI_BACKEND", renderer.env_value())
+        // The child must not switch again on its own.
+        .env_remove("XUI_AUTOSWITCH_MS")
+        .spawn();
 }

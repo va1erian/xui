@@ -8,7 +8,8 @@ choose — and switch — the backend it runs on.
 - A recent stable Rust toolchain (the crates are edition 2024).
 - On Linux/macOS, nothing extra for the software backend: `winit`, `softbuffer`
   and `tiny-skia` are pure Rust and dlopen the system graphics libraries.
-- On Windows, the Visual Studio build tools as usual.
+- On Windows, the Visual Studio build tools as usual; the optional Win32
+  (`d2d`) backend links the system libraries.
 
 ## 2. Create the project
 
@@ -17,7 +18,7 @@ cargo new counter
 ```
 
 Add the umbrella crate. Its default `canvas` feature is the cross-platform
-software backend:
+software backend; `d2d` adds the Windows-native Direct2D backend:
 
 ```toml
 # Cargo.toml
@@ -114,16 +115,20 @@ Use the table below; the full capability comparison is in [Backends](backends.md
 | You want… | Use |
 |---|---|
 | One binary that also runs on Linux and macOS, with no platform UI toolkit (the default) | `xui_canvas::WinitBackend` |
+| A Windows-only app with native text input, backdrop materials, the extended title bar and Direct2D-accelerated painting | `xui_win32::Win32Backend` |
 | GPU rendering inside a canvas window | a `GlWidget` installed with `WinitBackend::set_gl_content` |
 | Deterministic headless snapshots in tests and tooling | `xui_canvas::OffscreenBackend` |
 | An HTML page or a web browser view, on any backend | `xui-blitz`'s `BlitzView` |
+| An HTML page laid out by litehtml (being replaced by `xui-blitz`) | `xui-litehtml`'s `HtmlView` |
 
 Two practical notes:
 
 - `WinitBackend::new()` must be called on the main thread, and a process can have
-  only one `winit` event loop.
-- The same widget code runs on every backend, so develop against the canvas
-  backend: it builds everywhere and is snapshot-testable.
+  only one `winit` event loop. If you offer a runtime backend switch, relaunch
+  the process (as `crates/xui/examples/widgets.rs` does).
+- The same widget code runs on every backend, so a good pattern is to develop
+  against the canvas backend (it builds everywhere and is snapshot-testable) and
+  optionally ship the Win32 backend on Windows.
 
 To run the ready-made galleries:
 
@@ -132,15 +137,22 @@ cargo run -p xui --example widgets      # portable widgets, software backend
 cargo run -p xui-canvas --example gl    # GPU triangle
 ```
 
-## 6. Choosing the backend in code
+## 6. Switching the backend at run time
 
-`xui::app` runs on the software backend. `.backend(..)` overrides it with any `Rc<dyn Backend>`, and
+`xui::app` picks the backend: the Direct2D one where the `d2d` feature is on
+(on Windows) unless `XUI_BACKEND=canvas`, otherwise the software backend.
+`.backend(..)` overrides it with any `Rc<dyn Backend>`, and
 `xui_core::app(..)` and `run_app` are the same entry points for an app that
 depends on `xui-core` and a backend crate directly.
 
+```toml
+[dependencies]
+xui = { version = "0.1", features = ["d2d"] }      # also the Direct2D backend on Windows
+```
+
 ## 7. Explore the samples
 
-- `crates/xui/examples/widgets.rs` — every portable widget.
+- `crates/xui/examples/widgets.rs` — every portable widget, switchable backend.
 - `crates/xui/examples/listview.rs` and `gridview.rs` — virtualized models.
 - `crates/xui/examples/controls/` — one small example per portable widget.
 - `crates/xui-canvas/examples/gl.rs` — a `GlWidget`.

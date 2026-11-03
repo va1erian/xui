@@ -1,0 +1,75 @@
+//! The crate's raw-Win32 boundary.
+//!
+//! Every `unsafe` block in `win32ui` lives in this module tree. The functions
+//! here are safe to call; they encode the pointer/lifetime contracts of the
+//! Win32 APIs they wrap and document each block with a `// SAFETY:` comment.
+
+pub(crate) mod animation;
+pub(crate) mod capture;
+#[cfg(feature = "wgc")]
+pub(crate) mod capture_wgc;
+#[cfg(feature = "wgc")]
+pub(crate) mod capture_wgc_device;
+pub(crate) mod clipboard;
+pub(crate) mod control;
+pub(crate) mod cursor_idle;
+pub(crate) mod d2d;
+pub(crate) mod dispatch;
+pub(crate) mod dpi;
+pub(crate) mod drag;
+pub(crate) mod dwm;
+pub(crate) mod edit;
+pub(crate) mod edit_edge;
+pub(crate) mod first_show;
+pub(crate) mod fullscreen;
+pub(crate) mod gdi;
+pub(crate) mod gl;
+pub(crate) mod imaging;
+pub(crate) mod layout;
+pub(crate) mod looper;
+pub(crate) mod menu_seam;
+pub(crate) mod message;
+pub(crate) mod monitor;
+pub(crate) mod nc;
+pub(crate) mod theme;
+pub(crate) mod theme_system;
+pub(crate) mod window;
+pub(crate) mod window_ext;
+pub(crate) mod window_icon;
+pub(crate) mod window_input;
+pub(crate) mod window_ops;
+
+pub(crate) use dwm::{apply_backdrop, apply_extended_colors};
+pub(crate) use theme::{
+    ctlcolor_brush, ctlcolor_msg_btn, ctlcolor_msg_dlg, ctlcolor_msg_edit, ctlcolor_msg_listbox,
+    ctlcolor_msg_static, set_class_background, set_ctlcolor, set_titlebar_dark,
+};
+
+use core::ffi::c_void;
+
+use windows::Win32::Foundation::HWND;
+
+use crate::error::{Error, Win32Error};
+use crate::hwnd::Hwnd;
+
+/// Converts a safe handle into the raw `windows` newtype.
+pub(crate) fn raw_hwnd(hwnd: Hwnd) -> HWND {
+    HWND(hwnd.raw() as *mut c_void)
+}
+
+/// Converts a raw `windows` handle into the safe newtype.
+pub(crate) fn hwnd_from(hwnd: HWND) -> Hwnd {
+    Hwnd::from_raw(hwnd.0 as usize)
+}
+
+/// Converts a `windows` crate error into the crate-owned [`Win32Error`]. This
+/// is the only conversion from a `windows` type, and it stays inside `sys`.
+pub(crate) fn win32(error: windows::core::Error) -> Win32Error {
+    Win32Error::new(error.code().0, error.message())
+}
+
+/// Converts a `windows` crate error into the crate-owned [`Error`], keeping
+/// the `windows` type out of the public API.
+pub(crate) fn win32_error(error: windows::core::Error) -> Error {
+    Error::from(win32(error))
+}

@@ -2,7 +2,9 @@
 
 On macOS the only backend compiled is the cross-platform software backend
 `xui-canvas`: a `winit` window, a `softbuffer` surface and `tiny-skia` for
-rasterising the portable `xui-core` widgets.
+rasterising the portable `xui-core` widgets. The Win32 backend is
+`#![cfg(windows)]`, so the gallery's "native" renderer silently resolves to the
+canvas backend there (`backend_for` in `examples/widgets.rs`).
 
 ## Toolchain
 
@@ -22,6 +24,13 @@ enough to `cargo check` (no linker).
 
 ```bash
 cargo run -p xui --features canvas --example widgets
+```
+
+`XUI_BACKEND=canvas` selects the software backend; on macOS it is already the
+only backend, so the variable is optional:
+
+```bash
+XUI_BACKEND=canvas cargo run -p xui --features canvas --example widgets
 ```
 
 To have it quit on its own (handy for a smoke run), set

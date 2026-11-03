@@ -103,16 +103,36 @@ instead of `canvas.clear(...)`. A compositing backend (`xui-canvas`, and an
 embedder that paints nodes in creation order) reports
 `Canvas::composites_parents()`: the widget's container is already on the
 surface, so the backdrop does nothing and the widget sits on its card or the
-window gradient. A backend that repaints a widget alone into its own
-buffer fills the backdrop with the colour given.
+window gradient. The Win32 backend repaints a widget alone into its own
+buffer, so there the backdrop fills with the colour given.
+
+## Follow the system (Windows)
+
+The Win32 backend adds a `SystemTheme` extension trait over `Theme`:
+
+```rust
+use xui_win32::SystemTheme;
+
+let theme = Theme::system();      // reads the registry / DWM / high-contrast
+```
+
+It reads the user's light/dark preference, the accent colour and the high-contrast
+flag through documented APIs. `is_theme_change(message)` identifies the window
+message that means the preference changed, and a Win32 window can
+`follow_system_theme`. See [The Win32 layer](win32.md).
 
 ## Dark-mode notes
 
-- A backend that owns native parts re-themes them centrally, from the same
-  tokens.
+- A backend that owns native parts re-themes them centrally; the app never calls
+  `SetWindowTheme` or handles `WM_CTLCOLOR*`.
+- Where a native part ignores dark mode, a backend owner-draws it from the same
+  tokens. The Win32 details (list headers, scrollbars, tooltips) are in
+  [The Win32 layer](win32.md).
 - The canvas backend paints everything itself, so it is dark-mode-complete by
   construction.
 
 ## Related
 
 - [Widgets](widgets.md) — the widgets that consume the tokens.
+- [The Win32 layer](win32.md) — system theme, backdrop materials and the
+  extended title bar.

@@ -13,7 +13,7 @@ root="$(cd "$here/../.." && pwd)"
 out="${OUT:-$root/target/engine-compare}"
 # Building from a Windows checkout under /mnt is slow; keep the target native.
 export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$HOME/engine-compare-target}"
-engines=(blitz)
+engines=(litehtml netsurf blitz)
 width="${WIDTH:-1000}"
 height="${HEIGHT:-1400}"
 

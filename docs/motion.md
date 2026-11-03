@@ -99,6 +99,7 @@ let duration = if ui.prefers_reduced_motion() {
 
 | Backend | Answer |
 |---|---|
+| `Win32Backend` | `SystemParametersInfoW(SPI_GETCLIENTAREAANIMATION)`, inverted: the setting says whether client-area animation is *on*, so reduced motion is "off". A failed query is `false`. |
 | `WinitBackend` on Windows | the same query |
 | `WinitBackend` on macOS and Linux | `false`. No platform query is wired up there yet; nothing is guessed. |
 | `OffscreenBackend` | `false` unless a test scripts it with `set_prefers_reduced_motion`; it never reads the machine's setting, so a headless render is the same everywhere |

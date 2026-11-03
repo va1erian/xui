@@ -1,0 +1,12 @@
+# The upstream NetSurf revisions vendor/ is copied from, one
+# `<repository> <commit>` per line (https://github.com/netsurf-browser/<repository>).
+# vendor.sh copies them in; regen.sh builds from the same commits.
+netsurf 39da3c3a40af4566d86500ff3052dfdc7f9a0378
+libcss 499f1c4601ad39942fd1b2204053a387bec9b989
+libdom f69781e1f062444b5af3f62d431d7d94018da53b
+libhubbub 6651b8cf87a4aa87bcdb2ff024a02659cd3f9402
+libparserutils 6b0cbf086ca8eb8fe74b69f0c9ecf274eb2397ca
+libwapcaplet c7c128d3eb3223b216c974471f82e9337fbcf4ba
+libnsutils 0bd39060740b6163bd50875326654a722df97eb2
+libnsgif 22e99eb6818b1284d0f3ff1b7f46159e87221220
+libnsbmp ea063c9f46acb43e90208da14073332b505ef7e7

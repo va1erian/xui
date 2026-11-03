@@ -2,16 +2,17 @@
 //! transport band with a search field beside it, mirroring the emusic top bar:
 //! the band is one surface across its whole width, with a one-text-line-tall
 //! search field inset at the right. The dark-mode input contrast (#119) can be
-//! checked on the software (tiny-skia) path.
+//! checked on the software (tiny-skia) path as well as the native one.
 //!
 //! Run with:
 //!
 //! ```text
-//! cargo run -p xui --features canvas --example top_bar
+//! XUI_BACKEND=canvas cargo run -p xui --features canvas --example top_bar
 //! ```
 //!
-//! `XUI_SNAPSHOT=<dir>` saves a light and a dark screenshot instead of opening
-//! a window.
+//! `XUI_BACKEND=canvas` selects the software backend; without it the native
+//! Win32 backend is used where it exists. `XUI_SNAPSHOT=<dir>` saves a light
+//! and a dark screenshot instead of opening a window.
 
 use xui::prelude::*;
 use xui_core::Insets;

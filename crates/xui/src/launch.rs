@@ -95,8 +95,16 @@ impl Launch {
     }
 }
 
-/// The backend an app runs on by default: the portable software backend.
+/// The backend an app runs on by default: the native Win32 backend where it
+/// is built in (the `d2d` feature on Windows) unless `XUI_BACKEND=canvas`,
+/// otherwise the portable software backend.
 pub fn default_backend() -> Rc<dyn Backend> {
+    #[cfg(all(feature = "d2d", windows))]
+    {
+        if std::env::var("XUI_BACKEND").as_deref() != Ok("canvas") {
+            return Rc::new(xui_win32::Win32Backend::new());
+        }
+    }
     Rc::new(WinitBackend::new())
 }
 

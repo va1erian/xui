@@ -16,6 +16,7 @@ other agents. Run them in Windows Sandbox with `scripts/sandbox/run.ps1`
 scripts\sandbox\run.ps1                                              # whole suite
 scripts\sandbox\run.ps1 -CargoArgs '--test','slider'                 # one test binary
 scripts\sandbox\run.ps1 -CargoArgs '--test','slider' -TestArgs 'drag'  # libtest filter
+scripts\sandbox\run.ps1 -CargoArgs '--features','wgc'                # wgc capture tests
 scripts\sandbox\run.ps1 -Build -CargoArgs '--example','demo' -Env @{ WIN32UI_DEMO_AUTOCLOSE_MS = '4000' }
 ```
 
