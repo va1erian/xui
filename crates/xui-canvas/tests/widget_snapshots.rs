@@ -261,7 +261,7 @@ fn differing(a: &RgbaImage, b: &RgbaImage) -> usize {
 }
 
 #[test]
-fn every_portable_widget_renders_light_dark_and_midnight() {
+fn every_portable_widget_renders_in_every_bundled_theme() {
     let backend = Rc::new(OffscreenBackend::new());
     let rendered: Rc<RefCell<Vec<RgbaImage>>> = Rc::new(RefCell::new(Vec::new()));
 
@@ -297,11 +297,25 @@ fn every_portable_widget_renders_light_dark_and_midnight() {
                 .expect("a midnight render");
             save("widgets-midnight.png", &midnight);
 
+            ui.set_theme(Theme::daylight());
+            let daylight = backend_for_make
+                .render(ui.window())
+                .expect("a daylight render");
+            save("widgets-daylight.png", &daylight);
+
+            ui.set_theme(Theme::nightfall());
+            let nightfall = backend_for_make
+                .render(ui.window())
+                .expect("a nightfall render");
+            save("widgets-nightfall.png", &nightfall);
+
             let mut rendered = rendered_for_make.borrow_mut();
             rendered.push(light);
             rendered.push(dark);
             rendered.push(midnight);
             rendered.push(empty);
+            rendered.push(daylight);
+            rendered.push(nightfall);
 
             Gallery { _alive: alive }
         },
@@ -313,6 +327,8 @@ fn every_portable_widget_renders_light_dark_and_midnight() {
     let dark = &rendered[1];
     let midnight = &rendered[2];
     let empty = &rendered[3];
+    let daylight = &rendered[4];
+    let nightfall = &rendered[5];
 
     // Many widgets drew something on each theme.
     assert!(
@@ -340,5 +356,21 @@ fn every_portable_widget_renders_light_dark_and_midnight() {
         differing(light, dark) > 2_000,
         "light and dark differ: {}",
         differing(light, dark)
+    );
+    // The decorated pair paints its own look, not a recoloured flat one.
+    for (name, image, flat) in [
+        ("daylight", daylight, light),
+        ("nightfall", nightfall, dark),
+    ] {
+        assert!(
+            differing(image, flat) > 2_000,
+            "{name} differs from its flat counterpart: {}",
+            differing(image, flat)
+        );
+    }
+    assert!(
+        differing(nightfall, midnight) > 2_000,
+        "nightfall and midnight differ: {}",
+        differing(nightfall, midnight)
     );
 }

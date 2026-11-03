@@ -4,6 +4,15 @@
 
 ### Breaking changes
 
+- **The winit backend opens windows in Daylight or Nightfall.** Instead of
+  the flat `Theme::light()`, `WinitBackend::system_theme` now answers
+  `Theme::daylight()`, or `Theme::nightfall()` when the platform reports dark
+  mode (where it reports nothing, as on many X11 desktops, Daylight). The
+  light look matches LazyOS's default light theme; LazyOS's dark mode still
+  uses navy Midnight, which Nightfall shares its decoration and accent with.
+  An app that calls `ui.set_theme` keeps the theme it sets. The Win32 backend
+  is unchanged (flat light unless the app opts into `follow_system_theme`), so
+  on Windows the same app now opens differently on the two backends.
 - **`NodeSpec` has a new public field, `contained`.** Code that builds a
   `NodeSpec` with a struct literal must add it; `NodeSpec::new` and the
   builders are unchanged.
@@ -77,6 +86,11 @@
 
 ### Additions
 
+- **Daylight and Nightfall themes.** `Theme::daylight()` is LazyOS's light
+  widget theme (warm off-white gradients, rounded cards, gloss and a green
+  accent glow), ported from its settings crate. `Theme::nightfall()` is its
+  dark half: Midnight's decoration on near-neutral greys close to Windows 11's
+  dark surfaces instead of navy, with the same green accent lightened.
 - **`NodeSpec::contained`.** A node whose painter promises to stay inside its
   bounds gets no overdraw margin on the canvas backends: a change to it repaints
   its bounds alone, and what it draws outside them is cut. An ordinary

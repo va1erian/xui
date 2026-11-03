@@ -7,6 +7,15 @@ use xui_core::Image;
 use xui_core::units::dip;
 
 #[test]
+fn windows_open_in_daylight_or_nightfall_after_the_platform_preference() {
+    use winit::window::Theme as Preference;
+    use xui_core::Theme;
+    assert_eq!(super::theme_for(Some(Preference::Dark)), Theme::nightfall());
+    assert_eq!(super::theme_for(Some(Preference::Light)), Theme::daylight());
+    assert_eq!(super::theme_for(None), Theme::daylight());
+}
+
+#[test]
 fn window_state_records_the_requested_chrome() {
     let spec = PlatformSpec::new("t")
         .decorations(Decorations::None)
