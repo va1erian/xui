@@ -8,7 +8,7 @@
 //! `file_dialog` blocks the test thread until the helper answers. Run inside
 //! the sandbox (`scripts\sandbox\run.ps1`): the dialog is real.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use xui_core::backend::{
     Backend, FileDialogMode, FileDialogOutcome, FileDialogRequest, FileFilter, PlatformSpec,
@@ -166,6 +166,23 @@ fn scratch(name: &str) -> PathBuf {
     std::env::temp_dir().join(name)
 }
 
+/// Asserts the picker chose `expected`. The picker answers with the long form of
+/// a path (`runneradmin`) where the temp directory may be the 8.3 short one
+/// (`RUNNER~1`), so the folders are compared as the file system resolves them.
+fn assert_chosen(outcome: FileDialogOutcome, expected: &Path) {
+    let FileDialogOutcome::Chosen(chosen) = outcome else {
+        panic!("expected a chosen file, got {outcome:?}");
+    };
+    let resolve = |path: &Path| {
+        let folder = path.parent().expect("a file path has a folder");
+        (
+            std::fs::canonicalize(folder).expect("the folder exists"),
+            path.file_name().map(|name| name.to_owned()),
+        )
+    };
+    assert_eq!(resolve(&chosen), resolve(expected));
+}
+
 #[test]
 fn opening_returns_the_typed_existing_path() {
     let file = scratch("xui-d2d-open.msl");
@@ -174,7 +191,7 @@ fn opening_returns_the_typed_existing_path() {
         &request(FileDialogMode::Open, "xui-d2d open test"),
         Answer::Type(file.display().to_string()),
     );
-    assert_eq!(outcome, FileDialogOutcome::Chosen(file));
+    assert_chosen(outcome, &file);
 }
 
 #[test]
@@ -192,10 +209,7 @@ fn saving_uses_the_suggested_name_and_the_first_filters_extension() {
     save.require_existing = false;
     save.suggested_name = Some("xui-d2d-saved".to_owned());
     let outcome = show(&save, Answer::Accept);
-    assert_eq!(
-        outcome,
-        FileDialogOutcome::Chosen(scratch("xui-d2d-saved.msl"))
-    );
+    assert_chosen(outcome, &scratch("xui-d2d-saved.msl"));
 }
 
 #[test]
