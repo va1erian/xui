@@ -420,7 +420,7 @@ fn moving_the_focus_between_fields_repaints_both() {
             driver.click(at.0, at.1);
             let at = driver.centre(second);
             driver.click(at.0, at.1);
-            driver.key(Key::TAB);
+            driver.key(Key::END);
             driver.event(Event::Char('x'));
             let at = driver.centre(first);
             driver.click(at.0, at.1);

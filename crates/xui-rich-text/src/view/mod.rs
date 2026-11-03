@@ -64,7 +64,12 @@ impl<M: 'static> RichTextEditor<M> {
     /// Creates an empty editor at `bounds` (device pixels), copying and
     /// pasting through the window's portable clipboard.
     pub fn new(ui: &Ui<M>, bounds: Rect) -> Result<RichTextEditor<M>> {
-        let control = Control::new(ui, &NodeSpec::new(NodeKind::Custom, bounds).tab_stop())?;
+        let control = Control::new(
+            ui,
+            &NodeSpec::new(NodeKind::Custom, bounds)
+                .tab_stop()
+                .wants_tab(),
+        )?;
         let shared = Rc::new(Shared::new(ui, control.id(), bounds));
         {
             let shared = Rc::clone(&shared);

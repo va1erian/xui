@@ -26,12 +26,12 @@ $Out = (Resolve-Path $Out).Path
 Get-ChildItem -Path $Out -Filter *.png -File | Remove-Item -Force
 Get-ChildItem -Path $Out -Filter *.log -File | Remove-Item -Force
 
-cargo build -q -p xui --features canvas,rhai --examples
+cargo build -q -p xui --features canvas --examples
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 $targetDir = if ($env:CARGO_TARGET_DIR) { $env:CARGO_TARGET_DIR } else { "target" }
 $bin = Join-Path $targetDir "debug/examples"
 
-$examples = @("widgets", "listview", "gridview", "top_bar", "layout", "containers", "absolute", "form", "script", "cookbook", "menu_bar_flicker")
+$examples = @("widgets", "listview", "gridview", "top_bar", "layout", "containers", "absolute", "cookbook", "menu_bar_flicker")
 foreach ($file in Get-ChildItem "crates/xui/examples/controls/*.rs") {
     if ($file.BaseName -ne "support") { $examples += "control_$($file.BaseName)" }
 }

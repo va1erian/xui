@@ -19,6 +19,7 @@ mod clipboard;
 mod hit;
 mod paint;
 mod reduced_motion;
+mod tab;
 mod window_icon;
 
 /// A sink that records every event it is handed.
