@@ -15,10 +15,10 @@ xui-core  (portable; #![forbid(unsafe_code)], no platform dependency)
    │  widgets · App/Ui runtime · router · theme · units · layout arithmetic
    │  accessibility model · Backend trait · WindowId/WidgetId · Event/Canvas
    ▼
-a backend (xui-canvas · xui-win32 · xui-canvas::OffscreenBackend)
+a backend (xui-canvas · xui-canvas::OffscreenBackend)
    │  decodes native input → Event, creates nodes, paints, shapes text
    ▼
-the platform (winit + softbuffer/tiny-skia · Win32 · a headless surface)
+the platform (winit + softbuffer/tiny-skia · a headless surface)
 ```
 
 - **`xui-core`** is the only crate an application *needs* to depend on. It has
@@ -27,9 +27,7 @@ the platform (winit + softbuffer/tiny-skia · Win32 · a headless surface)
   `xui` umbrella crate's bare names are always this layer.
 - **A backend** is one value implementing [`xui_core::backend::Backend`]. It
   owns the event loop, creates windows and nodes, delivers events, paints and
-  measures text. `xui-canvas` (default, every platform) and `xui-win32`
-  (opt-in `d2d` feature, Windows-only, Direct2D-accelerated) are peers — pick
-  one by feature or construct either at runtime and pass it to
+  measures text. `xui-canvas` runs on every platform; construct it and pass it to
   `xui_core::run_app`. See [Backends](backends.md).
 - The application never names a platform handle; it refers to a window by
   `WindowId` and a widget by `WidgetId`, both assigned by the backend.
@@ -67,7 +65,7 @@ special-casing it.
 `run_app` builds the app through `run_with`: the runtime installs its event sink
 first, then the backend invokes the `make` closure once its platform window
 exists and its DPI is known, and only then pumps the loop. A backend that
-creates its window synchronously (Win32) builds the app before pumping; a
+creates its window synchronously builds the app before pumping; a
 backend whose window is created lazily by the loop (`winit`) builds it from
 inside the loop, so widgets lay out at the real scale factor from the start
 instead of being built at 96 DPI and rescaled afterwards. The default
@@ -76,8 +74,7 @@ implementation calls `on_ready` and then `run`.
 `NodeKind` is the portable widget vocabulary (`Label`, `Button`, `Edit`,
 `ListView`, `ScrollView`, `Panel`, `Custom`, …). `supports` tells the front
 layer whether the backend provides a real control for a kind (`ImplKind::Native`)
-or expects the front layer to paint it (`ImplKind::Painted`). On Win32 today
-only `Edit` is native; `WinitBackend` and `OffscreenBackend` report `Painted`
+or expects the front layer to paint it (`ImplKind::Painted`). `WinitBackend` and `OffscreenBackend` report `Painted`
 for everything.
 
 ### Identity
@@ -215,8 +212,7 @@ rectangles on a headless capture.
 ## Accessibility
 
 `xui_core::accessibility` is a plain model — `Role`, `Action`, `RangeValue` and
-a `Node` tree — with no backend hook. A backend that can expose it (Win32 UI
-Automation) bridges the tree to the platform; a painted widget describes itself
+a `Node` tree — with no backend hook. A backend that can expose it bridges the tree to the platform; a painted widget describes itself
 through the same model.
 
 ## Source layout
@@ -251,12 +247,10 @@ crates/xui-core/src/
   property.rs       the Properties/Property/Value surface
 
 crates/xui-canvas/src/    WinitBackend, SkiaCanvas, OffscreenBackend, GL seam
-crates/xui-win32/src/     Win32Backend: Direct2D/DirectWrite painting (Windows)
 crates/xui-gpu/src/       the shared OpenGL surface seam (no platform code)
 crates/xui-code-editor/src/  the code-editor widget (a portable custom-painted node)
 crates/xui-icons/src/     the optional Global Village icon set (vector shapes drawn through Canvas)
-crates/xui-litehtml/src/  the litehtml HTML view (a portable custom-painted node)
-crates/xui-blitz/src/     the Blitz web view (a portable custom-painted node; replaces litehtml and NetSurf)
+crates/xui-blitz/src/     the Blitz web view (a portable custom-painted node)
 crates/xui/src/           the umbrella crate
 ```
 
@@ -282,5 +276,4 @@ These are non-negotiable and are part of `AGENTS.md`.
 - [Motion](motion.md) — easing, tweens, the clock and the reduced-motion
   setting.
 - [Development](development.md) — the checks and how to add a widget.
-- [The Win32 layer](win32.md) — the low-level platform layer `Win32Backend` is
-  built on, for interop.
+

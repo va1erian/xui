@@ -103,7 +103,7 @@ reverts invalid input, firing `on_commit` only for a valid commit.
 
 | Widget | Builder | Events |
 |---|---|---|
-| `Edit<M>` | `edit()`, `.text(..)`, `.placeholder(..)`, `.password()` | `on_change(&str)`; native `EDIT` on Win32, painted elsewhere |
+| `Edit<M>` | `edit()`, `.text(..)`, `.placeholder(..)`, `.password()` | `on_change(&str)`; painted |
 | `MultilineEdit<M>` | `multiline_edit()` | `on_change(&str)` |
 | `NumberField<M>` | `number_field(min, max, step)` | `on_change(f64)`, `on_commit(f64)` |
 | `Slider<M>` | `slider(min, max)` | `on_change(f64)`, `on_commit(f64)`; `set_range` |
@@ -378,8 +378,8 @@ tip.show(); // e.g. for a screenshot; otherwise it appears on hover
 ## Text
 
 Text is shaped by the backend through `Backend::text_shaper()`, a `Send + Sync`
-handle a worker can use. The `WinitBackend` and `Win32Backend` both shape and
-hit-test; `Canvas::draw_layout` draws a layout that came back from a worker.
+handle a worker can use. The `WinitBackend` shapes and
+hit-tests; `Canvas::draw_layout` draws a layout that came back from a worker.
 `FlowText` supports styled runs (normal/weak/link), rich ranges, links and
 wrapping. See [Backends](backends.md) for the per-backend text stack.
 
@@ -388,5 +388,3 @@ wrapping. See [Backends](backends.md) for the per-backend text stack.
 - [Theming](theming.md) — how widgets get their colours.
 - [Architecture](architecture.md) — the node/event model behind the builders.
 - [Backends](backends.md) — what a widget becomes on each backend.
-- [The Win32 layer](win32.md) — the native controls, if you need deeper Windows
-  integration than the portable widgets give.

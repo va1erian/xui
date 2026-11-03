@@ -19,13 +19,12 @@ pub struct Parts {
     pub menu: Handle<Menu<Msg>>,
 }
 
-/// The whole window: `switch` is the renderer button's label, when the
-/// gallery can switch backends; `dark` starts the theme choice on `Dark`.
-pub fn page(parts: &Parts, switch: Option<String>, dark: bool) -> Layout<Msg> {
+/// The whole window; `dark` starts the theme choice on `Dark`.
+pub fn page(parts: &Parts, dark: bool) -> Layout<Msg> {
     let left = column().gap(8).children((
         row()
             .gap(20)
-            .children((controls(parts, switch, dark).fill(1), views(parts).fill(1)))
+            .children((controls(parts, dark).fill(1), views(parts).fill(1)))
             .fill(1),
         separator(),
         status_bar(&["Ready", ""]).bind(&parts.status),
@@ -40,11 +39,8 @@ pub fn page(parts: &Parts, switch: Option<String>, dark: bool) -> Layout<Msg> {
 }
 
 /// The first column: text, choices and values.
-fn controls(parts: &Parts, switch: Option<String>, dark: bool) -> Layout<Msg> {
-    let mut buttons = vec![button("Context menu").on_click(Msg::ContextMenu).width(174)];
-    if let Some(label) = switch {
-        buttons.push(button(label).on_click(Msg::Switch).fill(1));
-    }
+fn controls(parts: &Parts, dark: bool) -> Layout<Msg> {
+    let buttons = vec![button("Context menu").on_click(Msg::ContextMenu).width(174)];
     column().gap(8).children((
         label("xui widgets"),
         edit().text("type here").on_change(Msg::Edit),

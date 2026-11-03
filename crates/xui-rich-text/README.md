@@ -7,8 +7,7 @@ quotes, bullet and numbered lists), images, inline or floating with text
 flowing around them, and tables.
 
 It is **portable**: text is shaped only through `xui-core`'s `TextShaper` and
-painted only through the `Canvas`, so the same widget runs on the Win32 and the
-canvas backends, in light and dark mode.
+painted only through the `Canvas`, so the same widget runs on every backend, in light and dark mode.
 
 ## Using it
 
