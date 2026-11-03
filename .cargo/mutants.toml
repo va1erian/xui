@@ -6,9 +6,7 @@
 # would need a desktop and minutes to test.
 exclude_globs = [
   "crates/xui/**",
-  "crates/xui-win32/**",
   "crates/xui-canvas/**",
-  "crates/xui-litehtml/**",
 ]
 
 # A mutant that takes longer than this to test is reported and skipped.

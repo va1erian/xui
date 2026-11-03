@@ -14,10 +14,8 @@ comment:
   layout: "reach, diff, flags, files"
   require_changes: false
 
-# Raw Win32 bindings and the test/example scaffolding are not meaningful to
-# measure; the coverage job still builds and runs them.
+# The test/example scaffolding is not meaningful to measure; the coverage job
+# still builds and runs it.
 ignore:
-  - "crates/xui-win32/src/sys/**"
-  - "crates/xui-litehtml/**"
   - "**/tests/**"
   - "**/examples/**"

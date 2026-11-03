@@ -8,8 +8,8 @@ in [AGENTS.md](../AGENTS.md); the design invariants are repeated in
 
 - Stable Rust, edition 2024. There is no pinned `rust-toolchain` file and no
   declared MSRV; CI uses `stable`.
-- The workspace members include `xui-core`, `xui-win32`, `xui-canvas`,
-  `xui`, `xui-litehtml`, `xui-blitz`, `xui-code-editor` (`Cargo.toml`, resolver 3).
+- The workspace members include `xui-core`, `xui-canvas`,
+  `xui`, `xui-blitz`, `xui-code-editor` (`Cargo.toml`, resolver 3).
 
 ## Checks
 
@@ -29,10 +29,6 @@ Feature-specific checks:
 cargo check -p xui --features canvas --all-targets
 cargo clippy -p xui --features canvas --all-targets -- -D warnings
 cargo test -p xui-canvas
-
-cargo check --all-targets --features wgc
-cargo clippy --all-targets --features wgc -- -D warnings
-cargo test --features wgc
 ```
 
 ## Running UI tests safely
@@ -58,9 +54,9 @@ take a screenshot.
 
 | Job | Runner | What it does |
 |---|---|---|
-| `lint` | windows-latest | `cargo fmt --all --check`, then clippy with `-D warnings` on `--all-targets` and again with `--all-features` (the d2d, canvas and wgc backends) |
+| `lint` | windows-latest | `cargo fmt --all --check`, then clippy with `-D warnings` on `--all-targets` and again with `--all-features` (every feature) |
 | `test` | windows-latest | `cargo test`; `xui-code-editor`'s tests with the `rhai-syntax` feature; the opt-in GL test (`XUI_CANVAS_GL_TEST=1`, skips cleanly with no driver); and a run of the `widgets` example with an auto-close. The all-features test pass runs in `coverage` |
-| `cross-check` | ubuntu-latest | `cargo check --all-targets`, clippy on `xui-core`, the `xui-core`, `xui-code-editor` (`rhai-syntax`) and `xui-canvas` tests — proving the front layer has no Win32 dependency and the empty backends compile — and a `xui-blitz` check for `x86_64-unknown-linux-musl` |
+| `cross-check` | ubuntu-latest | `cargo check --all-targets`, clippy on `xui-core`, the `xui-core`, `xui-code-editor` (`rhai-syntax`) and `xui-canvas` tests — proving the front layer has no Win32 dependency — and a `xui-blitz` check for `x86_64-unknown-linux-musl` |
 | `cross-check-macos` | macos-latest | `cargo check --all-targets`, the `xui-core` and `xui-canvas` tests, and a check of the canvas `widgets` example |
 | `snapshots` | ubuntu-latest | `scripts/snapshots.sh`: every example rendered headlessly in light and dark, uploaded as the `snapshots` artifact (not a required check) |
 | `coverage` | windows-latest | `cargo llvm-cov --workspace --all-features`, uploading LCOV to Codecov and as a `coverage-lcov` artifact |
@@ -132,8 +128,7 @@ Treat a surviving mutant as a prompt to strengthen a test, not a per-PR gate.
 ## Examples as smoke tests
 
 Every example is compiled by `cargo check --all-targets`. The `test` job also
-*runs* the `widgets` example with an auto-close (`XUI_DEMO_AUTOCLOSE_MS`;
-`WIN32UI_DEMO_AUTOCLOSE_MS` for the Win32 ones) so a panic on startup or a
+*runs* the `widgets` example with an auto-close (`XUI_DEMO_AUTOCLOSE_MS`) so a panic on startup or a
 paint regression fails CI, and `snapshots` renders every example headlessly.
 When you add an example, give it the same auto-close hook — the per-control
 demos under `crates/xui/examples/controls/` are the smallest form.
@@ -189,13 +184,7 @@ etc. — before crossing the limit.
 
 ## Screenshots
 
-For portable widgets, render them headlessly first
-([headless-screenshots.md](headless-screenshots.md)). For a real window, never raise, activate, foreground a window or move the pointer to screenshot on a
-shared desktop. Use the composited capture (`--features wgc`):
-
-```text
-cargo run -p xui-win32 --features wgc --example capture -- --title "My App" --out shot.png
-```
-
-See [Windows-only window features → Capture](win32-windows.md#capture) and
-[sandbox-testing.md](sandbox-testing.md).
+For portable widgets, render them headlessly
+([headless-screenshots.md](headless-screenshots.md)). For a real window, never
+raise, activate, foreground a window or move the pointer to screenshot on a
+shared desktop; see [sandbox-testing.md](sandbox-testing.md).

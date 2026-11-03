@@ -122,7 +122,7 @@ light and dark into `target/snapshots/`.
 
 Copy, cut and paste go through the window's portable clipboard
 (`Backend::clipboard_text` / `set_clipboard_text`, reached through `Ui`): the
-real OS clipboard on the Win32 and canvas backends, an in-process store on a
+real OS clipboard on the canvas backend, an in-process store on a
 backend without one. To use your own clipboard, implement the two-method
 `Clipboard` trait (`text`, `set_text`) and pass it to `Editor::with_clipboard`:
 

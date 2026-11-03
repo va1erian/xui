@@ -19,8 +19,8 @@
     scripts\sandbox\run.ps1
 
 .EXAMPLE
-    # One integration test binary, with the wgc feature, filtered
-    scripts\sandbox\run.ps1 -CargoArgs '--test','slider','--features','wgc' -TestArgs 'drag'
+    # One integration test binary, filtered
+    scripts\sandbox\run.ps1 -CargoArgs '--test','slider' -TestArgs 'drag'
 
 .EXAMPLE
     # A client app's tests (run from its workspace, pointing at this script)
@@ -34,7 +34,7 @@
 param(
     # Cargo.toml of the crate or workspace to build.
     [string]$ManifestPath = (Join-Path $PSScriptRoot '..\..\Cargo.toml'),
-    # Extra cargo arguments, e.g. '--test','slider' or '--features','wgc'.
+    # Extra cargo arguments, e.g. '--test','slider'.
     [string[]]$CargoArgs = @(),
     # Arguments passed to every executable (libtest filters, --ignored, ...).
     [string[]]$TestArgs = @(),

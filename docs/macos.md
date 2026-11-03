@@ -2,9 +2,7 @@
 
 On macOS the only backend compiled is the cross-platform software backend
 `xui-canvas`: a `winit` window, a `softbuffer` surface and `tiny-skia` for
-rasterising the portable `xui-core` widgets. The Win32 backend is
-`#![cfg(windows)]`, so the gallery's "native" renderer silently resolves to the
-canvas backend there (`backend_for` in `examples/widgets.rs`).
+rasterising the portable `xui-core` widgets.
 
 ## Toolchain
 
