@@ -63,8 +63,8 @@ pub(crate) fn to_winit_icon(image: &Image) -> Option<winit::window::Icon> {
 }
 
 /// The theme a window opens in for the platform's dark-mode `preference`:
-/// the decorated Daylight/Nightfall pair, so an app looks the same here as on
-/// an embedder that paints with it; light when the platform does not say.
+/// the decorated Daylight/Nightfall pair, Daylight when the platform does not
+/// say.
 pub(crate) fn theme_for(preference: Option<winit::window::Theme>) -> Theme {
     match preference {
         Some(winit::window::Theme::Dark) => Theme::nightfall(),
