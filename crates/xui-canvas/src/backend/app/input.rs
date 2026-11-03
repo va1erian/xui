@@ -18,6 +18,7 @@ use super::App;
 use super::keymap::{
     RESIZE_BORDER_PX, cursor_icon, key_events, mouse_button, resize_cursor, resize_direction,
 };
+use crate::scene::tab_press;
 
 impl App<'_> {
     /// The window's live `winit` window, if it has one yet.
@@ -297,6 +298,18 @@ impl App<'_> {
         let id = focused.unwrap_or(WidgetId::NONE);
         let pressed = state == ElementState::Pressed;
         for event in key_events(pressed, repeat, logical, text, self.modifiers) {
+            // Tab moves the focus, unless its holder keeps Tab for itself.
+            if let Some(backwards) = tab_press(&event) {
+                let next = self
+                    .shared
+                    .nodes
+                    .borrow()
+                    .tab_destination(window, focused, backwards);
+                if let Some(next) = next {
+                    self.set_focus(raw, next);
+                    continue;
+                }
+            }
             self.shared.deliver(window, id, &event);
         }
     }

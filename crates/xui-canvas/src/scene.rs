@@ -18,9 +18,11 @@ use std::collections::{BTreeMap, HashMap};
 
 mod damage;
 mod notes;
+mod tab;
 
 use damage::Damage;
 pub(crate) use notes::event_marks_target;
+pub(crate) use tab::tab_press;
 
 use xui_core::backend::{Painter, ParentRef, WidgetId, WindowId};
 use xui_core::geometry::Rect;
@@ -54,6 +56,10 @@ pub(crate) struct Node {
     /// ([`NodeSpec::contained`](xui_core::backend::NodeSpec::contained)), so
     /// neither its reach nor its damage takes the overdraw margin.
     pub(crate) contained: bool,
+    /// Whether Tab moves the focus here.
+    pub(crate) tab_stop: bool,
+    /// Whether the node keeps Tab for itself while it has the focus.
+    pub(crate) wants_tab: bool,
 }
 
 impl Node {
@@ -72,6 +78,8 @@ impl Node {
             clip: None,
             popup: false,
             contained: false,
+            tab_stop: false,
+            wants_tab: false,
         }
     }
 }
