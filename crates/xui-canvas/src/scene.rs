@@ -50,6 +50,10 @@ pub(crate) struct Node {
     /// Whether the node is a transient popup surface, which a press outside it
     /// dismisses by taking the keyboard focus from it.
     pub(crate) popup: bool,
+    /// Whether the painter promised to stay inside the bounds
+    /// ([`NodeSpec::contained`](xui_core::backend::NodeSpec::contained)), so
+    /// neither its reach nor its damage takes the overdraw margin.
+    pub(crate) contained: bool,
 }
 
 impl Node {
@@ -67,6 +71,7 @@ impl Node {
             drag_region: false,
             clip: None,
             popup: false,
+            contained: false,
         }
     }
 }

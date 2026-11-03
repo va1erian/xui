@@ -32,6 +32,16 @@ impl Scene {
         self.damage_of(window).add(rect);
     }
 
+    /// Marks `rect`, in `window` coordinates, stale on behalf of `id`: without
+    /// the overdraw margin when `id` is contained, as nothing else draws there.
+    fn note_for(&mut self, id: WidgetId, window: WindowId, rect: Rect) {
+        if self.get(id).is_some_and(|node| node.contained) {
+            self.damage_of(window).add_exact(rect);
+        } else {
+            self.note(window, rect);
+        }
+    }
+
     /// Marks the whole of `window` stale: a resize, a DPI or theme change, new
     /// GL content. Always correct, never cheap.
     pub(crate) fn invalidate_window(&mut self, window: WindowId) {
@@ -176,7 +186,7 @@ impl Scene {
     fn note_own(&mut self, id: WidgetId) {
         let extent = self.own_extent(id);
         if let Some(window) = self.window_of(id) {
-            self.note(window, extent);
+            self.note_for(id, window, extent);
         }
     }
 
@@ -189,7 +199,7 @@ impl Scene {
         let Some(place) = placement(self, id) else {
             return false;
         };
-        self.note(window, place.visible_bounds());
+        self.note_for(id, window, place.visible_bounds());
         true
     }
 
@@ -211,7 +221,7 @@ impl Scene {
         if let Some(clip) = place.clip {
             area = intersect(area, clip);
         }
-        self.note(window, area);
+        self.note_for(id, window, area);
         true
     }
 }

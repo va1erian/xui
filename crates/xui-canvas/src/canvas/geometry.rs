@@ -204,10 +204,31 @@ impl SkiaCanvas<'_> {
             || shape.bottom > clip.bottom
     }
 
+    /// Whether a shape with these device-space `bounds`, `grow` pixels wider,
+    /// can change no pixel that is kept: it lies wholly outside the clip, the
+    /// reach, or the region being repainted. Skipping it changes nothing, and
+    /// keeps a repaint of a sliver of a busy painter near the sliver's cost.
+    fn misses(&self, bounds: tiny_skia::Rect, grow: f32) -> bool {
+        let Some(kept) = self.clip_bounds() else {
+            return false;
+        };
+        let shape = Rect::new(
+            (bounds.left() - grow).floor() as i32,
+            (bounds.top() - grow).floor() as i32,
+            (bounds.right() + grow).ceil() as i32,
+            (bounds.bottom() + grow).ceil() as i32,
+        );
+        intersect(shape, kept).is_empty()
+    }
+
     /// Fills `path`, whose coordinates are already in device space (the
     /// transform is applied by [`SkiaCanvas::rect`]/[`SkiaCanvas::point`]),
     /// cut by the active clips.
     pub(super) fn fill(&mut self, path: &Path, shader: Shader<'static>) {
+        // Anti-aliasing reaches at most one pixel past the path.
+        if self.misses(path.bounds(), 1.0) {
+            return;
+        }
         let paint = paint(shader);
         self.clip_mask_for(path.bounds(), 0.0);
         let mask = self.mask.as_ref();
@@ -222,6 +243,9 @@ impl SkiaCanvas<'_> {
         // the clip's edge is worth the outline's own bounds, which are what
         // decide whether it leaves the clip.
         let loose = stroke.width * stroke.miter_limit.max(1.0) + 1.0;
+        if self.misses(path.bounds(), loose) {
+            return;
+        }
         if self.mask.is_none() && self.reaches_outside_clip(path.bounds(), loose) {
             let outline = path
                 .stroke(&stroke, 1.0)

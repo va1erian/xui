@@ -159,6 +159,7 @@ impl Backend for WinitBackend {
         node.enabled = spec.enabled;
         node.text = spec.text.clone();
         node.popup = spec.popup;
+        node.contained = spec.contained;
         self.shared.nodes.borrow_mut().insert(id, node);
         Ok(id)
     }

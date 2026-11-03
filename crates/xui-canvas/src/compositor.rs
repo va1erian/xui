@@ -10,7 +10,8 @@
 //!    ones that paint: visible through their whole ancestry, with something
 //!    left inside their ancestors' clips. Each carries its window-absolute
 //!    bounds, its clip, and its *reach*: its bounds trimmed to the clips,
-//!    grown by the overdraw margin.
+//!    grown by the overdraw margin unless the node is contained
+//!    ([`NodeSpec::contained`](xui_core::backend::NodeSpec::contained)).
 //! 2. [`Plan::paint`] repaints rectangles of a [`Surface`]: for each, the
 //!    window background, then every planned node whose reach meets it, in
 //!    creation order, clipped to its ancestors' clips **and to its reach**.
@@ -200,7 +201,11 @@ pub(crate) fn plan(scene: &Scene, window: WindowId, dpi: u32, content: &dyn Cont
             id,
             bounds: placement.bounds,
             clip: placement.clip,
-            reach: grow(reach, overdraw),
+            reach: if node.contained {
+                reach
+            } else {
+                grow(reach, overdraw)
+            },
             painter: node.painter.clone(),
             content: has_content,
         });

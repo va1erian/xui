@@ -19,6 +19,10 @@
 //! A full invalidate (a first frame, a resize, a theme change) replaces the
 //! list with "everything" and is the fallback whenever the bounded list would
 //! not help.
+//!
+//! Damage from a contained node ([`Damage::add_exact`]) goes in a list of its
+//! own, kept the same way, which takes no overdraw margin: its painter cannot
+//! reach past its bounds.
 
 use xui_core::geometry::Rect;
 
@@ -31,9 +35,16 @@ pub(crate) const MAX_RECTS: usize = 8;
 /// What changed in one window since its last painted frame.
 #[derive(Debug, Default)]
 pub(crate) struct Damage {
-    rects: Vec<Rect>,
+    /// Rectangles to grow by the overdraw margin when taken.
+    rects: Rects,
+    /// Rectangles taken as they are.
+    exact: Rects,
     full: bool,
 }
+
+/// A short list of rectangles, merged as the module says.
+#[derive(Debug, Default)]
+struct Rects(Vec<Rect>);
 
 /// The area of `rect`, in pixels (0 when empty).
 fn area(rect: Rect) -> i64 {
@@ -61,22 +72,22 @@ impl Damage {
     /// A window nothing has been painted in yet: everything is stale.
     pub(crate) fn full() -> Damage {
         Damage {
-            rects: Vec::new(),
             full: true,
+            ..Damage::default()
         }
     }
 
     /// Whether any frame is owed.
     #[cfg(test)]
     pub(crate) fn is_pending(&self) -> bool {
-        self.full || !self.rects.is_empty()
+        self.full || !self.rects.0.is_empty() || !self.exact.0.is_empty()
     }
 
-    /// The rectangles waiting, for tests and diagnostics. Meaningless when
-    /// [`Damage::is_full`].
+    /// The rectangles waiting to take the margin, for tests and diagnostics.
+    /// Meaningless when [`Damage::is_full`].
     #[cfg(test)]
     pub(crate) fn rects(&self) -> &[Rect] {
-        &self.rects
+        &self.rects.0
     }
 
     /// Whether everything is stale.
@@ -88,26 +99,69 @@ impl Damage {
     /// Marks the whole window stale.
     pub(crate) fn add_all(&mut self) {
         self.full = true;
-        self.rects.clear();
+        self.rects.0.clear();
+        self.exact.0.clear();
     }
 
     /// Marks `rect` (window coordinates) stale. The overdraw margin is added
     /// when the damage is taken ([`Damage::take`]), at the DPI of that frame.
     pub(crate) fn add(&mut self, rect: Rect) {
-        if self.full || rect.is_empty() {
+        if !self.full {
+            self.rects.add(rect);
+        }
+    }
+
+    /// Marks `rect` (window coordinates) stale without the overdraw margin: a
+    /// contained node's own place, which only its painter draws in.
+    pub(crate) fn add_exact(&mut self, rect: Rect) {
+        if !self.full {
+            self.exact.add(rect);
+        }
+    }
+
+    /// Takes the damage: the rectangles to repaint, each grown by `margin`
+    /// pixels (the overdraw margin at the window's DPI) unless it came from a
+    /// contained node, and trimmed to `window`, or the whole window when
+    /// everything is stale (or `force` is set, or the list already covers the
+    /// window). Empty when nothing changed.
+    pub(crate) fn take(&mut self, window: Rect, force: bool, margin: i32) -> Vec<Rect> {
+        let full = self.full || force;
+        let grown = std::mem::take(&mut self.rects.0);
+        let exact = std::mem::take(&mut self.exact.0);
+        self.full = false;
+        if full {
+            return vec![window];
+        }
+        let mut clipped: Vec<Rect> = grown
+            .into_iter()
+            .map(|rect| grow(rect, margin))
+            .chain(exact)
+            .map(|rect| intersect(rect, window))
+            .filter(|rect| !rect.is_empty())
+            .collect();
+        if clipped.iter().map(|rect| area(*rect)).sum::<i64>() >= area(window) {
+            clipped = vec![window];
+        }
+        clipped
+    }
+}
+
+impl Rects {
+    fn add(&mut self, rect: Rect) {
+        if rect.is_empty() {
             return;
         }
         // Edges are kept far inside the range where widths and areas overflow.
         let rect = grow(rect, 0);
-        if self.rects.iter().any(|held| contains(*held, rect)) {
+        if self.0.iter().any(|held| contains(*held, rect)) {
             return;
         }
         let mut merged = rect;
         // A union can start to meet a rectangle the parts did not: go on until
         // nothing more joins.
         loop {
-            let before = self.rects.len();
-            self.rects.retain(|held| {
+            let before = self.0.len();
+            self.0.retain(|held| {
                 if cheap_union(*held, merged) {
                     merged = union(*held, merged);
                     false
@@ -115,12 +169,12 @@ impl Damage {
                     true
                 }
             });
-            if self.rects.len() == before {
+            if self.0.len() == before {
                 break;
             }
         }
-        self.rects.push(merged);
-        while self.rects.len() > MAX_RECTS {
+        self.0.push(merged);
+        while self.0.len() > MAX_RECTS {
             self.merge_closest();
         }
     }
@@ -128,9 +182,9 @@ impl Damage {
     /// Merges the two rectangles whose union adds the least area.
     fn merge_closest(&mut self) {
         let mut best: Option<(usize, usize, i64)> = None;
-        for first in 0..self.rects.len() {
-            for second in first + 1..self.rects.len() {
-                let (a, b) = (self.rects[first], self.rects[second]);
+        for first in 0..self.0.len() {
+            for second in first + 1..self.0.len() {
+                let (a, b) = (self.0[first], self.0[second]);
                 let waste = area(union(a, b)) - area(a) - area(b);
                 if best.is_none_or(|(_, _, least)| waste < least) {
                     best = Some((first, second, waste));
@@ -138,32 +192,10 @@ impl Damage {
             }
         }
         if let Some((first, second, _)) = best {
-            let merged = union(self.rects[first], self.rects[second]);
-            self.rects.swap_remove(second);
-            self.rects[first] = merged;
+            let merged = union(self.0[first], self.0[second]);
+            self.0.swap_remove(second);
+            self.0[first] = merged;
         }
-    }
-
-    /// Takes the damage: the rectangles to repaint, each grown by `margin`
-    /// pixels (the overdraw margin at the window's DPI) and trimmed to
-    /// `window`, or the whole window when everything is stale (or `force` is
-    /// set, or the list already covers the window). Empty when nothing changed.
-    pub(crate) fn take(&mut self, window: Rect, force: bool, margin: i32) -> Vec<Rect> {
-        let full = self.full || force;
-        let rects = std::mem::take(&mut self.rects);
-        self.full = false;
-        if full {
-            return vec![window];
-        }
-        let mut clipped: Vec<Rect> = rects
-            .into_iter()
-            .map(|rect| intersect(grow(rect, margin), window))
-            .filter(|rect| !rect.is_empty())
-            .collect();
-        if clipped.iter().map(|rect| area(*rect)).sum::<i64>() >= area(window) {
-            clipped = vec![window];
-        }
-        clipped
     }
 }
 
