@@ -5,9 +5,9 @@
 use std::rc::Rc;
 
 use xui_core::backend::{
-    Backend, BackendError, Cursor, Event, FontSpec, ImplKind, NodeKind, NodeSpec, Painter,
-    ParentRef, PlatformSpec, Result, TextLayout, TextMetrics, TextShaper, TextStyle, TimerId,
-    Waker, WidgetId, WindowId,
+    Backend, BackendError, Cursor, Event, FileDialogOutcome, FileDialogRequest, FontSpec, ImplKind,
+    NodeKind, NodeSpec, Painter, ParentRef, PlatformSpec, Result, TextLayout, TextMetrics,
+    TextShaper, TextStyle, TimerId, Waker, WidgetId, WindowId,
 };
 use xui_core::router::WidgetHost;
 use xui_core::{Dip, Rect, Theme};
@@ -16,7 +16,7 @@ use super::canvas::metrics;
 use super::scene::Node;
 use super::{D2dBackend, Shared, window};
 use crate::sys::gfx::TextParams;
-use crate::sys::{clipboard, settings, window as sys};
+use crate::sys::{clipboard, dialog, settings, window as sys};
 
 impl Backend for D2dBackend {
     fn init(&self) {
@@ -54,8 +54,19 @@ impl Backend for D2dBackend {
     }
 
     fn set_event_sink(&self, window: WindowId, sink: Rc<dyn WidgetHost>) {
-        if let Some(state) = self.shared.windows.borrow_mut().get_mut(&window.raw()) {
+        let late = {
+            let mut windows = self.shared.windows.borrow_mut();
+            let Some(state) = windows.get_mut(&window.raw()) else {
+                return;
+            };
             state.sink = Some(sink);
+            // The primary window is shown by `run_with` once its app is built; a
+            // window opened later (a secondary or modal one) is complete by the
+            // time its sink is set.
+            (!state.primary).then_some(state.hwnd)
+        };
+        if let Some(hwnd) = late {
+            sys::show(hwnd);
         }
     }
 
@@ -77,6 +88,22 @@ impl Backend for D2dBackend {
         if let Some(hwnd) = self.shared.hwnd_of(window) {
             sys::set_enabled(hwnd, enabled);
         }
+    }
+
+    fn file_dialog(&self, window: WindowId, request: &FileDialogRequest) -> FileDialogOutcome {
+        match self.shared.hwnd_of(window) {
+            Some(hwnd) => dialog::show(hwnd, request),
+            None => FileDialogOutcome::Declined,
+        }
+    }
+
+    fn run_modal(&self, window: WindowId) -> Result<()> {
+        let Some(hwnd) = self.shared.hwnd_of(window) else {
+            return Err(BackendError::Other("no such window".into()));
+        };
+        sys::show(hwnd);
+        sys::run_nested(|| self.shared.windows.borrow().contains_key(&window.raw()));
+        Ok(())
     }
 
     fn minimize(&self, window: WindowId) {

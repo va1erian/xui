@@ -445,3 +445,20 @@ pub(crate) fn apply_suggested_rect(hwnd: Hwnd, lparam: isize) -> Rect {
         suggested.bottom,
     )
 }
+
+/// Pumps messages while `keep_going` holds, for a modal window's own loop. A
+/// `WM_QUIT` ends it and is re-posted so the outer loop sees it too.
+pub(crate) fn run_nested(keep_going: impl Fn() -> bool) {
+    let mut msg = MSG::default();
+    // SAFETY: the standard message loop on the thread that owns the windows.
+    unsafe {
+        while keep_going() {
+            if !GetMessageW(&mut msg, None, 0, 0).as_bool() {
+                PostQuitMessage(msg.wParam.0 as i32);
+                break;
+            }
+            let _ = TranslateMessage(&msg);
+            DispatchMessageW(&msg);
+        }
+    }
+}

@@ -1,7 +1,6 @@
 //! A Direct2D render target bound to a window, and the frame lifecycle.
 
 use std::cell::RefCell;
-use std::collections::HashMap;
 
 use windows::Win32::Graphics::Direct2D::Common::{
     D2D_SIZE_U, D2D1_ALPHA_MODE_IGNORE, D2D1_COLOR_F, D2D1_PIXEL_FORMAT,
@@ -9,13 +8,14 @@ use windows::Win32::Graphics::Direct2D::Common::{
 use windows::Win32::Graphics::Direct2D::{
     D2D1_FEATURE_LEVEL_DEFAULT, D2D1_HWND_RENDER_TARGET_PROPERTIES,
     D2D1_PRESENT_OPTIONS_RETAIN_CONTENTS, D2D1_RENDER_TARGET_PROPERTIES,
-    D2D1_RENDER_TARGET_TYPE_DEFAULT, D2D1_RENDER_TARGET_USAGE_NONE, ID2D1Bitmap,
-    ID2D1HwndRenderTarget, ID2D1Layer, ID2D1SolidColorBrush,
+    D2D1_RENDER_TARGET_TYPE_DEFAULT, D2D1_RENDER_TARGET_USAGE_NONE, ID2D1HwndRenderTarget,
+    ID2D1Layer, ID2D1SolidColorBrush,
 };
 use windows::Win32::Graphics::Dxgi::Common::DXGI_FORMAT_B8G8R8A8_UNORM;
 use windows_numerics::Matrix3x2;
 use xui_core::backend::Rgba;
 
+use super::bitmap::BitmapCache;
 use super::factory;
 use crate::sys::window::Hwnd;
 
@@ -32,7 +32,7 @@ pub(crate) enum Frame {
 pub(crate) struct Target {
     pub(super) rt: ID2D1HwndRenderTarget,
     pub(super) brush: ID2D1SolidColorBrush,
-    pub(super) bitmaps: RefCell<HashMap<u64, ID2D1Bitmap>>,
+    pub(super) bitmaps: RefCell<BitmapCache>,
     pub(super) layers: RefCell<Vec<ID2D1Layer>>,
 }
 
@@ -76,7 +76,7 @@ impl Target {
         Some(Target {
             rt,
             brush,
-            bitmaps: RefCell::new(HashMap::new()),
+            bitmaps: RefCell::new(BitmapCache::default()),
             layers: RefCell::new(Vec::new()),
         })
     }

@@ -3,6 +3,7 @@
 //! widget; the backend modules above translate.
 
 pub(crate) mod clipboard;
+pub(crate) mod dialog;
 pub(crate) mod gfx;
 pub(crate) mod settings;
 pub(crate) mod window;

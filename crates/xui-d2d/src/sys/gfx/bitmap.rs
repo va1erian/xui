@@ -1,5 +1,7 @@
 //! Images: uploaded once per image identity and drawn scaled.
 
+use std::collections::{HashMap, VecDeque};
+
 use windows::Win32::Graphics::Direct2D::Common::{
     D2D_SIZE_U, D2D1_ALPHA_MODE_PREMULTIPLIED, D2D1_PIXEL_FORMAT,
 };
@@ -12,8 +14,36 @@ use super::RectF;
 use super::shapes::rect_f;
 use super::target::Target;
 
-/// How many uploaded images a target keeps before it starts over.
-const MAX_BITMAPS: usize = 256;
+/// How many bytes of uploaded images a target keeps before it drops the oldest.
+/// A viewport that streams a new image every frame must not grow without bound.
+const BUDGET_BYTES: usize = 96 << 20;
+
+/// Uploaded images by identity, oldest first, within a byte budget.
+#[derive(Default)]
+pub(super) struct BitmapCache {
+    map: HashMap<u64, (ID2D1Bitmap, usize)>,
+    order: VecDeque<u64>,
+    bytes: usize,
+}
+
+impl BitmapCache {
+    fn get(&self, id: u64) -> Option<ID2D1Bitmap> {
+        self.map.get(&id).map(|(bitmap, _)| bitmap.clone())
+    }
+
+    fn insert(&mut self, id: u64, bitmap: ID2D1Bitmap, bytes: usize) {
+        while self.bytes + bytes > BUDGET_BYTES
+            && let Some(oldest) = self.order.pop_front()
+        {
+            if let Some((_, freed)) = self.map.remove(&oldest) {
+                self.bytes -= freed;
+            }
+        }
+        self.bytes += bytes;
+        self.order.push_back(id);
+        self.map.insert(id, (bitmap, bytes));
+    }
+}
 
 impl Target {
     /// Draws the RGBA image `id` (`width` x `height`, top-down) into `dest`.
@@ -35,8 +65,8 @@ impl Target {
     }
 
     fn bitmap(&self, id: u64, width: u32, height: u32, rgba: &[u8]) -> Option<ID2D1Bitmap> {
-        if let Some(bitmap) = self.bitmaps.borrow().get(&id) {
-            return Some(bitmap.clone());
+        if let Some(bitmap) = self.bitmaps.borrow().get(id) {
+            return Some(bitmap);
         }
         if rgba.len() < (width as usize) * (height as usize) * 4 {
             return None;
@@ -72,11 +102,9 @@ impl Target {
             )
         }
         .ok()?;
-        let mut cache = self.bitmaps.borrow_mut();
-        if cache.len() >= MAX_BITMAPS {
-            cache.clear();
-        }
-        cache.insert(id, bitmap.clone());
+        self.bitmaps
+            .borrow_mut()
+            .insert(id, bitmap.clone(), bgra.len());
         Some(bitmap)
     }
 }
