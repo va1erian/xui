@@ -58,22 +58,6 @@ fn every_shape_is_painted_and_stays_near_the_grid() {
 }
 
 #[test]
-#[cfg(feature = "aero")]
-fn the_aero_style_uses_gradients() {
-    use crate::Paint;
-    assert_eq!(crate::STYLE, crate::Style::Aero);
-    let gradient_shapes = Icon::ALL
-        .iter()
-        .flat_map(|icon| icon.shapes())
-        .filter(|shape| matches!(shape.fill, Some(Paint::Gradient(_))))
-        .count();
-    assert!(
-        gradient_shapes > 100,
-        "only {gradient_shapes} gradient fills"
-    );
-}
-
-#[test]
 fn a_palette_retints_one_tone_only() {
     let red = xui_core::backend::Rgba::rgb(0xFF, 0, 0);
     let palette = Palette::GLOBAL_VILLAGE.with(Tone::Teal, red);

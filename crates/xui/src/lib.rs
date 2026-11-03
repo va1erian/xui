@@ -12,9 +12,6 @@
 //!   platform.
 //! - `icons` adds [`xui_icons`], the optional Global Village icon set.
 //! - `rich-text` adds [`xui_rich_text`], the editable rich-text widget.
-//! - `form` adds [`form`], declarative `.lfm` forms built into widgets.
-//! - `rhai` adds [`script`], forms whose events run Rhai handlers (and
-//!   implies `form`).
 //!
 //! Both backends run the exact same widgets. An app starts with [`app`],
 //! which picks the backend (and renders headless screenshots when
@@ -45,12 +42,3 @@ pub use xui_canvas;
 pub use xui_icons;
 #[cfg(feature = "rich-text")]
 pub use xui_rich_text;
-
-/// Declarative forms: the `.lfm` document, its schema, validation and the
-/// builder that turns a form into live widgets.
-#[cfg(feature = "form")]
-pub use xui_form as form;
-/// Rhai-scripted forms: `fn <control>_<event>` handlers run against a live
-/// form.
-#[cfg(feature = "rhai")]
-pub use xui_script as script;

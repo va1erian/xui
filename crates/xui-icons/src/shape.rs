@@ -4,7 +4,6 @@
 
 use xui_core::backend::PathSeg;
 
-use crate::gradient::Gradient;
 use crate::tone::Tone;
 use xui_core::backend::Rgba;
 
@@ -15,9 +14,6 @@ pub enum Paint {
     Tone(Tone),
     /// A fixed colour, alpha included.
     Color(Rgba),
-    /// A linear gradient across the shape's bounding box. Only fills use the
-    /// gradient; a stroke painted with one takes its middle stop.
-    Gradient(&'static Gradient),
 }
 
 /// A stroke: a paint and a width on the 32-unit grid.

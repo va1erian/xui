@@ -34,7 +34,7 @@ everywhere, or an offscreen surface for snapshots and tests. Dark mode is first-
 | `xui` | The umbrella crate most applications depend on. Selects a backend by feature (`canvas`, the default) and re-exports the portable front layer. |
 | `xui-code-editor` | A code-editor widget: rope buffer, monospace view, find/replace, pluggable syntax highlighting. |
 | `xui-rich-text` | An opt-in editable rich-text widget for a basic word processor: styled runs, paragraph formatting, lists, inline and floating images that text wraps around, undo, JSON save and Markdown export. Portable: lays out through the backend `TextShaper`. Enable with `xui`'s `rich-text` feature. |
-| `xui-icons` | An optional, multi-colour vector icon set (36 icons) in two compile-time styles, flat "Global Village" and glossy "Aero" (`--features aero`), drawn through the portable `Canvas` path API, so the software backend rasterises it with `tiny-skia`. Depends on `xui-core` only. |
+| `xui-icons` | An optional, multi-colour vector icon set (36 icons) in the flat "Global Village" style, drawn through the portable `Canvas` path API, so the software backend rasterises it with `tiny-skia`. Depends on `xui-core` only. |
 | `xui-blitz` | A web view on the [Blitz](https://github.com/DioxusLabs/blitz) engine (Stylo, Taffy, Parley): CSS grid, flexbox, floats, `var()`, SVG; links reported or followed, fetching through the app's `Fetcher`, downloads, selection and copy. A portable custom-painted node. |
 
 ## Documentation
@@ -47,11 +47,11 @@ everywhere, or an offscreen surface for snapshots and tests. Dark mode is first-
   or combine them.
 - **[Widgets](docs/widgets.md)** — the portable widget catalogue and models.
 - **[Theming](docs/theming.md)** — tokens, dark mode and live switching.
-- **[Forms and scripts](docs/forms.md)** — `.lfm` forms and Rhai handlers.
 - **[macOS](docs/macos.md)** and **[sandboxed testing](docs/sandbox-testing.md)**.
 - **[Headless screenshots](docs/headless-screenshots.md)** — render a window or
   the whole example gallery to PNG with no window, and use it from your own app.
 - **[Development](docs/development.md)** — checks, CI and how to add a widget.
+- **[The `attic` branch](#the-attic-branch)** — crates and features removed from `main`.
 
 ## Quick start
 
@@ -120,6 +120,21 @@ The portable core, the widget layer and the `xui-canvas` software backend all
 exist and are exercised by tests and examples. The `xui` umbrella's default
 `canvas` feature is the cross-platform backend; its bare names are the portable
 `xui-core` widgets.
+
+## The `attic` branch
+
+Code that no known consumer uses is removed from `main` but kept, with its
+history and tests, on the [`attic`](https://github.com/va1erian/xui/tree/attic)
+branch. It holds the last state of:
+
+- `xui-litehtml`, `xui-netsurf` (replaced by `xui-blitz`), `xui-win32` (the
+  Direct2D backend and its `d2d` feature), `xui-explorer` and `xui-paint`;
+- `xui-form`, `xui-script` and `xui-form-cli` (`.lfm` forms and Rhai scripting,
+  with the `form` and `rhai` features of `xui` and `docs/forms.md`);
+- the "Aero" icon style of `xui-icons` (the `aero` and `icons-aero` features).
+
+To bring one back, check it out from the branch (for example
+`git checkout attic -- crates/xui-form`) and restore its workspace entry.
 
 ## License
 

@@ -26,7 +26,7 @@ $Out = (Resolve-Path $Out).Path
 Get-ChildItem -Path $Out -Filter *.png -File | Remove-Item -Force
 Get-ChildItem -Path $Out -Filter *.log -File | Remove-Item -Force
 
-cargo build -q -p xui --features canvas,rhai --examples
+cargo build -q -p xui --features canvas --examples
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 $targetDir = if ($env:CARGO_TARGET_DIR) { $env:CARGO_TARGET_DIR } else { "target" }
 $bin = Join-Path $targetDir "debug/examples"
