@@ -154,7 +154,11 @@ const RED: (u8, u8, u8) = (200, 40, 40);
 const BLUE: (u8, u8, u8) = (30, 60, 220);
 const GREEN: (u8, u8, u8) = (0, 160, 0);
 
+/// Reads what is on the screen, so it needs a composited, interactive desktop:
+/// Windows Sandbox has one, a headless CI runner does not (it reads the dark
+/// backdrop). Run it in the sandbox: `scripts/sandbox/run.ps1` with `-TestArgs --include-ignored`.
 #[test]
+#[ignore = "reads the screen: needs an interactive desktop; run in the sandbox with --include-ignored"]
 fn drawing_is_clipped_to_the_nodes_reach_and_a_leaked_clip_does_not_spread() {
     let title = "xui-d2d pixel test";
     let backend = Rc::new(D2dBackend::new());
