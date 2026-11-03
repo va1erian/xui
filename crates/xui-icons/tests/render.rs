@@ -39,9 +39,7 @@ fn the_background_stays_transparent() {
     }
 }
 
-// Aero uses fixed colours and gradients, so the tone palette does not reach it.
 #[test]
-#[cfg(not(feature = "aero"))]
 fn a_palette_retints_the_render() {
     use xui_core::backend::Rgba;
     use xui_icons::Tone;
