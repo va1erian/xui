@@ -51,11 +51,11 @@ renders `icons-village-dark.png` and `icons-village-light.png` into
 ## Assets
 
 ```text
-assets/village/svg/       source of truth: one standalone 32×32 SVG per icon
+assets/village/svg/         source of truth: one standalone 32×32 SVG per icon
 assets/village/png/<size>/  alpha PNG exports at 16, 24, 32, 48, 64, 128 and 256 px
-assets/village/ico/       Windows .ico per icon (16, 24, 32, 48, 64 and 256 px)
-assets/generate.py          compiles assets/village/svg into src/village
-assets/svgpath.py           its SVG path and shape geometry (standard library only)
+assets/village/ico/         Windows .ico per icon (16, 24, 32, 48, 64 and 256 px)
+assets/generate.py            compiles assets/village/svg into src/village
+assets/svgpath.py             its SVG path and shape geometry (standard library only)
 ```
 
 Edit an SVG, then run `python crates/xui-icons/assets/generate.py` and commit
