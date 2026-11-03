@@ -87,6 +87,13 @@ checked or selected indicator). `Theme::light()` and `Theme::dark()` leave them
 all off, so they paint flat exactly as before; `Theme::midnight()` is a navy
 dark theme that turns them on.
 
+`Theme::daylight()` and `Theme::nightfall()` are a decorated light/dark pair:
+Daylight is LazyOS's light theme (warm off-white gradients, green accent), and
+Nightfall carries Midnight's decoration on near-neutral greys, close to
+Windows 11's dark surfaces. The winit backend's `system_theme` picks one of
+the two from the platform's dark-mode preference, so a canvas app opens in the
+same look on Windows, Linux and LazyOS.
+
 `xui_core::theme::look` paints them, so a custom widget looks like the bundled
 ones: `paint_background` (the window gradient), `backdrop`, `card`, `band`,
 `face`, `field`, `row`/`selected_row` and `glow`.

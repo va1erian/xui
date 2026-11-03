@@ -62,6 +62,16 @@ pub(crate) fn to_winit_icon(image: &Image) -> Option<winit::window::Icon> {
     winit::window::Icon::from_rgba(image.pixels().to_vec(), image.width(), image.height()).ok()
 }
 
+/// The theme a window opens in for the platform's dark-mode `preference`:
+/// the decorated Daylight/Nightfall pair, so an app looks the same here as on
+/// an embedder that paints with it; light when the platform does not say.
+pub(crate) fn theme_for(preference: Option<winit::window::Theme>) -> Theme {
+    match preference {
+        Some(winit::window::Theme::Dark) => Theme::nightfall(),
+        Some(winit::window::Theme::Light) | None => Theme::daylight(),
+    }
+}
+
 /// The default dots-per-inch a window is rendered at before the platform
 /// reports its scale factor.
 const DEFAULT_DPI: u32 = 96;

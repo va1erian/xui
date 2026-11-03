@@ -374,6 +374,18 @@ impl Backend for WinitBackend {
         self.shared.request_redraw(window);
     }
 
+    /// Daylight or Nightfall, after the dark-mode preference the platform
+    /// reports for the app's window; Daylight when it reports none.
+    fn system_theme(&self) -> Option<Theme> {
+        let preference = self
+            .shared
+            .windows
+            .borrow()
+            .values()
+            .find_map(|state| state.window.as_ref().and_then(|window| window.theme()));
+        Some(super::theme_for(preference))
+    }
+
     fn prefers_reduced_motion(&self) -> bool {
         crate::sys::animation::reduced_motion()
     }
