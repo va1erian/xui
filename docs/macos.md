@@ -24,13 +24,6 @@ enough to `cargo check` (no linker).
 cargo run -p xui --features canvas --example widgets
 ```
 
-`XUI_BACKEND=canvas` selects the software backend; on macOS it is already the
-only backend, so the variable is optional:
-
-```bash
-XUI_BACKEND=canvas cargo run -p xui --features canvas --example widgets
-```
-
 To have it quit on its own (handy for a smoke run), set
 `XUI_DEMO_AUTOCLOSE_MS`:
 

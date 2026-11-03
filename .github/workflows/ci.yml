@@ -36,7 +36,8 @@ jobs:
       - run: cargo clippy --all-targets --all-features -- -D warnings
 
   # The full toolkit on Windows: the platform backend, every widget and every UI
-  # test (windows are allowed on a runner). The all-features test pass runs in `coverage`, so it is not repeated here.
+  # test (windows are allowed on a runner). The all-features test pass runs in
+  # `coverage`, so it is not repeated here.
   test:
     runs-on: windows-latest
     steps:

@@ -103,10 +103,8 @@ including how to choose and switch the backend.
 
 - **Portable first.** Widgets, layout, theming and input live in `xui-core` and
   are shared by every backend. A widget never names a platform handle.
-- **Fast where it counts.** The default backend is portable software rendering;
-  on Windows an opt-in backend paints the same widgets through Direct2D and hosts
-  a real native `EDIT` where that is best (today, `Edit`), so IME and selection
-  come for free.
+- **Fast where it counts.** The default backend is portable software rendering,
+  with an optional GPU path.
 - **Themed, dark mode included.** Controls draw only from semantic theme
   tokens; the app picks a `Theme` (or follows the system) and never handles
   `NM_CUSTOMDRAW`, `WM_CTLCOLOR*` or `SetWindowTheme`.
