@@ -75,6 +75,11 @@ name = "gl"
 harness = false
 required-features = ["winit-backend"]
 
+[[test]]
+name = "system_theme"
+harness = false
+required-features = ["winit-backend"]
+
 [[example]]
 name = "gl"
 required-features = ["winit-backend"]
