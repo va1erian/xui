@@ -95,3 +95,28 @@ Worth pursuing as a Windows-native option next to `xui-canvas`: about a fifth of
 the size, a third of the source, and no windowing dependencies. Order of work:
 borderless/caption, IME, UI Automation, then extract the shared scene and damage
 code so both backends use one implementation.
+
+## Update: the miniscent editor on this backend
+
+The miniscent level editor (`E:\repos\miniscent`, branch `d2d-backend` of its
+worktree `E:\repos\miniscent-d2d`) runs on `xui-d2d` behind a `d2d` cargo
+feature. In Windows Sandbox: it starts, draws its menus, toolbars, viewports
+and status bar; Ctrl+S opens the **native Save dialog** (suggested `level.msl`)
+and writes the file (12,893 bytes); a fresh editor's Ctrl+O opens the **native
+Open dialog**, loads that file, and shows "26 brushes, 12 entities".
+
+Backend additions for it: `Backend::file_dialog` over the Common Item Dialog,
+`run_modal`, secondary windows shown once their sink is set, and a byte-bounded
+image cache (the 3D view streams a new image per frame). IME was deferred.
+
+Release size of `mscent-editor` (miniscent's own profile: `opt-level = "s"`,
+fat LTO, one codegen unit):
+
+| | canvas (default) | `d2d` |
+|---|---|---|
+| exe | 20,817,920 B | 18,671,616 B |
+| crates in the tree | 409 | 369 |
+
+The 2.1 MB saved is the same ~2.4 MB the cookbook showed for the winit/tiny-skia
+stack; the editor itself is dominated by `wgpu`, Blitz/Stylo and its own code,
+so the relative saving is 10%, not 83%.
