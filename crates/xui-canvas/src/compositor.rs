@@ -52,9 +52,10 @@ use crate::{Region, Surface};
 /// 1 px on the flat themes and 6 px on Midnight at 96 DPI.
 ///
 /// A node's *reach* is its bounds, trimmed to its ancestors' clips and grown
-/// by the margin. The compositor clips each painter to its reach, so nothing is
-/// drawn outside it; damage is grown by the same margin, and a damaged
-/// rectangle repaints every node whose reach touches it.
+/// by the margin, unless the node is contained. The compositor clips each
+/// painter to its reach, so nothing is drawn outside it; damage is grown by the
+/// same margin, except a contained node's own, and a damaged rectangle repaints
+/// every node whose reach touches it.
 pub(crate) const OVERDRAW_DIP: i32 = 8;
 
 /// The overdraw margin at `dpi`, in device pixels: [`OVERDRAW_DIP`] design

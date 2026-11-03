@@ -22,7 +22,9 @@
 //!
 //! Damage from a contained node ([`Damage::add_exact`]) goes in a list of its
 //! own, kept the same way, which takes no overdraw margin: its painter cannot
-//! reach past its bounds.
+//! reach past its bounds. The two lists together hold no more than
+//! [`MAX_RECTS`]: past that, an exact rectangle moves to the other list, which
+//! only adds margin.
 
 use xui_core::geometry::Rect;
 
@@ -108,6 +110,7 @@ impl Damage {
     pub(crate) fn add(&mut self, rect: Rect) {
         if !self.full {
             self.rects.add(rect);
+            self.bound();
         }
     }
 
@@ -116,7 +119,25 @@ impl Damage {
     pub(crate) fn add_exact(&mut self, rect: Rect) {
         if !self.full {
             self.exact.add(rect);
+            self.bound();
         }
+    }
+
+    /// Holds both lists to [`MAX_RECTS`] together, moving exact rectangles to
+    /// the margin list, which keeps itself to that bound.
+    fn bound(&mut self) {
+        while self.rects.0.len() + self.exact.0.len() > MAX_RECTS {
+            let Some(rect) = self.exact.0.pop() else {
+                break;
+            };
+            self.rects.add(rect);
+        }
+    }
+
+    /// The rectangles waiting to be taken as they are, for tests.
+    #[cfg(test)]
+    pub(crate) fn exact_rects(&self) -> &[Rect] {
+        &self.exact.0
     }
 
     /// Takes the damage: the rectangles to repaint, each grown by `margin`
@@ -327,5 +348,57 @@ mod tests {
         let mut damage = Damage::default();
         damage.add(Rect::new(1, 1, 5, 5));
         assert_eq!(damage.take(window(), true, 0), [window()]);
+    }
+
+    #[test]
+    fn exact_damage_takes_no_margin_and_ordinary_damage_still_does() {
+        let mut damage = Damage::default();
+        damage.add_exact(Rect::new(100, 100, 200, 150));
+        damage.add(Rect::new(500, 500, 510, 510));
+        assert_eq!(
+            damage.take(window(), false, 8),
+            [Rect::new(492, 492, 518, 518), Rect::new(100, 100, 200, 150)]
+        );
+        assert!(!damage.is_pending());
+    }
+
+    #[test]
+    fn a_full_damage_swallows_exact_rectangles_too() {
+        let mut damage = Damage::default();
+        damage.add_exact(Rect::new(1, 1, 5, 5));
+        damage.add_all();
+        assert!(damage.exact_rects().is_empty());
+        damage.add_exact(Rect::new(10, 10, 20, 20));
+        assert!(
+            damage.exact_rects().is_empty(),
+            "nothing is added to a full damage"
+        );
+        assert_eq!(damage.take(window(), false, 8), [window()]);
+    }
+
+    #[test]
+    fn the_two_lists_together_hold_no_more_than_the_bound() {
+        let mut damage = Damage::default();
+        for i in 0..20 {
+            let at = i * 40;
+            damage.add_exact(Rect::new(at, 0, at + 4, 4));
+            damage.add(Rect::new(at, 700, at + 4, 704));
+        }
+        assert!(damage.rects().len() + damage.exact_rects().len() <= MAX_RECTS);
+        let taken = damage.take(window(), false, 2);
+        for i in 0..20 {
+            let (at, low) = (i * 40, i * 40);
+            let covered = |r: Rect| taken.iter().any(|t| contains(*t, r));
+            assert!(covered(Rect::new(at, 0, at + 4, 4)), "exact {i}");
+            assert!(covered(Rect::new(low, 700, low + 4, 704)), "grown {i}");
+        }
+    }
+
+    #[test]
+    fn exact_damage_covering_the_window_is_one_whole_window_repaint() {
+        let mut damage = Damage::default();
+        damage.add_exact(Rect::new(0, 0, 1000, 500));
+        damage.add(Rect::new(0, 500, 1000, 800));
+        assert_eq!(damage.take(window(), false, 0), [window()]);
     }
 }

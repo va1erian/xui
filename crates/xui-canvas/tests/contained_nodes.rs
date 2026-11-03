@@ -81,7 +81,7 @@ fn a_contained_painter_is_cut_at_its_bounds() {
         id,
         Rc::new(|canvas| {
             let b = canvas.bounds();
-            // A 1 px outline on the edge reaches half a pixel outside.
+            // An outline on the edge reaches half its width outside.
             canvas.stroke_rect(b, Color::rgb(0, 0, 0), 3.0);
         }),
     );
@@ -153,4 +153,46 @@ fn a_shape_beside_a_repainted_rectangle_draws_its_edge_inside_it() {
         }
     }
     assert!(touched > 0, "the shapes do reach into the rectangle");
+}
+
+#[test]
+fn an_ordinary_neighbour_still_repaints_a_contained_node_it_may_draw_on() {
+    let backend = OffscreenBackend::new();
+    let window = window(&backend);
+    let (runs, other_runs) = (Rc::new(Cell::new(0)), Rc::new(Cell::new(0)));
+    let spec = NodeSpec::new(NodeKind::Custom, Rect::new(10, 10, 90, 110)).contained();
+    let contained = backend.create(ParentRef::Window(window), &spec).unwrap();
+    backend.set_painter(contained, counting(Color::rgb(200, 0, 0), &runs));
+    let spec = NodeSpec::new(NodeKind::Custom, Rect::new(94, 10, 190, 110));
+    let ordinary = backend.create(ParentRef::Window(window), &spec).unwrap();
+    backend.set_painter(ordinary, counting(Color::rgb(0, 0, 200), &other_runs));
+    backend.render(window).unwrap();
+    backend.invalidate(ordinary);
+    backend.render(window).unwrap();
+    assert_eq!(runs.get(), 2, "the neighbour's margin reaches it");
+}
+
+#[test]
+fn a_contained_container_keeps_the_margin_for_its_children() {
+    let backend = OffscreenBackend::new();
+    let window = window(&backend);
+    let spec = NodeSpec::new(NodeKind::Custom, Rect::new(40, 20, 120, 100)).contained();
+    let container = backend.create(ParentRef::Window(window), &spec).unwrap();
+    backend.set_painter(
+        container,
+        Rc::new(|canvas| canvas.clear(Color::rgb(9, 9, 9))),
+    );
+    let spec = NodeSpec::new(NodeKind::Custom, Rect::new(0, 0, 20, 20));
+    let child = backend.create(ParentRef::Widget(container), &spec).unwrap();
+    backend.set_painter(child, Rc::new(|canvas| canvas.clear(Color::rgb(90, 9, 9))));
+    backend.render(window).unwrap();
+    backend.invalidate(container);
+    let damage = backend
+        .present(window, |frame| frame.damage.to_vec())
+        .unwrap();
+    assert_eq!(damage.len(), 1);
+    assert!(
+        damage[0].left < 40 && damage[0].top < 20,
+        "its child may draw past it: {damage:?}"
+    );
 }

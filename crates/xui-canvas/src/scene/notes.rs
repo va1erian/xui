@@ -8,7 +8,8 @@
 //! after. That is the node's absolute bounds trimmed to its ancestors' clips,
 //! for itself and every node inside it, hidden subtrees excluded. The damage
 //! list grows each rectangle by the overdraw margin
-//! ([`margin`](crate::compositor::margin)) when it is taken.
+//! ([`margin`](crate::compositor::margin)) when it is taken, except what a
+//! contained node with nothing inside it says of its own place.
 //!
 //! The mutators return whether they changed anything, so a backend asks for a
 //! frame only when one is owed.
@@ -33,9 +34,11 @@ impl Scene {
     }
 
     /// Marks `rect`, in `window` coordinates, stale on behalf of `id`: without
-    /// the overdraw margin when `id` is contained, as nothing else draws there.
+    /// the overdraw margin when `id` is contained and has no children, whose
+    /// own painters keep theirs.
     fn note_for(&mut self, id: WidgetId, window: WindowId, rect: Rect) {
-        if self.get(id).is_some_and(|node| node.contained) {
+        let contained = self.get(id).is_some_and(|node| node.contained);
+        if contained && self.children(id).is_empty() {
             self.damage_of(window).add_exact(rect);
         } else {
             self.note(window, rect);
