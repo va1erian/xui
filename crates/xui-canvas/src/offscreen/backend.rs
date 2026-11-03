@@ -83,6 +83,8 @@ impl Backend for OffscreenBackend {
         node.text = spec.text.clone();
         node.popup = spec.popup;
         node.contained = spec.contained;
+        node.tab_stop = spec.tab_stop;
+        node.wants_tab = spec.wants_tab;
         self.nodes.borrow_mut().insert(id, node);
         Ok(id)
     }

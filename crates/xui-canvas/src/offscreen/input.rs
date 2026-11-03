@@ -12,7 +12,7 @@ use xui_core::backend::{Event, WidgetId, WindowId};
 use super::OffscreenBackend;
 use super::geometry::translate;
 use crate::geometry::{absolute_bounds, hit_test};
-use crate::scene::event_marks_target;
+use crate::scene::{event_marks_target, tab_press};
 
 impl OffscreenBackend {
     /// Sends `event` to `target`'s window sink, then marks `target`'s place
@@ -36,9 +36,20 @@ impl OffscreenBackend {
     /// node when none is focused there, so the app's shortcut hook still sees
     /// a key.
     fn inject_to_focus(&self, window: WindowId, event: &Event) -> bool {
-        let target = (*self.focused.borrow())
-            .filter(|target| self.nodes.borrow().window_of(*target) == Some(window))
-            .unwrap_or(WidgetId::NONE);
+        let focused = (*self.focused.borrow())
+            .filter(|target| self.nodes.borrow().window_of(*target) == Some(window));
+        // Tab moves the focus, unless its holder keeps Tab for itself.
+        if let Some(backwards) = tab_press(event) {
+            let next = self
+                .nodes
+                .borrow()
+                .tab_destination(window, focused, backwards);
+            if let Some(next) = next {
+                self.focus_node(next);
+                return true;
+            }
+        }
+        let target = focused.unwrap_or(WidgetId::NONE);
         self.deliver(window, target, event)
     }
 
