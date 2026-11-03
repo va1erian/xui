@@ -8,7 +8,8 @@
 //! after. That is the node's absolute bounds trimmed to its ancestors' clips,
 //! for itself and every node inside it, hidden subtrees excluded. The damage
 //! list grows each rectangle by the overdraw margin
-//! ([`margin`](crate::compositor::margin)) when it is taken.
+//! ([`margin`](crate::compositor::margin)) when it is taken, except what a
+//! contained node with nothing inside it says of its own place.
 //!
 //! The mutators return whether they changed anything, so a backend asks for a
 //! frame only when one is owed.
@@ -30,6 +31,18 @@ impl Scene {
     /// Marks `rect`, in `window` coordinates, stale.
     pub(super) fn note(&mut self, window: WindowId, rect: Rect) {
         self.damage_of(window).add(rect);
+    }
+
+    /// Marks `rect`, in `window` coordinates, stale on behalf of `id`: without
+    /// the overdraw margin when `id` is contained and has no children, whose
+    /// own painters keep theirs.
+    fn note_for(&mut self, id: WidgetId, window: WindowId, rect: Rect) {
+        let contained = self.get(id).is_some_and(|node| node.contained);
+        if contained && self.children(id).is_empty() {
+            self.damage_of(window).add_exact(rect);
+        } else {
+            self.note(window, rect);
+        }
     }
 
     /// Marks the whole of `window` stale: a resize, a DPI or theme change, new
@@ -176,7 +189,7 @@ impl Scene {
     fn note_own(&mut self, id: WidgetId) {
         let extent = self.own_extent(id);
         if let Some(window) = self.window_of(id) {
-            self.note(window, extent);
+            self.note_for(id, window, extent);
         }
     }
 
@@ -189,7 +202,7 @@ impl Scene {
         let Some(place) = placement(self, id) else {
             return false;
         };
-        self.note(window, place.visible_bounds());
+        self.note_for(id, window, place.visible_bounds());
         true
     }
 
@@ -211,7 +224,7 @@ impl Scene {
         if let Some(clip) = place.clip {
             area = intersect(area, clip);
         }
-        self.note(window, area);
+        self.note_for(id, window, area);
         true
     }
 }

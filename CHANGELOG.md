@@ -4,6 +4,9 @@
 
 ### Breaking changes
 
+- **`NodeSpec` has a new public field, `contained`.** Code that builds a
+  `NodeSpec` with a struct literal must add it; `NodeSpec::new` and the
+  builders are unchanged.
 - **Widgets are built only through builders in layouts.** Every
   `Widget::new(ui, Rect, ..)` rect constructor of the portable widgets
   (`Button`, `Label`, `Edit`, `ListView::new`/`with_model`, `TreeView`,
@@ -74,6 +77,18 @@
 
 ### Additions
 
+- **`NodeSpec::contained`.** A node whose painter promises to stay inside its
+  bounds gets no overdraw margin on the canvas backends: a change to it repaints
+  its bounds alone, and what it draws outside them is cut. An ordinary
+  neighbour's margin still reaches into it, so two contained nodes side by side
+  leave each other alone. For a large picture redrawn every frame (a 3D view, a
+  video) next to busy painters: in a 3840x2160 window, a new frame in a
+  contained 3D pane beside three contained 2D views went from 172 ms of
+  painting to 12 ms. The Win32 backend ignores it.
+- **A region repaint skips shapes that miss it.** `SkiaCanvas` no longer
+  rasterises a path, line or outline that lies wholly outside the clip, the
+  reach or the rectangle being repainted; the pixels are the same, and a
+  repaint of a sliver of a busy painter costs nearer the sliver.
 - **Pointer lock for mouse-look.** `Ui::set_pointer_lock(id, bool)` hides and
   grabs the cursor and delivers `Event::PointerDelta { dx, dy }` (raw device
   pixels) to the node; buttons, wheel and keys still arrive. The backend ends

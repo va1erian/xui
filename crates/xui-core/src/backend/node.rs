@@ -132,6 +132,20 @@ pub struct NodeSpec {
     /// platform's drop shadow. A backend without a separate popup surface
     /// treats it as an ordinary node, so the flag is advisory.
     pub popup: bool,
+    /// Whether the node's painter draws only inside its bounds, with nothing
+    /// (no focus ring, glow or outline) spilling past them.
+    ///
+    /// A software compositor otherwise lets a painter draw a little past its
+    /// bounds, and so repaints a margin around every change, which takes in the
+    /// painters of whatever sits next to it. A contained node gets no margin: a
+    /// change to it repaints its bounds and nothing more, and what its painter
+    /// draws outside them is cut away. An ordinary neighbour's margin still
+    /// reaches into it, as that neighbour may draw there, so two contained nodes
+    /// side by side leave each other alone. The flag is about the node's own
+    /// painter: its children keep their margin. For a large picture redrawn
+    /// often, such as a video or a 3D view, beside other busy painters. A backend
+    /// may ignore the flag.
+    pub contained: bool,
 }
 
 impl NodeSpec {
@@ -147,6 +161,7 @@ impl NodeSpec {
             tab_stop: false,
             wants_tab: false,
             popup: false,
+            contained: false,
         }
     }
 
@@ -181,6 +196,13 @@ impl NodeSpec {
     /// window's other nodes. See [`NodeSpec::popup`].
     pub fn popup(mut self) -> NodeSpec {
         self.popup = true;
+        self
+    }
+
+    /// Promises the painter stays inside the node's bounds. See
+    /// [`NodeSpec::contained`].
+    pub fn contained(mut self) -> NodeSpec {
+        self.contained = true;
         self
     }
 }

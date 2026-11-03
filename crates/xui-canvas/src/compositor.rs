@@ -10,7 +10,8 @@
 //!    ones that paint: visible through their whole ancestry, with something
 //!    left inside their ancestors' clips. Each carries its window-absolute
 //!    bounds, its clip, and its *reach*: its bounds trimmed to the clips,
-//!    grown by the overdraw margin.
+//!    grown by the overdraw margin unless the node is contained
+//!    ([`NodeSpec::contained`](xui_core::backend::NodeSpec::contained)).
 //! 2. [`Plan::paint`] repaints rectangles of a [`Surface`]: for each, the
 //!    window background, then every planned node whose reach meets it, in
 //!    creation order, clipped to its ancestors' clips **and to its reach**.
@@ -51,9 +52,10 @@ use crate::{Region, Surface};
 /// 1 px on the flat themes and 6 px on Midnight at 96 DPI.
 ///
 /// A node's *reach* is its bounds, trimmed to its ancestors' clips and grown
-/// by the margin. The compositor clips each painter to its reach, so nothing is
-/// drawn outside it; damage is grown by the same margin, and a damaged
-/// rectangle repaints every node whose reach touches it.
+/// by the margin, unless the node is contained. The compositor clips each
+/// painter to its reach, so nothing is drawn outside it; damage is grown by the
+/// same margin, except a contained node's own, and a damaged rectangle repaints
+/// every node whose reach touches it.
 pub(crate) const OVERDRAW_DIP: i32 = 8;
 
 /// The overdraw margin at `dpi`, in device pixels: [`OVERDRAW_DIP`] design
@@ -200,7 +202,11 @@ pub(crate) fn plan(scene: &Scene, window: WindowId, dpi: u32, content: &dyn Cont
             id,
             bounds: placement.bounds,
             clip: placement.clip,
-            reach: grow(reach, overdraw),
+            reach: if node.contained {
+                reach
+            } else {
+                grow(reach, overdraw)
+            },
             painter: node.painter.clone(),
             content: has_content,
         });
