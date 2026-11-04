@@ -13,13 +13,14 @@ use xui_core::backend::WidgetId;
 use xui_core::geometry::Rect;
 
 use super::App;
-use crate::backend::native::placement_change;
+use crate::backend::native::{native_place, placement_change, to_parent};
 use crate::geometry;
 use crate::sys::child_window;
 
 impl App<'_> {
     /// Makes, moves, shows and hides the native child windows to match their
-    /// nodes, and drops those whose node or parent window is gone.
+    /// nodes. A child whose node is gone (its window closed, too) is given up
+    /// before that window is dropped, so its handles are refused first.
     pub(super) fn reconcile_native(&mut self, event_loop: &ActiveEventLoop) {
         let ids: Vec<WidgetId> = self.shared.native.borrow().keys().copied().collect();
         for id in ids {
@@ -27,30 +28,28 @@ impl App<'_> {
                 self.shared.set_native(id, false);
                 continue;
             };
+            // A window opened while the loop runs has no OS window yet.
             let Some(parent) = self.window_handle(raw) else {
-                self.shared.set_native(id, false);
                 continue;
             };
             let mut children = self.shared.native.borrow_mut();
             let Some(child) = children.get_mut(&id) else {
                 continue;
             };
+            if child.failed {
+                continue;
+            }
             if child.window.is_none() {
-                // A failure is not retried every turn of the loop: the node
-                // keeps drawing through its painter, as on a backend without.
-                match child_window::create(event_loop, &parent) {
-                    Ok(window) => {
-                        let locked = *self.shared.pointer_lock.borrow();
-                        let ours = locked.is_some_and(|lock| self.same_window(lock, id));
-                        window.window().set_cursor_visible(!ours);
-                        child.window = Some(Arc::new(window));
-                    }
-                    Err(_) => {
-                        drop(children);
-                        self.shared.set_native(id, false);
-                        continue;
-                    }
-                }
+                // The node keeps drawing through its painter, as on a backend
+                // without child windows.
+                let Ok(window) = child_window::create(event_loop, &parent) else {
+                    child.failed = true;
+                    continue;
+                };
+                let locked = *self.shared.pointer_lock.borrow();
+                let ours = locked.is_some_and(|lock| self.same_window(lock, id));
+                window.window().set_cursor_visible(!ours);
+                child.window = Some(Arc::new(window));
             }
             let Some(window) = child.window.clone() else {
                 continue;
@@ -72,14 +71,21 @@ impl App<'_> {
         }
     }
 
-    /// `id`'s parent window, its rectangle there (cut to its ancestors'
-    /// clips) and whether it is shown; `None` when the node is gone.
+    /// `id`'s parent window, where its window goes there and whether it is
+    /// shown; `None` when the node is gone.
     fn native_place(&self, id: WidgetId) -> Option<(u64, Rect, bool)> {
         let nodes = self.shared.nodes.borrow();
-        let raw = nodes.window_of(id)?.raw();
+        let window = nodes.window_of(id)?;
         let placement = geometry::placement(&nodes, id)?;
-        let rect = placement.visible_bounds();
-        Some((raw, rect, placement.visible && !rect.is_empty()))
+        let popups: Vec<Rect> = nodes
+            .iter()
+            .filter(|(other, node)| node.popup && node.window == window && *other != id)
+            .filter_map(|(other, _)| geometry::placement(&nodes, other))
+            .filter(|p| p.visible)
+            .map(|p| p.visible_bounds())
+            .collect();
+        let (rect, shown) = native_place(&placement, &popups);
+        Some((window.raw(), rect, shown))
     }
 
     fn same_window(&self, a: WidgetId, b: WidgetId) -> bool {
@@ -87,26 +93,22 @@ impl App<'_> {
         nodes.window_of(a).is_some() && nodes.window_of(a) == nodes.window_of(b)
     }
 
-    /// Passes an event of a native child window on to its parent window as
-    /// pointer input there; false when `window_id` is not a child's.
-    pub(super) fn native_event(
-        &mut self,
-        window_id: winit::window::WindowId,
-        event: &WindowEvent,
-    ) -> bool {
-        let Some((raw, offset)) = self.native_parent(window_id) else {
-            return false;
+    /// Passes an event of a native child window on to its parent window, as
+    /// pointer input there. Events of windows that are no child are ignored.
+    pub(super) fn native_event(&mut self, window_id: winit::window::WindowId, event: &WindowEvent) {
+        let Some((raw, origin)) = self.native_parent(window_id) else {
+            return;
         };
         match *event {
             WindowEvent::CursorMoved { position, .. } => {
-                let (x, y) = (f64::from(offset.0), f64::from(offset.1));
-                self.cursor_moved(raw, position.x + x, position.y + y);
+                let (x, y) = to_parent((position.x, position.y), origin);
+                self.cursor_moved(raw, x, y);
             }
+            WindowEvent::CursorLeft { .. } => self.apply_cursor(raw, None),
             WindowEvent::MouseInput { state, button, .. } => self.mouse_input(raw, state, button),
             WindowEvent::MouseWheel { delta, .. } => self.mouse_wheel(raw, delta),
             _ => {}
         }
-        true
     }
 
     /// The parent window of the native child `window_id` and where the child

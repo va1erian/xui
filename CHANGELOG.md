@@ -116,15 +116,19 @@
   true)` gives a custom node a native child window of its own, and
   `Ui::native_surface(id)` hands it out, once made, as a `NativeSurface`: an
   `Arc` of anything with window and display handles that is `Send + Sync`, so a
-  render thread can make a wgpu (or other) swap chain on it. The winit backend
-  keeps the window on the node's bounds, clips and visibility, passes its
-  pointer input on to the node as if it fell there, and hides the cursor over it
-  during a pointer lock; frames drawn in it never pass through the software
-  composite. Its handles are read on the event-loop thread and handed out on
-  any thread, except on macOS, where `winit` still checks. Backends without
-  child windows (the offscreen one, so tests) return `None`, and the node keeps
-  drawing through its painter. `xui-core` now depends on `raw-window-handle`
-  for the traits alone.
+  render thread can make a wgpu (or other) swap chain on it. Frames drawn in it
+  never pass through the software composite. The winit backend keeps the
+  window on the node's bounds, shows it only while the node is visible, wholly
+  inside its clips and under no popup, passes its pointer input on to the node
+  as if it fell there, and gives it the node's cursor, hidden during a pointer
+  lock. Its handles are read on the event-loop thread and handed out on any
+  thread; once its parent window closes they are refused. Win32 and X11 only:
+  on Wayland and macOS `winit` makes a separate top-level window instead, so
+  there, as on the offscreen and headless backends, `native_surface` stays
+  `None` and the node keeps drawing through its painter. `xui-core` now depends
+  on `raw-window-handle` for the traits alone. Example:
+  `cargo run -p xui-canvas --example native_surface`.
+
 - **A layout report's warnings are lines of their own, and CI checks them.**
   `Ui::layout_report()` writes each `!` warning on its own line under the
   node it is about, so a reader (or a script) finds one without parsing a

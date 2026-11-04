@@ -295,7 +295,9 @@ pub trait Backend {
     /// Gives `id` a native child window of its own (`true`), or takes it back
     /// (`false`). The window is made when the backend next can, which may be
     /// after this returns; [`Backend::native_surface`] has it from then on. A
-    /// backend without native child windows ignores it.
+    /// backend without native child windows ignores it, and one that failed to
+    /// make the window does not try again until it is taken back and asked for
+    /// again.
     fn set_native_surface(&self, id: WidgetId, on: bool) {
         let _ = (id, on);
     }

@@ -68,6 +68,14 @@ fn a_backend_without_a_native_handle_reports_none() {
 }
 
 #[test]
+fn a_backend_without_child_windows_hands_out_no_native_surface() {
+    let (_backend, _window, _core, ui) = setup();
+    let node = WidgetId::from_raw(1);
+    ui.set_native_surface(node, true);
+    assert!(ui.native_surface(node).is_none());
+}
+
+#[test]
 fn a_modal_child_returns_its_result_and_reenables_the_owner() {
     struct Child;
 

@@ -124,6 +124,7 @@ impl App<'_> {
             None => CursorIcon::Default,
         };
         self.set_window_cursor(raw, icon);
+        self.shared.native_cursor(raw, icon);
     }
 
     pub(super) fn cursor_moved(&mut self, raw: u64, x: f64, y: f64) {
