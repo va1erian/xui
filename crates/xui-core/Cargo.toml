@@ -8,6 +8,9 @@ repository = "https://github.com/va1erian/xui"
 readme = "README.md"
 
 [dependencies]
+# The window and display handle traits a native surface is handed out as: traits
+# only, so the core stays free of any platform or GPU dependency.
+raw-window-handle = "0.6"
 # Pure-Rust decoders, so the portable `image` module stays platform-independent.
 png = "0.17"
 zune-jpeg = "0.5"

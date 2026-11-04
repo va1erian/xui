@@ -26,6 +26,7 @@ impl Shared {
             return;
         }
         handle.set_cursor_visible(false);
+        self.native_cursor_visible(id, false);
         *self.pointer_lock.borrow_mut() = Some(id);
     }
 
@@ -41,6 +42,7 @@ impl Shared {
             let _ = handle.set_cursor_grab(CursorGrabMode::None);
             handle.set_cursor_visible(true);
         }
+        self.native_cursor_visible(id, true);
         // Looked up first so the `nodes` borrow is gone when the handler runs.
         let window = self.nodes.borrow().window_of(id);
         if notify && let Some(window) = window {

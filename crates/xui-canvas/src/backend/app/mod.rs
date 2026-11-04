@@ -12,6 +12,7 @@
 mod double_click;
 mod input;
 mod keymap;
+mod native;
 mod present;
 mod window;
 
@@ -109,10 +110,17 @@ impl ApplicationHandler<UserEvent> for App<'_> {
     ) {
         let raw = window_id_index(self, window_id);
         let Some(raw) = raw else {
+            self.native_event(window_id, &event);
             return;
         };
         match event {
-            WindowEvent::RedrawRequested => self.redraw(raw),
+            WindowEvent::RedrawRequested => {
+                self.redraw(raw);
+                // The layout that frame shows may have moved a child: place it
+                // now, which also keeps it in step during a live resize, where
+                // `about_to_wait` does not run.
+                self.reconcile_native(event_loop);
+            }
             WindowEvent::CloseRequested => {
                 let primary = self
                     .shared
@@ -151,6 +159,7 @@ impl ApplicationHandler<UserEvent> for App<'_> {
                     },
                 );
                 self.redraw(raw);
+                self.reconcile_native(event_loop);
             }
             WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
                 let dpi = dpi_from_scale(scale_factor);
@@ -188,6 +197,7 @@ impl ApplicationHandler<UserEvent> for App<'_> {
                     },
                 );
                 self.redraw(raw);
+                self.reconcile_native(event_loop);
             }
             WindowEvent::CursorMoved { position, .. } => {
                 self.cursor_moved(raw, position.x, position.y);
@@ -270,10 +280,21 @@ impl ApplicationHandler<UserEvent> for App<'_> {
         }
         // Catch a window opened without a wake (for example a static one).
         self.create_windows(event_loop);
-        // A window the backend closed this turn has no state left; drop its OS
-        // window so it leaves the screen instead of staying frozen.
-        self.reconcile_windows();
         self.timers(event_loop);
+        // A window the backend closed this turn has no state left; drop its OS
+        // window so it leaves the screen instead of staying frozen. Its native
+        // children are given up first, as it destroys them with it.
+        self.reconcile_native(event_loop);
+        self.reconcile_windows();
+    }
+
+    /// Every window goes with the loop: their native children are given up
+    /// first, whoever still holds them.
+    fn exiting(&mut self, _: &ActiveEventLoop) {
+        let ids: Vec<WidgetId> = self.shared.native.borrow().keys().copied().collect();
+        for id in ids {
+            self.shared.set_native(id, false);
+        }
     }
 }
 

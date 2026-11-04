@@ -85,5 +85,9 @@ name = "gl"
 required-features = ["winit-backend"]
 
 [[example]]
+name = "native_surface"
+required-features = ["winit-backend"]
+
+[[example]]
 name = "kitchen_sink"
 required-features = ["winit-backend"]

@@ -17,6 +17,7 @@ use crate::tests::save;
 mod capture;
 mod clipboard;
 mod hit;
+mod native_surface;
 mod paint;
 mod reduced_motion;
 mod tab;

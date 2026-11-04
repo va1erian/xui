@@ -14,6 +14,7 @@
 mod app;
 mod contract;
 mod gl;
+mod native;
 mod pointer_lock;
 mod render;
 mod software;
@@ -162,6 +163,8 @@ pub(crate) struct Shared {
     /// The node that locked the pointer, if any: the cursor is hidden and
     /// grabbed, and the node receives raw motion.
     pub(crate) pointer_lock: RefCell<Option<WidgetId>>,
+    /// The nodes that asked for a native child window, and their windows.
+    pub(crate) native: RefCell<HashMap<WidgetId, native::NativeChild>>,
     /// Repeating timers: window, next due instant and period. A timer fires,
     /// is rescheduled one period on, and lives until killed.
     pub(crate) timers: RefCell<HashMap<usize, (WindowId, Instant, Duration)>>,
@@ -279,6 +282,7 @@ impl WinitBackend {
                 cursors: RefCell::new(HashMap::new()),
                 captured: RefCell::new(None),
                 pointer_lock: RefCell::new(None),
+                native: RefCell::new(HashMap::new()),
                 timers: RefCell::new(HashMap::new()),
                 next_window: Cell::new(1),
                 next_widget: Cell::new(1),

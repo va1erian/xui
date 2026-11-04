@@ -170,6 +170,7 @@ impl Backend for WinitBackend {
         if *self.shared.pointer_lock.borrow() == Some(id) {
             self.shared.unlock_pointer(false);
         }
+        self.shared.set_native(id, false);
         let window = self.window_of(id);
         self.shared.nodes.borrow_mut().remove(id);
         if let Some(window) = window {
@@ -252,6 +253,18 @@ impl Backend for WinitBackend {
         } else if *self.shared.pointer_lock.borrow() == Some(id) {
             self.shared.unlock_pointer(false);
         }
+    }
+
+    fn set_native_surface(&self, id: WidgetId, on: bool) {
+        self.shared.set_native(id, on);
+        // The handler makes the window between events: have it run soon.
+        if let Some(window) = self.window_of(id) {
+            self.shared.request_redraw(window);
+        }
+    }
+
+    fn native_surface(&self, id: WidgetId) -> Option<xui_core::backend::NativeSurface> {
+        self.shared.native_surface(id)
     }
 
     fn focus(&self, id: WidgetId) {
