@@ -142,6 +142,22 @@ impl<M: 'static> Ui<M> {
         self.core.backend().set_pointer_lock(id, locked);
     }
 
+    /// Gives a custom node a native child window of its own (`true`), or
+    /// takes it back (`false`), for a GPU API to present into: frames drawn
+    /// there reach the screen without passing through the software
+    /// composite. The backend makes the window when it next can; see
+    /// [`Ui::native_surface`].
+    pub fn set_native_surface(&self, id: WidgetId, on: bool) {
+        self.core.backend().set_native_surface(id, on);
+    }
+
+    /// The native child window [`Ui::set_native_surface`] gave `id`, once the
+    /// backend has made it. `None` until then, after it was taken back, and on
+    /// a backend that has none, where the node draws through its painter.
+    pub fn native_surface(&self, id: WidgetId) -> Option<crate::backend::NativeSurface> {
+        self.core.backend().native_surface(id)
+    }
+
     /// Gives a node the keyboard focus.
     pub fn focus(&self, id: WidgetId) {
         self.core.backend().focus(id);

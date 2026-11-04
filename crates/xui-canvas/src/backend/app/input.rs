@@ -22,7 +22,7 @@ use crate::scene::tab_press;
 
 impl App<'_> {
     /// The window's live `winit` window, if it has one yet.
-    fn window_handle(&self, raw: u64) -> Option<Rc<Window>> {
+    pub(super) fn window_handle(&self, raw: u64) -> Option<Rc<Window>> {
         self.shared
             .windows
             .borrow()

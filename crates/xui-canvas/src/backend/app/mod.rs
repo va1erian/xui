@@ -12,6 +12,7 @@
 mod double_click;
 mod input;
 mod keymap;
+mod native;
 mod present;
 mod window;
 
@@ -109,6 +110,7 @@ impl ApplicationHandler<UserEvent> for App<'_> {
     ) {
         let raw = window_id_index(self, window_id);
         let Some(raw) = raw else {
+            self.native_event(window_id, &event);
             return;
         };
         match event {
@@ -272,6 +274,8 @@ impl ApplicationHandler<UserEvent> for App<'_> {
         self.create_windows(event_loop);
         // A window the backend closed this turn has no state left; drop its OS
         // window so it leaves the screen instead of staying frozen.
+        // Children first: a closed window's children go before it does.
+        self.reconcile_native(event_loop);
         self.reconcile_windows();
         self.timers(event_loop);
     }

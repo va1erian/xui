@@ -112,6 +112,19 @@
   Implemented on `xui-canvas` (`Locked`, falling back to `Confined`); the
   offscreen and headless backends record it. `xui-win32` is not yet covered.
 
+- **Native child surfaces for GPU rendering.** `Ui::set_native_surface(id,
+  true)` gives a custom node a native child window of its own, and
+  `Ui::native_surface(id)` hands it out, once made, as a `NativeSurface`: an
+  `Arc` of anything with window and display handles that is `Send + Sync`, so a
+  render thread can make a wgpu (or other) swap chain on it. The winit backend
+  keeps the window on the node's bounds, clips and visibility, passes its
+  pointer input on to the node as if it fell there, and hides the cursor over it
+  during a pointer lock; frames drawn in it never pass through the software
+  composite. Its handles are read on the event-loop thread and handed out on
+  any thread, except on macOS, where `winit` still checks. Backends without
+  child windows (the offscreen one, so tests) return `None`, and the node keeps
+  drawing through its painter. `xui-core` now depends on `raw-window-handle`
+  for the traits alone.
 - **A layout report's warnings are lines of their own, and CI checks them.**
   `Ui::layout_report()` writes each `!` warning on its own line under the
   node it is about, so a reader (or a script) finds one without parsing a

@@ -27,6 +27,7 @@ mod node;
 mod paint;
 mod path;
 mod spec;
+mod surface;
 mod text;
 
 #[cfg(test)]
@@ -45,6 +46,7 @@ pub use paint::{
 };
 pub use path::{PathPlacement, PathSeg, Polyline, flatten};
 pub use spec::{Backdrop, Decorations, PlatformSpec};
+pub use surface::{NativeSurface, NativeWindow};
 pub use text::{FontSpec, TextHit, TextLayout, TextShaper};
 
 use std::fmt;
@@ -288,6 +290,23 @@ pub trait Backend {
     /// support may ignore it.
     fn set_pointer_lock(&self, id: WidgetId, locked: bool) {
         let _ = (id, locked);
+    }
+
+    /// Gives `id` a native child window of its own (`true`), or takes it back
+    /// (`false`). The window is made when the backend next can, which may be
+    /// after this returns; [`Backend::native_surface`] has it from then on. A
+    /// backend without native child windows ignores it.
+    fn set_native_surface(&self, id: WidgetId, on: bool) {
+        let _ = (id, on);
+    }
+
+    /// The native child window [`Backend::set_native_surface`] gave `id`, once
+    /// it exists; `None` before then, after it was taken back, and on a backend
+    /// without native child windows (the default), where the node keeps
+    /// drawing through its painter.
+    fn native_surface(&self, id: WidgetId) -> Option<NativeSurface> {
+        let _ = id;
+        None
     }
 
     /// Gives a node the keyboard focus.
