@@ -307,8 +307,10 @@ Constraints worth knowing:
   frame cannot be rendered, the backend switches to the software `paint` path
   for good, so the window stays usable. `gl_teardown` runs with the context
   still current.
-- The GL context and `glow` loader are the crate's only `unsafe`
-  (`src/sys/gl/`); every other module forbids it.
+- The crate's `unsafe` lives under `src/sys/`: the GL context and `glow`
+  loader (`sys/gl/`), the child windows behind native surfaces, and the
+  system's double-click and animation settings. Every other module forbids
+  it.
 - `glow` is re-exported as `xui_canvas::glow` so an implementor names the exact
   version the crate loads.
 
@@ -328,8 +330,8 @@ wants; `follow_links(true)` opens them, as a browser does, through the
 application's `Fetcher` for `http(s):`, with downloads offered to its
 `Downloader`. Selection, Ctrl+C (`CopyRequested`), form fields, overlay
 scrollbars and the theme's light/dark (`prefers-color-scheme`) are Blitz's own.
-`scripts/engine-compare/` renders fixtures with all three engines and a browser
-and measures their binary sizes.
+`scripts/engine-compare/` renders fixtures with Blitz and with headless Chrome,
+and measures what Blitz adds to a binary.
 
 ## File dialogs and the filesystem seam
 
@@ -382,5 +384,8 @@ another backend. The offscreen backend is a separate world used for rendering,
 not a window you show. GL content is the exception inside a canvas window, but it
 is composited like any other node and can cover the whole window or one pane.
 
-**Choosing.** Use `WinitBackend` (the default): it runs everywhere. Use
-`OffscreenBackend` in tests and build tooling. [Getting started](getting-started.md) walks through the decision.
+**Choosing.** Use `WinitBackend` (the default): it runs everywhere. On
+Windows, `D2dBackend` (`xui-d2d`, depended on directly: the umbrella has no
+feature for it) is a much smaller alternative drawn with Direct2D, with modal
+windows and the Common Item Dialog. Use `OffscreenBackend` in tests and build
+tooling. [Getting started](getting-started.md) walks through the decision.

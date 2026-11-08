@@ -8,7 +8,9 @@ Cross-platform UI for Rust: **small, fast, idiomatic and properly themed**.
 xui is a portable widget layer (`xui-core`) plus interchangeable **backends**.
 An application writes its widgets once, in device-independent units, and picks
 how they are hosted and drawn — a `winit` + `tiny-skia` software surface
-everywhere, or an offscreen surface for snapshots and tests. Dark mode is first-class on every backend.
+everywhere, a lightweight Direct2D window on Windows, or an offscreen surface
+for snapshots and tests. xui paints every widget itself: no backend hosts
+native controls. Dark mode is first-class on every backend.
 
 ```text
                 ┌──────────────────────────────────────────┐
@@ -16,12 +18,12 @@ everywhere, or an offscreen surface for snapshots and tests. Dark mode is first-
                     theme, input, accessibility, Backend    
                 └───────────────┬──────────────────────────┘
                                 │ Backend trait
-          ┌─────────────────────┴───────────────────────┐
-          ▼                                             ▼
-   xui-canvas (winit)                              xui-canvas
-   WinitBackend                                    OffscreenBackend
-   (tiny-skia software,                            (headless
-    optional glow/GL)                               snapshots)
+          ┌─────────────────────┼───────────────────────┐
+          ▼                     ▼                       ▼
+   xui-canvas (winit)      xui-d2d                 xui-canvas
+   WinitBackend            D2dBackend              OffscreenBackend
+   (tiny-skia software,    (Windows only,          (headless
+    optional glow/GL)       Direct2D)               snapshots)
 ```
 
 ## Crates
@@ -104,6 +106,9 @@ including how to choose and switch the backend.
 
 - **Portable first.** Widgets, layout, theming and input live in `xui-core` and
   are shared by every backend. A widget never names a platform handle.
+- **xui owns its widgets.** Every widget is painted by xui; no backend wraps a
+  native control, so a widget looks and behaves the same everywhere. A node's
+  only native window is an opt-in surface a GPU API draws into.
 - **Fast where it counts.** The default backend is portable software rendering,
   with an optional GPU path.
 - **Themed, dark mode included.** Controls draw only from semantic theme
@@ -117,10 +122,12 @@ including how to choose and switch the backend.
 
 ## Status
 
-The portable core, the widget layer and the `xui-canvas` software backend all
-exist and are exercised by tests and examples. The `xui` umbrella's default
-`canvas` feature is the cross-platform backend; its bare names are the portable
-`xui-core` widgets.
+The portable core, the widget layer, the `xui-canvas` software backend and the
+Windows-only `xui-d2d` backend all exist and are exercised by tests and
+examples. The `xui` umbrella's default `canvas` feature is the cross-platform
+backend; its bare names are the portable `xui-core` widgets. `xui-d2d` is not
+an umbrella feature: an app depends on it directly and hands `D2dBackend` to
+`.backend(..)`.
 
 ## The `attic` branch
 
@@ -129,7 +136,8 @@ history and tests, on the [`attic`](https://github.com/va1erian/xui/tree/attic)
 branch. It holds the last state of:
 
 - `xui-litehtml`, `xui-netsurf` (replaced by `xui-blitz`), `xui-win32` (the
-  Direct2D backend and its `d2d` feature), `xui-explorer` and `xui-paint`;
+  old Win32 backend that hosted native controls, and its `d2d` feature;
+  replaced by `xui-d2d`), `xui-explorer` and `xui-paint`;
 - `xui-form`, `xui-script` and `xui-form-cli` (`.lfm` forms and Rhai scripting,
   with the `form` and `rhai` features of `xui` and `docs/forms.md`);
 - the "Aero" icon style of `xui-icons` (the `aero` and `icons-aero` features).

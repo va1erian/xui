@@ -15,10 +15,10 @@ xui-core  (portable; #![forbid(unsafe_code)], no platform dependency)
    │  widgets · App/Ui runtime · router · theme · units · layout arithmetic
    │  accessibility model · Backend trait · WindowId/WidgetId · Event/Canvas
    ▼
-a backend (xui-canvas · xui-canvas::OffscreenBackend)
+a backend (xui-canvas::WinitBackend · xui-d2d::D2dBackend · xui-canvas::OffscreenBackend)
    │  decodes native input → Event, creates nodes, paints, shapes text
    ▼
-the platform (winit + softbuffer/tiny-skia · a headless surface)
+the platform (winit + softbuffer/tiny-skia · Win32 + Direct2D/DirectWrite · a headless surface)
 ```
 
 - **`xui-core`** is the only crate an application *needs* to depend on. It has
@@ -27,8 +27,10 @@ the platform (winit + softbuffer/tiny-skia · a headless surface)
   `xui` umbrella crate's bare names are always this layer.
 - **A backend** is one value implementing [`xui_core::backend::Backend`]. It
   owns the event loop, creates windows and nodes, delivers events, paints and
-  measures text. `xui-canvas` runs on every platform; construct it and pass it to
-  `xui_core::run_app`. See [Backends](backends.md).
+  measures text. `xui-canvas` runs on every platform; `xui-d2d` is a smaller,
+  Windows-only alternative. Construct one and pass it to `xui_core::run_app`.
+  Every backend paints every widget itself; none hosts native controls. See
+  [Backends](backends.md).
 - The application never names a platform handle; it refers to a window by
   `WindowId` and a widget by `WidgetId`, both assigned by the backend.
 
@@ -41,7 +43,8 @@ the platform (winit + softbuffer/tiny-skia · a headless surface)
   `run_with` (build the app once the window is live, then pump; see below),
   `quit`, `wake`/`waker` (a `Send + Sync` cross-thread wake), `set_event_sink`.
 - **Windows** — `open_window`, `close_window`, `set_window_title`,
-  `set_window_enabled` (make a modal owner inert), `native_window`,
+  `set_window_icon`, `set_window_enabled` (make a modal owner inert),
+  `file_dialog` (a native picker, or `Declined`), `native_window`,
   `capture`, `run_modal`, `minimize`, `toggle_maximize`, `is_maximized`,
   `caption_inset`.
 - **Nodes** — `create`/`destroy` (destroy cascades), `apply_moves` (batched so a
@@ -49,16 +52,17 @@ the platform (winit + softbuffer/tiny-skia · a headless surface)
   `set_drag_region`, `set_cursor`, `set_clip`, `set_capture`/`release_capture`, `set_pointer_lock`,
   `set_native_surface`/`native_surface`,
   `focus`/`focus_holder`, `set_text`/`text`, `bounds`, `invalidate`/`invalidate_rect`,
-  `set_painter`.
+  `set_painter`, `clipboard_text`/`set_clipboard_text`.
 - **Text** — `measure_text`, `text_shaper`/`layout_text` (a `Send + Sync` shaper
   a worker can use), `dpi`, `client_rect`.
-- **Runtime** — `set_theme`, `set_timer`/`kill_timer`,
+- **Runtime** — `set_theme`, `system_theme`, `set_timer`/`kill_timer`,
   `prefers_reduced_motion` (the system's animation setting; default `false`,
   meaning no preference; see [Motion](motion.md)).
 
 Methods a backend cannot meaningfully provide have defaults: `capture` and
 `run_modal` return `BackendError::Unsupported`, `native_window` returns `None`,
-and the rest are no-ops. This is why the portable core can run on a minimal
+`file_dialog` declines, the clipboard falls back to an in-process store, and
+the rest are no-ops. This is why the portable core can run on a minimal
 backend (the offscreen one overrides `run` to return immediately) without
 special-casing it.
 
@@ -228,11 +232,16 @@ crates/xui-core/src/
     text.rs         FontSpec, TextLayout, TextShaper
     spec.rs         PlatformSpec, Decorations, Backdrop
     native.rs       NativeWindowHandle
+    surface.rs      NativeSurface (a node's opt-in window for a GPU API)
+    path.rs         vector paths for fill_path/stroke_path
+    dialog.rs       FileDialogRequest / FileDialogOutcome
+    clipboard.rs    the in-process clipboard fallback
     cursor.rs       Cursor
     headless/       a test-only recording backend (#[cfg(test)])
   app/              App, Ui, run_app, Proxy, WindowHandle
   router.rs         maps an Event to the widget owning a node
   widget/           the portable widgets (one module per widget)
+  arrange/          declarative layout: row/column/grid/… of widget builders
   layout.rs         Dock/Stack/Anchor/Insets arithmetic
   geometry.rs       Point / Size / Rect (device pixels)
   units.rs          Dip / Px
@@ -241,14 +250,17 @@ crates/xui-core/src/
   motion/           Easing, Tween, Clock/ManualClock (portable; reads no clock)
   message/          Key, Modifiers, MouseButton, HitTest
   accessibility/    Role, Action, RangeValue, Node
+  icon.rs           IconRef, Lucide and draw_icon
   image.rs          portable RGBA images and PNG/JPEG decode
   property.rs       the Properties/Property/Value surface
 
 crates/xui-canvas/src/    WinitBackend, SkiaCanvas, OffscreenBackend, GL seam
+crates/xui-d2d/src/       D2dBackend: backend/ is safe code, sys/ wraps Win32, Direct2D and DirectWrite
 crates/xui-gpu/src/       the shared OpenGL surface seam (no platform code)
 crates/xui-code-editor/src/  the code-editor widget (a portable custom-painted node)
 crates/xui-icons/src/     the optional Global Village icon set (vector shapes drawn through Canvas)
 crates/xui-blitz/src/     the Blitz web view (a portable custom-painted node)
+crates/xui-rich-text/src/ the rich-text editor widget (model, layout, view, edit, formats)
 crates/xui/src/           the umbrella crate
 ```
 
@@ -262,7 +274,7 @@ These are non-negotiable and are part of `AGENTS.md`.
   field; callers only see xui types (`Hwnd` and `NativeWindowHandle` are opaque
   wrappers, not raw handles).
 - **Widgets own their nodes and destroy them in `Drop`.**
-- **Small files.** Aim under 300 lines, hard limit 400; split along a real seam
+- **Small files.** Aim under 300 lines, hard limit 500; split along a real seam
   before crossing it.
 - **Platform constants come from the platform binding or the SDK header**, never
   from memory.

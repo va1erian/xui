@@ -229,8 +229,7 @@ fn relayout<M>(ui: &Ui<M>, s: &Shared<M>) {
     // coordinates: start the viewport at the origin.
     let bounds = Rect::from_size(node.size());
     // Content rows can ride outside the view while scrolling; clip the view's
-    // descendants to it so only what fits is painted (Win32 does this for a
-    // child window already).
+    // descendants to it so only what fits is painted.
     ui.set_clip(s.id, Some(bounds));
     if content::relayout(ui, s, bounds) {
         return;

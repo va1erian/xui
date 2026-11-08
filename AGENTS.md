@@ -19,8 +19,7 @@ part of these rules.
   file past that, split it along a real seam first. New raw-Win32 helpers go in
   their own `src/sys/<name>.rs` rather than growing an existing one.
 - **Win32 constants come from the `windows` crate or the SDK header**, never from
-  memory. If you must mirror one as a literal (as `gdi/paint.rs` does for `DT_*`),
-  say which header it comes from.
+  memory. If you must mirror one as a literal, say which header it comes from.
 
 ## Quality bar
 
@@ -31,8 +30,9 @@ part of these rules.
 - Public items get doc comments. Comments elsewhere only explain the non-obvious *why*.
 - No dead code, no commented-out code. Nothing emusic-specific in new public API:
   this is a general-purpose library.
-- Every new control or message is exercised in `examples/demo/` and has a
-  test in `tests/` or a unit test.
+- Every new widget or message is exercised in the `widgets` gallery
+  (`crates/xui/examples/widgets/`) or its own example, and has a test in
+  `tests/` or a unit test.
 - **Widgets follow the widget layer** (docs → *Architecture*): events map to
   the app's `Msg` through closures given at construction, there are no numeric
   control ids in the public API, shared behaviour comes from capability traits
@@ -94,7 +94,7 @@ any change made after the review, other than a fix the reviewer has re-checked.
   runs `cargo test`, or a single test binary, inside Windows Sandbox, so windows
   and synthetic input never reach the shared desktop. Plain `cargo test` on the
   host is only acceptable in CI or where the sandbox is unavailable.
-- Running the demo: always set `XUI_DEMO_AUTOCLOSE_MS=4000` so it exits on
+- Running an example: always set `XUI_DEMO_AUTOCLOSE_MS=4000` so it exits on
   its own, and never leave a demo process running when you finish.
 - **Screenshots.** For portable widgets, take them headlessly:
   `scripts/snapshots.ps1` (or `.sh`) renders every example, light and dark, into

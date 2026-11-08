@@ -3,8 +3,8 @@
 //! The cross-platform, software-rendered backend for xui.
 //!
 //! It rasterises the portable widgets with `tiny-skia` into an RGBA buffer, so
-//! the same widget code that runs on the Win32 backend draws here without any
-//! platform UI toolkit. An [`OffscreenBackend`] renders the same widgets
+//! the same widget code that runs on the Direct2D backend draws here without
+//! any platform UI toolkit. An [`OffscreenBackend`] renders the same widgets
 //! headlessly for tests and snapshots; the software painter core ([`Surface`],
 //! [`SkiaCanvas`] and the `cosmic-text` shaper) is all an app needs to drive its
 //! own presentation.

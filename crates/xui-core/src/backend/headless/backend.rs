@@ -182,8 +182,8 @@ impl Backend for HeadlessBackend {
                 None => false,
             }
         };
-        // A native show paints synchronously before the window is composed
-        // (the Win32 backend cloaks, paints and uncloaks), so model it: a
+        // A native show paints synchronously before the window is composed,
+        // so model it: a
         // test then sees the same first frame a platform would compose.
         if shown {
             self.render(id);

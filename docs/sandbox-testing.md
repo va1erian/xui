@@ -1,8 +1,9 @@
 # Running UI tests without taking over your desktop
 
-The integration tests create real top-level windows, move focus
-(`SetForegroundWindow`) and send synthetic input. On your own desktop that
-steals focus while you type, and your typing can make tests flaky.
+The integration tests create real top-level windows, send them input
+messages and confine the cursor (the pointer lock). On your own desktop those
+windows appear and take focus while you type, and your typing can make tests
+flaky.
 `scripts/sandbox/run.ps1` runs them inside **Windows Sandbox**, a throwaway
 Hyper-V VM that ships with Windows. It has its own desktop, input queue and
 foreground window, so synthetic events stay in the sandbox — with one caveat:
@@ -22,8 +23,8 @@ You install nothing else. The sandbox doesn't need Rust or Visual Studio.
 
 ```powershell
 scripts\sandbox\run.ps1                                        # every test
-scripts\sandbox\run.ps1 -CargoArgs '--test','slider' -TestArgs 'drag'
-scripts\sandbox\run.ps1 -Env @{ WIN32UI_SLIDER_SHOTS = 'C:\stage\out' }  # screenshots land in target\sandbox\sandbox-stage\out
+scripts\sandbox\run.ps1 -CargoArgs '-p','xui-d2d','--test','pointer_lock'
+scripts\sandbox\run.ps1 -CargoArgs '-p','xui-d2d','--test','window' -TestArgs 'modal'  # libtest filter
 ```
 
 How it works:
@@ -50,30 +51,16 @@ virtualization. Windows Home doesn't include it (see the alternatives below).
 ## Pointer and input
 
 Windows Sandbox presents its desktop over an RDP session and shares the host
-pointer with it. Synthetic *events* are delivered only to the guest — a click
-never lands on a host window — but a test that moves the cursor
-(`SetCursorPos`/`mouse_event`) moves the guest cursor, and the session mirrors
-that onto your physical pointer.
+pointer with it. Messages a test sends are delivered only to the guest — a
+click never lands on a host window — but anything that moves or confines the
+guest cursor is mirrored onto your physical pointer.
 
-Some suites deliberately move the pointer, and one of those moves is load
-bearing:
-
-- Before injecting synthetic messages, the tests **park** the real pointer in the
-  screen corner (`park_real_pointer` in `slider`, `flow_text`,
-  `listview_header_resize`). This is not cosmetic: while the physical pointer
-  rests over a test window, the pointer moves the OS generates are genuine input
-  and get counted by the assertions. The full suite fails without it — for
-  example `slider::hovering_reports_the_value_under_the_pointer` sees extra
-  `Hover` events.
-- The ListView header drag (`listview_header_resize`) injects a real drag, and
-  the opt-in screenshot suites (`flow_text_shots`, `slider_shots`) position the
-  cursor for hover states.
-
-Because the sandbox shares one pointer, those moves are visible on your physical
-mouse while the suite runs. A click stays in the guest; only the pointer moves.
-There is no way to keep the physical pointer still while running tests that need
-real input; if that matters, use a VM with its own pointer (see
-*Alternatives*).
+The window tests post or send messages to their own windows and never move the
+cursor. The one suite that touches it is `xui-d2d`'s `pointer_lock`, which
+confines the cursor to a test window (`ClipCursor`) and checks that every way
+the lock ends frees it again. While it runs, your physical pointer may be held
+inside the sandbox window for a moment. If that matters, use a VM with its own
+pointer (see *Alternatives*).
 
 ## Screenshots
 
@@ -81,16 +68,17 @@ The sandbox has its own desktop with nothing else on it, so a plain
 full-screen capture is enough, and focus and occlusion don't matter:
 
 ```powershell
-# launch the demo, wait 3 s, save target\sandbox\sandbox-stage\out\demo.png
-scripts\sandbox\run.ps1 -Build -CargoArgs '--example','demo' -Screenshot
+# launch the gallery, wait 3 s, save target\sandbox\sandbox-stage\out\widgets.png
+scripts\sandbox\run.ps1 -Build -CargoArgs '-p','xui','--example','widgets' -Screenshot
 scripts\sandbox\run.ps1 -Exe .\myapp.exe -Screenshot -ScreenshotDelayMs 5000
 ```
 
 `-Screenshot` starts each executable, waits `-ScreenshotDelayMs`, saves the
 sandbox desktop as `out\<name>.png` (GDI+ `CopyFromScreen`, so it works for any
-app), then stops the executable. Test-driven captures (`WIN32UI_*_SHOTS`,
-`Window::capture_composited`) work as usual when you point them at
-`C:\stage\out`.
+app), then stops the executable. Captures an example or test writes itself
+(`XUI_SNAPSHOT`, `Ui::capture`) work as usual when you point them at
+`C:\stage\out`. For portable widgets, the headless snapshots
+([Headless screenshots](headless-screenshots.md)) need no sandbox at all.
 
 ## Client apps
 
@@ -101,7 +89,7 @@ The script works with any Cargo project. Call it from your app's repository:
 path\to\xui\scripts\sandbox\run.ps1 -ManifestPath .\Cargo.toml
 
 # build and launch the app itself as a smoke test (give it an auto-close switch
-# like the demo's WIN32UI_DEMO_AUTOCLOSE_MS / XUI_DEMO_AUTOCLOSE_MS, or it
+# like the examples' XUI_DEMO_AUTOCLOSE_MS, or it
 # runs until the timeout)
 path\to\xui\scripts\sandbox\run.ps1 -Build -CargoArgs '--bin','myapp' -Env @{ MYAPP_AUTOCLOSE_MS = '4000' }
 

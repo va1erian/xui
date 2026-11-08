@@ -47,7 +47,7 @@ fn update(&mut self, msg: Msg, ui: &mut Ui<Msg>) {
 ```
 
 `set_theme` stores the theme on the window and calls `Backend::set_theme`, so
-the backend can update native parts (title bar, scrollbars, controls). Widgets
+the backend can update native parts (such as the title bar). Widgets
 that were already built adopt the new theme on their next paint: they read the
 window's live theme through a shared handle captured at construction, so nothing
 is rebuilt and no event is needed.
@@ -91,7 +91,7 @@ dark theme that turns them on.
 Daylight is LazyOS's light theme (warm off-white gradients, green accent), and
 Nightfall carries Midnight's decoration and LazyOS's dark accent on
 near-neutral greys, close to Windows 11's dark surfaces instead of navy. The
-winit backend's `system_theme` picks one of the two from the platform's
+canvas and Direct2D backends' `system_theme` picks one of the two from the platform's
 dark-mode preference, Daylight where the platform reports none.
 
 `xui_core::theme::look` paints them, so a custom widget looks like the bundled
@@ -99,7 +99,7 @@ ones: `paint_background` (the window gradient), `backdrop`, `card`, `band`,
 `face`, `field`, `row`/`selected_row` and `glow`.
 
 A widget starts its painter with `look::backdrop(canvas, theme.background)`
-instead of `canvas.clear(...)`. A compositing backend (`xui-canvas`, and an
+instead of `canvas.clear(...)`. A compositing backend (`xui-canvas`, `xui-d2d`, and an
 embedder that paints nodes in creation order) reports
 `Canvas::composites_parents()`: the widget's container is already on the
 surface, so the backdrop does nothing and the widget sits on its card or the
@@ -108,10 +108,9 @@ buffer fills the backdrop with the colour given.
 
 ## Dark-mode notes
 
-- A backend that owns native parts re-themes them centrally, from the same
-  tokens.
-- The canvas backend paints everything itself, so it is dark-mode-complete by
-  construction.
+- Every backend paints every widget itself, so each is dark-mode-complete by
+  construction. The only native part left is the window frame: the Direct2D
+  backend sets its title bar dark or light from the theme.
 
 ## Related
 

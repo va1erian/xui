@@ -6,7 +6,7 @@
 //!
 //! Nodes are kept in creation order (later created draws on top, and
 //! [`Backend::raise`](xui_core::backend::Backend::raise) moves a node to the back
-//! of that order). Bounds are parent-relative, as in the Win32 backend; the
+//! of that order). Bounds are parent-relative, as in every backend; the
 //! window composition walks the parent chain to place a node, and input is
 //! translated into a node's own client coordinates before it is delivered,
 //! matching the contract the portable widgets rely on.
