@@ -80,7 +80,7 @@ pub(crate) fn on_event<M: 'static>(
             key: Key::RETURN, ..
         }
         | Event::KillFocus => commit(ui, shared, field),
-        Event::Char(_) | Event::TextChanged | Event::KeyDown { .. } => {
+        Event::Char(_) | Event::KeyDown { .. } => {
             live(ui, shared, field);
             None
         }
@@ -94,8 +94,8 @@ fn live<M: 'static>(ui: &Ui<M>, shared: &Shared<M>, field: Field) {
         return;
     };
     let text = edit.text();
-    // A native field reports the text this panel itself just wrote (from
-    // `sync`); ignore it rather than re-deriving a rounded colour from it.
+    // The field still holds the text this panel itself wrote (from `sync`);
+    // ignore it rather than re-deriving a rounded colour from it.
     if text == field.format(shared.hsv.get()) {
         return;
     }

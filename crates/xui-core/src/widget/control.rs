@@ -141,8 +141,7 @@ impl<M: 'static> Control<M> {
     }
 
     /// Marks the widget as selected or not. A painted widget draws an outline
-    /// while selected (a form editor's selection); a natively hosted one draws
-    /// nothing.
+    /// while selected (a form editor's selection).
     pub fn set_selected(&self, selected: bool) {
         self.selected.set(selected);
         self.invalidate();

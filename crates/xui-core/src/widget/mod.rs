@@ -5,8 +5,8 @@
 //! A widget is a thin value that owns one node through [`Control`], registers a
 //! painter that draws from semantic theme tokens, and maps the node's events to
 //! the app's `Msg`. Because it only uses [`Ui`](crate::Ui)'s portable
-//! operations, the same widget runs on every backend — painted here, and
-//! eventually delegated to a native control where the backend offers one.
+//! operations, the same widget runs on every backend, always painted by xui
+//! itself: no backend hosts native controls.
 
 mod button;
 mod checkbox;

@@ -155,7 +155,7 @@ fn a_third_quick_press_starts_a_new_sequence() {
 
 #[test]
 fn the_win32_sequence_is_down_up_double_click_up() {
-    // The Win32 backend maps a double-click to `MouseDown`, `MouseUp`,
+    // The Direct2D backend maps a double-click to `MouseDown`, `MouseUp`,
     // `MouseDoubleClick`, `MouseUp` (`WM_LBUTTONDBLCLK` replaces the second
     // `WM_LBUTTONDOWN`). The canvas backend must produce the same.
     let mut tracker = tracker();

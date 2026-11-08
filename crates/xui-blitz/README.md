@@ -4,7 +4,8 @@ A web view for xui whose pages are parsed, styled, laid out and painted by
 [Blitz](https://github.com/DioxusLabs/blitz): html5ever, Servo's Stylo (the
 Firefox style system), Taffy (block, flex, grid, floats) and Parley (text). It
 replaces both earlier views: `xui-litehtml`'s `HtmlView` (mail and help
-readers) and `xui-netsurf`'s `NetSurfView` (the LazyWeb browser).
+readers) and `xui-netsurf`'s `NetSurfView` (the LazyWeb browser), both now on
+the `attic` branch.
 
 Blitz is a dependency from crates.io, pinned to `=0.3.0-beta.2`; it is not
 forked or patched. What it lacks that pages need is filled in from this side
@@ -121,8 +122,8 @@ zig). CI checks that build.
 
 ## Comparing engines
 
-`scripts/engine-compare/` renders fixtures with litehtml, NetSurf, Blitz and
-Chrome (offline) and measures each engine's cost in binary size: see
+`scripts/engine-compare/` renders fixtures with Blitz and with Chrome
+(offline) and measures what Blitz adds to a binary: see
 `scripts/engine-compare/README.md`.
 
 ## Not yet

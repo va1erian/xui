@@ -20,7 +20,7 @@ pub(super) enum PressKind {
     Down,
     /// The second press of a double-click: the caller delivers
     /// [`Event::MouseDoubleClick`] in place of the second `MouseDown`, matching
-    /// the Win32 backend, where `WM_*BUTTONDBLCLK` replaces the second
+    /// the Direct2D backend, where `WM_*BUTTONDBLCLK` replaces the second
     /// `WM_*BUTTONDOWN`.
     DoubleClick,
 }

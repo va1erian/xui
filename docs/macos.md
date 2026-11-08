@@ -33,8 +33,8 @@ XUI_DEMO_AUTOCLOSE_MS=4000 cargo run -p xui --features canvas --example widgets
 
 Other environment variables the gallery reads: `XUI_GALLERY_THEME=dark` starts
 dark, `XUI_GALLERY_MENU` opens the menu bar, `XUI_GALLERY_CONTEXT` opens the
-context menu. `XUI_AUTOSWITCH_MS` (the Renderer button) is Windows-only: the
-gallery can only switch backends where both are compiled in.
+context menu, `XUI_GALLERY_DIALOG` a dialog and `XUI_GALLERY_TOOLTIP` a
+tooltip.
 
 ## Lifecycle
 

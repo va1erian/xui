@@ -81,10 +81,6 @@ impl Backend for DeferredBackend {
     }
 
     fn kill_timer(&self, _window: WindowId, _id: TimerId) {}
-
-    fn supports(&self, _kind: NodeKind) -> ImplKind {
-        ImplKind::Painted
-    }
 }
 
 #[test]

@@ -115,6 +115,7 @@ Use the table below; the full capability comparison is in [Backends](backends.md
 |---|---|
 | One binary that also runs on Linux and macOS, with no platform UI toolkit (the default) | `xui_canvas::WinitBackend` |
 | GPU rendering inside a canvas window | a `GlWidget` installed with `WinitBackend::set_gl_content` |
+| A small Windows-only binary drawn with Direct2D, with native file dialogs | `xui_d2d::D2dBackend` |
 | Deterministic headless snapshots in tests and tooling | `xui_canvas::OffscreenBackend` |
 | An HTML page or a web browser view, on any backend | `xui-blitz`'s `BlitzView` |
 
@@ -130,6 +131,7 @@ To run the ready-made galleries:
 ```text
 cargo run -p xui --example widgets      # portable widgets, software backend
 cargo run -p xui-canvas --example gl    # GPU triangle
+cargo run -p xui-d2d --example cookbook # the cookbook on Direct2D (Windows)
 ```
 
 ## 6. Choosing the backend in code

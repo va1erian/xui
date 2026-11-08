@@ -378,8 +378,8 @@ tip.show(); // e.g. for a screenshot; otherwise it appears on hover
 ## Text
 
 Text is shaped by the backend through `Backend::text_shaper()`, a `Send + Sync`
-handle a worker can use. The `WinitBackend` shapes and
-hit-tests; `Canvas::draw_layout` draws a layout that came back from a worker.
+handle a worker can use. Each windowed backend shapes and hit-tests
+(cosmic-text on `WinitBackend`, DirectWrite on `D2dBackend`); `Canvas::draw_layout` draws a layout that came back from a worker.
 `FlowText` supports styled runs (normal/weak/link), rich ranges, links and
 wrapping. See [Backends](backends.md) for the per-backend text stack.
 

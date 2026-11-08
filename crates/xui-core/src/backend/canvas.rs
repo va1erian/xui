@@ -1,6 +1,6 @@
 #![forbid(unsafe_code)]
 
-//! The portable drawing surface a [`Painted`](super::ImplKind::Painted) widget
+//! The portable drawing surface a painted widget
 //! draws into. A backend implements it over whatever it rasterizes with
 //! (Direct2D, tiny-skia, …).
 //!

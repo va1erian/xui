@@ -4,7 +4,7 @@
 //! widgets into a software [`Surface`] instead of a window.
 //!
 //! It runs on every platform with no UI toolkit, so the same widget code that
-//! the Win32 backend hosts can be rendered and snapshot-tested here (including
+//! the windowed backends host can be rendered and snapshot-tested here (including
 //! on headless CI runners). The windowing shell builds on the same surface.
 
 use std::cell::{OnceCell, RefCell};

@@ -1,7 +1,7 @@
 #![forbid(unsafe_code)]
 
 //! What the front layer asks a backend to create: a [`NodeKind`] and its
-//! [`NodeSpec`], plus how the backend implements it ([`ImplKind`]).
+//! [`NodeSpec`].
 
 use crate::geometry::Rect;
 
@@ -32,9 +32,9 @@ impl From<WidgetId> for ParentRef {
 
 /// The kind of widget a backend should create.
 ///
-/// This is the portable vocabulary of the widget layer; the backend decides
-/// whether it maps to a native control ([`ImplKind::Native`]) or a region the
-/// front layer paints ([`ImplKind::Painted`]).
+/// This is the portable vocabulary of the widget layer. Every node is a region
+/// the front layer paints: xui draws its own widgets rather than hosting
+/// native controls.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum NodeKind {
     /// A plain container with no behaviour of its own.
@@ -205,15 +205,6 @@ impl NodeSpec {
         self.contained = true;
         self
     }
-}
-
-/// How a backend implements a [`NodeKind`].
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ImplKind {
-    /// The backend owns the widget (a native control or its equivalent).
-    Native,
-    /// The front layer paints the widget through [`Canvas`](super::Canvas).
-    Painted,
 }
 
 #[cfg(test)]

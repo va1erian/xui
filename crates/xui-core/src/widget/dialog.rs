@@ -223,10 +223,8 @@ impl<M: 'static> Dialog<M> {
         }
         for id in shared.nodes.borrow().iter() {
             let shared = Rc::clone(&shared);
-            // The scrim and its controls are siblings, not a parent and children.
-            // Joining a painted child window to the scrim stops the Win32 backend
-            // painting the scrim (its whole area is covered by the child), so the
-            // dialog keeps one flat z-order instead.
+            // The scrim and its controls are siblings, not a parent and children,
+            // so the dialog keeps one flat z-order.
             let child_ui = ui.clone();
             ui.add_events(*id, move |event| {
                 if child_ui.is_design_mode() && event.is_input() {

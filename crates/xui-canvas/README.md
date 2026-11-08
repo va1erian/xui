@@ -26,15 +26,16 @@ impl GlWidget for Visualizer {
 }
 ```
 
-The `unsafe` GL context creation, the `glow` loader and the offscreen readback
-live in `src/sys/gl/` and `xui-gpu`'s `sys/`; every other module forbids
-`unsafe`.
+The `unsafe` code lives under `src/sys/` (the GL context and `glow` loader in
+`src/sys/gl/`, the child windows behind native surfaces, the double-click and
+animation settings) and `xui-gpu`'s `sys/` (the offscreen readback); every
+other module forbids `unsafe`.
 
 ## Features
 
 | Feature | Default | What it adds |
 |---|---|---|
-| `winit-backend` | yes | Everything that needs a windowing system: `WinitBackend` (`winit` + `softbuffer`), the optional `GlWidget`/`GlSurface` GPU seam (`glutin`/`glow` over `xui-gpu`), the `arboard` clipboard and the `windows` double-click metrics. |
+| `winit-backend` | yes | Everything that needs a windowing system: `WinitBackend` (`winit` + `softbuffer`), the optional `GlWidget`/`GlSurface` GPU seam (`glutin`/`glow` over `xui-gpu`), the `arboard` clipboard and the `windows` double-click metrics and animation setting. |
 
 Turn it off to build the **software painter core alone**:
 

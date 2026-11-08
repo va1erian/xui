@@ -24,6 +24,12 @@
 
 ### Breaking changes
 
+- **The native-control path is gone; xui paints every widget itself.**
+  `ImplKind`, `Backend::supports` / `Ui::supports`, `Backend::set_cue` /
+  `set_password` (and their `Ui` wrappers) and `Event::TextChanged` are
+  removed. They existed for the old Win32 backend's hosted `EDIT` control;
+  every current backend reported `Painted`, so no widget's behaviour changes.
+  A custom backend drops its `supports` impl.
 - **The winit backend opens windows in Daylight or Nightfall.** Instead of
   the flat `Theme::light()`, `WinitBackend::system_theme` now answers
   `Theme::daylight()`, or `Theme::nightfall()` when the platform reports dark

@@ -266,7 +266,7 @@ fn a_live_valid_edit_updates_the_other_views_but_not_its_own_box() {
     let rgb = panel.edit_handle(Field::Rgb).unwrap();
     // A raw, valid spelling: it must not be overwritten mid-edit.
     rgb.set_text("0200, 010, 020");
-    runtime.deliver(rgb.id(), &Event::TextChanged);
+    runtime.deliver(rgb.id(), &Event::Char('0'));
     drain(&runtime);
 
     assert_eq!(panel.color(), Color::rgb(200, 10, 20));

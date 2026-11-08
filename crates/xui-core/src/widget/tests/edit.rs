@@ -264,6 +264,35 @@ fn a_mouse_drag_selects_text() {
 }
 
 #[test]
+fn leaving_the_field_ends_a_drag() {
+    let (_backend, core, ui) = setup();
+    let edit = Edit::new(&ui, Rect::new(0, 0, 160, 28), "hello world").unwrap();
+    let log = Rc::new(RefCell::new(Vec::new()));
+    let runtime = runtime_for(core, &log);
+    let moved_to = |x| Event::MouseMove {
+        x,
+        y: 5,
+        modifiers: Modifiers::NONE,
+    };
+
+    runtime.deliver(
+        edit.id(),
+        &Event::MouseDown {
+            x: 4,
+            y: 5,
+            button: MouseButton::Left,
+            modifiers: Modifiers::NONE,
+        },
+    );
+    runtime.deliver(edit.id(), &moved_to(34));
+    runtime.deliver(edit.id(), &Event::MouseLeave);
+    // x=64 is position 10; a drag still running would extend to it.
+    runtime.deliver(edit.id(), &moved_to(64));
+    runtime.deliver(edit.id(), &Event::Char('X'));
+    assert_eq!(edit.text(), "X world", "the selection stopped at `hello`");
+}
+
+#[test]
 fn a_double_click_selects_a_word() {
     let (_backend, core, ui) = setup();
     let edit = Edit::new(&ui, Rect::new(0, 0, 160, 28), "hello world").unwrap();

@@ -8,8 +8,9 @@ in [AGENTS.md](../AGENTS.md); the design invariants are repeated in
 
 - Stable Rust, edition 2024. There is no pinned `rust-toolchain` file and no
   declared MSRV; CI uses `stable`.
-- The workspace members include `xui-core`, `xui-canvas`,
-  `xui`, `xui-blitz`, `xui-code-editor` (`Cargo.toml`, resolver 3).
+- The workspace members are `xui-core`, `xui-canvas`, `xui-d2d`, `xui-gpu`,
+  `xui`, `xui-blitz`, `xui-code-editor`, `xui-rich-text` and `xui-icons`
+  (`Cargo.toml`, resolver 3).
 
 ## Checks
 
@@ -39,7 +40,7 @@ run them in **Windows Sandbox**:
 
 ```powershell
 scripts\sandbox\run.ps1                        # every test
-scripts\sandbox\run.ps1 -CargoArgs '--test','slider' -TestArgs 'drag'
+scripts\sandbox\run.ps1 -CargoArgs '-p','xui-d2d','--test','window'
 ```
 
 See [sandbox-testing.md](sandbox-testing.md) and the
@@ -55,7 +56,7 @@ take a screenshot.
 | Job | Runner | What it does |
 |---|---|---|
 | `lint` | windows-latest | `cargo fmt --all --check`, then clippy with `-D warnings` on `--all-targets` and again with `--all-features` (every feature) |
-| `test` | windows-latest | `cargo test`; `xui-code-editor`'s tests with the `rhai-syntax` feature; the opt-in GL test (`XUI_CANVAS_GL_TEST=1`, skips cleanly with no driver); and a run of the `widgets` example with an auto-close. The all-features test pass runs in `coverage` |
+| `test` | windows-latest | `cargo test`; `xui-code-editor`'s tests with the `rhai-syntax` feature; the opt-in GL test (`XUI_CANVAS_GL_TEST=1`, skips cleanly with no driver); a run of the `widgets` example with an auto-close; and `scripts/snapshots.ps1`, which fails on a layout warning in any example. The all-features test pass runs in `coverage` |
 | `cross-check` | ubuntu-latest | `cargo check --all-targets`, clippy on `xui-core`, the `xui-core`, `xui-code-editor` (`rhai-syntax`) and `xui-canvas` tests — proving the front layer has no Win32 dependency — and a `xui-blitz` check for `x86_64-unknown-linux-musl` |
 | `cross-check-macos` | macos-latest | `cargo check --all-targets`, the `xui-core` and `xui-canvas` tests, and a check of the canvas `widgets` example |
 | `snapshots` | ubuntu-latest | `scripts/snapshots.sh`: every example rendered headlessly in light and dark, uploaded as the `snapshots` artifact (not a required check) |
@@ -167,7 +168,7 @@ runs on every backend. A widget:
    `Control::invalidate_layout`.
 6. Implements `HasText` and/or `Properties` where they fit.
 7. Is exercised by the cross-backend gallery
-   (`crates/xui/examples/widgets.rs`), gets a per-control demo under
+   (`crates/xui/examples/widgets/main.rs`), gets a per-control demo under
    `crates/xui/examples/controls/`, and appears in the offscreen light/dark
    snapshot (`crates/xui-canvas/tests/widget_snapshots.rs`). Add a `proptest`
    property for any pure helper it introduces, and attach one light and one
@@ -178,7 +179,7 @@ need adding to `backend/node.rs` if the backend must be aware of it.
 
 ## File size
 
-Aim under 300 lines per file, hard limit 400. Split along a real seam — a new
+Aim under 300 lines per file, hard limit 500. Split along a real seam — a new
 `sys/<name>.rs` for a backend's raw helpers, separate paint/state/model modules,
 etc. — before crossing the limit.
 
