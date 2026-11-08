@@ -37,7 +37,18 @@ pub(super) fn estimate(
     match &block.kind {
         BlockKind::Rule => 2.0 * scale,
         BlockKind::Code { .. } => {
-            (text.matches('\n').count() + 1) as f32 * style.code_size.0 * scale * 1.3 + 2.0 * inset
+            let size = style.code_size.0 * scale;
+            // A wrapped line takes a row per box width of characters.
+            let per_row = if style.wrap_code {
+                ((width - 2.0 * inset) / (size * 0.6)).max(1.0)
+            } else {
+                f32::INFINITY
+            };
+            let rows: f32 = text
+                .split('\n')
+                .map(|line| (line.chars().count() as f32 / per_row).ceil().max(1.0))
+                .sum();
+            rows * size * 1.3 + 2.0 * inset
         }
         BlockKind::TableRow { .. } => em * 1.35 + 2.0 * inset,
         kind => {

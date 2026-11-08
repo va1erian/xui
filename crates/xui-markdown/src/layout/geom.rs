@@ -95,7 +95,8 @@ pub(crate) struct BlockLayout {
     pub decor: Vec<Decor>,
     /// Where each link can be clicked, and which link it is.
     pub links: Vec<(FRect, u32)>,
-    /// The area pieces are clipped to (a code block's lines do not wrap).
+    /// The area pieces are clipped to (a code block's, for lines that do not
+    /// wrap).
     pub clip: Option<FRect>,
 }
 

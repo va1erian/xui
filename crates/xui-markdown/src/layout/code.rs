@@ -1,7 +1,9 @@
 #![forbid(unsafe_code)]
 
-//! Code blocks: unwrapped lines on a shaded box, coloured by the app's
-//! highlighter when it gave one.
+//! Code blocks: lines on a shaded box, coloured by the app's highlighter when
+//! it gave one. A line wider than the box wraps onto more rows
+//! ([`MarkdownStyle::wrap_code`](crate::MarkdownStyle::wrap_code)), or is
+//! clipped when wrapping is off.
 //!
 //! Tabs are shaped as four spaces, whatever the column, so a piece's shaped
 //! text is its [`Piece::range`] with each tab widened. A hit at byte `e` of a
@@ -14,6 +16,7 @@ use std::ops::Range;
 
 use super::cache::Shaped;
 use super::geom::{BlockLayout, Ctx, Decor, FRect, Piece};
+use super::rows;
 use crate::highlight::CodeSpan;
 use crate::model::{Block, Inline};
 use crate::style::{FontKey, Role};
@@ -79,6 +82,12 @@ pub(super) fn layout(
     } else {
         Role::Text
     };
+    let avail = if ctx.style.wrap_code {
+        width - 2.0 * inset
+    } else {
+        f32::INFINITY
+    };
+    let pen_x = left + inset;
     let mut y = inset;
     let mut at = block.text.start;
     let mut state = 0;
@@ -87,32 +96,37 @@ pub(super) fn layout(
             Some(h) => {
                 let (spans, next) = h.line(lang, line, state);
                 state = next;
-                spans
+                Some(spans)
             }
-            None => Vec::new(),
+            None => None,
         };
-        if !line.trim_end().is_empty() {
-            let pen = (left + inset, y);
-            if highlighter.is_some() {
-                highlighted(ctx, line, at, &spans, plain, pen, out);
-            } else {
-                let shaped = Shaped::new(ctx.shaper.layout(
-                    &expand(line),
-                    &ctx.style.spec(font),
-                    f32::INFINITY,
-                    ctx.dpi,
-                ));
-                out.pieces.push(Piece {
-                    layout: shaped.layout,
-                    x: pen.0,
-                    y,
-                    range: at..at + line.len() as u32,
-                    tabs: line.contains('\t'),
-                    role: plain,
-                });
-            }
+        if line.trim_end().is_empty() {
+            y += line_height;
+            at += line.len() as u32 + 1;
+            continue;
         }
-        y += line_height;
+        let spec = ctx.style.spec(font);
+        let whole = ctx
+            .shaper
+            .layout(&expand(line), &spec, f32::INFINITY, ctx.dpi);
+        let rows = rows::rows(&*whole, line, avail);
+        let mut whole = (rows.len() == 1).then_some(whole);
+        for range in rows {
+            let text = &line[range.clone()];
+            // A line on one row reuses its shape; a wrapped row is shaped alone.
+            let shaped = whole.take().unwrap_or_else(|| {
+                ctx.shaper
+                    .layout(&expand(text), &spec, f32::INFINITY, ctx.dpi)
+            });
+            let row = Row {
+                text,
+                at: at + range.start as u32,
+                pen: (pen_x, y),
+            };
+            let spans = spans.as_ref().map(|s| clip_spans(s, &range));
+            row.lay(ctx, shaped, spans.as_deref(), plain, out);
+            y += line_height;
+        }
         at += line.len() as u32 + 1;
     }
     let height = y + inset;
@@ -182,28 +196,77 @@ impl Line<'_> {
     }
 }
 
-/// The pieces of one line starting at byte `at` of the document: each valid
-/// span, and the trimmed plain text between them.
+/// One row of a code line: its text, its first byte in the document and
+/// where it is drawn.
+struct Row<'a> {
+    text: &'a str,
+    at: u32,
+    pen: (f32, f32),
+}
+
+impl Row<'_> {
+    /// Lays the row out from `shaped` (its text, unwrapped): one piece, or
+    /// with `spans` (relative to the row) each valid span and the trimmed
+    /// plain text between them.
+    fn lay(
+        &self,
+        ctx: &mut Ctx,
+        shaped: Box<dyn xui_core::backend::TextLayout>,
+        spans: Option<&[CodeSpan]>,
+        plain: Role,
+        out: &mut BlockLayout,
+    ) {
+        if self.text.trim_end().is_empty() {
+            return;
+        }
+        match spans {
+            Some(spans) => highlighted(ctx, self, shaped, spans, plain, out),
+            None => out.pieces.push(Piece {
+                layout: Shaped::new(shaped).layout,
+                x: self.pen.0,
+                y: self.pen.1,
+                range: self.at..self.at + self.text.len() as u32,
+                tabs: self.text.contains('\t'),
+                role: plain,
+            }),
+        }
+    }
+}
+
+/// The parts of `spans` (relative to a line) inside `row`, relative to it.
+fn clip_spans(spans: &[CodeSpan], row: &Range<usize>) -> Vec<CodeSpan> {
+    spans
+        .iter()
+        .filter_map(|span| {
+            let start = span.range.start.max(row.start);
+            let end = span.range.end.min(row.end);
+            (start < end).then(|| CodeSpan {
+                range: start - row.start..end - row.start,
+                class: span.class,
+            })
+        })
+        .collect()
+}
+
+/// The pieces of one row: each valid span, and the trimmed plain text
+/// between them. `whole` is the row shaped, for the position of its parts.
 fn highlighted(
     ctx: &mut Ctx,
-    text: &str,
-    at: u32,
+    row: &Row,
+    whole: Box<dyn xui_core::backend::TextLayout>,
     spans: &[CodeSpan],
     plain: Role,
-    pen: (f32, f32),
     out: &mut BlockLayout,
 ) {
     let font = ctx.style.font(Inline::NONE, None, true);
-    let whole = ctx
-        .shaper
-        .layout(&expand(text), &ctx.style.spec(font), f32::INFINITY, ctx.dpi);
+    let text = row.text;
     let line = Line {
         text,
-        at,
+        at: row.at,
         whole,
         font,
         plain,
-        pen,
+        pen: row.pen,
     };
     let mut pos = 0;
     for span in spans {

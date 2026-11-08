@@ -25,6 +25,7 @@ const AUTOSCROLL_MS: u32 = 40;
 
 pub(super) type LinkMapper<M> = Box<dyn Fn(&str) -> Option<M>>;
 pub(super) type ContextMapper<M> = Box<dyn Fn(Point) -> Option<M>>;
+pub(super) type PaintedMapper<M> = Box<dyn Fn() -> Option<M>>;
 
 /// What the widget, its painter, its event mapper and its timer share. The
 /// callbacks hold it weakly, so dropping the view drops it and its node.
@@ -36,6 +37,9 @@ pub(super) struct Shared<M: 'static> {
     pub(super) id: WidgetId,
     pub(super) on_link: RefCell<Option<LinkMapper<M>>>,
     pub(super) on_context: RefCell<Option<ContextMapper<M>>>,
+    pub(super) on_painted: RefCell<Option<PaintedMapper<M>>>,
+    /// The document set last has not been painted yet.
+    pub(super) unpainted: Cell<bool>,
     /// The timer laying out the rest of the document, while there is any.
     pub(super) timer: Cell<Option<TimerId>>,
     /// The timer scrolling a drag held past an edge, while it is.
@@ -58,6 +62,19 @@ impl<M: 'static> Shared<M> {
             None
         });
         self.timer.set(timer);
+    }
+
+    /// After a paint: reports the first one of a new document that drew its
+    /// text (a view with no room yet draws none and waits for the next).
+    pub(super) fn painted(&self) {
+        if !self.unpainted.get() || !self.state.borrow().layout.sized() {
+            return;
+        }
+        self.unpainted.set(false);
+        let message = self.on_painted.borrow().as_ref().and_then(|map| map());
+        if let Some(message) = message {
+            self.ui.emit(message);
+        }
     }
 
     /// Lays out the next slice of the document; stops the timer once all of

@@ -31,7 +31,9 @@ fn build(ui: &Ui<Msg>) -> xui_core::Result<MarkdownView<Msg>> {
 `set_markdown` swaps the text later; `document` / `set_document` take a
 `Document` parsed elsewhere (on a worker thread, say). `scroll_to_anchor`
 and `set_scroll` move the view. A `#slug` link to one of the document's
-headings scrolls there and is not reported to `on_link`.
+headings scrolls there and is not reported to `on_link`. `on_painted` maps
+the first paint of each document shown to a message, for an app that reports
+when a page is on screen.
 
 ## Selecting and copying
 
@@ -91,6 +93,8 @@ picks the one for the live theme, so switching theme only repaints.
 CommonMark plus the GFM extensions tables, strike-through and task lists:
 headings, paragraphs, emphasis, strong text, inline code, links, block quotes,
 bullet and numbered lists, code blocks and tables (with column alignment).
+A code line wider than its block wraps onto more rows (`MarkdownStyle::wrap_code`;
+off, it is clipped).
 Raw HTML is shown as literal text; an image is shown as its alt text for now.
 
 ## Styling
@@ -125,7 +129,8 @@ without laying anything out again.
   double-click time is not read.
 * No images (alt text only).
 * No bidirectional reordering across styled pieces.
-* Code blocks clip long lines rather than wrapping them.
+* A wrapped code line continues at the block's left edge, not under its
+  indentation.
 * A view with no room for text (narrower than its padding and scrollbar,
   about 51 px at 96 DPI) draws none; one squeezed that far keeps its last
   layout.
