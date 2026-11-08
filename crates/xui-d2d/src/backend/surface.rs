@@ -12,9 +12,9 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use windows::Win32::UI::WindowsAndMessaging::{
-    WM_LBUTTONDBLCLK, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MBUTTONDBLCLK, WM_MBUTTONDOWN, WM_MBUTTONUP,
-    WM_MOUSEMOVE, WM_RBUTTONDBLCLK, WM_RBUTTONDOWN, WM_RBUTTONUP, WM_SETCURSOR, WM_XBUTTONDBLCLK,
-    WM_XBUTTONDOWN, WM_XBUTTONUP,
+    WM_CAPTURECHANGED, WM_LBUTTONDBLCLK, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MBUTTONDBLCLK,
+    WM_MBUTTONDOWN, WM_MBUTTONUP, WM_MOUSEMOVE, WM_RBUTTONDBLCLK, WM_RBUTTONDOWN, WM_RBUTTONUP,
+    WM_SETCURSOR, WM_XBUTTONDBLCLK, WM_XBUTTONDOWN, WM_XBUTTONUP,
 };
 use xui_core::backend::{Event, NativeSurface, WidgetId, WindowId};
 use xui_core::geometry::Rect;
@@ -39,6 +39,8 @@ pub(super) struct Surface {
     placed: Option<(Rect, bool)>,
     /// Whether a `WM_MOUSELEAVE` of the child itself is requested.
     tracking: bool,
+    /// Whether the child holds the mouse capture a press gave it.
+    grabbed: bool,
 }
 
 /// Where a node's window goes (its bounds) and whether it is shown: only while
@@ -77,7 +79,9 @@ impl Shared {
     /// for again.
     pub(super) fn set_surface(&self, id: WidgetId, on: bool) {
         if !on {
-            self.drop_surface(id, false);
+            if let Some(window) = self.window_of(id) {
+                self.drop_surface(id, window, false);
+            }
             return;
         }
         if self.surfaces.borrow().contains_key(&id) {
@@ -116,21 +120,36 @@ impl Shared {
     /// Gives `id`'s window up (it is hidden and its handles refused; the OS
     /// window goes when the last holder drops it), or, with `gone`, forgets
     /// one the destruction of its parent already took.
-    pub(super) fn drop_surface(&self, id: WidgetId, gone: bool) {
-        let Some(window) = self
-            .surfaces
-            .borrow_mut()
-            .remove(&id)
-            .and_then(|surface| surface.window)
-        else {
+    pub(super) fn drop_surface(&self, id: WidgetId, owner: WindowId, gone: bool) {
+        let removed = self.surfaces.borrow_mut().remove(&id);
+        let Some(window) = removed.and_then(|surface| surface.window) else {
             return;
         };
         if gone {
             window.gone();
-        } else {
-            window.orphan();
-            surface::place(window.hwnd(), None, Some(false));
+            return;
         }
+        window.orphan();
+        surface::place(window.hwnd(), None, Some(false));
+        // A holder may keep it past its parent: remember it, so closing the
+        // parent can say the window went with it.
+        let mut orphans = self.orphans.borrow_mut();
+        orphans.retain(|(_, kept)| kept.strong_count() > 0);
+        orphans.push((owner, Arc::downgrade(&window)));
+    }
+
+    /// Says the child windows `window` took down with it are gone, including
+    /// the ones their nodes gave up but a holder still has.
+    pub(super) fn orphans_gone(&self, window: WindowId) {
+        self.orphans.borrow_mut().retain(|(owner, kept)| {
+            if *owner != window {
+                return kept.strong_count() > 0;
+            }
+            if let Some(surface) = kept.upgrade() {
+                surface.gone();
+            }
+            false
+        });
     }
 
     /// Makes, moves, shows and hides the native child windows of `window` to
@@ -147,19 +166,25 @@ impl Shared {
             let Some((rect, shown)) = self.surface_place(id, window) else {
                 continue;
             };
-            let mut surfaces = self.surfaces.borrow_mut();
-            let Some(surface) = surfaces.get_mut(&id) else {
-                continue;
+            // Recorded before the window is moved: moving it sends messages
+            // that read the record.
+            let change = {
+                let mut surfaces = self.surfaces.borrow_mut();
+                let Some(surface) = surfaces.get_mut(&id) else {
+                    continue;
+                };
+                let Some(os) = surface.window.clone() else {
+                    continue;
+                };
+                let (moved, visible) = placement_change(surface.placed, rect, shown);
+                let kept = surface.placed.map_or(rect, |(r, _)| r);
+                surface.placed = Some((moved.unwrap_or(kept), shown));
+                (os, moved, visible)
             };
-            let Some(os) = surface.window.clone() else {
-                continue;
-            };
-            let (moved, visible) = placement_change(surface.placed, rect, shown);
+            let (os, moved, visible) = change;
             if moved.is_some() || visible.is_some() {
                 surface::place(os.hwnd(), moved, visible);
             }
-            let kept = surface.placed.map_or(rect, |(r, _)| r);
-            surface.placed = Some((moved.unwrap_or(kept), shown));
         }
     }
 
@@ -169,7 +194,12 @@ impl Shared {
         let clip = scene.ancestor_clip(id);
         let popups: Vec<Rect> = scene
             .iter()
-            .filter(|(other, node)| node.popup && node.window == window && *other != id)
+            .filter(|(other, node)| {
+                node.popup
+                    && node.window == window
+                    && *other != id
+                    && !scene.is_ancestor(*other, id)
+            })
             .filter(|(other, _)| scene.effectively_visible(*other))
             .filter_map(|(other, _)| scene.absolute_bounds(other))
             .collect();
@@ -195,8 +225,18 @@ impl Shared {
             }
             WM_MOUSELEAVE => {
                 self.untrack_surface(id);
-                if surface::pointer_outside(parent) {
+                if !surface::pointer_over(parent) {
                     self.leave(window);
+                }
+                Some(0)
+            }
+            WM_CAPTURECHANGED => {
+                // Windows took the capture a press gave the child (a modal
+                // window, alt-tab) without the node asking: tell the node, as
+                // for its own capture. Our own parent taking it is a handoff.
+                let ours = msg.lparam == parent.value();
+                if !ours && self.set_grabbed(id, false) {
+                    self.deliver(window, id, &Event::CaptureChanged);
                 }
                 Some(0)
             }
@@ -207,12 +247,13 @@ impl Shared {
                 // took the capture itself.
                 if self.captured.get().is_none() {
                     window::capture(hwnd);
+                    self.set_grabbed(id, true);
                 }
                 Some(0)
             }
             WM_LBUTTONUP | WM_RBUTTONUP | WM_MBUTTONUP | WM_XBUTTONUP => {
                 self.pointer(window, button_event(msg, x, y, modifiers)?);
-                if msg.wparam & BUTTON_BITS == 0 && self.captured.get().is_none() {
+                if msg.wparam & BUTTON_BITS == 0 && self.set_grabbed(id, false) {
                     window::release_capture();
                 }
                 Some(0)
@@ -220,6 +261,14 @@ impl Shared {
             WM_SETCURSOR if low(msg.lparam) as isize == HTCLIENT => self.on_set_cursor(window),
             _ => None,
         }
+    }
+
+    /// Records whether the child holds the capture; whether it did before.
+    fn set_grabbed(&self, id: WidgetId, grabbed: bool) -> bool {
+        self.surfaces
+            .borrow_mut()
+            .get_mut(&id)
+            .is_some_and(|surface| std::mem::replace(&mut surface.grabbed, grabbed))
     }
 
     fn track_surface(&self, id: WidgetId, hwnd: Hwnd) {

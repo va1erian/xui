@@ -42,7 +42,7 @@ impl Hwnd {
     }
 
     /// The handle as the integer Win32 passes around.
-    pub(super) fn value(self) -> isize {
+    pub(crate) fn value(self) -> isize {
         self.0
     }
 }
@@ -134,12 +134,11 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
 }
 
 pub(super) fn register_class() {
-    register_class_named(CLASS, true);
+    register_class_named(CLASS);
 }
 
-/// Registers a class served by [`wndproc`]; `arrow` gives it the arrow cursor,
-/// which a class that answers `WM_SETCURSOR` itself leaves out.
-pub(super) fn register_class_named(name: PCWSTR, arrow: bool) {
+/// Registers a class served by [`wndproc`], with the arrow cursor.
+pub(super) fn register_class_named(name: PCWSTR) {
     // SAFETY: registers a class whose procedure is `wndproc`; registering the
     // same class twice fails harmlessly, which is what makes this idempotent.
     unsafe {
@@ -151,11 +150,7 @@ pub(super) fn register_class_named(name: PCWSTR, arrow: bool) {
             style: CS_DBLCLKS,
             lpfnWndProc: Some(wndproc),
             hInstance: instance.into(),
-            hCursor: if arrow {
-                LoadCursorW(None, IDC_ARROW).unwrap_or_default()
-            } else {
-                Default::default()
-            },
+            hCursor: LoadCursorW(None, IDC_ARROW).unwrap_or_default(),
             lpszClassName: name,
             ..Default::default()
         };

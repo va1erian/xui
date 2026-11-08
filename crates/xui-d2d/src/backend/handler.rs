@@ -6,8 +6,8 @@ use windows::Win32::UI::WindowsAndMessaging::{
     WM_ACTIVATE, WM_CAPTURECHANGED, WM_CHAR, WM_CLOSE, WM_DESTROY, WM_DPICHANGED, WM_ERASEBKGND,
     WM_INPUT, WM_KEYDOWN, WM_KEYUP, WM_KILLFOCUS, WM_LBUTTONDBLCLK, WM_LBUTTONDOWN, WM_LBUTTONUP,
     WM_MBUTTONDBLCLK, WM_MBUTTONDOWN, WM_MBUTTONUP, WM_MOUSEHWHEEL, WM_MOUSEMOVE, WM_MOUSEWHEEL,
-    WM_PAINT, WM_RBUTTONDBLCLK, WM_RBUTTONDOWN, WM_RBUTTONUP, WM_SETCURSOR, WM_SIZE, WM_SYSKEYDOWN,
-    WM_SYSKEYUP, WM_TIMER, WM_XBUTTONDBLCLK, WM_XBUTTONDOWN, WM_XBUTTONUP,
+    WM_MOVE, WM_PAINT, WM_RBUTTONDBLCLK, WM_RBUTTONDOWN, WM_RBUTTONUP, WM_SETCURSOR, WM_SIZE,
+    WM_SYSKEYDOWN, WM_SYSKEYUP, WM_TIMER, WM_XBUTTONDBLCLK, WM_XBUTTONDOWN, WM_XBUTTONUP,
 };
 use xui_core::backend::{Event, WidgetId, WindowId};
 use xui_core::message::{Modifiers, MouseButton};
@@ -103,7 +103,11 @@ impl Shared {
                 self.paint(window);
                 Some(0)
             }
-            WM_SIZE => self.on_size(window, msg),
+            WM_SIZE => self.on_size(window, hwnd, msg),
+            WM_MOVE => {
+                self.repin(window, hwnd);
+                None
+            }
             WM_DPICHANGED => self.on_dpi(window, hwnd, msg),
             WM_MOUSEMOVE => {
                 self.track_leave(window, hwnd);
@@ -201,7 +205,7 @@ impl Shared {
         }
     }
 
-    fn on_size(&self, window: WindowId, msg: Msg) -> Option<isize> {
+    fn on_size(&self, window: WindowId, hwnd: Hwnd, msg: Msg) -> Option<isize> {
         if msg.wparam == SIZE_MINIMIZED {
             return Some(0);
         }
@@ -218,6 +222,7 @@ impl Shared {
         {
             state.target = None;
         }
+        self.repin(window, hwnd);
         self.invalidate_window(window);
         self.deliver(window, WidgetId::NONE, &Event::Resize { width, height });
         Some(0)

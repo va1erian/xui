@@ -161,7 +161,7 @@ impl Backend for D2dBackend {
         let removed = self.shared.scene.borrow_mut().remove(id);
         for gone in removed {
             self.shared.forget(window, gone);
-            self.shared.drop_surface(gone, false);
+            self.shared.drop_surface(gone, window, false);
         }
         self.shared.place_surfaces(window);
     }

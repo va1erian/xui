@@ -8,12 +8,11 @@ use raw_window_handle::{
     DisplayHandle, HandleError, HasDisplayHandle, HasWindowHandle, RawWindowHandle,
     Win32WindowHandle, WindowHandle,
 };
-use windows::Win32::Foundation::{LPARAM, POINT, RECT, WPARAM};
-use windows::Win32::Graphics::Gdi::ScreenToClient;
+use windows::Win32::Foundation::{LPARAM, POINT, WPARAM};
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::UI::WindowsAndMessaging::{
-    GetClientRect, GetCursorPos, GetParent, PostMessageW, SWP_HIDEWINDOW, SWP_NOACTIVATE,
-    SWP_NOZORDER, SWP_SHOWWINDOW, SetWindowPos, WM_APP, WS_CHILD, WS_CLIPCHILDREN, WS_CLIPSIBLINGS,
+    GetCursorPos, GetParent, PostMessageW, SWP_HIDEWINDOW, SWP_NOACTIVATE, SWP_NOZORDER,
+    SWP_SHOWWINDOW, SetWindowPos, WM_APP, WS_CHILD, WS_CLIPCHILDREN, WS_CLIPSIBLINGS,
     WindowFromPoint,
 };
 use windows::core::w;
@@ -120,7 +119,7 @@ impl HasDisplayHandle for SurfaceWindow {
 /// Makes the hidden child window of `parent` that a surface node presents
 /// into; its messages go to `handler`.
 pub(crate) fn create(parent: Hwnd, handler: Handler) -> Option<Hwnd> {
-    window::register_class_named(w!("xui_d2d_surface"), false);
+    window::register_class_named(w!("xui_d2d_surface"));
     window::create_with(
         w!("xui_d2d_surface"),
         "",
@@ -170,16 +169,15 @@ pub(crate) fn pointer_over_child(parent: Hwnd) -> bool {
     }
 }
 
-/// Whether the pointer lies outside the client area of `parent`.
-pub(crate) fn pointer_outside(parent: Hwnd) -> bool {
+/// Whether the pointer is over `parent` or one of its child windows, and not
+/// over another window (another application's, or one of ours such as a menu).
+pub(crate) fn pointer_over(parent: Hwnd) -> bool {
     let mut at = POINT::default();
-    let mut client = RECT::default();
-    // SAFETY: valid out-pointers for the calls.
+    // SAFETY: `at` is a valid out-pointer; the lookups only read.
     unsafe {
-        if GetCursorPos(&mut at).is_err() || GetClientRect(parent.raw(), &mut client).is_err() {
-            return true;
+        GetCursorPos(&mut at).is_ok() && {
+            let under = WindowFromPoint(at);
+            under == parent.raw() || GetParent(under).is_ok_and(|p| p == parent.raw())
         }
-        let _ = ScreenToClient(parent.raw(), &mut at);
     }
-    at.x < client.left || at.x >= client.right || at.y < client.top || at.y >= client.bottom
 }

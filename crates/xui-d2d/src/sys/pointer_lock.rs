@@ -45,30 +45,38 @@ pub(crate) fn lock(hwnd: Hwnd) -> bool {
     let registered =
         unsafe { RegisterRawInputDevices(&device, size_of::<RAWINPUTDEVICE>() as u32).is_ok() };
     if registered {
-        let mut client = RECT::default();
-        // SAFETY: valid out-pointers; the clip is a one-pixel rectangle.
-        unsafe {
-            if GetClientRect(hwnd.raw(), &mut client).is_ok() {
-                let mut middle = POINT {
-                    x: (client.left + client.right) / 2,
-                    y: (client.top + client.bottom) / 2,
-                };
-                let _ = ClientToScreen(hwnd.raw(), &mut middle);
-                let pin = RECT {
-                    left: middle.x,
-                    top: middle.y,
-                    right: middle.x + 1,
-                    bottom: middle.y + 1,
-                };
-                let _ = ClipCursor(Some(&pin));
-            }
-            SetCursor(None);
-        }
+        pin(hwnd);
+        hide_cursor();
     }
     registered
 }
 
-/// Ends raw mouse input and frees the cursor.
+/// Pins the cursor to the middle of `hwnd`'s client area, again after the
+/// window moved or changed size while locked.
+pub(crate) fn pin(hwnd: Hwnd) {
+    let mut client = RECT::default();
+    // SAFETY: valid out-pointers; the clip is a one-pixel rectangle.
+    unsafe {
+        if GetClientRect(hwnd.raw(), &mut client).is_err() {
+            return;
+        }
+        let mut middle = POINT {
+            x: (client.left + client.right) / 2,
+            y: (client.top + client.bottom) / 2,
+        };
+        let _ = ClientToScreen(hwnd.raw(), &mut middle);
+        let pin = RECT {
+            left: middle.x,
+            top: middle.y,
+            right: middle.x + 1,
+            bottom: middle.y + 1,
+        };
+        let _ = ClipCursor(Some(&pin));
+    }
+}
+
+/// Ends raw mouse input and frees the cursor. The registration is the
+/// process's for the mouse, so one the application made itself ends too.
 pub(crate) fn unlock() {
     let device = [mouse_device(HWND::default(), RIDEV_REMOVE)];
     // SAFETY: as in `lock`; releasing the clip is always allowed.

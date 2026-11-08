@@ -9,7 +9,7 @@
 //! The loop ends on a timer and a later watchdog fails the test instead of
 //! letting it hang. Run inside the sandbox (`scripts\sandbox\run.ps1`).
 
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use raw_window_handle::RawWindowHandle;
@@ -25,8 +25,12 @@ mod os {
     #![allow(unsafe_code)]
 
     use raw_window_handle::RawWindowHandle;
-    use windows::Win32::Foundation::HWND;
-    use windows::Win32::UI::WindowsAndMessaging::{GetParent, GetWindowRect, IsWindowVisible};
+    use windows::Win32::Foundation::{HWND, LPARAM, WPARAM};
+    use windows::Win32::UI::Input::KeyboardAndMouse::GetCapture;
+    use windows::Win32::UI::WindowsAndMessaging::{
+        GetParent, GetWindowRect, IsWindowVisible, SendMessageW, WM_LBUTTONDOWN, WM_LBUTTONUP,
+        WM_MOUSEMOVE,
+    };
 
     use super::NativeSurface;
 
@@ -50,6 +54,35 @@ mod os {
         unsafe { GetParent(hwnd(surface)).is_ok() }
     }
 
+    /// Sends the child a mouse message at `(x, y)` in its own pixels, and
+    /// returns once it has been handled.
+    pub fn mouse(surface: &NativeSurface, message: Mouse, x: i32, y: i32) {
+        let id = match message {
+            Mouse::Move => WM_MOUSEMOVE,
+            Mouse::Down => WM_LBUTTONDOWN,
+            Mouse::Up => WM_LBUTTONUP,
+        };
+        let held = if message == Mouse::Up { 0 } else { 1 };
+        let at = ((y as u16 as isize) << 16) | (x as u16 as isize);
+        // SAFETY: a synchronous message to a window of this thread.
+        unsafe {
+            SendMessageW(hwnd(surface), id, Some(WPARAM(held)), Some(LPARAM(at)));
+        }
+    }
+
+    /// Whether the child holds the mouse capture.
+    pub fn captured(surface: &NativeSurface) -> bool {
+        // SAFETY: a plain query.
+        unsafe { GetCapture() == hwnd(surface) }
+    }
+
+    #[derive(Clone, Copy, PartialEq)]
+    pub enum Mouse {
+        Move,
+        Down,
+        Up,
+    }
+
     /// The window's size in pixels.
     pub fn size(surface: &NativeSurface) -> (i32, i32) {
         let mut rect = Default::default();
@@ -66,6 +99,7 @@ struct Sink {
     watchdog: Cell<Option<TimerId>>,
     timed_out: Cell<bool>,
     at_quit: Box<dyn Fn()>,
+    mouse: RefCell<Vec<String>>,
 }
 
 impl WidgetHost for Sink {
@@ -79,19 +113,23 @@ impl WidgetHost for Sink {
                 self.timed_out.set(true);
                 self.backend.quit(1);
             }
+            Event::MouseMove { .. } | Event::MouseDown { .. } | Event::MouseUp { .. } => {
+                self.mouse.borrow_mut().push(format!("{event:?}"));
+            }
             _ => {}
         }
         true
     }
 }
 
-fn run(backend: &Rc<D2dBackend>, window: WindowId, at_quit: impl Fn() + 'static) {
+fn run(backend: &Rc<D2dBackend>, window: WindowId, at_quit: impl Fn() + 'static) -> Rc<Sink> {
     let sink = Rc::new(Sink {
         backend: Rc::clone(backend),
         quit_at: Cell::new(None),
         watchdog: Cell::new(None),
         timed_out: Cell::new(false),
         at_quit: Box::new(at_quit),
+        mouse: RefCell::default(),
     });
     backend.set_event_sink(window, Rc::clone(&sink) as Rc<dyn WidgetHost>);
     sink.quit_at.set(Some(backend.set_timer(window, 300)));
@@ -99,6 +137,7 @@ fn run(backend: &Rc<D2dBackend>, window: WindowId, at_quit: impl Fn() + 'static)
     let code = backend.run_with(window, &mut || {});
     assert!(!sink.timed_out.get(), "the loop did not quit on its own");
     assert_eq!(code, 0);
+    sink
 }
 
 fn node(backend: &D2dBackend, window: WindowId, bounds: Rect, popup: bool) -> WidgetId {
@@ -177,4 +216,59 @@ fn a_surface_given_up_or_removed_refuses_its_handles() {
     };
     backend.close_window(window);
     assert!(c.window_handle().is_err(), "window closed: handles refused");
+}
+
+#[test]
+fn the_childs_mouse_input_reaches_its_node_in_the_nodes_coordinates() {
+    let backend = Rc::new(D2dBackend::new());
+    backend.init();
+    let window = backend
+        .open_window(&PlatformSpec::new("xui-d2d surface mouse test"))
+        .unwrap();
+    let view = node(&backend, window, Rect::new(10, 10, 160, 90), false);
+    backend.set_native_surface(view, true);
+    let surface = backend.native_surface(view).unwrap();
+    let held = Rc::new(Cell::new((false, true)));
+    let seen = Rc::clone(&held);
+    let sink = run(&backend, window, move || {
+        os::mouse(&surface, os::Mouse::Move, 30, 20);
+        os::mouse(&surface, os::Mouse::Down, 30, 20);
+        let during = os::captured(&surface);
+        os::mouse(&surface, os::Mouse::Up, 35, 25);
+        seen.set((during, os::captured(&surface)));
+    });
+    let log = sink.mouse.borrow();
+    assert!(log[0].contains("MouseMove") && log[0].contains("x: 30, y: 20"));
+    assert!(log[1].contains("MouseDown") && log[1].contains("x: 30, y: 20"));
+    assert!(log[2].contains("MouseUp") && log[2].contains("x: 35, y: 25"));
+    assert_eq!(held.get(), (true, false), "held for the press, freed after");
+    backend.close_window(window);
+}
+
+#[test]
+fn closing_the_window_with_a_given_up_surface_still_held_is_harmless() {
+    let backend = Rc::new(D2dBackend::new());
+    backend.init();
+    let window = backend
+        .open_window(&PlatformSpec::new("xui-d2d surface orphan test"))
+        .unwrap();
+    let view = node(&backend, window, Rect::new(0, 0, 50, 50), false);
+    backend.set_native_surface(view, true);
+    let held = backend.native_surface(view).unwrap();
+    backend.set_native_surface(view, false);
+    backend.close_window(window);
+    assert!(held.window_handle().is_err());
+    // The last holder drops after the window: no message may go to a window
+    // number that has since been reused.
+    drop(held);
+    let other = backend
+        .open_window(&PlatformSpec::new("xui-d2d surface after test"))
+        .unwrap();
+    let next = node(&backend, other, Rect::new(0, 0, 50, 50), false);
+    backend.set_native_surface(next, true);
+    let alive = backend.native_surface(next).unwrap();
+    run(&backend, other, move || {
+        assert!(os::shown(&alive), "a later surface is untouched");
+    });
+    backend.close_window(other);
 }

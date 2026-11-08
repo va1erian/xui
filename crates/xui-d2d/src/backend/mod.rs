@@ -12,6 +12,7 @@ use xui_core::backend::{Event, WidgetId, WindowId};
 use xui_core::router::WidgetHost;
 
 use crate::sys::gfx::{DwShaper, Target};
+use crate::sys::surface::SurfaceWindow;
 use crate::sys::window::Hwnd;
 
 mod canvas;
@@ -57,6 +58,10 @@ pub(crate) struct Shared {
     captured: Cell<Option<WidgetId>>,
     /// The node that holds the pointer lock.
     locked: Cell<Option<WidgetId>>,
+    /// An `Esc` that ended a lock: its `WM_CHAR` and key-up are swallowed too.
+    swallow_escape: Cell<bool>,
+    /// Native child windows given up by their node but still held, by window.
+    orphans: RefCell<Vec<(WindowId, std::sync::Weak<SurfaceWindow>)>>,
     /// Timer id to the window that owns it.
     timers: RefCell<HashMap<usize, u64>>,
     next_window: Cell<u64>,
@@ -113,6 +118,8 @@ impl D2dBackend {
                 surfaces: RefCell::new(HashMap::new()),
                 captured: Cell::new(None),
                 locked: Cell::new(None),
+                swallow_escape: Cell::new(false),
+                orphans: RefCell::new(Vec::new()),
                 timers: RefCell::new(HashMap::new()),
                 next_window: Cell::new(1),
                 next_widget: Cell::new(1),
@@ -123,6 +130,12 @@ impl D2dBackend {
                 this: this.clone(),
             }),
         }
+    }
+}
+
+impl Drop for Shared {
+    fn drop(&mut self) {
+        self.release_on_drop();
     }
 }
 

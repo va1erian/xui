@@ -33,6 +33,17 @@ impl Shared {
         }
     }
 
+    /// Re-pins the cursor after `window` moved or changed size or DPI.
+    pub(super) fn repin(&self, window: WindowId, hwnd: crate::sys::window::Hwnd) {
+        if self
+            .locked
+            .get()
+            .is_some_and(|id| self.window_of(id) == Some(window))
+        {
+            pointer_lock::pin(hwnd);
+        }
+    }
+
     /// Ends a lock held in `window`, if any.
     pub(super) fn unlock_window(&self, window: WindowId, notify: bool) {
         if self
@@ -41,6 +52,13 @@ impl Shared {
             .is_some_and(|id| self.window_of(id) == Some(window))
         {
             self.unlock_pointer(notify);
+        }
+    }
+
+    /// Frees the cursor if the backend goes away while it is locked.
+    pub(super) fn release_on_drop(&self) {
+        if self.locked.take().is_some() {
+            pointer_lock::unlock();
         }
     }
 

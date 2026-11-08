@@ -180,6 +180,18 @@ impl Scene {
         clip
     }
 
+    /// Whether `ancestor` is a parent, grandparent, ... of `id`.
+    pub(super) fn is_ancestor(&self, ancestor: WidgetId, id: WidgetId) -> bool {
+        let mut parent = self.get(id).map(|node| node.parent);
+        while let Some(ParentRef::Widget(next)) = parent {
+            if next == ancestor {
+                return true;
+            }
+            parent = self.get(next).map(|node| node.parent);
+        }
+        false
+    }
+
     /// Whether `id` and every ancestor satisfy `flag`.
     fn all_ancestry(&self, id: WidgetId, flag: impl Fn(&Node) -> bool) -> bool {
         let mut current = Some(id);

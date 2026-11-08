@@ -11,6 +11,16 @@
   its pointer input and cursor on as the node's, and refusing its handles once
   given up. A GPU API presents into it without the Direct2D composite. The
   window's parent now clips its children (`WS_CLIPCHILDREN`).
+- **`xui-d2d` implements the pointer lock.** `set_pointer_lock` hides the
+  cursor, pins it, and sends the node raw relative motion as
+  `Event::PointerDelta` (from `WM_INPUT`, unscaled and unclamped); the node
+  takes the buttons and the wheel. `Esc` (swallowed), focus loss and
+  deactivation end it with `PointerLockLost`; node removal, window close and
+  dropping the backend end it silently. Ending it removes the process's raw
+  mouse registration.
+- **`xui-d2d` reuses shaped text and gradient stops.** DirectWrite layouts
+  (up to 2048) and per-window gradient stop collections (up to 64) are kept
+  between draws, so a repainted label or gradient allocates nothing on a hit.
 
 ### Breaking changes
 

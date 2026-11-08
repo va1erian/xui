@@ -68,8 +68,9 @@ impl Shared {
         let removed = self.scene.borrow_mut().remove_window(window);
         // The child windows go with their parent.
         for id in removed {
-            self.drop_surface(id, true);
+            self.drop_surface(id, window, true);
         }
+        self.orphans_gone(window);
         self.timers
             .borrow_mut()
             .retain(|_, owner| *owner != window.raw());

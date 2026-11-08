@@ -27,6 +27,7 @@ impl Shared {
                 .is_some_and(|id| self.window_of(id) == Some(window))
         {
             self.unlock_pointer(true);
+            self.swallow_escape.set(true);
             return Some(0);
         }
         let target = self.key_target(window);
@@ -46,6 +47,9 @@ impl Shared {
     }
 
     pub(super) fn key_up(&self, window: WindowId, msg: Msg, system: bool) -> Option<isize> {
+        if Key::from_code(msg.wparam as u16) == Key::ESCAPE && self.swallow_escape.take() {
+            return Some(0);
+        }
         let event = Event::KeyUp {
             key: Key::from_code(msg.wparam as u16),
             modifiers: window::modifiers(),
@@ -59,6 +63,9 @@ impl Shared {
     /// the high half waits for its low half. Control characters are keys, not
     /// text.
     pub(super) fn character(&self, window: WindowId, unit: u16) {
+        if unit == 0x1B && self.swallow_escape.get() {
+            return;
+        }
         let character = if (0xD800..0xDC00).contains(&unit) {
             self.high_surrogate.set(unit);
             return;

@@ -146,4 +146,16 @@ mod tests {
         let bold = TextParams { weight: 700, ..p };
         assert_ne!(raw("Cache me", &bold, 100.0), Some(first), "another weight");
     }
+
+    #[test]
+    fn a_full_cache_is_emptied_and_still_answers_correctly() {
+        let p = params();
+        let first = raw("kept?", &p, 100.0).expect("a layout");
+        for i in 0..=MAX_LAYOUTS {
+            raw(&format!("filler {i}"), &p, 100.0).expect("a layout");
+        }
+        let again = raw("kept?", &p, 100.0).expect("a layout");
+        assert_ne!(first, again, "emptied: shaped anew");
+        assert_eq!(raw("kept?", &p, 100.0), Some(again), "and kept again");
+    }
 }
