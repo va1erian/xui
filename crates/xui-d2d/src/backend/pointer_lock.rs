@@ -12,6 +12,7 @@ impl Shared {
     /// Hides and pins the cursor for `id`. A lock the system cannot give
     /// (no window, no raw input) never starts.
     pub(super) fn lock_pointer(&self, id: WidgetId) {
+        self.swallow_escape.set(false);
         self.unlock_pointer(false);
         let Some(hwnd) = self.window_of(id).and_then(|w| self.hwnd_of(w)) else {
             return;

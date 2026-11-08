@@ -253,7 +253,10 @@ impl Shared {
             }
             WM_LBUTTONUP | WM_RBUTTONUP | WM_MBUTTONUP | WM_XBUTTONUP => {
                 self.pointer(window, button_event(msg, x, y, modifiers)?);
-                if msg.wparam & BUTTON_BITS == 0 && self.set_grabbed(id, false) {
+                if msg.wparam & BUTTON_BITS == 0
+                    && self.set_grabbed(id, false)
+                    && self.captured.get().is_none()
+                {
                     window::release_capture();
                 }
                 Some(0)

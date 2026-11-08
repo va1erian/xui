@@ -20,6 +20,11 @@ impl Shared {
     pub(super) fn key_down(&self, window: WindowId, msg: Msg, system: bool) -> Option<isize> {
         let key = Key::from_code(msg.wparam as u16);
         let modifiers = window::modifiers();
+        if key == Key::ESCAPE && self.swallow_escape.get() {
+            // The Esc that ended the lock, still held: its repeats stop here too.
+            return Some(0);
+        }
+        self.swallow_escape.set(false);
         if key == Key::ESCAPE
             && self
                 .locked

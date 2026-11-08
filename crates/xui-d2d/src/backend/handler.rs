@@ -156,12 +156,14 @@ impl Shared {
                 None
             }
             WM_KILLFOCUS => {
+                self.swallow_escape.set(false);
                 self.unlock_window(window, true);
                 None
             }
             WM_ACTIVATE => {
                 let active = msg.wparam & 0xFFFF != 0;
                 if !active {
+                    self.swallow_escape.set(false);
                     self.unlock_window(window, true);
                 }
                 let minimized = (msg.wparam >> 16) & 0xFFFF != 0;
