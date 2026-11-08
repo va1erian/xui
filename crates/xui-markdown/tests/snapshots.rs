@@ -177,3 +177,29 @@ fn a_view_built_at_no_size_draws_once_it_is_given_one() {
         .count();
     assert!(ink > 200, "the heading painted once sized ({ink} pixels)");
 }
+
+#[test]
+fn a_selection_paints_behind_the_text_in_the_theme_colour() {
+    let plain = render(Theme::light(), |_| {});
+    let selected = render(Theme::light(), |view| view.select_all());
+    save("markdown-selection-light.png", &selected);
+    save(
+        "markdown-selection-dark.png",
+        &render(Theme::dark(), |view| view.select_all()),
+    );
+    let theme = Theme::light();
+    let tint = |p: [u8; 4]| {
+        let (a, b) = (theme.selection, theme.selection_unfocused);
+        p[..3] == [a.r, a.g, a.b] || p[..3] == [b.r, b.g, b.b]
+    };
+    let count = |image: &Image| {
+        (0..image.size().0)
+            .flat_map(|x| (0..image.size().1).map(move |y| (x, y)))
+            .filter(|&(x, y)| image.pixel(x, y).is_some_and(tint))
+            .count()
+    };
+    assert!(
+        count(&selected) > count(&plain) + 5_000,
+        "the selection shows"
+    );
+}

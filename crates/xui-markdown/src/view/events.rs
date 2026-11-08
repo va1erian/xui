@@ -1,11 +1,14 @@
 #![forbid(unsafe_code)]
 
-//! Pointer, wheel and keyboard input: scrolling, the scrollbar and links.
+//! Input: the pointer (in [`pointer`](super::pointer)), the wheel and the
+//! keyboard, mapped to scrolling, selection, copying and links.
 
 use xui_core::backend::{Cursor, Event};
 use xui_core::geometry::{Point, Rect};
 use xui_core::message::{Key, MouseButton};
 
+use super::pointer;
+use super::selection::Selection;
 use super::state::{State, WHEEL_DIP};
 
 /// What handling an event asks of the widget around it.
@@ -18,8 +21,14 @@ pub(crate) struct Out {
     /// The layout was dropped (a new size): lay the document out again.
     pub relayout: bool,
     pub cursor: Option<Cursor>,
-    /// A link was clicked: its destination ([`Document::link`]).
+    /// A link was clicked: its destination ([`Document::link`](crate::Document::link)).
     pub link: Option<String>,
+    /// Put the selected text on the clipboard.
+    pub copy: bool,
+    /// The context menu was asked for at this client point.
+    pub context: Option<Point>,
+    /// A drag is held past an edge: keep scrolling on a timer.
+    pub autoscroll: bool,
 }
 
 /// Handles `event`, or returns `None` when the view has no use for it.
@@ -32,30 +41,47 @@ pub(crate) fn handle(state: &mut State, event: &Event) -> Option<Out> {
             out.invalidate = true;
             out.relayout = true;
         }
-        Event::SetFocus => state.focused = true,
-        Event::KillFocus => state.focused = false,
+        Event::SetFocus | Event::KillFocus => {
+            // The selection's colour follows the focus.
+            state.focused = matches!(event, Event::SetFocus);
+            out.invalidate = !state.selection.is_empty();
+        }
         Event::MouseDown {
             x,
             y,
             button: MouseButton::Left,
+            modifiers,
+        } => pointer::press(state, Point::new(x, y), modifiers.shift, &mut out),
+        Event::MouseDoubleClick {
+            x,
+            y,
+            button: MouseButton::Left,
             ..
-        } => press(state, Point::new(x, y), &mut out),
-        Event::MouseMove { x, y, .. } => {
-            if state.drag_bar(y) {
-                out.invalidate = true;
-            } else {
-                hover(state, Point::new(x, y), &mut out);
+        } => pointer::double_click(state, Point::new(x, y), &mut out),
+        Event::MouseDown {
+            x,
+            y,
+            button: MouseButton::Right,
+            ..
+        } => {
+            let point = Point::new(x, y);
+            out.focus = true;
+            if !state.on_bar(point) {
+                out.context = Some(point);
             }
         }
+        Event::MouseMove { x, y, .. } => pointer::moved(state, Point::new(x, y), &mut out),
         Event::MouseUp {
             x,
             y,
             button: MouseButton::Left,
             ..
-        } => release(state, Point::new(x, y), &mut out),
+        } => pointer::release(state, Point::new(x, y), &mut out),
         Event::CaptureChanged => {
             state.bar_drag = None;
             state.pressed = None;
+            state.dragging = false;
+            state.drag_point = None;
             out.invalidate = true;
         }
         Event::MouseWheel {
@@ -68,16 +94,29 @@ pub(crate) fn handle(state: &mut State, event: &Event) -> Option<Out> {
             let step = f32::from(delta) / 120.0 * WHEEL_DIP * state.dpi as f32 / 96.0;
             state.scroll_by(-step);
             // The text moved under a still pointer: a link may have come or
-            // gone there.
-            hover(state, Point::new(x, y), &mut out);
+            // gone there, and a drag in progress follows it.
+            pointer::moved(state, Point::new(x, y), &mut out);
             out.invalidate = true;
         }
         Event::KeyDown {
-            key, system: false, ..
+            key,
+            modifiers,
+            system: false,
+            ..
         } if state.focused => {
             let line = WHEEL_DIP / 2.0 * state.dpi as f32 / 96.0;
             let page = state.viewport() * 0.9;
             match key {
+                Key::A if modifiers.ctrl => {
+                    let end = state.layout.doc().text().len() as u32;
+                    state.selection = Selection::of(0..end);
+                    state.anchored = true;
+                }
+                Key::C | Key::INSERT if modifiers.ctrl => {
+                    out.copy = !state.selection.is_empty();
+                    return Some(out);
+                }
+                Key::ESCAPE if !state.selection.is_empty() => state.clear_selection(),
                 Key::UP => state.scroll_by(-line),
                 Key::DOWN => state.scroll_by(line),
                 Key::PAGE_UP => state.scroll_by(-page),
@@ -91,46 +130,4 @@ pub(crate) fn handle(state: &mut State, event: &Event) -> Option<Out> {
         _ => return None,
     }
     Some(out)
-}
-
-fn press(state: &mut State, point: Point, out: &mut Out) {
-    out.focus = true;
-    if state.on_bar(point) {
-        if state.press_bar(point.y) {
-            out.capture = Some(true);
-        }
-        out.invalidate = true;
-        return;
-    }
-    state.pressed = state.link_at(point);
-    if state.pressed.is_some() {
-        out.capture = Some(true);
-    }
-}
-
-fn hover(state: &mut State, point: Point, out: &mut Out) {
-    let link = state.link_at(point);
-    if link.is_some() != state.hover.is_some() {
-        out.cursor = Some(if link.is_some() {
-            Cursor::Hand
-        } else {
-            Cursor::Default
-        });
-    }
-    state.hover = link;
-}
-
-fn release(state: &mut State, point: Point, out: &mut Out) {
-    if state.bar_drag.take().is_some() {
-        out.capture = Some(false);
-        out.invalidate = true;
-        return;
-    }
-    let Some(pressed) = state.pressed.take() else {
-        return;
-    };
-    out.capture = Some(false);
-    if state.link_at(point) == Some(pressed) {
-        out.link = Some(state.layout.doc().link(pressed).to_owned());
-    }
 }

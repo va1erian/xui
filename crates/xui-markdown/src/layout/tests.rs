@@ -6,7 +6,9 @@
 //! wide and a line 18 px tall; a code character is 6.5 px and its line 16 px.
 
 mod blocks;
+mod code;
 mod flow;
+mod hit;
 mod tables;
 mod viewport;
 

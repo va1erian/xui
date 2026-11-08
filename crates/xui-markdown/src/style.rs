@@ -9,6 +9,7 @@
 use xui_core::backend::FontSpec;
 use xui_core::{Color, Dip, Theme};
 
+use crate::highlight::CodeClass;
 use crate::model::Inline;
 
 /// Fonts, sizes and spacing of a [`MarkdownView`](crate::MarkdownView), in
@@ -122,12 +123,69 @@ pub(crate) enum Role {
     Surface,
     /// Rules, quote bars, table grids, heading underlines.
     Border,
+    /// A highlighted span in a code block.
+    Code(CodeClass),
+}
+
+/// The colours of highlighted code, one set per theme brightness.
+///
+/// Without one, code colours come from the theme's tokens
+/// ([`CodePalette::from_theme`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct CodePalette {
+    /// The colours on a light theme.
+    pub light: CodeColors,
+    /// The colours on a dark theme.
+    pub dark: CodeColors,
+}
+
+/// A colour for each [`CodeClass`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct CodeColors {
+    /// Keywords.
+    pub keyword: Color,
+    /// Function and message names.
+    pub function: Color,
+    /// String literals.
+    pub string: Color,
+    /// Comments.
+    pub comment: Color,
+    /// Number literals.
+    pub number: Color,
+    /// Type names.
+    pub type_name: Color,
+}
+
+impl CodeColors {
+    /// The colour of `class`.
+    pub fn of(&self, class: CodeClass) -> Color {
+        match class {
+            CodeClass::Keyword => self.keyword,
+            CodeClass::Function => self.function,
+            CodeClass::String => self.string,
+            CodeClass::Comment => self.comment,
+            CodeClass::Number => self.number,
+            CodeClass::Type => self.type_name,
+        }
+    }
 }
 
 impl Role {
-    /// The colour of this role in `theme`.
-    pub(crate) fn color(self, theme: &Theme) -> Color {
+    /// The colour of this role in `theme`, code coloured by `palette` when
+    /// the app gave one.
+    pub(crate) fn color(self, theme: &Theme, palette: Option<&CodePalette>) -> Color {
         match self {
+            Role::Code(class) => {
+                let palette = palette
+                    .copied()
+                    .unwrap_or_else(|| CodePalette::from_theme(theme));
+                let colors = if theme.is_dark {
+                    palette.dark
+                } else {
+                    palette.light
+                };
+                colors.of(class)
+            }
             Role::Text => theme.text,
             Role::Weak => theme.text_secondary,
             Role::Link => theme.accent,
@@ -144,6 +202,25 @@ impl Role {
             Role::Weak
         } else {
             Role::Text
+        }
+    }
+}
+
+impl CodePalette {
+    /// Code colours from the theme's own tokens, the same for its light and
+    /// dark variants: the theme already picks them for its brightness.
+    pub fn from_theme(theme: &Theme) -> CodePalette {
+        let colors = CodeColors {
+            keyword: theme.accent,
+            function: theme.accent,
+            string: theme.warning,
+            comment: theme.text_secondary,
+            number: theme.danger,
+            type_name: theme.accent,
+        };
+        CodePalette {
+            light: colors,
+            dark: colors,
         }
     }
 }

@@ -9,17 +9,22 @@ use std::time::Duration;
 
 use xui_core::app::Ui;
 use xui_core::backend::{TimerId, WidgetId};
+use xui_core::geometry::Point;
 use xui_core::widget::Control;
 
 use super::events::Out;
+use super::pointer;
 use super::state::State;
 
 /// How often the timer lays out more of a long document, in milliseconds.
 const TICK_MS: u32 = 30;
 /// How long one tick may spend laying out.
 const SLICE: Duration = Duration::from_millis(4);
+/// How often a drag held past an edge scrolls, in milliseconds.
+const AUTOSCROLL_MS: u32 = 40;
 
 pub(super) type LinkMapper<M> = Box<dyn Fn(&str) -> Option<M>>;
+pub(super) type ContextMapper<M> = Box<dyn Fn(Point) -> Option<M>>;
 
 /// What the widget, its painter, its event mapper and its timer share. The
 /// callbacks hold it weakly, so dropping the view drops it and its node.
@@ -30,8 +35,11 @@ pub(super) struct Shared<M: 'static> {
     pub(super) ui: Ui<M>,
     pub(super) id: WidgetId,
     pub(super) on_link: RefCell<Option<LinkMapper<M>>>,
+    pub(super) on_context: RefCell<Option<ContextMapper<M>>>,
     /// The timer laying out the rest of the document, while there is any.
     pub(super) timer: Cell<Option<TimerId>>,
+    /// The timer scrolling a drag held past an edge, while it is.
+    pub(super) drag_timer: Cell<Option<TimerId>>,
 }
 
 impl<M: 'static> Shared<M> {
@@ -106,9 +114,53 @@ impl<M: 'static> Shared<M> {
                 }
             }
         }
+        if out.autoscroll {
+            self.start_autoscroll();
+        }
+        if out.copy {
+            self.copy();
+        }
+        if let Some(point) = out.context
+            && message.is_none()
+        {
+            message = self.on_context.borrow().as_ref().and_then(|map| map(point));
+        }
         if invalidate {
             self.ui.invalidate(self.id);
         }
         message
+    }
+
+    /// Puts the selected text on the clipboard. Returns whether there was
+    /// any.
+    pub(super) fn copy(&self) -> bool {
+        let text = {
+            let state = self.state.borrow();
+            if state.selection.is_empty() {
+                return false;
+            }
+            state.layout.doc().plain_text(state.selection.range())
+        };
+        self.ui.set_clipboard_text(&text);
+        true
+    }
+
+    /// Keeps a drag held past an edge scrolling, a step a tick, until the
+    /// pointer comes back or the drag ends.
+    fn start_autoscroll(&self) {
+        if self.drag_timer.get().is_some() {
+            return;
+        }
+        let me = self.me.clone();
+        let timer = self.control.set_timer(AUTOSCROLL_MS, move || {
+            let shared = me.upgrade()?;
+            let more = pointer::autoscroll(&mut shared.state.borrow_mut());
+            shared.ui.invalidate(shared.id);
+            if !more && let Some(timer) = shared.drag_timer.take() {
+                shared.control.kill_timer(timer);
+            }
+            None
+        });
+        self.drag_timer.set(timer);
     }
 }

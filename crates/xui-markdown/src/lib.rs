@@ -12,12 +12,15 @@
 //!
 //! See `docs/plans/markdown-view.md` for the design.
 
+mod copy;
+pub mod highlight;
 mod layout;
 pub mod model;
 mod parse;
 mod style;
 mod view;
 
+pub use highlight::{CodeClass, CodeSpan, Highlighter};
 pub use model::{Align, Block, BlockKind, Document, Inline, Marker, Span, Table};
-pub use style::MarkdownStyle;
+pub use style::{CodeColors, CodePalette, MarkdownStyle};
 pub use view::MarkdownView;

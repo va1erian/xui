@@ -7,10 +7,15 @@
 //! turn out wrong, the anchor's block stays where it was on screen instead of
 //! the text jumping.
 
+use std::time::Instant;
+
+use xui_core::backend::Cursor;
 use xui_core::geometry::{Point, Rect};
 use xui_core::widget::scrollbar::{self, Orientation, Scroll, THICKNESS, TrackHit};
 
+use super::selection::{RectCache, Selection};
 use crate::layout::Layout;
+use crate::style::CodePalette;
 
 /// One wheel notch, in design units.
 pub(crate) const WHEEL_DIP: f32 = 48.0;
@@ -41,6 +46,25 @@ pub(crate) struct State {
     /// The link pressed, followed if released over.
     pub pressed: Option<u32>,
     pub focused: bool,
+    /// The app's code colours, if it gave any.
+    pub palette: Option<CodePalette>,
+    pub selection: Selection,
+    /// Whether the selection has an anchor the user set (a press, a word,
+    /// Ctrl+A), which Shift+click extends.
+    pub anchored: bool,
+    /// The selection's rectangles, kept between paints.
+    pub rects: RectCache,
+    /// A text selection is being dragged.
+    pub dragging: bool,
+    /// Where the pointer is during a selection drag, for scrolling while it
+    /// is held past an edge.
+    pub drag_point: Option<Point>,
+    /// Where the left button went down, to tell a click from a drag.
+    pub press_at: Option<Point>,
+    /// When and where the last double-click was, to spot a triple-click.
+    pub last_double: Option<(Instant, Point)>,
+    /// The pointer shape last set.
+    pub cursor: Cursor,
 }
 
 impl State {
@@ -59,6 +83,15 @@ impl State {
             hover: None,
             pressed: None,
             focused: false,
+            palette: None,
+            selection: Selection::default(),
+            anchored: false,
+            rects: RectCache::default(),
+            dragging: false,
+            drag_point: None,
+            press_at: None,
+            last_double: None,
+            cursor: Cursor::Default,
         }
     }
 
@@ -166,6 +199,13 @@ impl State {
         self.settle();
     }
 
+    /// Clears the selection and its anchor, so a Shift+click after it starts
+    /// a new one.
+    pub fn clear_selection(&mut self) {
+        self.selection = Selection::default();
+        self.anchored = false;
+    }
+
     /// Starts over at the top, for a new document or style.
     pub fn reset_scroll(&mut self) {
         self.anchor = (0, 0.0);
@@ -173,6 +213,10 @@ impl State {
         self.scroll = 0.0;
         self.hover = None;
         self.pressed = None;
+        self.clear_selection();
+        self.dragging = false;
+        self.drag_point = None;
+        self.bar_drag = None;
     }
 
     /// The link at the client pixel `point`.
@@ -183,6 +227,20 @@ impl State {
         let x = (point.x - self.bounds.left) as f32 - self.pad;
         let y = (point.y - self.bounds.top) as f32 + self.scroll - self.pad;
         self.layout.link_at(x, y)
+    }
+
+    /// The document position nearest the client pixel `point`, which may lie
+    /// outside the view (a drag past its edge).
+    pub fn pos_at(&mut self, point: Point) -> u32 {
+        self.hit(point).map_or(0, |(_, pos)| pos)
+    }
+
+    /// The block under the client pixel `point` and the position there, or
+    /// `None` when the document has no blocks.
+    pub fn hit(&mut self, point: Point) -> Option<(usize, u32)> {
+        let x = (point.x - self.bounds.left) as f32 - self.pad;
+        let y = (point.y - self.bounds.top) as f32 + self.scroll - self.pad;
+        self.layout.hit(x, y)
     }
 
     pub fn bar_scroll(&mut self) -> Scroll {
