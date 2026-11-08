@@ -94,8 +94,8 @@ fn live<M: 'static>(ui: &Ui<M>, shared: &Shared<M>, field: Field) {
         return;
     };
     let text = edit.text();
-    // A native field reports the text this panel itself just wrote (from
-    // `sync`); ignore it rather than re-deriving a rounded colour from it.
+    // The field still holds the text this panel itself wrote (from `sync`);
+    // ignore it rather than re-deriving a rounded colour from it.
     if text == field.format(shared.hsv.get()) {
         return;
     }
