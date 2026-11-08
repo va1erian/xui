@@ -5,9 +5,9 @@
 use std::rc::Rc;
 
 use xui_core::backend::{
-    Backend, BackendError, Cursor, Event, FileDialogOutcome, FileDialogRequest, FontSpec, ImplKind,
-    NativeSurface, NodeKind, NodeSpec, Painter, ParentRef, PlatformSpec, Result, TextLayout,
-    TextMetrics, TextShaper, TextStyle, TimerId, Waker, WidgetId, WindowId,
+    Backend, BackendError, Cursor, Event, FileDialogOutcome, FileDialogRequest, FontSpec,
+    NativeSurface, NodeSpec, Painter, ParentRef, PlatformSpec, Result, TextLayout, TextMetrics,
+    TextShaper, TextStyle, TimerId, Waker, WidgetId, WindowId,
 };
 use xui_core::router::WidgetHost;
 use xui_core::{Dip, Rect, Theme};
@@ -413,10 +413,6 @@ impl Backend for D2dBackend {
             sys::kill_timer(hwnd, id.0);
         }
         self.shared.timers.borrow_mut().remove(&id.0);
-    }
-
-    fn supports(&self, _kind: NodeKind) -> ImplKind {
-        ImplKind::Painted
     }
 }
 

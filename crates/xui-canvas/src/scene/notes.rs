@@ -264,7 +264,6 @@ pub(crate) fn event_marks_target(event: &xui_core::backend::Event) -> bool {
             | Event::KeyDown { .. }
             | Event::KeyUp { .. }
             | Event::Char(_)
-            | Event::TextChanged
             | Event::SetFocus
             | Event::KillFocus
     )

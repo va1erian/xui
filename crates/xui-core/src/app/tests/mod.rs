@@ -4,7 +4,7 @@ use std::rc::Rc;
 use super::{App, Core, Runtime, Ui, run_app};
 use crate::backend::headless::HeadlessBackend;
 use crate::backend::{
-    Backend, BackendError, Event, ImplKind, NodeKind, NodeSpec, Painter, ParentRef, PlatformSpec,
+    Backend, BackendError, Event, NodeKind, NodeSpec, Painter, ParentRef, PlatformSpec,
     Result as BackendResult, TextMetrics, TextStyle, TimerId, Waker, WidgetId, WindowId,
 };
 use crate::geometry::Rect;

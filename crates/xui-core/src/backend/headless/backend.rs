@@ -7,9 +7,9 @@ use std::rc::Rc;
 use super::text::HeadlessShaper;
 use super::{HeadlessBackend, Node, SinkWindow, remove_orphans};
 use crate::backend::{
-    Backend, BackendError, Event, FileDialogOutcome, FileDialogRequest, FontSpec, ImplKind,
-    NodeKind, NodeSpec, Painter, ParentRef, PlatformSpec, Result, TextLayout, TextMetrics,
-    TextShaper, TextStyle, TimerId, Waker, WidgetId, WindowId,
+    Backend, BackendError, Event, FileDialogOutcome, FileDialogRequest, FontSpec, NodeSpec,
+    Painter, ParentRef, PlatformSpec, Result, TextLayout, TextMetrics, TextShaper, TextStyle,
+    TimerId, Waker, WidgetId, WindowId,
 };
 use crate::geometry::Rect;
 use crate::image::Image;
@@ -307,8 +307,4 @@ impl Backend for HeadlessBackend {
     }
 
     fn kill_timer(&self, _window: WindowId, _id: TimerId) {}
-
-    fn supports(&self, _kind: NodeKind) -> ImplKind {
-        ImplKind::Painted
-    }
 }

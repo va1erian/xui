@@ -191,7 +191,6 @@ fn marks_target(event: &Event) -> bool {
             | Event::KeyDown { .. }
             | Event::KeyUp { .. }
             | Event::Char(_)
-            | Event::TextChanged
             | Event::SetFocus
             | Event::KillFocus
     )

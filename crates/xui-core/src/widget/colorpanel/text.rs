@@ -80,7 +80,7 @@ pub(crate) fn on_event<M: 'static>(
             key: Key::RETURN, ..
         }
         | Event::KillFocus => commit(ui, shared, field),
-        Event::Char(_) | Event::TextChanged | Event::KeyDown { .. } => {
+        Event::Char(_) | Event::KeyDown { .. } => {
             live(ui, shared, field);
             None
         }

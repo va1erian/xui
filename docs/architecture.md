@@ -54,8 +54,7 @@ the platform (winit + softbuffer/tiny-skia · a headless surface)
   a worker can use), `dpi`, `client_rect`.
 - **Runtime** — `set_theme`, `set_timer`/`kill_timer`,
   `prefers_reduced_motion` (the system's animation setting; default `false`,
-  meaning no preference; see [Motion](motion.md)), and
-  `supports(NodeKind) -> ImplKind`.
+  meaning no preference; see [Motion](motion.md)).
 
 Methods a backend cannot meaningfully provide have defaults: `capture` and
 `run_modal` return `BackendError::Unsupported`, `native_window` returns `None`,
@@ -73,10 +72,8 @@ instead of being built at 96 DPI and rescaled afterwards. The default
 implementation calls `on_ready` and then `run`.
 
 `NodeKind` is the portable widget vocabulary (`Label`, `Button`, `Edit`,
-`ListView`, `ScrollView`, `Panel`, `Custom`, …). `supports` tells the front
-layer whether the backend provides a real control for a kind (`ImplKind::Native`)
-or expects the front layer to paint it (`ImplKind::Painted`). `WinitBackend` and `OffscreenBackend` report `Painted`
-for everything.
+`ListView`, `ScrollView`, `Panel`, `Custom`, …). Every kind is painted by the
+front layer: xui owns its widgets and no backend hosts native controls.
 
 ### Identity
 
@@ -90,7 +87,7 @@ for everything.
 ## Events, routing and the message model
 
 A backend decodes native input into a portable `Event` (`MouseDown`,
-`MouseMove`, `KeyDown`, `Char`, `TextChanged`, `Resize`, `Paint`, `Timer`,
+`MouseMove`, `KeyDown`, `Char`, `Resize`, `Paint`, `Timer`,
 `DpiChanged`, `Close`, `Wake`, …) and delivers it to the `WidgetId` it targets.
 Window-level events that belong to no widget target `WidgetId::NONE`.
 
@@ -224,7 +221,7 @@ crates/xui-core/src/
   backend/          the Backend trait and its vocabulary
     mod.rs          Backend, Painter, Waker, BackendError, Result
     ids.rs          WindowId / WidgetId
-    node.rs         NodeKind, NodeSpec, ParentRef, ImplKind
+    node.rs         NodeKind, NodeSpec, ParentRef
     event.rs        Event, TimerId
     canvas.rs       the Canvas draw trait and text styles
     paint.rs        Rgba, gradients, strokes, corners

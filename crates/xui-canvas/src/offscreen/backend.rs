@@ -5,9 +5,9 @@
 use std::rc::Rc;
 
 use xui_core::backend::{
-    Backend, BackendError, Event, FontSpec, ImplKind, NodeKind, NodeSpec, Painter, ParentRef,
-    PlatformSpec, Result as BackendResult, TextLayout, TextMetrics, TextShaper, TextStyle, TimerId,
-    Waker, WidgetId, WindowId,
+    Backend, BackendError, Event, FontSpec, NodeSpec, Painter, ParentRef, PlatformSpec,
+    Result as BackendResult, TextLayout, TextMetrics, TextShaper, TextStyle, TimerId, Waker,
+    WidgetId, WindowId,
 };
 use xui_core::image::Image;
 use xui_core::router::WidgetHost;
@@ -257,8 +257,4 @@ impl Backend for OffscreenBackend {
     }
 
     fn kill_timer(&self, _window: WindowId, _id: TimerId) {}
-
-    fn supports(&self, _kind: NodeKind) -> ImplKind {
-        ImplKind::Painted
-    }
 }

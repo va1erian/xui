@@ -6,19 +6,15 @@
 //! edits the same way. A form designer draws one to capture a property; a
 //! normal app maps each change to its `Msg` through [`Edit::on_change`].
 //!
-//! A backend that hosts a native control ([`ImplKind::Native`], as the Win32
-//! backend does for a real `EDIT`) draws and edits the field itself, including
-//! selection, clipboard and undo; the widget then draws nothing and syncs its
-//! text from the control's change events. Otherwise
-//! ([`Painted`](ImplKind::Painted)) the widget paints the field and handles its
-//! own input through [`keys`]. [`Edit::password`] masks it for a secret.
+//! The widget paints the field and handles its own input through [`keys`].
+//! [`Edit::password`] masks it for a secret.
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use super::control::{Control, HasText};
 use crate::app::Ui;
-use crate::backend::{Cursor, Event, ImplKind, NodeKind, NodeSpec, Result, TextStyle};
+use crate::backend::{Cursor, Event, NodeKind, NodeSpec, Result, TextStyle};
 use crate::color::Color;
 use crate::geometry::Rect;
 use crate::message::MouseButton;
@@ -48,18 +44,12 @@ const PADDING: Dip = Dip(4.0);
 pub struct Edit<M: 'static> {
     control: Control<M>,
     model: Rc<RefCell<EditModel>>,
-    /// The cue banner drawn while the text is empty (a native control shows
-    /// its own).
+    /// The cue banner drawn while the text is empty.
     cue: Rc<RefCell<String>>,
     /// The horizontal scroll offset in pixels, so the caret stays visible.
     scroll: Rc<Cell<i32>>,
     /// Whether the text is masked, as a password field's is.
     masked: Rc<Cell<bool>>,
-    /// Whether the backend hosts a native control that edits itself.
-    native: bool,
-    /// Set while the widget itself sets the native text, so the resulting
-    /// change notification does not loop back through `on_change`.
-    setting: Rc<Cell<bool>>,
     on_change: ChangeMapper<M>,
 }
 
@@ -79,7 +69,6 @@ impl<M: 'static> Clipboard for UiClipboard<'_, M> {
 impl<M: 'static> Edit<M> {
     /// Creates a field showing `text` at `bounds`.
     pub(crate) fn new(ui: &Ui<M>, bounds: Rect, text: &str) -> Result<Edit<M>> {
-        let native = ui.supports(NodeKind::Edit) == ImplKind::Native;
         let control = Control::new(
             ui,
             &NodeSpec::new(NodeKind::Edit, bounds).text(text).tab_stop(),
@@ -89,11 +78,10 @@ impl<M: 'static> Edit<M> {
         let cue = Rc::new(RefCell::new(String::new()));
         let scroll = Rc::new(Cell::new(0));
         let focused = Rc::new(Cell::new(false));
-        let setting = Rc::new(Cell::new(false));
         let masked = Rc::new(Cell::new(false));
         let on_change: ChangeMapper<M> = Rc::new(RefCell::new(None));
 
-        if !native {
+        {
             let model = Rc::clone(&model);
             let cue = Rc::clone(&cue);
             let scroll = Rc::clone(&scroll);
@@ -118,15 +106,13 @@ impl<M: 'static> Edit<M> {
             let model = Rc::clone(&model);
             let focused = Rc::clone(&focused);
             let scroll = Rc::clone(&scroll);
-            let setting = Rc::clone(&setting);
             let masked = Rc::clone(&masked);
             let on_change = Rc::clone(&on_change);
             let dragging = Rc::new(Cell::new(false));
             let ui = ui.clone();
             let id = control.id();
             control.on_events(move |event| {
-                // In design mode the editor handles input, not the field; a
-                // native control's change notification still syncs the text.
+                // In design mode the editor handles input, not the field.
                 if ui.is_design_mode() && event.is_input() {
                     return None;
                 }
@@ -176,21 +162,17 @@ impl<M: 'static> Edit<M> {
                     } => {
                         focused.set(true);
                         ui.focus(id);
-                        if !native {
-                            let pos = char_at(*x);
-                            let mut model = model.borrow_mut();
-                            model.move_to(pos, modifiers.shift);
-                            drop(model);
-                            dragging.set(true);
-                            ui.set_capture(id);
-                        }
+                        let pos = char_at(*x);
+                        model.borrow_mut().move_to(pos, modifiers.shift);
+                        dragging.set(true);
+                        ui.set_capture(id);
                         redraw = true;
                     }
                     Event::MouseDoubleClick {
                         x,
                         button: MouseButton::Left,
                         ..
-                    } if !native => {
+                    } => {
                         let pos = char_at(*x);
                         // A run would reveal where a masked field's spaces are.
                         if masked.get() {
@@ -202,7 +184,7 @@ impl<M: 'static> Edit<M> {
                         ui.release_capture();
                         redraw = true;
                     }
-                    Event::MouseMove { x, .. } if !native && dragging.get() => {
+                    Event::MouseMove { x, .. } if dragging.get() => {
                         let pos = char_at(*x);
                         model.borrow_mut().move_to(pos, true);
                         redraw = true;
@@ -210,33 +192,16 @@ impl<M: 'static> Edit<M> {
                     Event::MouseUp {
                         button: MouseButton::Left,
                         ..
-                    } if !native => {
+                    } => {
                         dragging.set(false);
                         ui.release_capture();
                     }
-                    Event::MouseLeave if !native && dragging.get() => {
+                    Event::MouseLeave if dragging.get() => {
                         dragging.set(false);
                         ui.release_capture();
-                    }
-                    // A native control edits itself and reports the change; read
-                    // the new text back and raise it.
-                    Event::TextChanged if native => {
-                        let value = ui.text(id);
-                        model.borrow_mut().set_text(&value);
-                        // A change the widget itself made is not a user edit.
-                        if setting.get() {
-                            return None;
-                        }
-                        let mapper = on_change.borrow();
-                        if let Some(mapper) = mapper.as_ref() {
-                            return mapper(&value);
-                        }
-                        return None;
                     }
                     // Only the focused field edits.
-                    Event::Char(character)
-                        if !native && focused.get() && !character.is_control() =>
-                    {
+                    Event::Char(character) if focused.get() && !character.is_control() => {
                         model.borrow_mut().insert_char(*character);
                         changed = true;
                         redraw = true;
@@ -246,7 +211,7 @@ impl<M: 'static> Edit<M> {
                         modifiers,
                         system,
                         ..
-                    } if !native && focused.get() && !*system => {
+                    } if focused.get() && !*system => {
                         let clipboard = UiClipboard(&ui);
                         let result = {
                             let mut model = model.borrow_mut();
@@ -283,21 +248,14 @@ impl<M: 'static> Edit<M> {
             cue,
             scroll,
             masked,
-            native,
-            setting,
             on_change,
         })
     }
 
-    /// Shows `cue` as a placeholder while the field is empty (a native cue
-    /// banner where the backend hosts one). Chainable.
+    /// Shows `cue` as a placeholder while the field is empty. Chainable.
     pub fn cue(self, cue: &str) -> Edit<M> {
         *self.cue.borrow_mut() = cue.to_string();
-        if self.native {
-            self.control.ui().set_cue(self.control.id(), cue);
-        } else {
-            self.control.invalidate();
-        }
+        self.control.invalidate();
         self
     }
 
@@ -309,15 +267,10 @@ impl<M: 'static> Edit<M> {
     /// to Ctrl+arrows, Ctrl+Backspace/Delete and double-click; and reports its
     /// `text` property as bullets. The cue still shows while it is empty, and
     /// [`HasText::text`] and [`on_change`](Edit::on_change) still deliver the
-    /// real text. A native Win32 `EDIT` switches to its own password style,
-    /// which masks and refuses copy and cut the same way.
+    /// real text.
     pub fn password(self, password: bool) -> Edit<M> {
         self.masked.set(password);
-        if self.native {
-            self.control.ui().set_password(self.control.id(), password);
-        } else {
-            self.control.invalidate();
-        }
+        self.control.invalidate();
         self
     }
 
@@ -344,7 +297,7 @@ impl<M: 'static> Edit<M> {
     }
 
     /// Marks the field selected, so its painter draws an outline (a form
-    /// editor's selection). A native field draws no outline.
+    /// editor's selection).
     pub fn set_selected(&self, selected: bool) {
         self.control.set_selected(selected);
     }
@@ -362,16 +315,8 @@ impl<M: 'static> HasText for Edit<M> {
 
     fn set_text(&self, text: &str) {
         self.model.borrow_mut().set_text(text);
-        if self.native {
-            // Push to the control; its change notification is suppressed so
-            // `on_change` fires only for real edits.
-            self.setting.set(true);
-            self.control.set_text(text);
-            self.setting.set(false);
-        } else {
-            self.scroll.set(0);
-            self.control.invalidate();
-        }
+        self.scroll.set(0);
+        self.control.invalidate();
     }
 }
 

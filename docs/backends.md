@@ -40,7 +40,6 @@ use xui_canvas::WinitBackend;
 let backend: Rc<dyn Backend> = Rc::new(WinitBackend::new());
 ```
 
-- `supports` always returns `ImplKind::Painted`; there are no native controls.
 - Nodes are kept in creation order (later draws on top; `raise` moves a node
   last). Input is hit-tested and translated into the node's own coordinates.
 - DPI comes from the window's `scale_factor` (`round(scale × 96)`). The app is
@@ -108,8 +107,7 @@ xui_core::app("Hello")
     .run(|ui| { /* ... */ })
 ```
 
-- `supports` always returns `ImplKind::Painted`. `run_modal` is a nested
-  message loop and `file_dialog` the Common Item Dialog.
+- `run_modal` is a nested message loop and `file_dialog` the Common Item Dialog.
 - Covered: DPI (per-monitor v2) and `DpiChanged`, mouse with capture, keyboard
   and Tab traversal, timers, `wake`, clipboard text, system dark mode and
   reduced motion, cursors, the whole `Canvas` trait, text shaping,

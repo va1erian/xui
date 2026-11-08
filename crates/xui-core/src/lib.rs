@@ -34,9 +34,9 @@ pub use app::{App, Launch, Proxy, Ui, WindowHandle, app, run_app};
 
 pub use backend::{
     Backdrop, Backend, BackendError, Canvas, Cap, Corner, Dash, Decorations, Event, FontSpec,
-    GradientStop, ImplKind, LinearGradient, NativeWindowHandle, NodeKind, NodeOptions, NodeSpec,
-    Painter, ParentRef, PlatformSpec, RadialGradient, Rgba, Stroke, TextHit, TextLayout,
-    TextMetrics, TextShaper, TextStyle, TextVAlign, TimerId, WidgetId, WindowId,
+    GradientStop, LinearGradient, NativeWindowHandle, NodeKind, NodeOptions, NodeSpec, Painter,
+    ParentRef, PlatformSpec, RadialGradient, Rgba, Stroke, TextHit, TextLayout, TextMetrics,
+    TextShaper, TextStyle, TextVAlign, TimerId, WidgetId, WindowId,
 };
 pub use color::Color;
 pub use geometry::{Point, Rect, Size};

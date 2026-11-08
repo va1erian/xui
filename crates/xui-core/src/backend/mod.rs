@@ -39,7 +39,7 @@ pub use dialog::{FileDialogMode, FileDialogOutcome, FileDialogRequest, FileFilte
 pub use event::{Event, TimerId};
 pub use ids::{WidgetId, WindowId};
 pub use native::NativeWindowHandle;
-pub use node::{ImplKind, NodeKind, NodeOptions, NodeSpec, ParentRef};
+pub use node::{NodeKind, NodeOptions, NodeSpec, ParentRef};
 pub use paint::{
     Cap, Corner, Dash, GradientStop, Join, LinearGradient, PathGradient, RadialGradient, Rgba,
     Stroke,
@@ -264,8 +264,7 @@ pub trait Backend {
 
     /// Clips a node's descendants to `rect`, in the node's own coordinate
     /// space (relative to its top-left). `None` clears the clip. The node's own
-    /// painting is not clipped. A backend whose painted nodes are native child
-    /// windows already clips each child to its parent and may ignore it.
+    /// painting is not clipped.
     fn set_clip(&self, id: WidgetId, rect: Option<Rect>) {
         let _ = (id, rect);
     }
@@ -320,8 +319,7 @@ pub trait Backend {
     /// A backend that reports it does so from inside a `KillFocus` delivery,
     /// so a widget losing the focus can tell a move to one of its own nodes
     /// from one to somewhere else. A widget must still cover a backend that
-    /// answers `None` on its own (the Win32 backend does), as the menu does
-    /// with its own-move guard.
+    /// answers `None` on its own, as the menu does with its own-move guard.
     fn focus_holder(&self, window: WindowId) -> Option<WidgetId> {
         let _ = window;
         None
@@ -330,24 +328,7 @@ pub trait Backend {
     /// Replaces a node's text.
     fn set_text(&self, id: WidgetId, text: &str);
 
-    /// Sets a node's cue banner: the placeholder a text field shows while it
-    /// is empty. A backend hosting a native control forwards it (the Win32
-    /// `EDIT`'s `EM_SETCUEBANNER`); a painted field draws its own cue, so the
-    /// default does nothing.
-    fn set_cue(&self, id: WidgetId, cue: &str) {
-        let _ = (id, cue);
-    }
-
-    /// Masks a text field's characters, as a password field does, or shows
-    /// them again. A backend hosting a native control forwards it (the Win32
-    /// `EDIT`'s `EM_SETPASSWORDCHAR`, which also refuses copy and cut); a
-    /// painted field masks itself, so the default does nothing.
-    fn set_password(&self, id: WidgetId, password: bool) {
-        let _ = (id, password);
-    }
-
-    /// A node's current text; empty for a node that has none. A native control
-    /// answers from its own state.
+    /// A node's current text; empty for a node that has none.
     fn text(&self, id: WidgetId) -> String {
         let _ = id;
         String::new()
@@ -436,7 +417,7 @@ pub trait Backend {
     /// seen by the next call; ask when an animation starts rather than on every
     /// frame. The default is `false`: a backend that has no way to read the
     /// setting reports no preference rather than guessing one. Today only
-    /// Windows reads it (the Win32 backend and the windowed canvas backend);
+    /// Windows reads it (the Direct2D and windowed canvas backends);
     /// macOS, Linux and the headless backends report `false`.
     fn prefers_reduced_motion(&self) -> bool {
         false
@@ -451,8 +432,4 @@ pub trait Backend {
 
     /// Stops a timer started with [`Backend::set_timer`].
     fn kill_timer(&self, window: WindowId, id: TimerId);
-
-    /// Whether the backend provides a native widget for `kind`, or expects the
-    /// front layer to paint it.
-    fn supports(&self, kind: NodeKind) -> ImplKind;
 }

@@ -7,9 +7,9 @@ use std::time::Instant;
 
 use winit::window::Window;
 use xui_core::backend::{
-    Backend, BackendError, Cursor, Event, FontSpec, ImplKind, NodeKind, NodeSpec, Painter,
-    ParentRef, PlatformSpec, Result as BackendResult, TextLayout, TextMetrics, TextShaper,
-    TextStyle, TimerId, Waker, WidgetId, WindowId,
+    Backend, BackendError, Cursor, Event, FontSpec, NodeSpec, Painter, ParentRef, PlatformSpec,
+    Result as BackendResult, TextLayout, TextMetrics, TextShaper, TextStyle, TimerId, Waker,
+    WidgetId, WindowId,
 };
 use xui_core::image::Image;
 use xui_core::router::WidgetHost;
@@ -420,9 +420,5 @@ impl Backend for WinitBackend {
 
     fn kill_timer(&self, _window: WindowId, id: TimerId) {
         self.shared.timers.borrow_mut().remove(&id.0);
-    }
-
-    fn supports(&self, _kind: NodeKind) -> ImplKind {
-        ImplKind::Painted
     }
 }

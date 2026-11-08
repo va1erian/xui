@@ -12,12 +12,12 @@ part of these rules.
   explaining why its contract holds.
 - **No `windows` types in the public API.** They may be private fields; callers
   only ever see xui types.
-- **Controls own their child `HWND`** and destroy it (and unregister from
-  `controls::registry`) in `Drop`.
+- **xui owns its widgets.** Every widget is painted by xui itself; no backend
+  hosts native controls (no child `HWND` per widget). A node's only native
+  window is an opt-in surface for a GPU API (`Ui::set_native_surface`).
 - **Small files.** Aim under 300 lines, hard limit 500. If a change would push a
-  file past that, split it along a real seam first. New raw-Win32 helpers for a
-  new control go in their own `src/sys/<name>.rs` rather than growing
-  `sys/control.rs`.
+  file past that, split it along a real seam first. New raw-Win32 helpers go in
+  their own `src/sys/<name>.rs` rather than growing an existing one.
 - **Win32 constants come from the `windows` crate or the SDK header**, never from
   memory. If you must mirror one as a literal (as `gdi/paint.rs` does for `DT_*`),
   say which header it comes from.

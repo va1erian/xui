@@ -5,8 +5,8 @@
 //! limit.
 
 use crate::backend::{
-    Cursor, FileDialogOutcome, FileDialogRequest, ImplKind, NodeKind, NodeSpec, Painter, ParentRef,
-    Result, TextMetrics, TextStyle, WidgetId,
+    Cursor, FileDialogOutcome, FileDialogRequest, NodeSpec, Painter, ParentRef, Result,
+    TextMetrics, TextStyle, WidgetId,
 };
 use crate::geometry::Rect;
 use std::rc::Rc;
@@ -175,19 +175,7 @@ impl<M: 'static> Ui<M> {
         self.core.invalidate_layout();
     }
 
-    /// Sets a node's cue banner (placeholder shown while a field is empty);
-    /// a painted field draws its own cue instead.
-    pub fn set_cue(&self, id: WidgetId, cue: &str) {
-        self.core.backend().set_cue(id, cue);
-    }
-
-    /// Masks a native text field's characters (or shows them again); a
-    /// painted field masks itself instead.
-    pub fn set_password(&self, id: WidgetId, password: bool) {
-        self.core.backend().set_password(id, password);
-    }
-
-    /// A node's current text (a native control answers from its own state).
+    /// A node's current text.
     pub fn text(&self, id: WidgetId) -> String {
         self.core.backend().text(id)
     }
@@ -249,11 +237,6 @@ impl<M: 'static> Ui<M> {
     /// worker thread that lays text out off the UI thread.
     pub fn text_shaper(&self) -> Box<dyn crate::backend::TextShaper> {
         self.core.backend().text_shaper()
-    }
-
-    /// Whether the backend provides a native widget for `kind`.
-    pub fn supports(&self, kind: NodeKind) -> ImplKind {
-        self.core.backend().supports(kind)
     }
 
     /// Asks the backend for a native file picker. The default backend declines,
