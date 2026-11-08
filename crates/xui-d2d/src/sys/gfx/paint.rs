@@ -1,5 +1,9 @@
 //! Gradient fills.
 
+use std::collections::HashMap;
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
+
 use windows::Win32::Graphics::Direct2D::Common::D2D1_GRADIENT_STOP;
 use windows::Win32::Graphics::Direct2D::{
     D2D1_EXTEND_MODE_CLAMP, D2D1_GAMMA_2_2, D2D1_LINEAR_GRADIENT_BRUSH_PROPERTIES,
@@ -17,8 +21,42 @@ fn point(x: f32, y: f32) -> Vector2 {
     Vector2 { X: x, Y: y }
 }
 
+/// Most stop collections kept per target.
+const MAX_STOPS: usize = 64;
+
+/// Stop collections, keyed by a hash of their stops and used only when the
+/// stops compare equal; emptied when full.
+#[derive(Default)]
+pub(super) struct StopCache(HashMap<u64, (Vec<GradientStop>, ID2D1GradientStopCollection)>);
+
+fn hash_stops(stops: &[GradientStop]) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    for stop in stops {
+        stop.position.to_bits().hash(&mut hasher);
+        (stop.color.r, stop.color.g, stop.color.b, stop.color.a).hash(&mut hasher);
+    }
+    hasher.finish()
+}
+
 impl Target {
+    /// The collection for `stops`: kept from an earlier fill, or built.
     fn stops(&self, stops: &[GradientStop]) -> Option<ID2D1GradientStopCollection> {
+        let hash = hash_stops(stops);
+        if let Some((kept, collection)) = self.stops.borrow().0.get(&hash)
+            && kept.as_slice() == stops
+        {
+            return Some(collection.clone());
+        }
+        let built = self.build_stops(stops)?;
+        let mut cache = self.stops.borrow_mut();
+        if cache.0.len() >= MAX_STOPS {
+            cache.0.clear();
+        }
+        cache.0.insert(hash, (stops.to_vec(), built.clone()));
+        Some(built)
+    }
+
+    fn build_stops(&self, stops: &[GradientStop]) -> Option<ID2D1GradientStopCollection> {
         let native: Vec<D2D1_GRADIENT_STOP> = stops
             .iter()
             .map(|stop| D2D1_GRADIENT_STOP {

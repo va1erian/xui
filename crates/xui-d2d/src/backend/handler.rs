@@ -4,13 +4,13 @@
 
 use windows::Win32::UI::WindowsAndMessaging::{
     WM_ACTIVATE, WM_CAPTURECHANGED, WM_CHAR, WM_CLOSE, WM_DESTROY, WM_DPICHANGED, WM_ERASEBKGND,
-    WM_KEYDOWN, WM_KEYUP, WM_LBUTTONDBLCLK, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MBUTTONDBLCLK,
-    WM_MBUTTONDOWN, WM_MBUTTONUP, WM_MOUSEHWHEEL, WM_MOUSEMOVE, WM_MOUSEWHEEL, WM_PAINT,
-    WM_RBUTTONDBLCLK, WM_RBUTTONDOWN, WM_RBUTTONUP, WM_SETCURSOR, WM_SIZE, WM_SYSKEYDOWN,
-    WM_SYSKEYUP, WM_TIMER, WM_XBUTTONDBLCLK, WM_XBUTTONDOWN, WM_XBUTTONUP,
+    WM_INPUT, WM_KEYDOWN, WM_KEYUP, WM_KILLFOCUS, WM_LBUTTONDBLCLK, WM_LBUTTONDOWN, WM_LBUTTONUP,
+    WM_MBUTTONDBLCLK, WM_MBUTTONDOWN, WM_MBUTTONUP, WM_MOUSEHWHEEL, WM_MOUSEMOVE, WM_MOUSEWHEEL,
+    WM_MOVE, WM_PAINT, WM_RBUTTONDBLCLK, WM_RBUTTONDOWN, WM_RBUTTONUP, WM_SETCURSOR, WM_SIZE,
+    WM_SYSKEYDOWN, WM_SYSKEYUP, WM_TIMER, WM_XBUTTONDBLCLK, WM_XBUTTONDOWN, WM_XBUTTONUP,
 };
 use xui_core::backend::{Event, WidgetId, WindowId};
-use xui_core::message::MouseButton;
+use xui_core::message::{Modifiers, MouseButton};
 
 use super::Shared;
 use crate::sys::window::{self, Hwnd, Msg, WM_WAKE};
@@ -18,15 +18,15 @@ use crate::sys::window::{self, Hwnd, Msg, WM_WAKE};
 /// `SIZE_MINIMIZED`, the `wparam` of a `WM_SIZE` for a minimised window.
 const SIZE_MINIMIZED: usize = 1;
 /// `WM_MOUSELEAVE` (0x02A3 in winuser.h), which the `windows` crate omits.
-const WM_MOUSELEAVE: u32 = 0x02A3;
+pub(super) const WM_MOUSELEAVE: u32 = 0x02A3;
 /// `HTCLIENT`, the hit-test code of the client area.
-const HTCLIENT: isize = 1;
+pub(super) const HTCLIENT: isize = 1;
 
-fn low(value: isize) -> i32 {
+pub(super) fn low(value: isize) -> i32 {
     i32::from(value as u16 as i16)
 }
 
-fn high(value: isize) -> i32 {
+pub(super) fn high(value: isize) -> i32 {
     i32::from((value >> 16) as u16 as i16)
 }
 
@@ -60,6 +60,31 @@ fn button_of(msg: Msg) -> Option<(MouseButton, Press)> {
     })
 }
 
+/// The mouse-button event `msg` reports at `(x, y)`, if it is one.
+pub(super) fn button_event(msg: Msg, x: i32, y: i32, modifiers: Modifiers) -> Option<Event> {
+    let (button, press) = button_of(msg)?;
+    Some(match press {
+        Press::Down => Event::MouseDown {
+            x,
+            y,
+            button,
+            modifiers,
+        },
+        Press::Up => Event::MouseUp {
+            x,
+            y,
+            button,
+            modifiers,
+        },
+        Press::Double => Event::MouseDoubleClick {
+            x,
+            y,
+            button,
+            modifiers,
+        },
+    })
+}
+
 impl Shared {
     /// Handles one message of `window`; `None` leaves it to Windows.
     pub(super) fn handle(&self, window: WindowId, hwnd: Hwnd, msg: Msg) -> Option<isize> {
@@ -68,27 +93,7 @@ impl Shared {
         }
         let modifiers = window::modifiers();
         let (x, y) = (low(msg.lparam), high(msg.lparam));
-        if let Some((button, press)) = button_of(msg) {
-            let event = match press {
-                Press::Down => Event::MouseDown {
-                    x,
-                    y,
-                    button,
-                    modifiers,
-                },
-                Press::Up => Event::MouseUp {
-                    x,
-                    y,
-                    button,
-                    modifiers,
-                },
-                Press::Double => Event::MouseDoubleClick {
-                    x,
-                    y,
-                    button,
-                    modifiers,
-                },
-            };
+        if let Some(event) = button_event(msg, x, y, modifiers) {
             self.pointer(window, event);
             return Some(0);
         }
@@ -98,7 +103,11 @@ impl Shared {
                 self.paint(window);
                 Some(0)
             }
-            WM_SIZE => self.on_size(window, msg),
+            WM_SIZE => self.on_size(window, hwnd, msg),
+            WM_MOVE => {
+                self.repin(window, hwnd);
+                None
+            }
             WM_DPICHANGED => self.on_dpi(window, hwnd, msg),
             WM_MOUSEMOVE => {
                 self.track_leave(window, hwnd);
@@ -106,7 +115,7 @@ impl Shared {
                 Some(0)
             }
             WM_MOUSELEAVE => {
-                self.leave(window);
+                self.parent_left(window, hwnd);
                 Some(0)
             }
             WM_MOUSEWHEEL | WM_MOUSEHWHEEL => {
@@ -141,8 +150,22 @@ impl Shared {
                 }
                 Some(0)
             }
+            WM_INPUT => {
+                self.raw_motion(window, msg.lparam);
+                // Windows wants `DefWindowProc` to clean up raw input.
+                None
+            }
+            WM_KILLFOCUS => {
+                self.swallow_escape.set(false);
+                self.unlock_window(window, true);
+                None
+            }
             WM_ACTIVATE => {
                 let active = msg.wparam & 0xFFFF != 0;
+                if !active {
+                    self.swallow_escape.set(false);
+                    self.unlock_window(window, true);
+                }
                 let minimized = (msg.wparam >> 16) & 0xFFFF != 0;
                 self.deliver(
                     window,
@@ -184,7 +207,7 @@ impl Shared {
         }
     }
 
-    fn on_size(&self, window: WindowId, msg: Msg) -> Option<isize> {
+    fn on_size(&self, window: WindowId, hwnd: Hwnd, msg: Msg) -> Option<isize> {
         if msg.wparam == SIZE_MINIMIZED {
             return Some(0);
         }
@@ -201,6 +224,7 @@ impl Shared {
         {
             state.target = None;
         }
+        self.repin(window, hwnd);
         self.invalidate_window(window);
         self.deliver(window, WidgetId::NONE, &Event::Resize { width, height });
         Some(0)
@@ -221,7 +245,15 @@ impl Shared {
         Some(0)
     }
 
-    fn on_set_cursor(&self, window: WindowId) -> Option<isize> {
+    pub(super) fn on_set_cursor(&self, window: WindowId) -> Option<isize> {
+        if self
+            .locked
+            .get()
+            .is_some_and(|id| self.window_of(id) == Some(window))
+        {
+            crate::sys::pointer_lock::hide_cursor();
+            return Some(1);
+        }
         let hover = self.windows.borrow().get(&window.raw())?.hover?;
         let cursor = self.scene.borrow().get(hover)?.cursor;
         window::set_cursor(cursor);

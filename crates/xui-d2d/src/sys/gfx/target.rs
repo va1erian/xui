@@ -34,6 +34,8 @@ pub(crate) struct Target {
     pub(super) brush: ID2D1SolidColorBrush,
     pub(super) bitmaps: RefCell<BitmapCache>,
     pub(super) layers: RefCell<Vec<ID2D1Layer>>,
+    /// Gradient stop collections by what they were built from.
+    pub(super) stops: RefCell<super::paint::StopCache>,
 }
 
 pub(super) fn color(rgba: Rgba) -> D2D1_COLOR_F {
@@ -78,6 +80,7 @@ impl Target {
             brush,
             bitmaps: RefCell::new(BitmapCache::default()),
             layers: RefCell::new(Vec::new()),
+            stops: RefCell::default(),
         })
     }
 

@@ -6,8 +6,8 @@ use std::rc::Rc;
 
 use xui_core::backend::{
     Backend, BackendError, Cursor, Event, FileDialogOutcome, FileDialogRequest, FontSpec, ImplKind,
-    NodeKind, NodeSpec, Painter, ParentRef, PlatformSpec, Result, TextLayout, TextMetrics,
-    TextShaper, TextStyle, TimerId, Waker, WidgetId, WindowId,
+    NativeSurface, NodeKind, NodeSpec, Painter, ParentRef, PlatformSpec, Result, TextLayout,
+    TextMetrics, TextShaper, TextStyle, TimerId, Waker, WidgetId, WindowId,
 };
 use xui_core::router::WidgetHost;
 use xui_core::{Dip, Rect, Theme};
@@ -147,6 +147,9 @@ impl Backend for D2dBackend {
         node.wants_tab = spec.wants_tab;
         node.contained = spec.contained;
         shared.scene.borrow_mut().insert(id, node);
+        if spec.popup {
+            shared.place_surfaces(window);
+        }
         Ok(id)
     }
 
@@ -158,7 +161,9 @@ impl Backend for D2dBackend {
         let removed = self.shared.scene.borrow_mut().remove(id);
         for gone in removed {
             self.shared.forget(window, gone);
+            self.shared.drop_surface(gone, window, false);
         }
+        self.shared.place_surfaces(window);
     }
 
     fn apply_moves(&self, window: WindowId, moves: &[(WidgetId, Rect)]) {
@@ -185,6 +190,7 @@ impl Backend for D2dBackend {
                 resized.push((*id, *rect));
             }
         }
+        self.shared.place_surfaces(window);
         // There is no child window to fire `WM_SIZE`, so a resized widget is
         // told directly or its cached layout goes stale.
         for (id, rect) in resized {
@@ -198,6 +204,7 @@ impl Backend for D2dBackend {
 
     fn set_visible(&self, id: WidgetId, visible: bool) {
         self.with_node(id, |node| node.visible = visible);
+        self.place_surfaces_of(id);
     }
 
     fn set_enabled(&self, id: WidgetId, enabled: bool) {
@@ -207,6 +214,7 @@ impl Backend for D2dBackend {
     fn raise(&self, id: WidgetId) {
         if self.shared.scene.borrow_mut().raise(id) {
             self.shared.invalidate(id);
+            self.place_surfaces_of(id);
         }
     }
 
@@ -218,6 +226,23 @@ impl Backend for D2dBackend {
 
     fn set_clip(&self, id: WidgetId, rect: Option<Rect>) {
         self.with_node(id, |node| node.clip = rect);
+        self.place_surfaces_of(id);
+    }
+
+    fn set_pointer_lock(&self, id: WidgetId, locked: bool) {
+        if locked {
+            self.shared.lock_pointer(id);
+        } else if self.shared.locked.get() == Some(id) {
+            self.shared.unlock_pointer(false);
+        }
+    }
+
+    fn set_native_surface(&self, id: WidgetId, on: bool) {
+        self.shared.set_surface(id, on);
+    }
+
+    fn native_surface(&self, id: WidgetId) -> Option<NativeSurface> {
+        self.shared.surface_of(id)
     }
 
     fn set_capture(&self, id: WidgetId) {
@@ -396,6 +421,13 @@ impl Backend for D2dBackend {
 }
 
 impl D2dBackend {
+    /// Puts the native child windows of `id`'s window where their nodes are.
+    fn place_surfaces_of(&self, id: WidgetId) {
+        if let Some(window) = self.shared.window_of(id) {
+            self.shared.place_surfaces(window);
+        }
+    }
+
     /// Changes a node and repaints it.
     fn with_node(&self, id: WidgetId, change: impl FnOnce(&mut Node)) {
         if let Some(node) = self.shared.scene.borrow_mut().get_mut(id) {

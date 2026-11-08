@@ -61,10 +61,16 @@ impl Shared {
     /// Forgets `window`: its nodes, timers and capture, and its entry. Returns
     /// the entry, if the window was still known.
     pub(super) fn release(&self, window: WindowId) -> Option<WindowState> {
+        self.unlock_window(window, false);
         if self.captured.get().and_then(|id| self.window_of(id)) == Some(window) {
             self.captured.set(None);
         }
-        self.scene.borrow_mut().remove_window(window);
+        let removed = self.scene.borrow_mut().remove_window(window);
+        // The child windows go with their parent.
+        for id in removed {
+            self.drop_surface(id, window, true);
+        }
+        self.orphans_gone(window);
         self.timers
             .borrow_mut()
             .retain(|_, owner| *owner != window.raw());

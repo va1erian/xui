@@ -15,6 +15,7 @@ use windows::core::HSTRING;
 use windows_numerics::Vector2;
 use xui_core::backend::{Rgba, TextAlign, TextVAlign};
 
+use super::layout_cache::shape_cached;
 use super::target::Target;
 use super::{RectF, factory};
 
@@ -137,7 +138,7 @@ pub(super) fn shape(
 /// The advance width, height and first baseline of `text`, in device pixels.
 pub(crate) fn measure(text: &str, params: &TextParams<'_>) -> (f32, f32, f32) {
     factory::with(|f| {
-        let layout = shape(&f.dwrite, text, params, f32::MAX, f32::MAX)?;
+        let layout = shape_cached(&f.dwrite, text, params, f32::MAX, f32::MAX)?;
         let mut metrics = DWRITE_TEXT_METRICS::default();
         // SAFETY: `metrics` is a valid out-pointer.
         unsafe { layout.GetMetrics(&mut metrics) }.ok()?;
@@ -158,7 +159,7 @@ impl Target {
             return;
         }
         let Some(layout) =
-            factory::with(|f| shape(&f.dwrite, text, params, rect.width(), rect.height()))
+            factory::with(|f| shape_cached(&f.dwrite, text, params, rect.width(), rect.height()))
                 .flatten()
         else {
             return;

@@ -8,6 +8,7 @@ mod bitmap;
 mod factory;
 mod geometry;
 mod layout;
+mod layout_cache;
 mod paint;
 mod shapes;
 mod target;

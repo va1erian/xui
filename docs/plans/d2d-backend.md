@@ -66,7 +66,7 @@ Not covered (each is a follow-up, not a blocker):
   window always has a system frame.
 - **IME composition** (`WM_IME_*`) and **UI Automation**: CJK input and screen
   readers.
-- **`capture`, pointer lock, window icon, `GlWidget`.**
+- **`capture`, window icon, `GlWidget`.**
 - **Damage tracking is Windows' update region only.** The canvas backend's
   scene damage list is not reused, so every `WM_PAINT` replans all nodes.
   Sharing `scene.rs`, `compositor.rs` and the damage code needs them pulled out
@@ -119,6 +119,18 @@ fat LTO, one codegen unit):
 The 2.1 MB saved is the same ~2.4 MB the cookbook showed for the winit/tiny-skia
 stack; the editor itself is dominated by `wgpu`, Blitz/Stylo and its own code,
 so the relative saving is 10%, not 83%.
+
+## Update: native surfaces, pointer lock, and a cheaper paint path
+
+`set_native_surface` / `native_surface` work as on `xui-canvas`: a Win32 child
+window per node (`sys/surface.rs`, `backend/surface.rs`), placed after every
+bounds, visibility, clip, order or popup change, shown only while it can be
+(visible, wholly inside its clips, no popup over it), forwarding its mouse
+input to the node. A GPU API presents into it, so Play skips Direct2D. The
+pointer lock uses raw input and a one-pixel `ClipCursor`. DirectWrite layouts
+and gradient stop collections are cached, which removes the two largest of the
+per-draw allocations listed above; the rest remain. Still not covered: IME,
+UI Automation, borderless windows, window icon.
 
 ## Review
 
