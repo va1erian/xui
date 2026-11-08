@@ -191,6 +191,26 @@ fn clicking_the_scrollbar_track_pages_down() {
 }
 
 #[test]
+fn the_thumb_drags_on_the_second_press_of_a_quick_pair() {
+    run(SAMPLE, |stage, rig| {
+        // The thumb starts at the top of the bar: a click, then a press the
+        // platform reports as a double-click, held and dragged down.
+        stage.click(WIDTH - 3, 10);
+        assert_eq!(rig.view.scroll(), 0.0, "a click on the thumb does not page");
+        stage.inject(xui_core::backend::Event::MouseDoubleClick {
+            x: WIDTH - 3,
+            y: 10,
+            button: xui_core::message::MouseButton::Left,
+            modifiers: Modifiers::NONE,
+        });
+        mouse(stage, "move", WIDTH - 3, 70);
+        mouse(stage, "up", WIDTH - 3, 70);
+        assert!(rig.view.scroll() > 0.0, "the drag moved the page");
+        assert!(rig.log.borrow().is_empty());
+    });
+}
+
+#[test]
 fn set_markdown_resets_the_scroll() {
     run(SAMPLE, |stage, rig| {
         wheel(stage, -5);

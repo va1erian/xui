@@ -61,7 +61,10 @@ pub(crate) fn press(state: &mut State, point: Point, shift: bool, out: &mut Out)
 }
 
 pub(crate) fn double_click(state: &mut State, point: Point, out: &mut Out) {
+    // On the bar the second press of a quick pair is a press like the first:
+    // it grabs the thumb or pages, so a drag right after a click follows.
     if state.on_bar(point) {
+        press(state, point, false, out);
         return;
     }
     let Some((block, pos)) = state.hit(point) else {
