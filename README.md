@@ -30,6 +30,7 @@ everywhere, or an offscreen surface for snapshots and tests. Dark mode is first-
 |---|---|
 | `xui-core` | The portable front layer: geometry, units, colour, pure layout arithmetic, semantic theme tokens, the input vocabulary, the accessibility model, the **widget layer**, the `App`/`Ui` runtime and the `Backend` contract. No platform dependency, no `unsafe`. |
 | `xui-canvas` | The cross-platform software backend: a `winit` window compositing with `tiny-skia` and presenting through `softbuffer`, an optional GPU path (`glow` OpenGL through `glutin`), and an `OffscreenBackend` that renders the same widgets headlessly. |
+| `xui-d2d` | The Windows-only lightweight backend: one Win32 window per xui window, drawn with Direct2D and DirectWrite, with native file dialogs, native child surfaces for a GPU API and the pointer lock. About a fifth of the size of `xui-canvas`; no windowing dependencies. Not covered: IME, UI Automation, borderless windows. |
 | `xui-gpu` | The shared OpenGL seam behind both backends' GL widgets: the opaque `GlContext` handle, the `GlSurface` frame/offscreen lifecycle and the offscreen readback. Keeps `glow` out of `xui-core`. |
 | `xui` | The umbrella crate most applications depend on. Selects a backend by feature (`canvas`, the default) and re-exports the portable front layer. |
 | `xui-code-editor` | A code-editor widget: rope buffer, monospace view, find/replace, pluggable syntax highlighting. |

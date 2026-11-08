@@ -10,6 +10,7 @@ hands it to `xui_core::run_app`.
 | `WinitBackend` | `xui-canvas` | `winit` | `tiny-skia` → `softbuffer`, or GL | no | no |
 | `OffscreenBackend` | `xui-canvas` | none | `tiny-skia` into an RGBA surface | no | no |
 | `GlWidget` host | `xui-canvas` | `winit` | `glow`/OpenGL (whole client area) | no | no |
+| `D2dBackend` | `xui-d2d` | one Win32 window | Direct2D and DirectWrite | no | yes |
 
 Every backend runs the **same portable widgets**. This is the point of the
 split: an app written against `xui-core` works on Windows, on Linux/macOS through
@@ -87,6 +88,70 @@ let bytes = image.pixel(x, y);
 
 This is how the `xui-core` and `xui-canvas` unit tests render deterministic
 snapshots without a desktop.
+
+## `D2dBackend` — Windows only, a fifth of the size
+
+`crates/xui-d2d/`. One Win32 window per xui window; every widget is a painted
+node of a scene xui keeps itself (as in `xui-canvas`), drawn with an
+`ID2D1HwndRenderTarget` at 96 DPI and shaped with DirectWrite. Windows provides
+the window, the message loop, input, the clipboard and the native file dialogs;
+there is no `winit`, `tiny-skia` or `cosmic-text` in the tree, which is about
+0.1 MB of backend code against about 2.4 MB (see
+[the plan](plans/d2d-backend.md) for the numbers).
+
+```rust
+use std::rc::Rc;
+use xui_d2d::D2dBackend;
+
+xui_core::app("Hello")
+    .backend(Rc::new(D2dBackend::new()))
+    .run(|ui| { /* ... */ })
+```
+
+- `supports` always returns `ImplKind::Painted`. `run_modal` is a nested
+  message loop and `file_dialog` the Common Item Dialog.
+- Covered: DPI (per-monitor v2) and `DpiChanged`, mouse with capture, keyboard
+  and Tab traversal, timers, `wake`, clipboard text, system dark mode and
+  reduced motion, cursors, the whole `Canvas` trait, text shaping,
+  [native surfaces](#native-surfaces) and the pointer lock.
+- **Pointer lock** hides the cursor, pins it to the middle of the window and
+  sends the node raw relative motion (`WM_INPUT`) as `Event::PointerDelta`.
+  `Esc` (swallowed), focus loss and deactivation end it with
+  `PointerLockLost`; node removal, window close and dropping the backend end it
+  silently. Ending it removes the process's raw mouse registration.
+- **Paint cost:** DirectWrite layouts (up to 2048) and per-window gradient stop
+  collections (up to 64) are kept between draws and allocate nothing on a hit.
+  Other per-draw allocations (gradient brushes, path geometries, rounded-clip
+  layers) remain, and every `WM_PAINT` replans all nodes: the damage list of
+  [the canvas backend](#repainting-only-what-changed) is not shared yet.
+- Not covered: IME, UI Automation, borderless windows and Mica/Acrylic, drag
+  regions, window icon, `capture`, `GlWidget`.
+
+## Native surfaces
+
+`Ui::set_native_surface(id, true)` gives a node a native child window of its
+own, which `Ui::native_surface(id)` hands out as a `NativeSurface` (window and
+display handles, `Send + Sync`) once it exists, for a render thread to make a
+swap chain on. Frames drawn there reach the screen without the software
+composite, which a GL widget cannot avoid. Both windowed backends keep the child
+on the node's bounds, show it only while the node is visible, lies wholly inside
+its clips and has no popup over it (a window cannot be clipped as a painter is,
+and a popup is drawn under it; the node's painter shows meanwhile), pass its
+pointer input on as the node's, and show the node's cursor over it. Once the
+node gives it up, is removed or its window closes, the surface refuses its
+handles (`HandleError::Unavailable`); a swap chain made earlier works until the
+window closes.
+
+| | `WinitBackend` | `D2dBackend` | `OffscreenBackend` |
+|---|---|---|---|
+| Native surface | Win32 and X11 | Win32 | none (`native_surface` is `None`) |
+| Made | on the event loop, after the window exists | at once | |
+| Window is destroyed | when the last holder drops it | when the last holder drops it, or with its parent | |
+
+A widget draws through its painter whenever `native_surface` is `None`, so the
+same code runs everywhere. `crates/xui-canvas/examples/native_surface.rs` and
+`crates/xui-d2d/examples/native_surface.rs` present a `softbuffer` gradient into
+one.
 
 ## Repainting only what changed
 
