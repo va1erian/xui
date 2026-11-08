@@ -87,6 +87,7 @@ pub fn run_raw(markdown: &str, body: impl FnOnce(&Stage<'_, String>, &Rig) + 'st
             let log = Rc::new(RefCell::new(Vec::new()));
             let view = MarkdownView::new(ui, Rect::new(0, 0, WIDTH, HEIGHT))?
                 .on_link(|href| Some(href.to_owned()))
+                .on_context(|at| Some(format!("context:{},{}", at.x, at.y)))
                 .markdown(&markdown);
             let view = Rc::new(view);
             *build_slot.borrow_mut() = Some(Rig {
@@ -178,4 +179,89 @@ pub fn find(stage: &Stage<'_, String>, found: impl Fn() -> bool) -> Option<(i32,
 
 pub fn clicked_next(rig: &Rig) -> bool {
     rig.log.borrow().iter().any(|href| href == "next.md")
+}
+
+/// Presses `key` with Ctrl held.
+pub fn ctrl(stage: &Stage<'_, String>, key: Key) {
+    stage.inject(Event::KeyDown {
+        key,
+        modifiers: Modifiers {
+            ctrl: true,
+            ..Modifiers::NONE
+        },
+        repeat: 1,
+        system: false,
+    });
+    paint(stage);
+}
+
+/// A mouse event of `kind` (`down`, `up`, anything else is a move) with
+/// `button` and `modifiers`.
+pub fn mouse_with(
+    stage: &Stage<'_, String>,
+    kind: &str,
+    x: i32,
+    y: i32,
+    button: MouseButton,
+    modifiers: Modifiers,
+) {
+    stage.inject(match kind {
+        "down" => Event::MouseDown {
+            x,
+            y,
+            button,
+            modifiers,
+        },
+        "up" => Event::MouseUp {
+            x,
+            y,
+            button,
+            modifiers,
+        },
+        _ => Event::MouseMove { x, y, modifiers },
+    });
+    paint(stage);
+}
+
+/// Presses the left button with Shift held, then releases it.
+pub fn shift_click(stage: &Stage<'_, String>, x: i32, y: i32) {
+    let shift = Modifiers {
+        shift: true,
+        ..Modifiers::NONE
+    };
+    mouse_with(stage, "down", x, y, MouseButton::Left, shift);
+    mouse_with(stage, "up", x, y, MouseButton::Left, shift);
+}
+
+/// A press and release of the right button.
+pub fn right_click(stage: &Stage<'_, String>, x: i32, y: i32) {
+    mouse_with(stage, "down", x, y, MouseButton::Right, Modifiers::NONE);
+    mouse_with(stage, "up", x, y, MouseButton::Right, Modifiers::NONE);
+}
+
+/// What a window sends for a double click: the first click, then the
+/// double-click event in place of the second press, then the release.
+pub fn double_click(stage: &Stage<'_, String>, x: i32, y: i32) {
+    stage.click(x, y);
+    stage.inject(Event::MouseDoubleClick {
+        x,
+        y,
+        button: MouseButton::Left,
+        modifiers: Modifiers::NONE,
+    });
+    paint(stage);
+    mouse(stage, "up", x, y);
+}
+
+/// Drags the left button from `from` to `to` with a move between.
+pub fn drag(stage: &Stage<'_, String>, from: (i32, i32), to: (i32, i32)) {
+    mouse(stage, "down", from.0, from.1);
+    mouse(stage, "move", (from.0 + to.0) / 2, (from.1 + to.1) / 2);
+    mouse(stage, "move", to.0, to.1);
+    mouse(stage, "up", to.0, to.1);
+}
+
+/// The text on the window's clipboard.
+pub fn clipboard(stage: &Stage<'_, String>) -> Option<String> {
+    stage.ui().clipboard_text()
 }

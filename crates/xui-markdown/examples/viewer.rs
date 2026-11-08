@@ -1,6 +1,7 @@
 //! A small Markdown viewer on the portable canvas backend. Opens the file
 //! given as the first argument, or the crate's sample document, and prints
-//! the destination of every link clicked.
+//! the destination of every link clicked. Select text with the mouse or
+//! Ctrl+A; Ctrl+C or a right-click copies it.
 //!
 //! ```text
 //! cargo run -p xui-markdown --example viewer -- README.md
@@ -23,11 +24,13 @@ const SAMPLE: &str = include_str!("../tests/sample.md");
 
 enum Msg {
     Link(String),
+    /// A right-click: a real app shows a context menu here.
+    Context,
     Autoclose,
 }
 
 struct Viewer {
-    _view: Rc<MarkdownView<Msg>>,
+    view: Rc<MarkdownView<Msg>>,
 }
 
 impl App for Viewer {
@@ -36,6 +39,12 @@ impl App for Viewer {
     fn update(&mut self, msg: Msg, ui: &mut Ui<Msg>) {
         match msg {
             Msg::Link(href) => println!("link: {href}"),
+            // Stands in for a context menu's Copy: copies the selection.
+            Msg::Context => {
+                if self.view.copy() {
+                    println!("copied: {:?}", self.view.selected_text());
+                }
+            }
             Msg::Autoclose => ui.quit(),
         }
     }
@@ -47,14 +56,15 @@ fn build(ui: &mut Ui<Msg>, text: String) -> Result<Viewer> {
         column().children((create(move |ui: &Ui<Msg>| {
             Ok(MarkdownView::new(ui, Rect::default())?
                 .markdown(&text)
-                .on_link(|href| Some(Msg::Link(href.to_owned()))))
+                .on_link(|href| Some(Msg::Link(href.to_owned())))
+                .on_context(|_| Some(Msg::Context)))
         })
         .bind(&handle)
         .fill(1),)),
     )?;
     let view = handle.get();
     view.focus();
-    Ok(Viewer { _view: view })
+    Ok(Viewer { view })
 }
 
 fn main() -> Result<()> {

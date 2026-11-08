@@ -1,6 +1,8 @@
 # Plan: a Markdown view (`xui-markdown`)
 
-Status: phase 1 (render) implemented · Branch: `claude/markdown-view-component-436c17` ·
+Status: phase 1 (render) merged (va1erian/xui#329); selection, copy and the
+highlighter (phases 2 and 3, xui side) implemented · Branch:
+`claude/markdown-select-highlight` ·
 2026-11-08 · For: the miniscent editor's script guide, LazyOS Docs
 
 ## Goal
@@ -68,7 +70,7 @@ Rejected:
 ```text
 &str ──parse──▶ Document ──layout (lazy, per block)──▶ BlockLayout cache ──paint──▶ Canvas
                    │                                          ▲
-                   └──────── Selection (block, byte) ─────────┘── hit-test / copy
+                   └──────── Selection (byte offset) ─────────┘── hit-test / copy
 ```
 
 ### Model (`model.rs`)
@@ -160,7 +162,11 @@ Each block is laid out on its own and the result is cached per
    cells wrap. A row's height is its tallest cell.
 5. **Code blocks** never wrap; a long line is clipped. Horizontal scrolling
    inside a code block comes later (phase 5). With a highlighter, each line
-   is cut into token-coloured pieces through the same shape cache.
+   is shaped once whole, for the x position of every token, and each token
+   (and each stretch of plain text between them) is shaped again through the
+   shape cache, so a highlighted line costs about twice an unhighlighted one
+   at layout time, and nothing more to paint. Tabs are shaped as four spaces,
+   and positions map back to the document's bytes.
 
 `BlockLayout` stores, for each piece: `Arc<dyn TextLayout>`, origin, byte
 range and colour role, plus any decoration rectangles (code background,
@@ -174,17 +180,25 @@ cached layouts with `draw_layout`. **Drawing a laid-out block allocates
 nothing and shapes nothing.** Before drawing, the painter lays out any block
 just coming into view (the first paint, a resize, scrolling onto new text);
 only that block costs shaping. A scroll over text already laid out only
-repaints. Selection rectangles are computed once,
-when the selection changes, and cached.
+repaints. Selection rectangles are worked out per block when the block is
+first painted with a selection, and cached until the selection or that
+block's layout changes.
 
-### Selection and copy (`select.rs`, `copy.rs`)
+### Selection and copy (`layout/hit.rs`, `view/selection.rs`, `view/pointer.rs`, `copy.rs`)
 
-- **Positions.** A position is `(block, byte)` and a selection is an anchor
-  and a focus. Hit-testing finds the block by binary search, then the piece,
-  then asks the piece's `TextLayout::hit_test_point`.
+- **Positions.** A position is a byte offset into `Document::text`, and a
+  selection is an anchor and a focus.
+  - Blocks hold increasing ranges of that text, so one offset orders
+    positions across the document.
+  - Two neighbouring blocks share their boundary offset: the end of one is
+    the start of the next. So hit-testing also returns the block it found,
+    and a word or block selection uses that block.
+  - Hit-testing finds the block by binary search, then the nearest piece,
+    then asks the piece's `TextLayout::hit_test_point`.
 - **Mouse.**
-  - Dragging selects; holding the pointer past the top or bottom edge
-    scrolls.
+  - Dragging selects. Past the top or bottom edge, the view scrolls toward
+    the pointer, and goes on scrolling on a 40 ms timer while the pointer is
+    held there; on a backend without timers, only while it moves.
   - Shift+click extends the selection.
   - Double-click selects a word (`unicode-segmentation`); triple-click
     selects the block.
@@ -193,12 +207,15 @@ when the selection changes, and cached.
 - **Keys.** The widget can take focus.
   - Ctrl+A selects all and Ctrl+C copies.
   - Arrows, PageUp/PageDown and Home/End scroll.
-  - Shift+arrows extend the selection by character or line (phase 2).
-- **Context menu.** "Copy" and "Select all".
+  - Escape clears the selection.
+  - Moving the selection with Shift+arrows is not built.
+- **Context menu.** The app's own: `on_context` maps a right-click to a
+  message, and the app's menu calls `copy()` and `select_all()`.
 - **Copy** goes through `Ui::set_clipboard_text`, as plain text rebuilt from
   the blocks:
   - a blank line between paragraphs;
-  - list markers kept (`- `, `1. `, `[x] `);
+  - list markers kept (`- `, `1. `, `- [x] `) when the selection reaches
+    past a single item, and dropped for text from inside one item;
   - code copied verbatim;
   - table cells separated by tabs and rows by newlines (this pastes into a
     spreadsheet).
@@ -214,8 +231,9 @@ same shape as `FlowText` and `xui-rich-text`'s `on_link`.
 
 - A `#slug` href that matches a heading scrolls there **inside the view**,
   before `on_link` is asked. Docs' anchors start working this way.
-- Hovering a link shows the hand cursor and an underline, and reports the
-  href through `on_hover_link` (for a status bar).
+- Hovering a link shows the hand cursor. Links are always underlined.
+  Reporting the hovered link (`on_hover_link`, for a status bar) is not
+  built.
 - The view itself never opens anything.
 
 ## Public API (sketch)
@@ -224,8 +242,11 @@ Phase 1 follows the repo's widget style rather than a separate builder:
 `MarkdownView::new(ui, bounds)?` and chained setters, as `RichTextEditor`
 does. It has `markdown`/`set_markdown`, `document`/`set_document`,
 `style`/`set_style`, `on_link`, `scroll_to_anchor`, `set_scroll`/`scroll`,
-`focus`, `set_bounds` and `id`. `on_hover_link`, `highlighter`,
-`code_action` and `selected_text` come with phases 2 and 3.
+`focus`, `set_bounds` and `id`.
+
+Phases 2 and 3 add selection and copy (`selected_text`, `has_selection`,
+`copy`, `select_all`, `clear_selection`, `on_context`) and code colours
+(`highlighter`, `code_palette`). `on_hover_link` is not built yet.
 
 ```rust
 use xui_markdown::{MarkdownView, CodeClass, CodeSpan, Highlighter};
@@ -233,9 +254,9 @@ use xui_markdown::{MarkdownView, CodeClass, CodeSpan, Highlighter};
 let view = MarkdownView::new(ui, bounds)?
     .markdown(&text)                          // or .document(Arc<Document>)
     .on_link(|href| links::classify(href).map(Msg::Open))
-    .on_hover_link(|href| Some(Msg::Status(href.map(str::to_owned))))
+    .on_context(|point| Some(Msg::ShowMenu(point)))
     .highlighter(ScriptHighlighter)           // optional: impl Highlighter
-    .code_action("Insert in script", |index, _code| Some(Msg::Insert(index)));
+    .code_palette(palette);                   // optional: else theme tokens
 
 view.set_markdown(&text);                    // new document, scroll to top
 view.scroll_to_anchor("installing");         // false if no such heading
@@ -254,8 +275,9 @@ pub enum CodeClass { Keyword, Function, String, Comment, Number, Type }
 - `Highlighter` lives in this crate, so it does not pull in
   `xui-code-editor`. miniscent adapts `ScriptColours` to it in about ten
   lines.
-- `code_action` draws a small link-styled button below each code block. The
-  closure gets the block's index among code blocks and its text.
+- An action on a code block (miniscent's "Insert in script") is an ordinary
+  link the app writes into its Markdown, such as `[Insert in script](insert:3)`,
+  so no `code_action` API is needed.
 - No numeric ids and no `windows` types appear in the API. Behaviour comes
   from the `Placeable`, `Themed` and focus capability traits.
 - The umbrella crate gets a `markdown` feature that re-exports the crate as
@@ -266,23 +288,29 @@ pub enum CodeClass { Keyword, Function, String, Comment, Number, Type }
 ```text
 crates/xui-markdown/
   src/lib.rs              re-exports, crate docs
-  src/model.rs            Document, Block, Span, Marker
-  src/parse/mod.rs        pulldown events → model, size cap
-  src/parse/inline.rs     spans, links, slugs
-  src/style.rs            MarkdownStyle, CodePalette, from_theme
+  src/model.rs            Document, Block, Span, Marker; anchors
+  src/parse/              pulldown events → model (builder, events), slugs
+  src/copy.rs             a selection as plain text
+  src/style.rs            MarkdownStyle, CodePalette, colour roles
   src/highlight.rs        Highlighter, CodeSpan, CodeClass
-  src/layout/mod.rs       prefix sum, estimates, viewport-first scheduling
-  src/layout/block.rs     one block → BlockLayout (fast path / breaker)
-  src/layout/breaker.rs   greedy line breaking over pieces
-  src/layout/cache.rs     shape cache
+  src/layout/mod.rs       prefix sum, viewport-first scheduling
+  src/layout/estimate.rs  gaps and estimated heights
+  src/layout/block.rs     one block: indent, markers, quote bars
+  src/layout/flow.rs      inline flow: one-call path, words
+  src/layout/line.rs      packing words onto lines
+  src/layout/code.rs      code blocks, highlighting, tab mapping
   src/layout/table.rs     column widths, rows
-  src/select.rs           positions, hit-test, word/block selection
-  src/copy.rs             selection → plain text
-  src/view/mod.rs         MarkdownView, builder, Themed, scroll
-  src/view/input.rs       mouse, keys, context menu, link hover/click
-  src/view/paint.rs       decorations, layouts, selection
-  examples/markdown.rs    opens a .md file
-  tests/                  parse, layout, select/copy, snapshot
+  src/layout/cache.rs     shape cache
+  src/layout/hit.rs       hit-testing, selection rectangles
+  src/view/mod.rs         MarkdownView and its API
+  src/view/shared.rs      shared state, timers, delivering events
+  src/view/state.rs       scroll anchor, scrollbar
+  src/view/events.rs      wheel, keys, event dispatch
+  src/view/pointer.rs     clicks, drags, autoscroll, cursor
+  src/view/selection.rs   selection, word and block, rectangle cache
+  src/view/paint.rs       painting
+  examples/               viewer (a window), snapshot (headless)
+  tests/                  parse, view, select, highlight, snapshots, perf
 ```
 
 ## Performance targets
@@ -376,8 +404,10 @@ What phase 1 tests, under `crates/xui-markdown`:
     has no timers.
   - `scripts/snapshots.ps1` and `examples/demo/` cover only the `xui`
     crate's examples, as for `xui-rich-text`.
-  - Selection and copy tests come with phase 2.
-  - `code_action` and the miniscent guide test come with phase 3.
+  - Selection, copy and highlighting have their own tests:
+    `src/layout/tests/hit.rs`, `src/layout/tests/code.rs`, `src/copy.rs`,
+    `tests/select.rs` and `tests/highlight.rs`.
+  - The miniscent guide test moves with the migration.
 
 ## Migration
 
@@ -387,8 +417,9 @@ What phase 1 tests, under `crates/xui-markdown`:
   each page's Markdown over as is.
 - The reference page is written as a GFM table, with `|` escaped.
 - `guide_html.rs` (338 lines) is replaced by a small adapter: a
-  `Highlighter` over `ScriptColours`, the palette, and `code_action` →
-  `ScriptMsg::Example(i)`.
+  `Highlighter` over `ScriptColours`, the palette, and Markdown for each page
+  whose examples end in an `[Insert in script](insert:N)` link, read back by
+  `example_of`.
 - `script_widgets.rs` swaps `BlitzView` for `MarkdownView`, and drops
   `GuideFrame` and `CopyRequested`, because the view copies by itself.
 - `xui-blitz` leaves `apps/editor/Cargo.toml`.
@@ -408,9 +439,16 @@ What phase 1 tests, under `crates/xui-markdown`:
 
 1. **Render.** Model, parser, style, layout (fast path, breaker, tables,
    code), paint, scrolling, links and anchors, theming, snapshots.
-2. **Select and copy.** Mouse, keys, context menu, plain-text copy.
-3. **miniscent.** Highlighter, `code_action`, the guide migration, removing
-   `xui-blitz`, and the size measurement recorded in this plan.
+2. **Select and copy.** Mouse, keys, plain-text copy, and an `on_context`
+   hook for the app's own context menu (as `ListView` has), which calls the
+   view's `copy()` and `select_all()`. Done. Moving the selection with
+   Shift+arrows is not done.
+3. **miniscent.** The xui side is done: the `Highlighter` trait and a
+   `CodePalette`. Still to do: the guide migration, removing `xui-blitz`, and
+   recording the size saving in this plan. `code_action` was dropped: an
+   example's "Insert in script" is an ordinary Markdown link
+   (`[Insert in script](insert:N)`), which `on_link` hands to the guide's
+   existing `example_of`.
 4. **LazyOS Docs.** Migration, an image resolver (`Fn(&str) -> Option<Image>`,
    decoded by the app), and find-in-page (`find(&str)` → highlighted matches).
 5. **Later.**

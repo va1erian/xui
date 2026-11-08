@@ -5,6 +5,8 @@
 
 mod events;
 mod paint;
+mod pointer;
+mod selection;
 mod shared;
 mod state;
 
@@ -14,14 +16,16 @@ use std::sync::Arc;
 
 use xui_core::app::Ui;
 use xui_core::backend::{NodeKind, NodeSpec, Result, WidgetId};
-use xui_core::geometry::{Rect, Size};
+use xui_core::geometry::{Point, Rect, Size};
 use xui_core::layout::Constraints;
 use xui_core::theme::{Theme, Themed};
 use xui_core::widget::{Control, Placeable};
 
+use crate::highlight::Highlighter;
 use crate::layout::Layout;
 use crate::model::Document;
-use crate::style::MarkdownStyle;
+use crate::style::{CodePalette, MarkdownStyle};
+use selection::Selection;
 use shared::Shared;
 use state::State;
 /// A read-only view of a Markdown document: styled text, lists, quotes, code
@@ -80,7 +84,9 @@ impl<M: 'static> MarkdownView<M> {
                 state: RefCell::new(State::new(layout, padding, ui.dpi())),
                 ui: ui.clone(),
                 on_link: RefCell::new(None),
+                on_context: RefCell::new(None),
                 timer: Cell::new(None),
+                drag_timer: Cell::new(None),
             }
         });
         Ok(MarkdownView { shared })
@@ -107,8 +113,13 @@ impl<M: 'static> MarkdownView<M> {
     pub fn set_document(&self, document: Arc<Document>) {
         let mut state = self.shared.state.borrow_mut();
         state.layout.set_document(document);
+        let captured = state.dragging || state.bar_drag.is_some();
         state.reset_scroll();
         drop(state);
+        // A drag over the old text ends with it.
+        if captured {
+            self.shared.ui.release_capture();
+        }
         self.shared.control.invalidate();
         self.shared.kick();
     }
@@ -129,10 +140,45 @@ impl<M: 'static> MarkdownView<M> {
         let mut state = self.shared.state.borrow_mut();
         state.padding = style.padding;
         state.layout.set_style(style);
+        let captured = state.dragging || state.bar_drag.is_some();
         state.reset_scroll();
         drop(state);
+        // A drag over the old text ends with it.
+        if captured {
+            self.shared.ui.release_capture();
+        }
         self.shared.control.invalidate();
         self.shared.kick();
+    }
+
+    /// Colours code blocks with `highlighter`.
+    pub fn highlighter(self, highlighter: impl Highlighter + 'static) -> MarkdownView<M> {
+        self.set_highlighter(Some(Box::new(highlighter)));
+        self
+    }
+
+    /// Colours code blocks with `highlighter`, or stops colouring them, laying
+    /// the document out again.
+    pub fn set_highlighter(&self, highlighter: Option<Box<dyn Highlighter>>) {
+        self.shared
+            .state
+            .borrow_mut()
+            .layout
+            .set_highlighter(highlighter);
+        self.shared.control.invalidate();
+        self.shared.kick();
+    }
+
+    /// Colours highlighted code with `palette` instead of the theme's tokens.
+    pub fn code_palette(self, palette: CodePalette) -> MarkdownView<M> {
+        self.set_code_palette(Some(palette));
+        self
+    }
+
+    /// Changes the code colours (`None` for the theme's); only repaints.
+    pub fn set_code_palette(&self, palette: Option<CodePalette>) {
+        self.shared.state.borrow_mut().palette = palette;
+        self.shared.control.invalidate();
     }
 
     /// Maps a click on a link to a message, given its destination as
@@ -142,6 +188,49 @@ impl<M: 'static> MarkdownView<M> {
     pub fn on_link(self, mapper: impl Fn(&str) -> Option<M> + 'static) -> MarkdownView<M> {
         *self.shared.on_link.borrow_mut() = Some(Box::new(mapper));
         self
+    }
+
+    /// Maps a right-click to a message carrying the client point, for the
+    /// app to show its context menu (with [`copy`](Self::copy) and
+    /// [`select_all`](Self::select_all), say). The mapper must not call back
+    /// into the view.
+    pub fn on_context(self, mapper: impl Fn(Point) -> Option<M> + 'static) -> MarkdownView<M> {
+        *self.shared.on_context.borrow_mut() = Some(Box::new(mapper));
+        self
+    }
+
+    /// The selected text, as [`copy`](Self::copy) puts it on the clipboard;
+    /// empty when nothing is selected.
+    pub fn selected_text(&self) -> String {
+        let state = self.shared.state.borrow();
+        state.layout.doc().plain_text(state.selection.range())
+    }
+
+    /// Whether any text is selected.
+    pub fn has_selection(&self) -> bool {
+        !self.shared.state.borrow().selection.is_empty()
+    }
+
+    /// Puts the selected text on the clipboard, as Ctrl+C does. Returns
+    /// whether anything was selected.
+    pub fn copy(&self) -> bool {
+        self.shared.copy()
+    }
+
+    /// Selects the whole document, as Ctrl+A does.
+    pub fn select_all(&self) {
+        let mut state = self.shared.state.borrow_mut();
+        let end = state.layout.doc().text().len() as u32;
+        state.selection = Selection::of(0..end);
+        state.anchored = true;
+        drop(state);
+        self.shared.control.invalidate();
+    }
+
+    /// Clears the selection.
+    pub fn clear_selection(&self) {
+        self.shared.state.borrow_mut().clear_selection();
+        self.shared.control.invalidate();
     }
 
     /// Scrolls the heading whose slug is `slug` (without `#`) to the top.

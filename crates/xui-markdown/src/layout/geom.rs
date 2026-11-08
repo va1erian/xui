@@ -3,11 +3,13 @@
 //! What laying out a block produces: shaped pieces of text and the
 //! decorations behind them, in device pixels relative to the block's corner.
 
+use std::ops::Range;
 use std::sync::Arc;
 
 use xui_core::backend::{TextLayout, TextShaper};
 
 use super::cache::ShapeCache;
+use crate::highlight::Highlighter;
 use crate::model::Document;
 use crate::style::{MarkdownStyle, Role};
 
@@ -36,7 +38,41 @@ pub(crate) struct Piece {
     pub layout: Arc<dyn TextLayout>,
     pub x: f32,
     pub y: f32,
+    /// The bytes of [`Document::text`] it shows, for hit-testing and
+    /// selection; empty for a list marker, which is not text of the document.
+    pub range: Range<u32>,
+    /// Whether its tabs were widened to spaces for shaping (code), so its
+    /// shaped bytes differ from the document's.
+    pub tabs: bool,
     pub role: Role,
+}
+
+impl Piece {
+    /// The document position of byte `local` of the piece's shaped text;
+    /// `text` is [`Document::text`].
+    pub fn offset(&self, text: &str, local: usize) -> u32 {
+        let local = if self.tabs {
+            super::code::original_offset(&text[self.slice()], local)
+        } else {
+            local
+        };
+        (self.range.start + local as u32).min(self.range.end)
+    }
+
+    /// The byte of the piece's shaped text at document position `pos`
+    /// (clamped to [`Piece::range`]); `text` is [`Document::text`].
+    pub fn local(&self, text: &str, pos: u32) -> usize {
+        let local = (pos.clamp(self.range.start, self.range.end) - self.range.start) as usize;
+        if self.tabs {
+            super::code::expanded_offset(&text[self.slice()], local)
+        } else {
+            local
+        }
+    }
+
+    fn slice(&self) -> Range<usize> {
+        self.range.start as usize..self.range.end as usize
+    }
 }
 
 /// Something painted behind the text.
@@ -70,6 +106,8 @@ pub(crate) struct Ctx<'a> {
     pub shaper: &'a dyn TextShaper,
     pub cache: &'a mut ShapeCache,
     pub dpi: u32,
+    /// The app's code highlighter, if it gave one.
+    pub highlighter: Option<&'a dyn Highlighter>,
 }
 
 impl Ctx<'_> {

@@ -11,6 +11,8 @@ use super::geom::{BlockLayout, Ctx, FRect, Piece};
 struct Placed {
     shaped: Shaped,
     x: f32,
+    /// The bytes of the document it shows.
+    range: (u32, u32),
     span: usize,
     /// The space after it, up to the next word.
     tail: f32,
@@ -89,23 +91,24 @@ impl Lines {
                 let head = ctx
                     .cache
                     .word(ctx.shaper, ctx.style, font, &text[..cut], ctx.dpi);
-                self.push(head, atom.span, 0.0);
+                self.push(head, (from, from + cut as u32), atom.span, 0.0);
                 self.finish(ctx, flow, out);
                 from += cut as u32;
                 shaped = ctx
                     .cache
                     .word(ctx.shaper, ctx.style, font, &text[cut..], ctx.dpi);
             }
-            self.push(shaped, atom.span, atom.tail);
+            self.push(shaped, (from, end), atom.span, atom.tail);
         }
     }
 
-    fn push(&mut self, shaped: Shaped, span: usize, tail: f32) {
+    fn push(&mut self, shaped: Shaped, range: (u32, u32), span: usize, tail: f32) {
         let x = self.cursor;
         self.cursor += shaped.width + tail;
         self.line.push(Placed {
             shaped,
             x,
+            range,
             span,
             tail,
         });
@@ -156,6 +159,8 @@ impl Lines {
                 layout: p.shaped.layout,
                 x: left,
                 y: top,
+                range: p.range.0..p.range.1,
+                tabs: false,
                 role: flow.role(span),
             });
         }

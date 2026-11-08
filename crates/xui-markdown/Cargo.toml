@@ -12,6 +12,8 @@ xui-core = { path = "../xui-core" }
 # CommonMark parsing only: no HTML writer, no SIMD.
 pulldown-cmark = { version = "0.13", default-features = false }
 unicode-linebreak = "0.1"
+# Word boundaries, for double-click selection.
+unicode-segmentation = "1"
 
 [dev-dependencies]
 xui-canvas = { path = "../xui-canvas" }

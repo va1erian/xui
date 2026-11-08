@@ -10,9 +10,11 @@
 
 mod block;
 mod cache;
+mod code;
 mod estimate;
 mod flow;
 mod geom;
+mod hit;
 mod line;
 #[cfg(test)]
 mod perf;
@@ -26,6 +28,7 @@ use std::time::{Duration, Instant};
 
 use xui_core::backend::TextShaper;
 
+use crate::highlight::Highlighter;
 use crate::model::Document;
 use crate::style::MarkdownStyle;
 use block::Context;
@@ -36,6 +39,8 @@ use table::Tables;
 
 struct Slot {
     layout: Option<BlockLayout>,
+    /// The [`Layout::generation`] its layout was made in.
+    made: u64,
     /// The laid-out height, or an estimate.
     height: f32,
     /// The space above the block.
@@ -47,6 +52,7 @@ pub(crate) struct Layout {
     doc: Arc<Document>,
     style: MarkdownStyle,
     shaper: Box<dyn TextShaper>,
+    highlighter: Option<Box<dyn Highlighter>>,
     cache: ShapeCache,
     tables: Tables,
     width: f32,
@@ -58,6 +64,9 @@ pub(crate) struct Layout {
     stale: usize,
     /// No block before this one waits to be laid out.
     pending: usize,
+    /// Counts changes to any block's layout, so what is derived from them
+    /// (selection rectangles) knows when to work them out again.
+    generation: u64,
 }
 
 impl Layout {
@@ -72,6 +81,7 @@ impl Layout {
             doc,
             style,
             shaper,
+            highlighter: None,
             cache: ShapeCache::default(),
             width: 0.0,
             dpi,
@@ -79,6 +89,7 @@ impl Layout {
             tops: Vec::new(),
             stale: 0,
             pending: 0,
+            generation: 0,
         };
         layout.reset();
         layout
@@ -92,6 +103,13 @@ impl Layout {
     pub fn set_document(&mut self, doc: Arc<Document>) {
         self.tables = Tables::new(&doc);
         self.doc = doc;
+        self.reset();
+    }
+
+    /// Colours code blocks with `highlighter` (or none), laying everything
+    /// out again.
+    pub fn set_highlighter(&mut self, highlighter: Option<Box<dyn Highlighter>>) {
+        self.highlighter = highlighter;
         self.reset();
     }
 
@@ -128,6 +146,7 @@ impl Layout {
         self.slots = (0..doc.blocks().len())
             .map(|i| Slot {
                 layout: None,
+                made: 0,
                 height: estimate(&doc, &doc.blocks()[i], &self.style, scale, self.width),
                 gap: gap(&doc, i, &self.style, scale),
             })
@@ -136,6 +155,7 @@ impl Layout {
         self.tops = vec![0.0; self.slots.len() + 1];
         self.stale = 0;
         self.pending = 0;
+        self.generation += 1;
     }
 
     fn refresh_tops(&mut self) {
@@ -210,6 +230,7 @@ impl Layout {
             shaper: self.shaper.as_ref(),
             cache: &mut self.cache,
             dpi: self.dpi,
+            highlighter: self.highlighter.as_deref(),
         };
         let laid = block::layout(&mut ctx, index, self.width, around, &mut self.tables);
         let slot = &mut self.slots[index];
@@ -218,6 +239,8 @@ impl Layout {
         }
         slot.height = laid.height;
         slot.layout = Some(laid);
+        self.generation += 1;
+        slot.made = self.generation;
     }
 
     /// Lays out every block that overlaps `y0..y1`, settling the estimates
@@ -254,6 +277,12 @@ impl Layout {
         self.pending < self.slots.len()
     }
 
+    /// Changes whenever block `index`'s layout does (and is 0 while it has
+    /// none).
+    pub fn generation(&self, index: usize) -> u64 {
+        self.slots.get(index).map_or(0, |slot| slot.made)
+    }
+
     /// Whether every block is laid out.
     pub fn done(&self) -> bool {
         self.pending >= self.slots.len()
@@ -262,16 +291,5 @@ impl Layout {
     /// Block `index`'s layout, if it has one.
     pub fn block(&self, index: usize) -> Option<&BlockLayout> {
         self.slots.get(index)?.layout.as_ref()
-    }
-
-    /// The link at `(x, y)` (content pixels, `x` from the text's left edge).
-    pub fn link_at(&mut self, x: f32, y: f32) -> Option<u32> {
-        let index = self.block_at(y);
-        let top = self.top(index);
-        let laid = self.block(index)?;
-        laid.links
-            .iter()
-            .find(|(rect, _)| rect.contains(x, y - top))
-            .map(|&(_, link)| link)
     }
 }

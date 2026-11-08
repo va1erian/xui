@@ -2,15 +2,12 @@
 
 //! One block laid out: its indent, list marker, quote bars and text.
 
-use super::cache::Shaped;
+use super::code;
 use super::flow::{Flow, flow};
 use super::geom::{BlockLayout, Ctx, Decor, FRect, Piece};
 use super::table::{self, Tables};
 use crate::model::{Align, Block, BlockKind, Inline, Marker};
 use crate::style::Role;
-
-/// Spaces a tab in a code block stands for.
-const TAB: &str = "    ";
 
 /// Where a block sits among its neighbours.
 #[derive(Clone, Copy, Debug, Default)]
@@ -41,10 +38,10 @@ pub(crate) fn layout(
         BlockKind::Paragraph => text(ctx, block, left, inner, &mut out).height,
         BlockKind::ListItem(marker) => {
             let flowed = text(ctx, block, left, inner, &mut out);
-            self::marker(ctx, *marker, block.list, left, flowed.baseline, &mut out);
+            self::marker(ctx, block, *marker, left, flowed.baseline, &mut out);
             flowed.height
         }
-        BlockKind::Code { .. } => code(ctx, block, left, inner, &mut out),
+        BlockKind::Code { .. } => code::layout(ctx, block, left, inner, &mut out),
         BlockKind::TableRow { .. } => table::row(ctx, index, left, inner, tables, &mut out),
         BlockKind::Rule => {
             let thin = (2.0 * ctx.scale()).round();
@@ -119,8 +116,8 @@ fn heading(
 /// The marker of a list item, in the indent before `left`.
 fn marker(
     ctx: &mut Ctx,
+    block: &Block,
     marker: Marker,
-    depth: u8,
     left: f32,
     baseline: f32,
     out: &mut BlockLayout,
@@ -132,7 +129,7 @@ fn marker(
             let d = (0.36 * em).round();
             let rect = FRect::new(left - gap - d, baseline - 0.33 * em - d / 2.0, d, d);
             // Nested levels alternate a disc with a square, as browsers do.
-            out.decor.push(if depth % 2 == 1 {
+            out.decor.push(if block.list % 2 == 1 {
                 Decor::Disc(rect, Role::Text)
             } else {
                 Decor::Fill(rect, Role::Text)
@@ -161,60 +158,10 @@ fn marker(
                 x: left - gap - shaped.width,
                 y: baseline - shaped.baseline,
                 layout: shaped.layout,
+                range: block.text.start..block.text.start,
+                tabs: false,
                 role: Role::Text,
             });
         }
     }
-}
-
-/// A code block: unwrapped lines on a shaded box, clipped to it.
-fn code(ctx: &mut Ctx, block: &Block, left: f32, width: f32, out: &mut BlockLayout) -> f32 {
-    let inset = ctx.px(ctx.style.inset);
-    let font = ctx.style.font(Inline::NONE, None, true);
-    let spec = ctx.style.spec(font);
-    let line_height = ctx
-        .cache
-        .metrics(ctx.shaper, ctx.style, font, ctx.dpi)
-        .height;
-    let mut y = inset;
-    let mut at = block.text.start;
-    for line in ctx.doc.block_text(block).split('\n') {
-        let end = at + line.len() as u32;
-        if !line.trim_end().is_empty() {
-            let shaped = if line.contains('\t') {
-                Shaped::new(ctx.shaper.layout(
-                    &line.replace('\t', TAB),
-                    &spec,
-                    f32::INFINITY,
-                    ctx.dpi,
-                ))
-            } else {
-                Shaped::new(ctx.shaper.layout(line, &spec, f32::INFINITY, ctx.dpi))
-            };
-            out.pieces.push(Piece {
-                layout: shaped.layout,
-                x: left + inset,
-                y,
-                role: if block.quote > 0 {
-                    Role::Weak
-                } else {
-                    Role::Text
-                },
-            });
-        }
-        y += line_height;
-        at = end + 1;
-    }
-    let height = y + inset;
-    out.decor.insert(
-        0,
-        Decor::Fill(FRect::new(left, 0.0, width, height), Role::Surface),
-    );
-    out.clip = Some(FRect::new(
-        left + inset,
-        0.0,
-        (width - 2.0 * inset).max(0.0),
-        height,
-    ));
-    height
 }

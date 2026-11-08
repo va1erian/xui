@@ -4,14 +4,14 @@
 //! block shapes and allocates nothing; `State::prepare` first lays out any
 //! visible block that has no layout yet (the only shaping a paint does).
 
-use xui_core::Theme;
 use xui_core::backend::{Canvas, Rgba};
 use xui_core::geometry::{Point, Rect};
 use xui_core::widget::scrollbar::{self, Orientation, ThumbState};
+use xui_core::{Color, Theme};
 
 use super::state::State;
 use crate::layout::{BlockLayout, Decor, FRect};
-use crate::style;
+use crate::style::{self, CodePalette, Role};
 
 /// Paints the document and the scrollbar.
 ///
@@ -35,12 +35,31 @@ fn paint_local(canvas: &mut dyn Canvas, state: &mut State, theme: &Theme, bounds
     canvas.push_clip(text_area);
     let y0 = state.scroll - state.pad;
     let range = state.layout.visible(y0, y0 + state.viewport());
-    let thin = (canvas.dpi() as f32 / 96.0).round().max(1.0);
+    let palette = state.palette;
+    let ink = Ink {
+        theme,
+        palette: palette.as_ref(),
+        thin: (canvas.dpi() as f32 / 96.0).round().max(1.0),
+        selection: if state.focused {
+            theme.selection
+        } else {
+            theme.selection_unfocused
+        },
+    };
+    let selection = state.selection.range();
     for index in range {
         let top = state.layout.top(index);
+        if !selection.is_empty() {
+            state.rects.prepare(&state.layout, &selection, index);
+        }
         if let Some(laid) = state.layout.block(index) {
             let at = (state.pad, top - y0);
-            block(canvas, laid, at, theme, thin);
+            let selected = if selection.is_empty() {
+                &[][..]
+            } else {
+                state.rects.get(index)
+            };
+            block(canvas, laid, at, &ink, selected);
         }
     }
     canvas.pop_clip();
@@ -69,17 +88,53 @@ fn pixels(r: &FRect, (dx, dy): (f32, f32)) -> Rect {
     Rect::new(left, top, right, bottom)
 }
 
-fn block(canvas: &mut dyn Canvas, laid: &BlockLayout, at: (f32, f32), theme: &Theme, thin: f32) {
-    for decor in &laid.decor {
-        match decor {
-            Decor::Fill(r, role) => canvas.fill_rect(pixels(r, at), role.color(theme)),
-            Decor::Frame(r, role) => canvas.stroke_rect(pixels(r, at), role.color(theme), thin),
-            Decor::Disc(r, role) => {
-                let rect = pixels(r, at);
-                let radius = rect.width().min(rect.height()) as f32 / 2.0;
-                canvas.fill_rounded_rect(rect, radius, role.color(theme));
-            }
+fn draw(canvas: &mut dyn Canvas, decor: &Decor, at: (f32, f32), ink: &Ink) {
+    let color = |role: &Role| role.color(ink.theme, ink.palette);
+    match decor {
+        Decor::Fill(r, role) => canvas.fill_rect(pixels(r, at), color(role)),
+        Decor::Frame(r, role) => canvas.stroke_rect(pixels(r, at), color(role), ink.thin),
+        Decor::Disc(r, role) => {
+            let rect = pixels(r, at);
+            let radius = rect.width().min(rect.height()) as f32 / 2.0;
+            canvas.fill_rounded_rect(rect, radius, color(role));
         }
+    }
+}
+
+/// The colours and stroke a paint uses.
+struct Ink<'a> {
+    theme: &'a Theme,
+    palette: Option<&'a CodePalette>,
+    thin: f32,
+    selection: Color,
+}
+
+fn block(
+    canvas: &mut dyn Canvas,
+    laid: &BlockLayout,
+    at: (f32, f32),
+    ink: &Ink,
+    selected: &[FRect],
+) {
+    let (theme, palette) = (ink.theme, ink.palette);
+    // Backgrounds (code and header shading) go under the selection; lines,
+    // frames and markers over it, so a selected link keeps its underline.
+    let background = |d: &&Decor| matches!(d, Decor::Fill(_, Role::Surface));
+    for decor in laid.decor.iter().filter(background) {
+        draw(canvas, decor, at, ink);
+    }
+    // A code block clips its long lines, and their selection with them.
+    if let Some(clip) = &laid.clip {
+        canvas.push_clip(pixels(clip, at));
+    }
+    for rect in selected {
+        canvas.fill_rect(pixels(rect, at), ink.selection);
+    }
+    if laid.clip.is_some() {
+        canvas.pop_clip();
+    }
+    for decor in laid.decor.iter().filter(|d| !background(d)) {
+        draw(canvas, decor, at, ink);
     }
     if let Some(clip) = &laid.clip {
         canvas.push_clip(pixels(clip, at));
@@ -92,7 +147,7 @@ fn block(canvas: &mut dyn Canvas, laid: &BlockLayout, at: (f32, f32), theme: &Th
         canvas.draw_layout(
             piece.layout.as_ref(),
             origin,
-            Rgba::from(piece.role.color(theme)),
+            Rgba::from(piece.role.color(theme, palette)),
         );
     }
     if laid.clip.is_some() {

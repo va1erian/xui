@@ -13,6 +13,14 @@
   allocates nothing (a paint lays out only blocks just coming into view).
   Opt-in: `xui`'s `markdown` feature re-exports it as `xui::xui_markdown`.
   Examples: `snapshot` (headless, light and dark) and `viewer` (a window).
+- **`xui-markdown` selects, copies and highlights code.**
+  - Selection: drag (scrolling past the edges), Shift+click, a double-click
+    for a word, a triple-click for a block, and Ctrl+A.
+  - Copy: Ctrl+C or `copy()` puts plain text on the clipboard, with list
+    markers kept, code verbatim and tables as tab-separated rows.
+  - `on_context` maps a right-click for the app's context menu.
+  - Code: a `Highlighter` the app supplies colours code blocks line by line,
+    in a `CodePalette` or the theme's tokens.
 - **`xui-d2d` gives nodes native child windows.** `Ui::set_native_surface` /
   `native_surface` work on the Direct2D backend as on `xui-canvas`: a Win32
   child window of the node's window, kept on its bounds, shown only while the

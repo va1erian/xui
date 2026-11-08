@@ -127,6 +127,8 @@ fn single(
         layout: shaped.layout,
         x: x + dx,
         y,
+        range: start..end,
+        tabs: false,
         role: flow.role(span),
     });
     Flowed {
