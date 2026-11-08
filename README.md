@@ -35,6 +35,7 @@ everywhere, or an offscreen surface for snapshots and tests. Dark mode is first-
 | `xui` | The umbrella crate most applications depend on. Selects a backend by feature (`canvas`, the default) and re-exports the portable front layer. |
 | `xui-code-editor` | A code-editor widget: rope buffer, monospace view, find/replace, pluggable syntax highlighting. |
 | `xui-rich-text` | An opt-in editable rich-text widget for a basic word processor: styled runs, paragraph formatting, lists, inline and floating images that text wraps around, undo, JSON save and Markdown export. Portable: lays out through the backend `TextShaper`. Enable with `xui`'s `rich-text` feature. |
+| `xui-markdown` | An opt-in read-only Markdown view: CommonMark with GFM tables, strike-through and task lists, links, scrolling. Portable: lays out through the backend `TextShaper`, visible blocks first. Enable with `xui`'s `markdown` feature. |
 | `xui-icons` | An optional, multi-colour vector icon set (36 icons) in the flat "Global Village" style, drawn through the portable `Canvas` path API, so the software backend rasterises it with `tiny-skia`. Depends on `xui-core` only. |
 | `xui-blitz` | A web view on the [Blitz](https://github.com/DioxusLabs/blitz) engine (Stylo, Taffy, Parley): CSS grid, flexbox, floats, `var()`, SVG; links reported or followed, fetching through the app's `Fetcher`, downloads, selection and copy. A portable custom-painted node. |
 

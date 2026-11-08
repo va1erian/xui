@@ -1,0 +1,17 @@
+[package]
+name = "xui-markdown"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "A fast, small, read-only Markdown view for xui: CommonMark with GFM tables, shaped and painted through xui-core's portable canvas"
+repository = "https://github.com/va1erian/xui"
+readme = "README.md"
+
+[dependencies]
+xui-core = { path = "../xui-core" }
+# CommonMark parsing only: no HTML writer, no SIMD.
+pulldown-cmark = { version = "0.13", default-features = false }
+unicode-linebreak = "0.1"
+
+[dev-dependencies]
+xui-canvas = { path = "../xui-canvas" }

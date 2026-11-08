@@ -1,0 +1,206 @@
+#![forbid(unsafe_code)]
+
+//! The widget: [`MarkdownView`], one custom node that paints a laid-out
+//! [`Document`], scrolls it and follows its links.
+
+mod events;
+mod paint;
+mod shared;
+mod state;
+
+use std::cell::{Cell, RefCell};
+use std::rc::{Rc, Weak};
+use std::sync::Arc;
+
+use xui_core::app::Ui;
+use xui_core::backend::{NodeKind, NodeSpec, Result, WidgetId};
+use xui_core::geometry::{Rect, Size};
+use xui_core::layout::Constraints;
+use xui_core::theme::{Theme, Themed};
+use xui_core::widget::{Control, Placeable};
+
+use crate::layout::Layout;
+use crate::model::Document;
+use crate::style::MarkdownStyle;
+use shared::Shared;
+use state::State;
+/// A read-only view of a Markdown document: styled text, lists, quotes, code
+/// blocks and tables, scrolled with the wheel, the keyboard and its own bar.
+///
+/// Text is shaped through the backend's [`TextShaper`](xui_core::backend::TextShaper)
+/// and painted in the live theme's colours. Blocks on screen are laid out
+/// first and the rest a slice at a time on a timer, so a long document opens
+/// at once.
+///
+/// ```ignore
+/// let view = MarkdownView::new(ui, bounds)?
+///     .markdown("# Hello\n\nSome *styled* text and a [link](next.md).")
+///     .on_link(|href| Some(Msg::Open(href.to_owned())));
+/// ```
+pub struct MarkdownView<M: 'static> {
+    shared: Rc<Shared<M>>,
+}
+
+impl<M: 'static> MarkdownView<M> {
+    /// Creates an empty view at `bounds` (device pixels).
+    pub fn new(ui: &Ui<M>, bounds: Rect) -> Result<MarkdownView<M>> {
+        let control = Control::new(ui, &NodeSpec::new(NodeKind::Custom, bounds).tab_stop())?;
+        let style = MarkdownStyle::default();
+        let padding = style.padding;
+        let layout = Layout::new(
+            Arc::new(Document::default()),
+            style,
+            ui.text_shaper(),
+            ui.dpi(),
+        );
+        let theme = ui.theme_handle();
+        let shared = Rc::new_cyclic(|me: &Weak<Shared<M>>| {
+            let painter = me.clone();
+            control.set_painter(Rc::new(move |canvas| {
+                if let Some(shared) = painter.upgrade() {
+                    paint::paint(canvas, &mut shared.state.borrow_mut(), &theme.get());
+                    // A paint may have sized the layout for the first time or
+                    // reset it for a new DPI: lay out the rest in the background.
+                    shared.kick();
+                }
+            }));
+            let mapper = me.clone();
+            control.on_events(move |event| {
+                let shared = mapper.upgrade()?;
+                let out = events::handle(&mut shared.state.borrow_mut(), event)?;
+                if out.relayout {
+                    shared.kick();
+                }
+                shared.deliver(out)
+            });
+            Shared {
+                id: control.id(),
+                control,
+                me: me.clone(),
+                state: RefCell::new(State::new(layout, padding, ui.dpi())),
+                ui: ui.clone(),
+                on_link: RefCell::new(None),
+                timer: Cell::new(None),
+            }
+        });
+        Ok(MarkdownView { shared })
+    }
+
+    /// Shows `markdown`, parsed here.
+    pub fn markdown(self, markdown: &str) -> MarkdownView<M> {
+        self.set_markdown(markdown);
+        self
+    }
+
+    /// Parses and shows `markdown`, scrolled to the top.
+    pub fn set_markdown(&self, markdown: &str) {
+        self.set_document(Arc::new(Document::parse(markdown)));
+    }
+
+    /// Shows a document parsed elsewhere (on a worker thread, say).
+    pub fn document(self, document: Arc<Document>) -> MarkdownView<M> {
+        self.set_document(document);
+        self
+    }
+
+    /// Shows `document`, scrolled to the top.
+    pub fn set_document(&self, document: Arc<Document>) {
+        let mut state = self.shared.state.borrow_mut();
+        state.layout.set_document(document);
+        state.reset_scroll();
+        drop(state);
+        self.shared.control.invalidate();
+        self.shared.kick();
+    }
+
+    /// The document shown.
+    pub fn current_document(&self) -> Arc<Document> {
+        Arc::clone(self.shared.state.borrow().layout.doc())
+    }
+
+    /// Sets the fonts, sizes and spacing.
+    pub fn style(self, style: MarkdownStyle) -> MarkdownView<M> {
+        self.set_style(style);
+        self
+    }
+
+    /// Changes the fonts, sizes and spacing, laying the document out again.
+    pub fn set_style(&self, style: MarkdownStyle) {
+        let mut state = self.shared.state.borrow_mut();
+        state.padding = style.padding;
+        state.layout.set_style(style);
+        state.reset_scroll();
+        drop(state);
+        self.shared.control.invalidate();
+        self.shared.kick();
+    }
+
+    /// Maps a click on a link to a message, given its destination as
+    /// [`Document::link`] gives it (escapes and entities resolved).
+    /// A `#slug` link to one of the document's headings scrolls there and is
+    /// not reported. The mapper must not call back into the view.
+    pub fn on_link(self, mapper: impl Fn(&str) -> Option<M> + 'static) -> MarkdownView<M> {
+        *self.shared.on_link.borrow_mut() = Some(Box::new(mapper));
+        self
+    }
+
+    /// Scrolls the heading whose slug is `slug` (without `#`) to the top.
+    /// Returns whether there is one.
+    pub fn scroll_to_anchor(&self, slug: &str) -> bool {
+        let mut state = self.shared.state.borrow_mut();
+        let Some(block) = state.layout.doc().anchor(slug) else {
+            return false;
+        };
+        state.scroll_to_block(block);
+        drop(state);
+        self.shared.control.invalidate();
+        true
+    }
+
+    /// Scrolls to `offset` device pixels from the top, clamped to the content.
+    pub fn set_scroll(&self, offset: f32) {
+        self.shared.state.borrow_mut().set_scroll(offset);
+        self.shared.control.invalidate();
+    }
+
+    /// The scroll offset in device pixels.
+    pub fn scroll(&self) -> f32 {
+        self.shared.state.borrow().scroll
+    }
+
+    /// Takes the keyboard focus.
+    pub fn focus(&self) {
+        self.shared.control.focus();
+    }
+
+    /// Moves and resizes the view (device pixels).
+    pub fn set_bounds(&self, bounds: Rect) {
+        self.shared.control.set_bounds(bounds);
+        self.shared.kick();
+    }
+
+    /// The view's node.
+    pub fn id(&self) -> WidgetId {
+        self.shared.control.id()
+    }
+}
+
+/// The view fills whatever slot a layout gives it; it scrolls, so it has no
+/// natural size of its own.
+impl<M: 'static> Placeable<M> for MarkdownView<M> {
+    fn id(&self) -> WidgetId {
+        self.shared.control.id()
+    }
+
+    fn measure(&self, _ui: &Ui<M>, _constraints: Constraints) -> Size {
+        Size::new(0, 0)
+    }
+}
+
+/// Colours are resolved from the live theme when painting, so a theme change
+/// only repaints.
+impl<M: 'static> Themed for MarkdownView<M> {
+    fn apply_theme(&self, _theme: &Theme) {
+        self.shared.control.invalidate();
+    }
+}

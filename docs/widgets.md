@@ -118,6 +118,15 @@ on every backend and follows the theme. It is opt-in: depend on the crate direct
 enable the `xui` crate's `rich-text` feature. Documents save as JSON and export
 to Markdown. See its [README](../crates/xui-rich-text/README.md).
 
+### Markdown (optional)
+
+`xui-markdown` provides `MarkdownView`, a read-only view of a Markdown document:
+CommonMark with GFM tables, strike-through and task lists, laid out viewport-first
+so long documents open at once. Like the rich-text editor it is a custom-painted
+node that runs on every backend and follows the theme. It is opt-in: depend on the
+crate directly or enable the `xui` crate's `markdown` feature. Links are reported
+through `on_link`. See its [README](../crates/xui-markdown/README.md).
+
 ### Collections
 
 `ListView<M>` is a virtualized list. Build it from words or from a model:

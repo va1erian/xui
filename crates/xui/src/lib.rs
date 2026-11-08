@@ -12,6 +12,7 @@
 //!   platform.
 //! - `icons` adds [`xui_icons`], the optional Global Village icon set.
 //! - `rich-text` adds [`xui_rich_text`], the editable rich-text widget.
+//! - `markdown` adds [`xui_markdown`], the read-only Markdown view.
 //!
 //! Both backends run the exact same widgets. An app starts with [`app`],
 //! which picks the backend (and renders headless screenshots when
@@ -40,5 +41,7 @@ pub use xui_canvas;
 
 #[cfg(feature = "icons")]
 pub use xui_icons;
+#[cfg(feature = "markdown")]
+pub use xui_markdown;
 #[cfg(feature = "rich-text")]
 pub use xui_rich_text;

@@ -16,12 +16,15 @@ canvas = ["dep:xui-canvas"]
 icons = ["dep:xui-icons"]
 # The optional editable rich-text widget (`xui::xui_rich_text`).
 rich-text = ["dep:xui-rich-text"]
+# The optional read-only Markdown view (`xui::xui_markdown`).
+markdown = ["dep:xui-markdown"]
 
 [dependencies]
 xui-core = { path = "../xui-core" }
 xui-canvas = { path = "../xui-canvas", optional = true }
 xui-icons = { path = "../xui-icons", optional = true }
 xui-rich-text = { path = "../xui-rich-text", optional = true }
+xui-markdown = { path = "../xui-markdown", optional = true }
 
 [[example]]
 name = "widgets"

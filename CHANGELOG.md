@@ -4,6 +4,15 @@
 
 ### Added
 
+- **`xui-markdown`, a read-only Markdown view.** `MarkdownView` shows CommonMark
+  with GFM tables, strike-through and task lists, scrolled with the wheel, the
+  keyboard and its own bar, with links reported through `on_link` (a `#slug`
+  link to a heading scrolls there). Blocks on screen are laid out first and the
+  rest on a timer that stops once all are done; text is shaped through the
+  backend `TextShaper` and cached, and drawing a laid-out block shapes and
+  allocates nothing (a paint lays out only blocks just coming into view).
+  Opt-in: `xui`'s `markdown` feature re-exports it as `xui::xui_markdown`.
+  Examples: `snapshot` (headless, light and dark) and `viewer` (a window).
 - **`xui-d2d` gives nodes native child windows.** `Ui::set_native_surface` /
   `native_surface` work on the Direct2D backend as on `xui-canvas`: a Win32
   child window of the node's window, kept on its bounds, shown only while the
