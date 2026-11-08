@@ -78,3 +78,31 @@ fn a_view_with_no_room_waits_for_one() {
         assert_eq!(*log.borrow(), ["frame", "painted", "frame"]);
     });
 }
+
+#[test]
+fn a_new_style_or_size_does_not_report_again() {
+    run(Rect::new(0, 0, 320, 200), |stage, (view, log)| {
+        paint(stage);
+        log.borrow_mut().clear();
+        view.set_style(xui_markdown::MarkdownStyle::default());
+        view.set_bounds(Rect::new(0, 0, 300, 180));
+        paint(stage);
+        assert_eq!(*log.borrow(), ["frame"]);
+    });
+}
+
+#[test]
+fn a_document_set_while_squeezed_waits_for_room() {
+    run(Rect::new(0, 0, 320, 200), |stage, (view, log)| {
+        paint(stage);
+        view.set_bounds(Rect::new(0, 0, 0, 0));
+        paint(stage);
+        log.borrow_mut().clear();
+        view.set_markdown("# Two");
+        paint(stage);
+        assert_eq!(*log.borrow(), ["frame"], "no room, no report");
+        view.set_bounds(Rect::new(0, 0, 320, 200));
+        paint(stage);
+        assert_eq!(*log.borrow(), ["frame", "painted", "frame"]);
+    });
+}

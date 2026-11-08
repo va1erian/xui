@@ -119,3 +119,63 @@ fn the_estimate_counts_wrapped_rows() {
     let long = lay(&format!("```\n{}\n```", "a".repeat(100)), TEN).height();
     assert!(long > short * 4.0, "{long} vs {short}");
 }
+
+#[test]
+fn a_last_character_the_hit_rounded_up_to_goes_to_the_next_row() {
+    // 69.5 px of room: ten characters (65 px) fit, the eleventh (71.5) does not.
+    let block = one("```\nabcdefghijk\n```", 0, 16.0 + 69.5);
+    assert_eq!(texts(&block), ["abcdefghij", "k"]);
+}
+
+#[test]
+fn the_spaces_at_a_cut_end_their_row_and_no_row_is_blank() {
+    let line = format!("a{}b", " ".repeat(20));
+    let block = one(&format!("```\n{line}\n```"), 0, TEN);
+    let ys: Vec<f32> = block.pieces.iter().map(|p| p.y).collect();
+    assert_eq!(texts(&block), [&line[..21], "b"]);
+    assert_eq!(ys, [8.0, 24.0]);
+}
+
+#[test]
+fn a_line_past_the_wrap_limit_is_clipped_not_wrapped() {
+    let long = "a".repeat(super::super::rows::WRAP_LIMIT + 1);
+    let block = one(&format!("```\n{long}\n```"), 0, TEN);
+    assert_eq!(block.pieces.len(), 1);
+    assert_eq!(block.height, 8.0 + 16.0 + 8.0);
+}
+
+/// The same spans for every line.
+struct Fixed(Vec<CodeSpan>);
+
+impl Highlighter for Fixed {
+    fn line(&self, _: &str, _: &str, _: u32) -> (Vec<CodeSpan>, u32) {
+        (self.0.clone(), 0)
+    }
+}
+
+#[test]
+fn a_span_invalid_for_the_line_is_dropped_before_the_cut() {
+    let mut layout = lay("```\nabcdefghijklmnopqrst\n```", TEN);
+    layout.set_highlighter(Some(Box::new(Fixed(vec![CodeSpan {
+        range: 5..1000,
+        class: CodeClass::Keyword,
+    }]))));
+    layout.ensure(0.0, 1.0e6);
+    let block = layout.block(0).expect("laid out");
+    assert_eq!(block.pieces.len(), 2);
+    assert!(block.pieces.iter().all(|p| p.role == Role::Text));
+}
+
+#[test]
+fn the_estimate_matches_the_rows_without_room_and_counts_tabs() {
+    let line = "a".repeat(100);
+    let none = lay(&format!("```\n{line}\n```"), 0.0).height();
+    let one_row = lay("```\nab\n```", 0.0).height();
+    assert!(close(none, one_row), "{none} vs {one_row}");
+    let tabs = lay("```\n\t\t\t\t\t\n```", TEN).height();
+    let five = lay("```\naaaaa\n```", TEN).height();
+    assert!(
+        tabs > five,
+        "five tabs are twenty columns: {tabs} vs {five}"
+    );
+}

@@ -101,7 +101,8 @@ Raw HTML is shown as literal text; an image is shown as its alt text for now.
 
 `MarkdownStyle` holds the fonts, sizes and spacing as design values (`Dip`):
 body and code families and sizes, heading scale, padding, block gap, list and
-quote indents, and the inset of code blocks and table cells. Pass it with
+quote indents, the inset of code blocks and table cells, and whether long
+code lines wrap (`wrap_code`). Pass it with
 `.style(..)` or `set_style`. Colours are not part of it: text is painted in
 semantic roles resolved against the live theme, so a theme change repaints
 without laying anything out again.
@@ -131,6 +132,8 @@ without laying anything out again.
 * No bidirectional reordering across styled pieces.
 * A wrapped code line continues at the block's left edge, not under its
   indentation.
+* A code line longer than 4096 bytes (minified data) is clipped, not wrapped:
+  cutting it into rows would cost the square of its length.
 * A view with no room for text (narrower than its padding and scrollbar,
   about 51 px at 96 DPI) draws none; one squeezed that far keeps its last
   layout.

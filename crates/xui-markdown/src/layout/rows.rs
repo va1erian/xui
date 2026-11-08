@@ -4,8 +4,14 @@
 //!
 //! The line is shaped once, unwrapped; each row ends at the last character
 //! that fits, or after the last space in the row's second half so a word is
-//! not split when a space is near. A row holds at least one character, so a
-//! box narrower than a character still makes progress.
+//! not split when a space is near. The spaces at a cut stay at the end of the
+//! row they follow, so no row is only blank. A row holds at least one
+//! character, so a box narrower than a character still makes progress.
+//!
+//! Each row asks the shaped line a few questions, and a backend may answer
+//! each by walking the whole line, so a line longer than [`WRAP_LIMIT`] (minified
+//! data, say) is clipped rather than wrapped: wrapping it would cost the
+//! square of its length.
 
 use std::ops::Range;
 
@@ -13,23 +19,26 @@ use xui_core::backend::TextLayout;
 
 use super::code::{expanded_offset, original_offset};
 
+/// The longest line, in bytes, that wraps.
+pub(super) const WRAP_LIMIT: usize = 4096;
+
 /// The byte ranges of `line` shown on each row of a box `avail` pixels wide;
 /// `whole` is `line` shaped unwrapped (tabs widened). One row when it fits.
 pub(super) fn rows(whole: &dyn TextLayout, line: &str, avail: f32) -> Vec<Range<usize>> {
-    if avail.is_nan() || avail <= 0.0 || whole.width() <= avail {
+    let unwrapped = avail.is_nan() || avail <= 0.0 || line.len() > WRAP_LIMIT;
+    if unwrapped || whole.width() <= avail {
         return std::iter::once(0..line.len()).collect();
     }
     let mid = whole.height() / 2.0;
     let mut rows = Vec::new();
-    let mut start = 0;
+    let (mut start, mut left) = (0, 0.0);
     while start < line.len() {
-        let left = x_at(whole, line, start);
         let hit = whole.hit_test_point(left + avail, mid);
-        if !hit.inside || hit.byte_index >= expanded_offset(line, line.len()) {
-            rows.push(start..line.len());
-            break;
-        }
-        let mut end = original_offset(line, hit.byte_index).max(start);
+        let mut end = if hit.inside {
+            original_offset(line, hit.byte_index).max(start)
+        } else {
+            line.len()
+        };
         // The hit rounds to the nearer caret: a character it rounded up past
         // may not fit.
         while end > start && x_at(whole, line, end) - left > avail + 0.5 {
@@ -38,8 +47,9 @@ pub(super) fn rows(whole: &dyn TextLayout, line: &str, avail: f32) -> Vec<Range<
         if end == start {
             end = next(line, start);
         }
-        end = after_space(line, start, end);
+        end = absorb_spaces(line, after_space(line, start, end));
         rows.push(start..end);
+        left = x_at(whole, line, end);
         start = end;
     }
     rows
@@ -57,16 +67,29 @@ fn after_space(line: &str, start: usize, end: usize) -> usize {
     }
 }
 
-/// The pen position before byte `at` of `line`.
+/// `end` moved past the spaces that follow it: they end this row instead of
+/// starting the next one.
+fn absorb_spaces(line: &str, end: usize) -> usize {
+    end + line[end..].len() - line[end..].trim_start_matches(' ').len()
+}
+
+/// The pen position before byte `at` of `line`: the right edge of the
+/// character before it (the whole prefix when that edge is not reported, as
+/// some backends leave a trailing space out of a selection).
 fn x_at(whole: &dyn TextLayout, line: &str, at: usize) -> f32 {
     if at == 0 {
         return 0.0;
     }
-    whole
-        .selection_rects(0, expanded_offset(line, at))
-        .iter()
-        .map(|r| r.right as f32)
-        .reduce(f32::max)
+    let right = |from: usize| {
+        whole
+            .selection_rects(expanded_offset(line, from), expanded_offset(line, at))
+            .iter()
+            .map(|r| r.right as f32)
+            .reduce(f32::max)
+    };
+    right(previous(line, at))
+        .filter(|&x| x > 0.0)
+        .or_else(|| right(0))
         .unwrap_or(0.0)
 }
 

@@ -64,10 +64,16 @@ impl<M: 'static> Shared<M> {
         self.timer.set(timer);
     }
 
-    /// After a paint: reports the first one of a new document that drew its
-    /// text (a view with no room yet draws none and waits for the next).
+    /// After a paint: reports the first one of a new document that had room
+    /// for its text (a view with none, never sized or squeezed to nothing,
+    /// draws no text and waits for a paint that does).
     pub(super) fn painted(&self) {
-        if !self.unpainted.get() || !self.state.borrow().layout.sized() {
+        let room = {
+            let state = self.state.borrow();
+            let text_width = (state.track.left - state.bounds.left) as f32 - 2.0 * state.pad;
+            state.layout.sized() && text_width > 0.0 && state.bounds.height() > 0
+        };
+        if !self.unpainted.get() || !room {
             return;
         }
         self.unpainted.set(false);

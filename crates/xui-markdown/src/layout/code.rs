@@ -123,7 +123,7 @@ pub(super) fn layout(
                 at: at + range.start as u32,
                 pen: (pen_x, y),
             };
-            let spans = spans.as_ref().map(|s| clip_spans(s, &range));
+            let spans = spans.as_ref().map(|s| clip_spans(s, line, &range));
             row.lay(ctx, shaped, spans.as_deref(), plain, out);
             y += line_height;
         }
@@ -233,10 +233,19 @@ impl Row<'_> {
     }
 }
 
-/// The parts of `spans` (relative to a line) inside `row`, relative to it.
-fn clip_spans(spans: &[CodeSpan], row: &Range<usize>) -> Vec<CodeSpan> {
+/// The parts of `spans` (relative to `line`) inside `row`, relative to it. A
+/// span that is not valid for the whole line is dropped first, as it would be
+/// unwrapped, rather than made valid by the cut.
+fn clip_spans(spans: &[CodeSpan], line: &str, row: &Range<usize>) -> Vec<CodeSpan> {
     spans
         .iter()
+        .filter(|span| {
+            let r = &span.range;
+            r.start < r.end
+                && r.end <= line.len()
+                && line.is_char_boundary(r.start)
+                && line.is_char_boundary(r.end)
+        })
         .filter_map(|span| {
             let start = span.range.start.max(row.start);
             let end = span.range.end.min(row.end);

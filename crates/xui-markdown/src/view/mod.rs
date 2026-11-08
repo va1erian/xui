@@ -194,11 +194,13 @@ impl<M: 'static> MarkdownView<M> {
         self
     }
 
-    /// Maps the first paint of each document shown to a message, sent once
-    /// the document's visible text has been drawn (for an app that reports
-    /// when a page is on screen). A document set before this is called
-    /// counts too, if it has not been painted yet. The mapper must not call
-    /// back into the view.
+    /// Maps the first paint of each document shown to a message, queued
+    /// once a paint with room for text has drawn the document's visible
+    /// blocks (for an app that reports when a page is on screen; the frame
+    /// is presented after the paint). A paint of a view with no room waits
+    /// for the next. Only a new document re-arms it, not a new style or
+    /// size. A document set before this is called counts too, if it has not
+    /// been painted yet. The mapper must not call back into the view.
     pub fn on_painted(self, mapper: impl Fn() -> Option<M> + 'static) -> MarkdownView<M> {
         *self.shared.on_painted.borrow_mut() = Some(Box::new(mapper));
         self

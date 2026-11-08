@@ -25,8 +25,10 @@
   paint.** A code line wider than its block continues on more rows, ending
   after a space when one is in the row's second half; selection, copy and
   highlighting follow the rows (`MarkdownStyle::wrap_code`, on by default;
-  off clips as before). `on_painted` maps the first paint of each document
-  shown to a message, for an app that reports when a page is on screen.
+  off clips as before; a line over 4096 bytes is clipped). `on_painted` maps
+  the first paint with room for text of each document shown to a message, for
+  an app that reports when a page is on screen. `MarkdownStyle` gains a public
+  field, so a struct literal needs `..MarkdownStyle::default()`.
 - **`xui-d2d` gives nodes native child windows.** `Ui::set_native_surface` /
   `native_surface` work on the Direct2D backend as on `xui-canvas`: a Win32
   child window of the node's window, kept on its bounds, shown only while the
