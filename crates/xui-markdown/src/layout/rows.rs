@@ -40,9 +40,9 @@ pub(super) fn rows(whole: &dyn TextLayout, line: &str, avail: f32) -> Vec<Range<
             line.len()
         };
         // The hit rounds to the nearer caret: a character it rounded up past
-        // may not fit.
-        while end > start && x_at(whole, line, end) - left > avail + 0.5 {
-            end = previous(line, end);
+        // may not fit, and a backend that misses the point reports none.
+        if x_at(whole, line, end) - left > avail + 0.5 {
+            end = last_fit(whole, line, start..end, left + avail + 0.5);
         }
         if end == start {
             end = next(line, start);
@@ -53,6 +53,18 @@ pub(super) fn rows(whole: &dyn TextLayout, line: &str, avail: f32) -> Vec<Range<
         start = end;
     }
     rows
+}
+
+/// The last character boundary in `span` (after its start) whose pen
+/// position is at most `limit`, or the span's start when none is: a binary
+/// search, as pen positions grow along left-to-right text.
+fn last_fit(whole: &dyn TextLayout, line: &str, span: Range<usize>, limit: f32) -> usize {
+    let ends: Vec<usize> = line[span.clone()]
+        .char_indices()
+        .map(|(at, c)| span.start + at + c.len_utf8())
+        .collect();
+    let fits = ends.partition_point(|&end| x_at(whole, line, end) <= limit);
+    fits.checked_sub(1).map_or(span.start, |i| ends[i])
 }
 
 /// Where the row `start..end` ends to keep a word whole: after its last
