@@ -59,7 +59,13 @@ impl Shared {
         let Some((x, y)) = event.position() else {
             return false;
         };
-        let captured = self.captured.get();
+        // A locked pointer reports relative motion instead of positions, and
+        // its node takes the buttons and the wheel.
+        let locked = self.locked.get();
+        if locked.is_some() && matches!(event, Event::MouseMove { .. }) {
+            return false;
+        }
+        let captured = locked.or(self.captured.get());
         let target = match captured {
             Some(id) => {
                 let origin = self.scene.borrow().absolute_bounds(id);
@@ -174,6 +180,9 @@ impl Shared {
         }
         if self.captured.get() == Some(id) {
             self.captured.set(None);
+        }
+        if self.locked.get() == Some(id) {
+            self.unlock_pointer(false);
         }
     }
 }

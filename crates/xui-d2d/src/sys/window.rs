@@ -24,8 +24,8 @@ use windows::Win32::UI::WindowsAndMessaging::{
     IDC_SIZENESW, IDC_SIZENS, IDC_SIZENWSE, IDC_SIZEWE, IDC_WAIT, IsZoomed, KillTimer, LoadCursorW,
     PostMessageW, RegisterClassExW, SW_MAXIMIZE, SW_MINIMIZE, SW_RESTORE, SW_SHOW, SWP_NOACTIVATE,
     SWP_NOMOVE, SWP_NOZORDER, SetCursor, SetTimer, SetWindowLongPtrW, SetWindowPos, SetWindowTextW,
-    ShowWindow, WINDOW_EX_STYLE, WM_APP, WM_DPICHANGED, WM_NCCREATE, WM_NCDESTROY, WNDCLASSEXW,
-    WS_MAXIMIZEBOX, WS_OVERLAPPEDWINDOW, WS_THICKFRAME,
+    ShowWindow, WINDOW_EX_STYLE, WINDOW_STYLE, WM_APP, WM_DPICHANGED, WM_NCCREATE, WM_NCDESTROY,
+    WNDCLASSEXW, WS_CLIPCHILDREN, WS_MAXIMIZEBOX, WS_OVERLAPPEDWINDOW, WS_THICKFRAME,
 };
 use windows::core::{HSTRING, PCWSTR, w};
 use xui_core::backend::Cursor;
@@ -39,6 +39,11 @@ pub(crate) struct Hwnd(isize);
 impl Hwnd {
     pub(super) fn raw(self) -> HWND {
         HWND(self.0 as *mut _)
+    }
+
+    /// The handle as the integer Win32 passes around.
+    pub(super) fn value(self) -> isize {
+        self.0
     }
 }
 
@@ -129,6 +134,12 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
 }
 
 pub(super) fn register_class() {
+    register_class_named(CLASS, true);
+}
+
+/// Registers a class served by [`wndproc`]; `arrow` gives it the arrow cursor,
+/// which a class that answers `WM_SETCURSOR` itself leaves out.
+pub(super) fn register_class_named(name: PCWSTR, arrow: bool) {
     // SAFETY: registers a class whose procedure is `wndproc`; registering the
     // same class twice fails harmlessly, which is what makes this idempotent.
     unsafe {
@@ -140,8 +151,12 @@ pub(super) fn register_class() {
             style: CS_DBLCLKS,
             lpfnWndProc: Some(wndproc),
             hInstance: instance.into(),
-            hCursor: LoadCursorW(None, IDC_ARROW).unwrap_or_default(),
-            lpszClassName: CLASS,
+            hCursor: if arrow {
+                LoadCursorW(None, IDC_ARROW).unwrap_or_default()
+            } else {
+                Default::default()
+            },
+            lpszClassName: name,
             ..Default::default()
         };
         RegisterClassExW(&class);
@@ -158,49 +173,12 @@ pub(crate) fn create(
     handler: Handler,
 ) -> Option<Hwnd> {
     register_class();
-    let mut style = WS_OVERLAPPEDWINDOW;
+    // `WS_CLIPCHILDREN` keeps the parent's painting off a native surface.
+    let mut style = WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN;
     if !resizable {
         style &= !(WS_THICKFRAME | WS_MAXIMIZEBOX);
     }
-    // SAFETY: a plain module-handle query.
-    let instance = unsafe { GetModuleHandleW(None) }.ok()?;
-    let slot = Rc::new(Slot {
-        handler,
-        adopted: Cell::new(false),
-    });
-    // The procedure's reference: released by it on WM_NCDESTROY, or below if
-    // it never saw the window.
-    let params = Rc::into_raw(Rc::clone(&slot));
-    // SAFETY: creates a window of the class registered above. `params` is the
-    // `Rc<Slot>` reference `wndproc` adopts on WM_NCCREATE and releases on
-    // WM_NCDESTROY.
-    let created = unsafe {
-        CreateWindowExW(
-            WINDOW_EX_STYLE(0),
-            CLASS,
-            &HSTRING::from(title),
-            style,
-            CW_USEDEFAULT,
-            CW_USEDEFAULT,
-            CW_USEDEFAULT,
-            CW_USEDEFAULT,
-            None,
-            Some(HMENU::default()),
-            Some(instance.into()),
-            Some(params as *const _),
-        )
-    };
-    let Ok(hwnd) = created else {
-        if !slot.adopted.get() {
-            // SAFETY: the procedure never adopted the slot, so the reference
-            // `params` carries is still ours to release. When it did adopt
-            // it, the system has sent (or will send) WM_NCDESTROY for the
-            // half-built window and the procedure releases it there.
-            unsafe { drop(Rc::from_raw(params)) };
-        }
-        return None;
-    };
-    let hwnd = Hwnd(hwnd.0 as isize);
+    let hwnd = create_with(CLASS, title, style, None, handler)?;
     let dpi = dpi(hwnd);
     let mut frame = RECT {
         left: 0,
@@ -222,6 +200,56 @@ pub(crate) fn create(
         );
     }
     Some(hwnd)
+}
+
+/// Creates a window of `class` whose messages go to `handler`, a child of
+/// `parent` when given.
+pub(super) fn create_with(
+    class: PCWSTR,
+    title: &str,
+    style: WINDOW_STYLE,
+    parent: Option<Hwnd>,
+    handler: Handler,
+) -> Option<Hwnd> {
+    // SAFETY: a plain module-handle query.
+    let instance = unsafe { GetModuleHandleW(None) }.ok()?;
+    let slot = Rc::new(Slot {
+        handler,
+        adopted: Cell::new(false),
+    });
+    // The procedure's reference: released by it on WM_NCDESTROY, or below if
+    // it never saw the window.
+    let params = Rc::into_raw(Rc::clone(&slot));
+    // SAFETY: creates a window of a class registered with `wndproc`. `params`
+    // is the `Rc<Slot>` reference `wndproc` adopts on WM_NCCREATE and releases
+    // on WM_NCDESTROY; `parent` is a live window of this thread.
+    let created = unsafe {
+        CreateWindowExW(
+            WINDOW_EX_STYLE(0),
+            class,
+            &HSTRING::from(title),
+            style,
+            CW_USEDEFAULT,
+            CW_USEDEFAULT,
+            CW_USEDEFAULT,
+            CW_USEDEFAULT,
+            parent.map(Hwnd::raw),
+            Some(HMENU::default()),
+            Some(instance.into()),
+            Some(params as *const _),
+        )
+    };
+    let Ok(hwnd) = created else {
+        if !slot.adopted.get() {
+            // SAFETY: the procedure never adopted the slot, so the reference
+            // `params` carries is still ours to release. When it did adopt
+            // it, the system has sent (or will send) WM_NCDESTROY for the
+            // half-built window and the procedure releases it there.
+            unsafe { drop(Rc::from_raw(params)) };
+        }
+        return None;
+    };
+    Some(Hwnd(hwnd.0 as isize))
 }
 
 /// The window's DPI.

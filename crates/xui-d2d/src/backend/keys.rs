@@ -20,6 +20,15 @@ impl Shared {
     pub(super) fn key_down(&self, window: WindowId, msg: Msg, system: bool) -> Option<isize> {
         let key = Key::from_code(msg.wparam as u16);
         let modifiers = window::modifiers();
+        if key == Key::ESCAPE
+            && self
+                .locked
+                .get()
+                .is_some_and(|id| self.window_of(id) == Some(window))
+        {
+            self.unlock_pointer(true);
+            return Some(0);
+        }
         let target = self.key_target(window);
         if key == Key::TAB && !modifiers.ctrl && !modifiers.alt && !self.wants_tab(target) {
             self.move_focus(window, target, modifiers.shift);

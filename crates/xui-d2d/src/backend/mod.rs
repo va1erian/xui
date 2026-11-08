@@ -20,13 +20,16 @@ mod handler;
 mod input;
 mod keys;
 mod paint;
+mod pointer_lock;
 mod scene;
+mod surface;
 mod window;
 
 #[cfg(test)]
 mod input_tests;
 
 use scene::Scene;
+use surface::Surface;
 
 /// What the backend keeps for one top-level window.
 struct WindowState {
@@ -49,7 +52,11 @@ struct WindowState {
 pub(crate) struct Shared {
     windows: RefCell<HashMap<u64, WindowState>>,
     scene: RefCell<Scene>,
+    /// The nodes that own a native child window.
+    surfaces: RefCell<HashMap<WidgetId, Surface>>,
     captured: Cell<Option<WidgetId>>,
+    /// The node that holds the pointer lock.
+    locked: Cell<Option<WidgetId>>,
     /// Timer id to the window that owns it.
     timers: RefCell<HashMap<usize, u64>>,
     next_window: Cell<u64>,
@@ -103,7 +110,9 @@ impl D2dBackend {
             shared: Rc::new_cyclic(|this| Shared {
                 windows: RefCell::new(HashMap::new()),
                 scene: RefCell::new(Scene::default()),
+                surfaces: RefCell::new(HashMap::new()),
                 captured: Cell::new(None),
+                locked: Cell::new(None),
                 timers: RefCell::new(HashMap::new()),
                 next_window: Cell::new(1),
                 next_widget: Cell::new(1),

@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### Added
+
+- **`xui-d2d` gives nodes native child windows.** `Ui::set_native_surface` /
+  `native_surface` work on the Direct2D backend as on `xui-canvas`: a Win32
+  child window of the node's window, kept on its bounds, shown only while the
+  node is visible, wholly inside its clips and with no popup over it, passing
+  its pointer input and cursor on as the node's, and refusing its handles once
+  given up. A GPU API presents into it without the Direct2D composite. The
+  window's parent now clips its children (`WS_CLIPCHILDREN`).
+
 ### Breaking changes
 
 - **The winit backend opens windows in Daylight or Nightfall.** Instead of
