@@ -46,6 +46,11 @@ thread_local! {
     static FORMATS: RefCell<HashMap<FormatKey, IDWriteTextFormat>> = RefCell::new(HashMap::new());
 }
 
+/// Drops every cached text format.
+pub(super) fn clear_formats() {
+    FORMATS.with(|cache| cache.borrow_mut().clear());
+}
+
 fn family_name(family: Option<&str>) -> &str {
     match family {
         None => DEFAULT_FAMILY,

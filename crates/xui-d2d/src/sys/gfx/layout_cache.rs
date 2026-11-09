@@ -68,6 +68,11 @@ thread_local! {
         RefCell::new(HashMap::new());
 }
 
+/// Drops every cached layout.
+pub(super) fn clear() {
+    LAYOUTS.with(|cache| cache.borrow_mut().clear());
+}
+
 /// Like [`shape`], but a layout shaped before from the same inputs is reused.
 /// The layout is never changed after it is shaped, so sharing it is safe.
 pub(super) fn shape_cached(
@@ -157,5 +162,15 @@ mod tests {
         let again = raw("kept?", &p, 100.0).expect("a layout");
         assert_ne!(first, again, "emptied: shaped anew");
         assert_eq!(raw("kept?", &p, 100.0), Some(again), "and kept again");
+    }
+
+    #[test]
+    fn releasing_the_thread_resources_empties_the_layout_cache() {
+        let p = params();
+        raw("Release me", &p, 100.0).expect("a layout");
+        assert!(LAYOUTS.with(|cache| !cache.borrow().is_empty()));
+        crate::sys::gfx::release_thread_resources();
+        assert!(LAYOUTS.with(|cache| cache.borrow().is_empty()));
+        assert!(raw("Release me", &p, 100.0).is_some(), "shaping recovers");
     }
 }

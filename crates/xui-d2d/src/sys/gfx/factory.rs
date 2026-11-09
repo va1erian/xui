@@ -3,6 +3,7 @@
 
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::rc::Rc;
 
 use windows::Win32::Graphics::Direct2D::{
     D2D1_CAP_STYLE_FLAT, D2D1_CAP_STYLE_ROUND, D2D1_CAP_STYLE_SQUARE, D2D1_DASH_STYLE_DASH,
@@ -22,7 +23,7 @@ pub(crate) struct Factories {
 }
 
 thread_local! {
-    static FACTORIES: Option<Factories> = create();
+    static FACTORIES: RefCell<Option<Rc<Factories>>> = const { RefCell::new(None) };
 }
 
 fn create() -> Option<Factories> {
@@ -40,7 +41,23 @@ fn create() -> Option<Factories> {
 /// Runs `f` with the thread's factories, or returns `None` when Direct2D or
 /// DirectWrite could not be created.
 pub(crate) fn with<R>(f: impl FnOnce(&Factories) -> R) -> Option<R> {
-    FACTORIES.with(|factories| factories.as_ref().map(f))
+    let existing = FACTORIES.with(|slot| slot.borrow().clone());
+    let factories = match existing {
+        Some(factories) => factories,
+        None => {
+            let created = Rc::new(create()?);
+            FACTORIES.with(|slot| *slot.borrow_mut() = Some(Rc::clone(&created)));
+            created
+        }
+    };
+    Some(f(&factories))
+}
+
+/// Drops the thread's factories. Thread-local destructors run during process
+/// teardown, after DXGI has started shutting down, and releasing Direct2D
+/// objects then raises `DXGI_ERROR_INVALID_CALL` as the process exit code.
+pub(super) fn release() {
+    FACTORIES.with(|slot| slot.borrow_mut().take());
 }
 
 impl Factories {
@@ -76,5 +93,36 @@ impl Factories {
         let style = unsafe { self.d2d.CreateStrokeStyle(&properties, None) }.ok()?;
         self.strokes.borrow_mut().insert(key, style.clone());
         Some(style)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn present() -> bool {
+        FACTORIES.with(|slot| slot.borrow().is_some())
+    }
+
+    #[test]
+    fn release_drops_the_factories_and_the_next_use_recreates_them() {
+        assert!(with(|_| ()).is_some(), "Direct2D is available");
+        assert!(present());
+        release();
+        assert!(!present());
+        assert!(with(|_| ()).is_some());
+        assert!(present());
+        release();
+    }
+
+    #[test]
+    fn release_inside_a_use_leaves_the_running_use_valid() {
+        let seen = with(|outer| {
+            release();
+            drop(outer.dwrite.clone());
+            with(|_| ()).is_some()
+        });
+        assert_eq!(seen, Some(true));
+        release();
     }
 }
