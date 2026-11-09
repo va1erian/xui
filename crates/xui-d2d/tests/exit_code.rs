@@ -1,5 +1,3 @@
-#![cfg(windows)]
-
 //! A d2d app that shows text and quits must leave the process with exit code 0.
 //!
 //! Cached Direct2D objects used to be destroyed by thread-local destructors
@@ -9,45 +7,56 @@
 //! app in a child process and checks its status. It opens a real window, so
 //! run it in the sandbox (`scripts\sandbox\run.ps1`).
 
-use std::process::Command;
-use std::rc::Rc;
+#[cfg(windows)]
+mod windows_only {
+    use std::process::Command;
+    use std::rc::Rc;
 
-use xui_core::prelude::*;
-use xui_d2d::D2dBackend;
+    use xui_core::prelude::*;
+    use xui_d2d::D2dBackend;
 
-const CHILD: &str = "XUI_EXIT_CODE_CHILD";
+    const CHILD: &str = "XUI_EXIT_CODE_CHILD";
 
-struct Hello;
+    struct Hello;
 
-impl App for Hello {
-    type Msg = ();
+    impl App for Hello {
+        type Msg = ();
 
-    fn update(&mut self, _msg: (), _ui: &mut Ui<()>) {}
-}
-
-fn child() -> Result<()> {
-    xui_core::app("Exit code")
-        .backend(Rc::new(D2dBackend::new()))
-        .size(240, 120)
-        .run(|ui| {
-            ui.root(column().padding(8).children((label("Hello"), edit())))?;
-            Ok(Hello)
-        })
-}
-
-fn main() {
-    if std::env::var_os(CHILD).is_some() {
-        child().expect("the app ran");
-        return;
+        fn update(&mut self, _msg: (), _ui: &mut Ui<()>) {}
     }
-    let status = Command::new(std::env::current_exe().expect("the test's own path"))
-        .env(CHILD, "1")
-        .env("XUI_DEMO_AUTOCLOSE_MS", "500")
-        .status()
-        .expect("the child started");
-    assert_eq!(
-        status.code(),
-        Some(0),
-        "the app must exit cleanly, got {status}"
-    );
+
+    fn child() -> Result<()> {
+        xui_core::app("Exit code")
+            .backend(Rc::new(D2dBackend::new()))
+            .size(240, 120)
+            .run(|ui| {
+                ui.root(column().padding(8).children((label("Hello"), edit())))?;
+                Ok(Hello)
+            })
+    }
+
+    pub fn main() {
+        if std::env::var_os(CHILD).is_some() {
+            child().expect("the app ran");
+            return;
+        }
+        let status = Command::new(std::env::current_exe().expect("the test's own path"))
+            .env(CHILD, "1")
+            .env("XUI_DEMO_AUTOCLOSE_MS", "500")
+            .status()
+            .expect("the child started");
+        assert_eq!(
+            status.code(),
+            Some(0),
+            "the app must exit cleanly, got {status}"
+        );
+    }
 }
+
+#[cfg(windows)]
+fn main() {
+    windows_only::main();
+}
+
+#[cfg(not(windows))]
+fn main() {}
