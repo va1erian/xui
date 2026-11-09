@@ -203,3 +203,32 @@ fn an_image_in_a_cell_leaves_the_next_cell_its_own_lines() {
     let rects = layout.selection_rects(0, &(0..end));
     assert!(rects.len() <= 4, "{rects:?}");
 }
+
+#[test]
+fn an_image_with_styled_alt_text_is_one_box() {
+    let layout = with_image("![a *b* c](i.png)", 1000.0, "i.png", (30, 10));
+    let block = layout.block(0).expect("laid out");
+    assert!(block.pieces.is_empty(), "{:?}", texts(block));
+    assert_eq!(block.images.len(), 1);
+    assert_eq!(block.images[0].range, 0..5);
+}
+
+#[test]
+fn an_image_glued_to_a_word_moves_to_the_next_line_when_both_do_not_fit() {
+    let layout = with_image("ab![i](i.png)", 50.0, "i.png", (50, 10));
+    let block = layout.block(0).expect("laid out");
+    let ab = piece(block, "ab");
+    let image = &block.images[0];
+    assert_eq!(image.rect.x, 0.0);
+    assert!(image.rect.y > ab.y, "{image:?} below y {}", ab.y);
+}
+
+#[test]
+fn pixels_for_a_block_not_yet_laid_out_are_kept_until_it_is() {
+    let md = format!("{}![i](i.png)", "p\n\n".repeat(200));
+    let mut layout = lay(&md, 1000.0);
+    layout.ensure(0.0, 10.0);
+    assert!(layout.set_image("i.png", &bitmap(10, 10)));
+    layout.ensure(0.0, 1.0e6);
+    assert_eq!(images(&layout, 200).len(), 1);
+}

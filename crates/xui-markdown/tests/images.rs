@@ -199,3 +199,16 @@ fn an_image_never_supplied_stays_its_alt_text() {
         },
     );
 }
+
+#[test]
+fn a_view_with_no_on_image_still_draws_supplied_pixels() {
+    run_configured(
+        "![a](red.png)",
+        |view| view,
+        |stage, rig| {
+            assert_eq!(reds(&frame(stage)), 0);
+            assert!(rig.view.set_image("red.png", red(4, 4)));
+            assert_eq!(reds(&frame(stage)), 16);
+        },
+    );
+}

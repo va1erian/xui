@@ -51,13 +51,8 @@ impl Tables {
     /// Forgets one table's column widths (an image in it arrived) and returns
     /// its rows, which must be laid out again.
     pub fn forget(&mut self, table: usize) -> Range<usize> {
-        match self.widths.get_mut(table) {
-            Some(widths) => {
-                *widths = None;
-                self.rows[table].clone()
-            }
-            None => 0..0,
-        }
+        self.widths[table] = None;
+        self.rows[table].clone()
     }
 
     fn widths(&mut self, ctx: &mut Ctx, table: usize, width: f32) -> Vec<f32> {
