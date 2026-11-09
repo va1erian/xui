@@ -40,3 +40,7 @@ windows = { version = "0.62", default-features = false, features = [
 
 [target.'cfg(windows)'.dev-dependencies]
 softbuffer = { version = "0.4", default-features = false }
+
+[[test]]
+name = "exit_code"
+harness = false
