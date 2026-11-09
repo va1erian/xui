@@ -338,8 +338,9 @@ fn handle_key<M: 'static>(
             ),
             Key::A if modifiers.ctrl && state.mode != SelectionMode::Single => {
                 state.selected = (0..len).collect();
-                state.anchor = Some(0);
-                state.focused.get_or_insert(0);
+                // The anchor follows the focus so Shift+arrow extends from it.
+                let focus = *state.focused.get_or_insert(0);
+                state.anchor = Some(focus);
             }
             Key::SPACE if state.mode == SelectionMode::Multi => {
                 let row = state.focused?;

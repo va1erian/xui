@@ -62,7 +62,9 @@ impl<M: 'static> ListView<M> {
     /// Replaces the rows with the same items in a new order (a sort), carrying
     /// the selection, focus and anchor with their items: `remap` gives the
     /// new row of an old row, `None` where the item is gone. The focused row
-    /// is scrolled into view, so a sort does not strand the selection.
+    /// is scrolled into view, so a sort does not strand the selection. If the
+    /// focused item is gone the list is left with no selection. `remap` must not
+    /// call back into this list.
     pub fn reorder_model(
         &self,
         model: impl ListModel + 'static,
