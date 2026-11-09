@@ -15,7 +15,7 @@ use std::rc::Rc;
 
 use xui::prelude::*;
 use xui_core::icon::{IconRef, Lucide};
-use xui_core::widget::{ListModel, SortDirection};
+use xui_core::widget::{ListModel, SortDirection, natural_cmp};
 
 /// One row of mock data; the numeric columns are pre-formatted so the
 /// model's accessors can borrow `&str`.
@@ -73,7 +73,6 @@ struct Library {
     status: Handle<StatusBar<Msg>>,
     tracks: Rc<Vec<Track>>,
     order: Vec<usize>,
-    sort: Option<(usize, bool)>,
 }
 
 impl Library {
@@ -85,36 +84,38 @@ impl Library {
     }
 
     fn sort_by(&mut self, column: usize) {
-        let ascending = match self.sort {
-            Some((sorted, was)) if sorted == column => !was,
-            _ => true,
-        };
-        if let Some((sorted, _)) = self.sort
-            && sorted != column
-        {
-            self.list.get().clear_sort_indicator(sorted);
-        }
+        // The list flipped its arrow before raising the message.
+        let ascending = !matches!(
+            self.list.get().sort_indicator(),
+            Some((_, SortDirection::Descending))
+        );
+        let before = self.order.clone();
         let tracks = Rc::clone(&self.tracks);
         let key = |&row: &usize| &tracks[row];
         match column {
-            1 => self.order.sort_by(|a, b| key(a).artist.cmp(&key(b).artist)),
-            2 => self.order.sort_by(|a, b| key(a).album.cmp(&key(b).album)),
-            3 => self.order.sort_by(|a, b| key(a).year.cmp(&key(b).year)),
-            _ => self.order.sort_by(|a, b| key(a).title.cmp(&key(b).title)),
+            1 => self
+                .order
+                .sort_by(|a, b| natural_cmp(&key(a).artist, &key(b).artist)),
+            2 => self
+                .order
+                .sort_by(|a, b| natural_cmp(&key(a).album, &key(b).album)),
+            3 => self
+                .order
+                .sort_by(|a, b| natural_cmp(&key(a).year, &key(b).year)),
+            _ => self
+                .order
+                .sort_by(|a, b| natural_cmp(&key(a).title, &key(b).title)),
         }
         if !ascending {
             self.order.reverse();
         }
-        self.sort = Some((column, ascending));
-        self.list.get().set_sort_indicator(
-            column,
-            if ascending {
-                SortDirection::Ascending
-            } else {
-                SortDirection::Descending
-            },
-        );
-        self.list.get().set_model(self.model());
+        let mut position = vec![0; self.order.len()];
+        for (new, &item) in self.order.iter().enumerate() {
+            position[item] = new;
+        }
+        self.list
+            .get()
+            .reorder_model(self.model(), |old| Some(position[before[old]]));
     }
 }
 
@@ -160,7 +161,6 @@ fn main() -> Result<()> {
             status: Handle::new(),
             tracks,
             order,
-            sort: None,
         };
         ui.root(
             column().padding(12).gap(8).children((

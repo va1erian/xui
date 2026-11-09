@@ -93,7 +93,6 @@ pub(crate) fn build(ui: &mut Ui<Msg>) -> App {
         list: handles.list,
         tracks,
         order,
-        sort: None,
         pages: handles.pages,
         _tips: tips,
     };

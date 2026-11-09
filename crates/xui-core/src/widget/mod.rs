@@ -71,6 +71,7 @@ pub use iconview::{IconModel, IconSize, IconView};
 pub use label::Label;
 pub use listview::{
     CellData, Column, ColumnWidth, Fill, ListModel, ListView, SelectionMode, SortDirection,
+    natural_cmp,
 };
 pub use lucide::Lucide;
 pub use materialstatusbar::MaterialStatusBar;

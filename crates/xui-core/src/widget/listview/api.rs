@@ -59,6 +59,34 @@ impl<M: 'static> ListView<M> {
         self.control.invalidate();
     }
 
+    /// Replaces the rows with the same items in a new order (a sort), carrying
+    /// the selection, focus and anchor with their items: `remap` gives the
+    /// new row of an old row, `None` where the item is gone. The focused row
+    /// is scrolled into view, so a sort does not strand the selection.
+    pub fn reorder_model(
+        &self,
+        model: impl ListModel + 'static,
+        remap: impl Fn(usize) -> Option<usize>,
+    ) {
+        let (selected, focused, anchor) = {
+            let state = self.state.borrow();
+            (state.selected.clone(), state.focused, state.anchor)
+        };
+        self.set_model(model);
+        let focused = {
+            let mut state = self.state.borrow_mut();
+            let len = state.rows.len();
+            let map = |row: usize| remap(row).filter(|row| *row < len);
+            state.selected = selected.into_iter().filter_map(map).collect();
+            state.focused = focused.and_then(map);
+            state.anchor = anchor.and_then(map);
+            state.focused
+        };
+        if let Some(row) = focused {
+            self.ensure_visible(row);
+        }
+    }
+
     /// Replaces the rows with plain text. A selection past the new end moves
     /// to the last row.
     pub fn set_items(&self, items: &[&str]) {

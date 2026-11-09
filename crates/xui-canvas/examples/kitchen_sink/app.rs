@@ -11,6 +11,7 @@ use xui_core::geometry::Point;
 use xui_core::units::Dip;
 use xui_core::widget::{
     Dialog, DialogAction, ListView, Menu, Panel, SortDirection, StatusBar, Tooltip, TreeView,
+    natural_cmp,
 };
 
 use super::data::{Track, TrackModel};
@@ -56,7 +57,6 @@ pub(crate) struct App {
     pub(super) list: Handle<ListView<Msg>>,
     pub(super) tracks: Rc<Vec<Track>>,
     pub(super) order: Vec<usize>,
-    pub(super) sort: Option<(usize, bool)>,
     pub(super) pages: Vec<Handle<Panel<Msg>>>,
     pub(super) _tips: Vec<Tooltip<Msg>>,
 }
@@ -67,41 +67,46 @@ impl App {
     }
 
     fn sort_by(&mut self, column: usize) {
-        let ascending = match self.sort {
-            Some((sorted, was)) if sorted == column => !was,
-            _ => true,
-        };
         let list = self.list.get();
-        if let Some((sorted, _)) = self.sort
-            && sorted != column
-        {
-            list.clear_sort_indicator(sorted);
-        }
+        // The list flipped its arrow before raising the message.
+        let ascending = !matches!(list.sort_indicator(), Some((_, SortDirection::Descending)));
+        let before = self.order.clone();
         let tracks = Rc::clone(&self.tracks);
         let key = |&row: &usize| &tracks[row];
         match column {
-            1 => self.order.sort_by(|a, b| key(a).artist.cmp(&key(b).artist)),
-            2 => self.order.sort_by(|a, b| key(a).album.cmp(&key(b).album)),
-            3 => self.order.sort_by(|a, b| key(a).genre.cmp(&key(b).genre)),
-            4 => self.order.sort_by(|a, b| key(a).year.cmp(&key(b).year)),
-            5 => self.order.sort_by(|a, b| key(a).time.cmp(&key(b).time)),
-            6 => self.order.sort_by(|a, b| key(a).format.cmp(&key(b).format)),
-            7 => self.order.sort_by(|a, b| key(a).plays.cmp(&key(b).plays)),
-            _ => self.order.sort_by(|a, b| key(a).title.cmp(&key(b).title)),
+            1 => self
+                .order
+                .sort_by(|a, b| natural_cmp(&key(a).artist, &key(b).artist)),
+            2 => self
+                .order
+                .sort_by(|a, b| natural_cmp(&key(a).album, &key(b).album)),
+            3 => self
+                .order
+                .sort_by(|a, b| natural_cmp(&key(a).genre, &key(b).genre)),
+            4 => self
+                .order
+                .sort_by(|a, b| natural_cmp(&key(a).year, &key(b).year)),
+            5 => self
+                .order
+                .sort_by(|a, b| natural_cmp(&key(a).time, &key(b).time)),
+            6 => self
+                .order
+                .sort_by(|a, b| natural_cmp(&key(a).format, &key(b).format)),
+            7 => self
+                .order
+                .sort_by(|a, b| natural_cmp(&key(a).plays, &key(b).plays)),
+            _ => self
+                .order
+                .sort_by(|a, b| natural_cmp(&key(a).title, &key(b).title)),
         }
         if !ascending {
             self.order.reverse();
         }
-        self.sort = Some((column, ascending));
-        list.set_sort_indicator(
-            column,
-            if ascending {
-                SortDirection::Ascending
-            } else {
-                SortDirection::Descending
-            },
-        );
-        list.set_model(self.model());
+        let mut position = vec![0; self.order.len()];
+        for (new, &item) in self.order.iter().enumerate() {
+            position[item] = new;
+        }
+        list.reorder_model(self.model(), |old| Some(position[before[old]]));
     }
 
     pub(super) fn show_page(&self, page: usize, ui: &Ui<Msg>) {
