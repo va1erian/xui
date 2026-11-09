@@ -21,6 +21,14 @@
   - `on_context` maps a right-click for the app's context menu.
   - Code: a `Highlighter` the app supplies colours code blocks line by line,
     in a `CodePalette` or the theme's tokens.
+- **`xui-markdown` wraps long code lines and reports a document's first
+  paint.** A code line wider than its block continues on more rows, ending
+  after a space when one is in the row's second half; selection, copy and
+  highlighting follow the rows (`MarkdownStyle::wrap_code`, on by default;
+  off clips as before; a line over 4096 bytes is clipped). `on_painted` maps
+  the first paint with room for text of each document shown to a message, for
+  an app that reports when a page is on screen. `MarkdownStyle` gains a public
+  field, so a struct literal needs `..MarkdownStyle::default()`.
 - **`xui-d2d` gives nodes native child windows.** `Ui::set_native_surface` /
   `native_surface` work on the Direct2D backend as on `xui-canvas`: a Win32
   child window of the node's window, kept on its bounds, shown only while the

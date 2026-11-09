@@ -102,12 +102,18 @@ fn a_thematic_break_is_a_two_pixel_rule() {
 }
 
 #[test]
-fn a_code_block_is_one_unwrapped_piece_per_non_empty_line_on_a_shaded_box() {
-    let block = one(
+fn without_wrapping_a_code_block_is_one_piece_per_non_empty_line_on_a_shaded_box() {
+    let mut layout = lay(
         "```\nfn a() { long_line_that_is_wider_than_the_box }\n\n  b\n```",
-        0,
         100.0,
     );
+    layout.set_style(MarkdownStyle {
+        wrap_code: false,
+        ..MarkdownStyle::default()
+    });
+    layout.resize(100.0, 96);
+    layout.ensure(0.0, 1.0e6);
+    let block = layout.block(0).expect("laid out").clone();
     assert_eq!(block.pieces.len(), 2, "the empty line has no piece");
     assert!(block.pieces[0].layout.width() > 100.0, "not wrapped");
     assert_eq!(block.pieces[0].x, 8.0);

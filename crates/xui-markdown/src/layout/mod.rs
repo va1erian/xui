@@ -18,6 +18,7 @@ mod hit;
 mod line;
 #[cfg(test)]
 mod perf;
+mod rows;
 mod table;
 #[cfg(test)]
 mod tests;

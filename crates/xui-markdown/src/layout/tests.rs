@@ -11,6 +11,7 @@ mod flow;
 mod hit;
 mod tables;
 mod viewport;
+mod wrap;
 
 use std::any::Any;
 use std::ops::Range;

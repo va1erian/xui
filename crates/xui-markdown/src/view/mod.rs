@@ -66,6 +66,7 @@ impl<M: 'static> MarkdownView<M> {
                     // A paint may have sized the layout for the first time or
                     // reset it for a new DPI: lay out the rest in the background.
                     shared.kick();
+                    shared.painted();
                 }
             }));
             let mapper = me.clone();
@@ -85,6 +86,8 @@ impl<M: 'static> MarkdownView<M> {
                 ui: ui.clone(),
                 on_link: RefCell::new(None),
                 on_context: RefCell::new(None),
+                on_painted: RefCell::new(None),
+                unpainted: Cell::new(false),
                 timer: Cell::new(None),
                 drag_timer: Cell::new(None),
             }
@@ -116,6 +119,7 @@ impl<M: 'static> MarkdownView<M> {
         let captured = state.dragging || state.bar_drag.is_some();
         state.reset_scroll();
         drop(state);
+        self.shared.unpainted.set(true);
         // A drag over the old text ends with it.
         if captured {
             self.shared.ui.release_capture();
@@ -187,6 +191,18 @@ impl<M: 'static> MarkdownView<M> {
     /// not reported. The mapper must not call back into the view.
     pub fn on_link(self, mapper: impl Fn(&str) -> Option<M> + 'static) -> MarkdownView<M> {
         *self.shared.on_link.borrow_mut() = Some(Box::new(mapper));
+        self
+    }
+
+    /// Maps the first paint of each document shown to a message, queued
+    /// once a paint with room for text has drawn the document's visible
+    /// blocks (for an app that reports when a page is on screen; the frame
+    /// is presented after the paint). A paint of a view with no room waits
+    /// for the next. Only a new document re-arms it, not a new style or
+    /// size. A document set before this is called counts too, if it has not
+    /// been painted yet. The mapper must not call back into the view.
+    pub fn on_painted(self, mapper: impl Fn() -> Option<M> + 'static) -> MarkdownView<M> {
+        *self.shared.on_painted.borrow_mut() = Some(Box::new(mapper));
         self
     }
 

@@ -37,7 +37,32 @@ pub(super) fn estimate(
     match &block.kind {
         BlockKind::Rule => 2.0 * scale,
         BlockKind::Code { .. } => {
-            (text.matches('\n').count() + 1) as f32 * style.code_size.0 * scale * 1.3 + 2.0 * inset
+            let size = style.code_size.0 * scale;
+            let indent = (f32::from(block.list) * style.list_indent.0
+                + f32::from(block.quote) * style.quote_indent.0)
+                * scale;
+            let avail = width - indent - 2.0 * inset;
+            // A wrapped line takes a row per box width of characters, as
+            // `rows::rows` cuts it (no wrapping without room, or past the limit).
+            let per_row = if style.wrap_code && avail > 0.0 {
+                (avail / (size * 0.6)).max(1.0)
+            } else {
+                f32::INFINITY
+            };
+            let rows: f32 = text
+                .split('\n')
+                .map(|line| {
+                    if line.len() > super::rows::WRAP_LIMIT {
+                        return 1.0;
+                    }
+                    let columns = line
+                        .chars()
+                        .map(|c| if c == '\t' { 4 } else { 1 })
+                        .sum::<usize>();
+                    (columns as f32 / per_row).ceil().max(1.0)
+                })
+                .sum();
+            rows * size * 1.3 + 2.0 * inset
         }
         BlockKind::TableRow { .. } => em * 1.35 + 2.0 * inset,
         kind => {

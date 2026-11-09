@@ -36,6 +36,9 @@ pub struct MarkdownStyle {
     pub quote_indent: Dip,
     /// The space inside a code block and around a table cell's text.
     pub inset: Dip,
+    /// Whether a code line wider than its block wraps onto more rows; when
+    /// off, it is clipped at the block's edge.
+    pub wrap_code: bool,
 }
 
 impl Default for MarkdownStyle {
@@ -51,6 +54,7 @@ impl Default for MarkdownStyle {
             list_indent: Dip(24.0),
             quote_indent: Dip(16.0),
             inset: Dip(8.0),
+            wrap_code: true,
         }
     }
 }
