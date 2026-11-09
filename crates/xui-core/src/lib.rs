@@ -56,7 +56,7 @@ pub use widget::{
     Menu, MenuId, MenuScope, MultilineEdit, NodeId, NumberField, Panel, ProgressBar, RadioGroup,
     RowIcon, Run, RunStyle, ScrollView, SelectionMode, Separator, Slider, SortDirection, Split,
     StatusBar, StdFileSystem, Tabs, Tile, TilePaint, TileSize, ToggleButton, Toolbar, Tooltip,
-    TopBar, TopBarId, TreeModel, TreeNode, TreeRow, TreeView,
+    TopBar, TopBarId, TreeModel, TreeNode, TreeRow, TreeView, natural_cmp,
 };
 
 /// The core types a frontend or a backend usually needs, in one `use`.

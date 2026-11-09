@@ -35,6 +35,7 @@ mod events;
 mod model;
 mod paint;
 mod resize;
+mod sort;
 mod state;
 
 #[cfg(test)]
@@ -43,6 +44,7 @@ mod tests;
 pub use self::model::{
     CellData, Column, ColumnWidth, Fill, ListModel, SelectionMode, SortDirection,
 };
+pub use self::sort::natural_cmp;
 use self::state::{Rows, State};
 
 /// The natural size of a list with nothing to size it; a `fill` entry overrides

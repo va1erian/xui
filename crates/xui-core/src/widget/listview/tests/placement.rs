@@ -50,3 +50,34 @@ fn a_refresh_keeps_the_scroll_position_and_set_model_resets_it() {
     table.set_model(rows(100));
     assert_eq!(table.state.borrow().offset, 0);
 }
+
+#[test]
+fn reordering_carries_the_selection_with_its_items() {
+    let (_backend, _core, ui) = setup();
+    let table = Handle::<ListView<u32>>::new();
+    let _mounted = ui
+        .mount(column().child(list().column("Row", super::Fill).bind(&table).fill(1)))
+        .unwrap();
+    let table = table.get();
+    table.set_model(rows(100));
+    table.set_selection(&[2, 5]);
+
+    // Reverse the rows: old row `i` becomes `99 - i`.
+    let mut reversed = rows(100);
+    reversed.reverse();
+    table.reorder_model(reversed, |old| Some(99 - old));
+
+    assert_eq!(table.selection(), vec![94, 97]);
+    assert_eq!(table.cell_text(94, 0).as_deref(), Some("row 5"));
+    assert_eq!(table.focused(), Some(97));
+    assert!(
+        table.state.borrow().offset > 0,
+        "the focus is scrolled into view"
+    );
+
+    table.reorder_model(rows(3), |_| None);
+    assert!(
+        table.selection().is_empty(),
+        "items that are gone are dropped"
+    );
+}

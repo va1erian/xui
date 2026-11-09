@@ -179,3 +179,27 @@ fn select_may_replace_the_rows_it_was_raised_from() {
     assert_eq!(list.len(), 3);
     *slot.borrow_mut() = None;
 }
+
+#[test]
+fn ctrl_a_selects_every_row_in_multi_mode_only() {
+    let (_backend, core, ui) = setup();
+    let items = ["a", "b", "c"];
+    let multi = ListView::new(&ui, Rect::new(0, 0, 200, 200), &items)
+        .unwrap()
+        .selection_mode(SelectionMode::Multi)
+        .on_selection(|rows| Some(rows.len() as u32));
+    let single = ListView::new(&ui, Rect::new(0, 0, 200, 200), &items).unwrap();
+    let runtime = Runtime::primary(core, TestApp(log()));
+    let select_all = Event::KeyDown {
+        key: Key::A,
+        modifiers: ctrl(),
+        repeat: 0,
+        system: false,
+    };
+
+    runtime.deliver(multi.id(), &select_all);
+    assert_eq!(multi.selection(), vec![0, 1, 2]);
+    runtime.deliver(single.id(), &select_all);
+    assert_eq!(single.selection().len(), 1);
+    runtime.deliver(WidgetId::NONE, &Event::Wake);
+}
