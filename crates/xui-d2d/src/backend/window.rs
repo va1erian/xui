@@ -81,5 +81,11 @@ impl Shared {
         if let Some(state) = self.release(window) {
             window::destroy(state.hwnd);
         }
+        if self.windows.borrow().is_empty() {
+            // `Shared` is not reliably dropped before the process exits (a probe
+            // in its `Drop` never fired), so the cached Direct2D objects are
+            // released here, not left to thread-local destructors at teardown.
+            crate::sys::gfx::release_thread_resources();
+        }
     }
 }

@@ -21,6 +21,16 @@ pub(crate) use text::{TextParams, measure};
 
 use xui_core::Rect;
 
+/// Releases the calling thread's cached Direct2D and DirectWrite objects.
+/// Call it before the process exits: left to thread-local destructors they are
+/// dropped while DXGI is shutting down, which ends the process with
+/// `DXGI_ERROR_INVALID_CALL` (`0x887A0001`) as the exit code.
+pub(crate) fn release_thread_resources() {
+    layout_cache::clear();
+    text::clear_formats();
+    factory::release();
+}
+
 /// A rectangle in floating-point device pixels.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct RectF {
