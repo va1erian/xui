@@ -16,7 +16,8 @@ const MAX_SOURCE: usize = u32::MAX as usize;
 
 impl Document {
     /// Parses `markdown` (CommonMark with GFM tables, strike-through and task
-    /// lists). Raw HTML is kept as literal text; images become their alt text.
+    /// lists). Raw HTML is kept as literal text; an image is its alt text, its
+    /// source listed in [`Document::images`].
     pub fn parse(markdown: &str) -> Document {
         Document::parse_limited(markdown, MAX_SOURCE).0
     }

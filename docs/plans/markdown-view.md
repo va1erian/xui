@@ -106,8 +106,10 @@ ENABLE_TASKLISTS`, and its events are folded into the model.
 
 - **Raw HTML** (block and inline) becomes literal text. This matches the
   current Docs security stance, and nothing is ever interpreted.
-- **Images** become their alt text in phase 1, styled weak. Phase 4 adds an
-  optional resolver.
+- **Images** are their alt text, styled weak, each span tied to its entry in
+  `Document::images` (source and title); an image with no alt text holds
+  U+FFFC so it has a place in the text. The view draws one once the app
+  supplies its pixels (phase 4).
 - **Soft breaks** become spaces. **Hard breaks** become a line break inside
   the block.
 - **Inputs over a size cap** (default 1 MiB, settable) are cut at a block
@@ -432,8 +434,9 @@ What phase 1 tests, under `crates/xui-markdown`:
   `Link::Anchor` is now handled by the view.
 - The Docs window shows a `MarkdownView` instead of a `LightView`, so Docs no
   longer needs `webd`.
-- Images: alt text until phase 4, then `.image_resolver(|src| …)` reads them
-  through the existing `mimed` / file path rules.
+- Images: `on_image` reports each source as written; Docs resolves it with
+  the same rules as `links.rs` (relative to the page, no schemes), decodes
+  it on a worker and calls `set_image`.
 
 ## Phases
 
@@ -449,8 +452,11 @@ What phase 1 tests, under `crates/xui-markdown`:
    example's "Insert in script" is an ordinary Markdown link
    (`[Insert in script](insert:N)`), which `on_link` hands to the guide's
    existing `example_of`.
-4. **LazyOS Docs.** Migration, an image resolver (`Fn(&str) -> Option<Image>`,
-   decoded by the app), and find-in-page (`find(&str)` → highlighted matches).
+4. **LazyOS Docs.** Migration, images, and find-in-page (`find(&str)` →
+   highlighted matches). Images: done. They are asked for by message
+   (`on_image`) and supplied with `set_image`, not through a synchronous
+   resolver, so reading and decoding never run inside a paint; the view
+   loads nothing. Find-in-page is not done.
 5. **Later.**
    - Copy as Markdown.
    - Horizontal scrolling in code blocks.

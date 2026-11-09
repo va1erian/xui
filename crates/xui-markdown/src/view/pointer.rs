@@ -70,7 +70,11 @@ pub(crate) fn double_click(state: &mut State, point: Point, out: &mut Out) {
     let Some((block, pos)) = state.hit(point) else {
         return;
     };
-    state.selection = Selection::of(word_at(&state.layout, block, pos));
+    // An image is one character: a double-click on it selects all of it.
+    let word = state
+        .image_at(point)
+        .unwrap_or_else(|| word_at(&state.layout, block, pos));
+    state.selection = Selection::of(word);
     state.anchored = true;
     state.last_double = Some((Instant::now(), point));
     state.pressed = None;

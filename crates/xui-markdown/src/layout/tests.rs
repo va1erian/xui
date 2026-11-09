@@ -9,6 +9,7 @@ mod blocks;
 mod code;
 mod flow;
 mod hit;
+mod images;
 mod tables;
 mod viewport;
 mod wrap;

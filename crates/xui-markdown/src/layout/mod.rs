@@ -15,6 +15,7 @@ mod estimate;
 mod flow;
 mod geom;
 mod hit;
+mod images;
 mod line;
 #[cfg(test)]
 mod perf;
@@ -36,6 +37,8 @@ use block::Context;
 use cache::ShapeCache;
 use estimate::{estimate, gap};
 pub(crate) use geom::{BlockLayout, Ctx, Decor, FRect};
+pub(crate) use hit::overlaps;
+use images::Images;
 use table::Tables;
 
 struct Slot {
@@ -56,6 +59,7 @@ pub(crate) struct Layout {
     highlighter: Option<Box<dyn Highlighter>>,
     cache: ShapeCache,
     tables: Tables,
+    images: Images,
     width: f32,
     dpi: u32,
     slots: Vec<Slot>,
@@ -79,6 +83,7 @@ impl Layout {
     ) -> Layout {
         let mut layout = Layout {
             tables: Tables::new(&doc),
+            images: Images::new(&doc),
             doc,
             style,
             shaper,
@@ -103,6 +108,7 @@ impl Layout {
     /// Shows another document.
     pub fn set_document(&mut self, doc: Arc<Document>) {
         self.tables = Tables::new(&doc);
+        self.images = Images::new(&doc);
         self.doc = doc;
         self.reset();
     }
@@ -225,6 +231,7 @@ impl Layout {
             },
         };
         let doc = Arc::clone(&self.doc);
+        let mut wanted = Vec::new();
         let mut ctx = Ctx {
             doc: &doc,
             style: &self.style,
@@ -232,8 +239,11 @@ impl Layout {
             cache: &mut self.cache,
             dpi: self.dpi,
             highlighter: self.highlighter.as_deref(),
+            images: self.images.pixels(),
+            wanted: &mut wanted,
         };
         let laid = block::layout(&mut ctx, index, self.width, around, &mut self.tables);
+        self.images.want(&doc, &wanted);
         let slot = &mut self.slots[index];
         if slot.height != laid.height {
             self.stale = self.stale.min(index + 1);

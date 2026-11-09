@@ -17,6 +17,7 @@ use std::sync::Arc;
 use xui_core::app::Ui;
 use xui_core::backend::{NodeKind, NodeSpec, Result, WidgetId};
 use xui_core::geometry::{Point, Rect, Size};
+use xui_core::image::Image;
 use xui_core::layout::Constraints;
 use xui_core::theme::{Theme, Themed};
 use xui_core::widget::{Control, Placeable};
@@ -66,6 +67,7 @@ impl<M: 'static> MarkdownView<M> {
                     // A paint may have sized the layout for the first time or
                     // reset it for a new DPI: lay out the rest in the background.
                     shared.kick();
+                    shared.request_images();
                     shared.painted();
                 }
             }));
@@ -76,6 +78,7 @@ impl<M: 'static> MarkdownView<M> {
                 if out.relayout {
                     shared.kick();
                 }
+                shared.request_images();
                 shared.deliver(out)
             });
             Shared {
@@ -87,6 +90,7 @@ impl<M: 'static> MarkdownView<M> {
                 on_link: RefCell::new(None),
                 on_context: RefCell::new(None),
                 on_painted: RefCell::new(None),
+                on_image: RefCell::new(None),
                 unpainted: Cell::new(false),
                 timer: Cell::new(None),
                 drag_timer: Cell::new(None),
@@ -204,6 +208,42 @@ impl<M: 'static> MarkdownView<M> {
     pub fn on_painted(self, mapper: impl Fn() -> Option<M> + 'static) -> MarkdownView<M> {
         *self.shared.on_painted.borrow_mut() = Some(Box::new(mapper));
         self
+    }
+
+    /// Maps each image the document shows to a message carrying its source
+    /// as [`Document::images`] gives it (a relative path stays relative),
+    /// for the app to load and decode, then hand over with
+    /// [`set_image`](Self::set_image).
+    ///
+    /// The view loads nothing itself. A source is reported once per
+    /// document, when the first block showing it is laid out: the visible
+    /// blocks first, the rest as the background layout reaches them (a
+    /// table's rows are measured together, so all its images come at once
+    /// when any row shows). Until
+    /// its pixels arrive, an image shows as its alt text. The mapper must
+    /// not call back into the view.
+    pub fn on_image(self, mapper: impl Fn(&str) -> Option<M> + 'static) -> MarkdownView<M> {
+        *self.shared.on_image.borrow_mut() = Some(Box::new(mapper));
+        self
+    }
+
+    /// Shows `image` for every image of the current document whose source
+    /// is `src`, in place of its alt text. One image pixel is one design
+    /// unit, scaled down to fit the line. Returns whether the document has
+    /// such an image; pixels for any other source are dropped, so a stale
+    /// load for a document no longer shown does nothing.
+    pub fn set_image(&self, src: &str, image: Image) -> bool {
+        let found = self
+            .shared
+            .state
+            .borrow_mut()
+            .layout
+            .set_image(src, &Arc::new(image));
+        if found {
+            self.shared.control.invalidate();
+            self.shared.kick();
+        }
+        found
     }
 
     /// Maps a right-click to a message carrying the client point, for the

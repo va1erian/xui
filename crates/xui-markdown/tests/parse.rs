@@ -31,7 +31,7 @@ fn check(doc: &Document) {
             };
             let seam = cells.iter().any(|c| c.start == s.range.start);
             assert!(
-                seam || (p.style, p.link) != (s.style, s.link),
+                seam || (p.style, p.link, p.image) != (s.style, s.link, s.image),
                 "block {i} unmerged"
             );
         }

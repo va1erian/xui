@@ -48,6 +48,13 @@ impl Tables {
         self.widths.iter_mut().for_each(|w| *w = None);
     }
 
+    /// Forgets one table's column widths (an image in it arrived) and returns
+    /// its rows, which must be laid out again.
+    pub fn forget(&mut self, table: usize) -> Range<usize> {
+        self.widths[table] = None;
+        self.rows[table].clone()
+    }
+
     fn widths(&mut self, ctx: &mut Ctx, table: usize, width: f32) -> Vec<f32> {
         if let Some((at, widths)) = &self.widths[table]
             && *at == width
@@ -105,6 +112,7 @@ fn columns(ctx: &mut Ctx, rows: Range<usize>, width: f32) -> Vec<f32> {
             scratch.pieces.clear();
             scratch.decor.clear();
             scratch.links.clear();
+            scratch.images.clear();
         }
     }
     let total: f32 = natural.iter().sum();

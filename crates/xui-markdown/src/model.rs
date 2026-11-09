@@ -25,7 +25,8 @@ impl Inline {
     pub const STRIKE: Inline = Inline(1 << 2);
     /// `` `code` ``.
     pub const CODE: Inline = Inline(1 << 3);
-    /// The alt text standing in for an image.
+    /// An image's alt text, which stands in for it until the app supplies its
+    /// pixels (see [`Span::image`]).
     pub const IMAGE: Inline = Inline(1 << 4);
 
     /// Whether every flag of `other` is set here.
@@ -53,6 +54,29 @@ pub struct Span {
     pub style: Inline,
     /// An index into [`Document::link`], when the run is (part of) a link.
     pub link: Option<u32>,
+    /// An index into [`Document::image`], when the run is (part of) an
+    /// image's alt text. An image's spans are contiguous, and one with no alt
+    /// text has a single span of [`OBJECT`].
+    pub image: Option<u32>,
+}
+
+/// The text standing for an image with no alt text (U+FFFC, the object
+/// replacement character), so every image has a place in
+/// [`Document::text`]. Copied text leaves out every U+FFFC, these and any
+/// the document itself holds.
+pub const OBJECT: char = '\u{FFFC}';
+
+/// An image as the document writes it. Nothing is loaded: the app reads and
+/// decodes the source and hands the pixels to the view.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ImageRef {
+    /// The destination as CommonMark reads it, like [`Document::link`]:
+    /// backslash escapes and entities resolved, but percent-escapes
+    /// (`my%20pic.png`) kept and a relative path left relative, for the app
+    /// to resolve.
+    pub src: Box<str>,
+    /// The title (`![alt](src "title")`), or empty.
+    pub title: Box<str>,
 }
 
 /// What starts a list item.
@@ -145,6 +169,7 @@ pub struct Document {
     pub(crate) cells: Vec<Range<u32>>,
     pub(crate) tables: Vec<Table>,
     pub(crate) links: Vec<Box<str>>,
+    pub(crate) images: Vec<ImageRef>,
     /// Heading slugs and the block each names, in document order.
     pub(crate) anchors: Vec<(Box<str>, u32)>,
 }
@@ -188,6 +213,17 @@ impl Document {
     /// relative).
     pub fn link(&self, index: u32) -> &str {
         &self.links[index as usize]
+    }
+
+    /// The document's images in order, which [`Span::image`] indexes. A
+    /// source may appear more than once.
+    pub fn images(&self) -> &[ImageRef] {
+        &self.images
+    }
+
+    /// One image, by its [`Span::image`] index.
+    pub fn image(&self, index: u32) -> &ImageRef {
+        &self.images[index as usize]
     }
 
     /// The block of the heading whose GitHub-style slug is `slug` (without

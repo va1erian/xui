@@ -1,15 +1,47 @@
 #![forbid(unsafe_code)]
 
 //! Packing words onto lines: a line takes words while they fit, cuts a word
-//! wider than a whole line, and sets its words on one shared baseline.
+//! wider than a whole line, and sets its words on one shared baseline. An
+//! image stands on the baseline, so a tall one makes its line tall.
 
 use super::cache::Shaped;
 use super::flow::{Atom, EPS, Flow, Flowed, decorate, offset};
-use super::geom::{BlockLayout, Ctx, FRect, Piece};
+use super::geom::{BlockLayout, Ctx, FRect, ImageBox, Piece};
+use super::images::Picture;
 
-/// A word placed on the line being built.
+/// What is placed: a shaped word or an image.
+enum Item {
+    Text(Shaped),
+    Image(Picture),
+}
+
+impl Item {
+    fn width(&self) -> f32 {
+        match self {
+            Item::Text(shaped) => shaped.width,
+            Item::Image(picture) => picture.w,
+        }
+    }
+
+    fn height(&self) -> f32 {
+        match self {
+            Item::Text(shaped) => shaped.height,
+            Item::Image(picture) => picture.h,
+        }
+    }
+
+    /// From the top: an image's bottom edge sits on the baseline.
+    fn baseline(&self) -> f32 {
+        match self {
+            Item::Text(shaped) => shaped.baseline,
+            Item::Image(picture) => picture.h,
+        }
+    }
+}
+
+/// A word or image placed on the line being built.
 struct Placed {
-    shaped: Shaped,
+    item: Item,
     x: f32,
     /// The bytes of the document it shows.
     range: (u32, u32),
@@ -60,7 +92,7 @@ impl Lines {
     pub fn place(&mut self, ctx: &mut Ctx, flow: &Flow, atoms: Vec<Atom>, out: &mut BlockLayout) {
         let mut need = 0.0;
         for (i, atom) in atoms.iter().enumerate() {
-            need += atom.shaped.as_ref().map_or(0.0, |s| s.width);
+            need += atom.width();
             if i + 1 < atoms.len() {
                 need += atom.tail;
             }
@@ -71,7 +103,16 @@ impl Lines {
         let split = need > self.width + EPS;
         for atom in atoms {
             let Some(mut shaped) = atom.shaped else {
-                self.cursor += atom.tail;
+                match atom.picture {
+                    // Scaled to fit a line, it only moves to the next one.
+                    Some(picture) => {
+                        if !self.line.is_empty() && self.cursor + picture.w > self.width + EPS {
+                            self.finish(ctx, flow, out);
+                        }
+                        self.push(Item::Image(picture), atom.range, atom.span, atom.tail);
+                    }
+                    None => self.cursor += atom.tail,
+                }
                 continue;
             };
             let (mut from, end) = atom.range;
@@ -91,22 +132,22 @@ impl Lines {
                 let head = ctx
                     .cache
                     .word(ctx.shaper, ctx.style, font, &text[..cut], ctx.dpi);
-                self.push(head, (from, from + cut as u32), atom.span, 0.0);
+                self.push(Item::Text(head), (from, from + cut as u32), atom.span, 0.0);
                 self.finish(ctx, flow, out);
                 from += cut as u32;
                 shaped = ctx
                     .cache
                     .word(ctx.shaper, ctx.style, font, &text[cut..], ctx.dpi);
             }
-            self.push(shaped, (from, end), atom.span, atom.tail);
+            self.push(Item::Text(shaped), (from, end), atom.span, atom.tail);
         }
     }
 
-    fn push(&mut self, shaped: Shaped, range: (u32, u32), span: usize, tail: f32) {
+    fn push(&mut self, item: Item, range: (u32, u32), span: usize, tail: f32) {
         let x = self.cursor;
-        self.cursor += shaped.width + tail;
+        self.cursor += item.width() + tail;
         self.line.push(Placed {
-            shaped,
+            item,
             x,
             range,
             span,
@@ -124,39 +165,63 @@ impl Lines {
             let base = self
                 .line
                 .iter()
-                .map(|p| p.shaped.baseline)
+                .map(|p| p.item.baseline())
                 .fold(0.0, f32::max);
             let below = self
                 .line
                 .iter()
-                .map(|p| p.shaped.height - p.shaped.baseline)
+                .map(|p| p.item.height() - p.item.baseline())
                 .fold(0.0, f32::max);
             (base + below, base)
         };
-        let used = self.line.last().map_or(0.0, |p| p.x + p.shaped.width);
+        let used = self.line.last().map_or(0.0, |p| p.x + p.item.width());
         let dx = if self.width.is_finite() {
             offset(flow.align, self.width - used)
         } else {
             0.0
         };
         let count = self.line.len();
+        let across = if self.width.is_finite() {
+            self.width
+        } else {
+            used
+        };
+        let line = FRect::new(self.x, self.y + self.top, across, height);
         for (i, p) in self.line.drain(..).enumerate() {
             let span = &flow.spans[p.span];
-            let top = self.y + self.top + baseline - p.shaped.baseline;
+            let top = self.y + self.top + baseline - p.item.baseline();
             let left = self.x + p.x + dx;
+            let shaped = match p.item {
+                Item::Text(shaped) => shaped,
+                Item::Image(picture) => {
+                    let rect = FRect::new(left, top, picture.w, picture.h);
+                    // A linked image is clicked anywhere on it, and not
+                    // underlined.
+                    if let Some(link) = span.link {
+                        out.links.push((rect, link));
+                    }
+                    out.images.push(ImageBox {
+                        rect,
+                        image: picture.image,
+                        range: p.range.0..p.range.1,
+                        line,
+                    });
+                    continue;
+                }
+            };
             // A run continues across the space to the next word of the same
             // span, so its underline or shading has no gaps.
             let joined = i + 1 < count && p.tail > 0.0;
-            let w = p.shaped.width + if joined { p.tail } else { 0.0 };
+            let w = shaped.width + if joined { p.tail } else { 0.0 };
             decorate(
                 ctx,
                 out,
-                FRect::new(left, top, w, p.shaped.height),
-                p.shaped.baseline,
+                FRect::new(left, top, w, shaped.height),
+                shaped.baseline,
                 span,
             );
             out.pieces.push(Piece {
-                layout: p.shaped.layout,
+                layout: shaped.layout,
                 x: left,
                 y: top,
                 range: p.range.0..p.range.1,

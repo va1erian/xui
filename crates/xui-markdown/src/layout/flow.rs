@@ -7,13 +7,18 @@
 //! text is cut into words at Unicode line-break opportunities and at style
 //! changes, each word shaped through the [`ShapeCache`](super::cache), and
 //! the words packed greedily onto lines that share a baseline.
+//!
+//! An image the app has supplied pixels for is one unbreakable atom in place
+//! of its alt text, sitting on the baseline; until then its alt text flows
+//! like any other.
 
 use unicode_linebreak::{BreakOpportunity, linebreaks};
 
 use super::cache::Shaped;
 use super::geom::{BlockLayout, Ctx, Decor, FRect, Piece};
+use super::images::{Picture, inside_image, picture};
 use super::line::Lines;
-use crate::model::{Align, Inline, Span};
+use crate::model::{Align, Inline, OBJECT, Span};
 use crate::style::{FontKey, Role};
 
 /// Slack for float rounding when testing whether a word fits.
@@ -76,7 +81,7 @@ pub(crate) fn flow(
     let uniform = flow
         .spans
         .iter()
-        .all(|s| s.style == first.style && s.link == first.link);
+        .all(|s| s.style == first.style && s.link == first.link && s.image.is_none());
     if uniform && !text.contains('\n') {
         return single(ctx, flow, (x, y), width, out);
     }
@@ -84,7 +89,10 @@ pub(crate) fn flow(
     let mut span = 0;
     let mut from = 0;
     for (to, kind) in linebreaks(text) {
-        let atoms = atoms(ctx, flow, start, from, to, &mut span);
+        if inside_image(ctx, flow, start + to as u32) {
+            continue;
+        }
+        let atoms = atoms(ctx, flow, start, (from, to), width, &mut span);
         lines.place(ctx, flow, atoms, out);
         if kind == BreakOpportunity::Mandatory && to < text.len() {
             lines.finish(ctx, flow, out);
@@ -168,13 +176,24 @@ pub(super) fn decorate(ctx: &Ctx, out: &mut BlockLayout, rect: FRect, baseline: 
     }
 }
 
-/// A piece of a segment in one span: the word (trailing space trimmed) and
-/// the space after it.
+/// A piece of a segment in one span: the word (trailing space trimmed) or
+/// an image, and the space after it.
 pub(super) struct Atom {
     pub range: (u32, u32),
     pub span: usize,
     pub shaped: Option<Shaped>,
+    pub picture: Option<Picture>,
     pub tail: f32,
+}
+
+impl Atom {
+    pub fn width(&self) -> f32 {
+        match (&self.shaped, &self.picture) {
+            (Some(shaped), _) => shaped.width,
+            (None, Some(picture)) => picture.w,
+            (None, None) => 0.0,
+        }
+    }
 }
 
 /// The atoms of the segment `from..to` (relative to `start`), advancing
@@ -183,8 +202,8 @@ fn atoms(
     ctx: &mut Ctx,
     flow: &Flow,
     start: u32,
-    from: usize,
-    to: usize,
+    (from, to): (usize, usize),
+    width: f32,
     span: &mut usize,
 ) -> Vec<Atom> {
     let mut atoms = Vec::new();
@@ -194,6 +213,30 @@ fn atoms(
             *span += 1;
         }
         let s = &flow.spans[*span];
+        if let Some(image) = s.image {
+            if let Some(picture) = picture(ctx, image, width) {
+                // No break falls inside it, so the segment holds all of it.
+                let mut last = *span;
+                while flow
+                    .spans
+                    .get(last + 1)
+                    .is_some_and(|n| n.image == Some(image))
+                {
+                    last += 1;
+                }
+                let stop = flow.spans[last].range.end.min(end);
+                atoms.push(Atom {
+                    range: (at, stop),
+                    span: *span,
+                    shaped: None,
+                    picture: Some(picture),
+                    tail: 0.0,
+                });
+                at = stop;
+                continue;
+            }
+            ctx.wanted.push(image);
+        }
         let stop = s.range.end.min(end);
         let piece = &ctx.doc.text[at as usize..stop as usize];
         let word = piece.trim_end();
@@ -211,12 +254,14 @@ fn atoms(
         } else {
             0.0
         };
-        let shaped =
-            (!word.is_empty()).then(|| ctx.cache.word(ctx.shaper, ctx.style, font, word, ctx.dpi));
+        // An image with no alt text shows nothing until it has its pixels.
+        let shown = !word.is_empty() && !(s.image.is_some() && word.chars().all(|c| c == OBJECT));
+        let shaped = shown.then(|| ctx.cache.word(ctx.shaper, ctx.style, font, word, ctx.dpi));
         atoms.push(Atom {
             range: (at, at + word.len() as u32),
             span: *span,
             shaped,
+            picture: None,
             tail,
         });
         at = stop;

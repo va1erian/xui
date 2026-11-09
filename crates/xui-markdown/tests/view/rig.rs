@@ -77,6 +77,16 @@ pub fn run(markdown: &str, body: impl FnOnce(&Stage<'_, String>, &Rig) + 'static
 
 /// Like [`run`], with the view as the first paint leaves it.
 pub fn run_raw(markdown: &str, body: impl FnOnce(&Stage<'_, String>, &Rig) + 'static) -> Image {
+    run_configured(markdown, |view| view, body)
+}
+
+/// Like [`run_raw`], with the view passed through `configure` before the
+/// first paint.
+pub fn run_configured(
+    markdown: &str,
+    configure: impl FnOnce(MarkdownView<String>) -> MarkdownView<String> + 'static,
+    body: impl FnOnce(&Stage<'_, String>, &Rig) + 'static,
+) -> Image {
     let _watchdog = Watchdog::start();
     let slot: Rc<RefCell<Option<Rig>>> = Rc::new(RefCell::new(None));
     let build_slot = Rc::clone(&slot);
@@ -89,7 +99,7 @@ pub fn run_raw(markdown: &str, body: impl FnOnce(&Stage<'_, String>, &Rig) + 'st
                 .on_link(|href| Some(href.to_owned()))
                 .on_context(|at| Some(format!("context:{},{}", at.x, at.y)))
                 .markdown(&markdown);
-            let view = Rc::new(view);
+            let view = Rc::new(configure(view));
             *build_slot.borrow_mut() = Some(Rig {
                 view: Rc::clone(&view),
                 log: Rc::clone(&log),

@@ -4,13 +4,15 @@
 //! block shapes and allocates nothing; `State::prepare` first lays out any
 //! visible block that has no layout yet (the only shaping a paint does).
 
+use std::ops::Range;
+
 use xui_core::backend::{Canvas, Rgba};
 use xui_core::geometry::{Point, Rect};
 use xui_core::widget::scrollbar::{self, Orientation, ThumbState};
 use xui_core::{Color, Theme};
 
 use super::state::State;
-use crate::layout::{BlockLayout, Decor, FRect};
+use crate::layout::{BlockLayout, Decor, FRect, Layout, overlaps};
 use crate::style::{self, CodePalette, Role};
 
 /// Paints the document and the scrollbar.
@@ -59,7 +61,11 @@ fn paint_local(canvas: &mut dyn Canvas, state: &mut State, theme: &Theme, bounds
             } else {
                 state.rects.get(index)
             };
-            block(canvas, laid, at, &ink, selected);
+            let images = Images {
+                layout: &state.layout,
+                selection: &selection,
+            };
+            block(canvas, laid, at, &ink, selected, &images);
         }
     }
     canvas.pop_clip();
@@ -109,12 +115,19 @@ struct Ink<'a> {
     selection: Color,
 }
 
+/// Where a block's images come from, and what is selected.
+struct Images<'a> {
+    layout: &'a Layout,
+    selection: &'a Range<u32>,
+}
+
 fn block(
     canvas: &mut dyn Canvas,
     laid: &BlockLayout,
     at: (f32, f32),
     ink: &Ink,
     selected: &[FRect],
+    images: &Images,
 ) {
     let (theme, palette) = (ink.theme, ink.palette);
     // Backgrounds (code and header shading) go under the selection; lines,
@@ -135,6 +148,18 @@ fn block(
     }
     for decor in laid.decor.iter().filter(|d| !background(d)) {
         draw(canvas, decor, at, ink);
+    }
+    for image in &laid.images {
+        let Some(bitmap) = images.layout.image(image.image) else {
+            continue;
+        };
+        let rect = pixels(&image.rect, at);
+        canvas.draw_image(bitmap, rect);
+        // The selection band is under the image: tint a selected one.
+        if overlaps(&image.range, images.selection) {
+            let tint = Rgba::from(ink.selection);
+            canvas.fill_rect_rgba(rect, Rgba { a: 128, ..tint });
+        }
     }
     if let Some(clip) = &laid.clip {
         canvas.push_clip(pixels(clip, at));
