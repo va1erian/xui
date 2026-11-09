@@ -64,6 +64,8 @@ mod tests {
         assert_eq!(natural_cmp("abc", "ABD"), Ordering::Less);
         assert_eq!(natural_cmp("Abc", "abc"), Ordering::Equal);
         assert_eq!(natural_cmp("ab", "abc"), Ordering::Less);
+        assert_eq!(natural_cmp("abc", "ab"), Ordering::Greater);
+        assert_eq!(natural_cmp("1a", "10"), Ordering::Less);
         assert_eq!(natural_cmp("", ""), Ordering::Equal);
     }
 }
