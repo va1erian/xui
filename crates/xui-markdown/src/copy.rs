@@ -8,7 +8,7 @@
 
 use std::ops::Range;
 
-use crate::model::{Block, BlockKind, Document, Marker, range};
+use crate::model::{Block, BlockKind, Document, Marker, OBJECT, range};
 
 impl Document {
     /// The text in `selection` (byte offsets into [`Document::text`]) as
@@ -45,7 +45,7 @@ impl Document {
             }
             match &block.kind {
                 BlockKind::TableRow { .. } => self.row(&mut out, block, from..to),
-                _ => out.push_str(&self.text[range(&(from..to))]),
+                _ => push_text(&mut out, &self.text[range(&(from..to))]),
             }
             previous = Some(block);
         }
@@ -71,7 +71,7 @@ impl Document {
                 out.push('\t');
             }
             first = false;
-            out.push_str(&self.text[range(&(from..to))]);
+            push_text(out, &self.text[range(&(from..to))]);
         }
     }
 }
@@ -85,6 +85,16 @@ fn separator(previous: &Block, block: &Block) -> &'static str {
     );
     let in_list = previous.list > 0 && matches!(block.kind, BlockKind::ListItem(_));
     if same_table || in_list { "\n" } else { "\n\n" }
+}
+
+/// Appends `text` without the [`OBJECT`]s standing for images with no alt
+/// text.
+fn push_text(out: &mut String, text: &str) {
+    if text.contains(OBJECT) {
+        out.extend(text.chars().filter(|&c| c != OBJECT));
+    } else {
+        out.push_str(text);
+    }
 }
 
 /// A list item's marker, indented by its depth, as Markdown writes it.

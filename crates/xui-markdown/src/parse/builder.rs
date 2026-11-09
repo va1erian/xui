@@ -5,7 +5,9 @@
 use std::ops::Range;
 
 use super::slug::Slugs;
-use crate::model::{Align, Block, BlockKind, Document, Inline, Marker, Span, Table};
+use crate::model::{
+    Align, Block, BlockKind, Document, ImageRef, Inline, Marker, OBJECT, Span, Table,
+};
 
 /// A block whose text is still being appended.
 pub(super) struct Open {
@@ -22,6 +24,12 @@ pub(super) struct Builder {
     pub open: Option<Open>,
     pub style: Vec<Inline>,
     pub link: Option<u32>,
+    /// The image whose alt text is being appended, and where that text
+    /// starts.
+    pub image: Option<(u32, u32)>,
+    /// How many images the parser is in: alt text may hold an image, which
+    /// counts as plain alt text of the outer one.
+    pub image_depth: u32,
     /// Per enclosing list: the next item number, or `None` for a bullet list.
     pub lists: Vec<Option<u64>>,
     /// A list item's marker, not yet drawn because no block has started in it.
@@ -89,6 +97,7 @@ impl Builder {
         self.doc.text.push_str(text);
         let end = self.pos();
         let style = self.style().with(extra);
+        let image = self.image.map(|(index, _)| index);
         let first = self.open.as_ref().map_or(0, |o| o.spans as usize);
         if self.doc.spans.len() > first
             && let Some(last) = self.doc.spans.last_mut()
@@ -96,6 +105,7 @@ impl Builder {
             && last.range.start >= self.floor
             && last.style == style
             && last.link == self.link
+            && last.image == image
         {
             last.range.end = end;
             return;
@@ -105,6 +115,7 @@ impl Builder {
             range: start..end,
             style,
             link,
+            image,
         });
     }
 
@@ -118,6 +129,35 @@ impl Builder {
             }
             _ => {}
         }
+    }
+
+    /// Enters an image; of nested images only the outermost counts.
+    pub fn start_image(&mut self, src: &str, title: &str) {
+        self.image_depth += 1;
+        if self.image_depth > 1 {
+            return;
+        }
+        let index = u32::try_from(self.doc.images.len()).unwrap_or(u32::MAX);
+        self.doc.images.push(ImageRef {
+            src: src.into(),
+            title: title.into(),
+        });
+        self.image = Some((index, self.pos()));
+    }
+
+    /// Leaves an image, giving one with no alt text [`OBJECT`] for it.
+    pub fn end_image(&mut self) {
+        self.image_depth = self.image_depth.saturating_sub(1);
+        if self.image_depth > 0 {
+            return;
+        }
+        if let Some((_, start)) = self.image
+            && start == self.pos()
+        {
+            let mut object = [0; 4];
+            self.push(OBJECT.encode_utf8(&mut object), Inline::NONE);
+        }
+        self.image = None;
     }
 
     pub fn start_cell(&mut self) {

@@ -7,6 +7,7 @@
 //! turn out wrong, the anchor's block stays where it was on screen instead of
 //! the text jumping.
 
+use std::ops::Range;
 use std::time::Instant;
 
 use xui_core::backend::Cursor;
@@ -241,6 +242,13 @@ impl State {
         let x = (point.x - self.bounds.left) as f32 - self.pad;
         let y = (point.y - self.bounds.top) as f32 + self.scroll - self.pad;
         self.layout.hit(x, y)
+    }
+
+    /// The text of the image under the client pixel `point`.
+    pub fn image_at(&mut self, point: Point) -> Option<Range<u32>> {
+        let x = (point.x - self.bounds.left) as f32 - self.pad;
+        let y = (point.y - self.bounds.top) as f32 + self.scroll - self.pad;
+        self.layout.image_at(x, y)
     }
 
     pub fn bar_scroll(&mut self) -> Scroll {

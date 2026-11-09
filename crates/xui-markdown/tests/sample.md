@@ -37,4 +37,4 @@ fn main() {
 | `say:` | Shows text | 1 |
 | `move:` | Moves the **entity** to a point | 22 |
 
-![A picture](pic.png) stands in as its alt text.
+![A picture](pic.png) is drawn once the app supplies its pixels, and shows its alt text until then.

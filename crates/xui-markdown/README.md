@@ -88,6 +88,30 @@ colour, strings in the warning colour, numbers in the danger colour, and
 comments in secondary text. A palette has a light and a dark set, and the view
 picks the one for the live theme, so switching theme only repaints.
 
+## Images
+
+The view loads nothing itself: it reports each image's source as the
+document writes it, and the app decides what to read and decode.
+
+```rust,ignore
+let view = MarkdownView::new(ui, bounds)?
+    .markdown(text)
+    .on_image(|src| Some(Msg::LoadImage(src.to_owned())));
+
+// in update(), once the app has read and decoded the file (on a worker
+// thread, say):
+view.set_image(&src, image); // an xui_core::image::Image
+```
+
+`on_image` fires once per source per document, as the blocks showing it are
+laid out (the visible ones first). Until `set_image` hands over its pixels,
+an image shows as its alt text; one the app never supplies (a web address it
+refuses, a missing file) stays that way. An image is drawn one image pixel per
+design unit, scaled down to fit its line, standing on the text's baseline;
+inside a link it is clicked like the link's text. It selects as one
+character and copies as its alt text. `Document::images` lists every image
+with its source and title, for an app that loads them ahead of time.
+
 ## What it renders
 
 CommonMark plus the GFM extensions tables, strike-through and task lists:
@@ -95,7 +119,8 @@ headings, paragraphs, emphasis, strong text, inline code, links, block quotes,
 bullet and numbered lists, code blocks and tables (with column alignment).
 A code line wider than its block wraps onto more rows (`MarkdownStyle::wrap_code`;
 off, it is clipped).
-Raw HTML is shown as literal text; an image is shown as its alt text for now.
+Raw HTML is shown as literal text. Images are drawn from pixels the app
+supplies (see *Images*).
 
 ## Styling
 
@@ -128,7 +153,9 @@ without laying anything out again.
   indentation and blank lines (the copied text keeps them).
 * A triple-click is a press within 500 ms of a double-click; the system's
   double-click time is not read.
-* No images (alt text only).
+* An image is drawn at its own size, or scaled down to its line: no width or
+  height from the document, and no SVG or animation (the app decodes, and
+  `Image` is a still bitmap).
 * No bidirectional reordering across styled pieces.
 * A wrapped code line continues at the block's left edge, not under its
   indentation.
@@ -139,7 +166,8 @@ without laying anything out again.
   layout.
 * A table measures all its rows once any of them shows, to size its columns.
 * A list item that starts with a code block or a quote shows its marker on a
-  line of its own, and an image with empty alt text shows nothing.
+  line of its own, and an image with empty alt text shows nothing until its
+  pixels arrive.
 
 See [`docs/plans/markdown-view.md`](../../docs/plans/markdown-view.md) for the
 design.

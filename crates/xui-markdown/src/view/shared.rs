@@ -26,6 +26,7 @@ const AUTOSCROLL_MS: u32 = 40;
 pub(super) type LinkMapper<M> = Box<dyn Fn(&str) -> Option<M>>;
 pub(super) type ContextMapper<M> = Box<dyn Fn(Point) -> Option<M>>;
 pub(super) type PaintedMapper<M> = Box<dyn Fn() -> Option<M>>;
+pub(super) type ImageMapper<M> = Box<dyn Fn(&str) -> Option<M>>;
 
 /// What the widget, its painter, its event mapper and its timer share. The
 /// callbacks hold it weakly, so dropping the view drops it and its node.
@@ -38,6 +39,7 @@ pub(super) struct Shared<M: 'static> {
     pub(super) on_link: RefCell<Option<LinkMapper<M>>>,
     pub(super) on_context: RefCell<Option<ContextMapper<M>>>,
     pub(super) on_painted: RefCell<Option<PaintedMapper<M>>>,
+    pub(super) on_image: RefCell<Option<ImageMapper<M>>>,
     /// The document set last has not been painted yet.
     pub(super) unpainted: Cell<bool>,
     /// The timer laying out the rest of the document, while there is any.
@@ -83,6 +85,21 @@ impl<M: 'static> Shared<M> {
         }
     }
 
+    /// Asks the app for the images that blocks laid out since the last call
+    /// need, each source once per document.
+    pub(super) fn request_images(&self) {
+        let sources = self.state.borrow_mut().layout.take_requests();
+        let map = self.on_image.borrow();
+        let Some(map) = map.as_ref() else {
+            return;
+        };
+        for src in sources {
+            if let Some(message) = map(&src) {
+                self.ui.emit(message);
+            }
+        }
+    }
+
     /// Lays out the next slice of the document; stops the timer once all of
     /// it is laid out.
     fn tick(&self) {
@@ -101,6 +118,7 @@ impl<M: 'static> Shared<M> {
             state.layout.work(SLICE);
             state.layout.done()
         };
+        self.request_images();
         self.ui.invalidate(self.id);
         if finished && let Some(timer) = self.timer.take() {
             self.control.kill_timer(timer);

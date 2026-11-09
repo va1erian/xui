@@ -29,6 +29,15 @@
   the first paint with room for text of each document shown to a message, for
   an app that reports when a page is on screen. `MarkdownStyle` gains a public
   field, so a struct literal needs `..MarkdownStyle::default()`.
+- **`xui-markdown` draws images.** `on_image` reports each image's source as
+  written (once per document, as its block is laid out, visible blocks first);
+  the app reads and decodes it and hands it over with `set_image`. The view
+  loads nothing itself. An image stands on the baseline at one pixel per
+  design unit, scaled down to fit its line; it is clickable inside a link,
+  selects as one character and copies as its alt text, which it shows until
+  its pixels arrive. `Document::images` lists the sources and titles, and
+  `Span::image` ties alt text to its image (a new public field, so a `Span`
+  struct literal needs it).
 - **`xui-d2d` gives nodes native child windows.** `Ui::set_native_surface` /
   `native_surface` work on the Direct2D backend as on `xui-canvas`: a Win32
   child window of the node's window, kept on its bounds, shown only while the

@@ -21,6 +21,6 @@ mod style;
 mod view;
 
 pub use highlight::{CodeClass, CodeSpan, Highlighter};
-pub use model::{Align, Block, BlockKind, Document, Inline, Marker, Span, Table};
+pub use model::{Align, Block, BlockKind, Document, ImageRef, Inline, Marker, OBJECT, Span, Table};
 pub use style::{CodeColors, CodePalette, MarkdownStyle};
 pub use view::MarkdownView;

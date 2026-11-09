@@ -7,6 +7,7 @@ use std::ops::Range;
 use std::sync::Arc;
 
 use xui_core::backend::{TextLayout, TextShaper};
+use xui_core::image::Image;
 
 use super::cache::ShapeCache;
 use crate::highlight::Highlighter;
@@ -87,12 +88,27 @@ pub(crate) enum Decor {
     Disc(FRect, Role),
 }
 
+/// An image placed in its block.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct ImageBox {
+    pub rect: FRect,
+    /// Which image, an index into [`Document::images`].
+    pub image: u32,
+    /// The bytes of [`Document::text`] standing for it (its alt text).
+    pub range: Range<u32>,
+    /// The line it stands on, across its flow's width (a table cell's, in a
+    /// table): a point beside its line's text is on that line.
+    pub line: FRect,
+}
+
 /// One block laid out.
 #[derive(Clone, Default)]
 pub(crate) struct BlockLayout {
     pub height: f32,
     pub pieces: Vec<Piece>,
     pub decor: Vec<Decor>,
+    /// The images, drawn over the decorations.
+    pub images: Vec<ImageBox>,
     /// Where each link can be clicked, and which link it is.
     pub links: Vec<(FRect, u32)>,
     /// The area pieces are clipped to (a code block's, for lines that do not
@@ -109,6 +125,10 @@ pub(crate) struct Ctx<'a> {
     pub dpi: u32,
     /// The app's code highlighter, if it gave one.
     pub highlighter: Option<&'a dyn Highlighter>,
+    /// Per image of the document: its pixels, once the app gave them.
+    pub images: &'a [Option<Arc<Image>>],
+    /// The images laid out without pixels, for the app to be asked for.
+    pub wanted: &'a mut Vec<u32>,
 }
 
 impl Ctx<'_> {

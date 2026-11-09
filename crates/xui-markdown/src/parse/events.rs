@@ -73,7 +73,12 @@ impl Builder {
             Tag::Emphasis => self.nest(Inline::ITALIC),
             Tag::Strong => self.nest(Inline::BOLD),
             Tag::Strikethrough => self.nest(Inline::STRIKE),
-            Tag::Image { .. } => self.nest(Inline::IMAGE),
+            Tag::Image {
+                dest_url, title, ..
+            } => {
+                self.nest(Inline::IMAGE);
+                self.start_image(&dest_url, &title);
+            }
             Tag::Link { dest_url, .. } => {
                 self.link = Some(self.doc.links.len() as u32);
                 self.doc.links.push(dest_url.as_ref().into());
@@ -100,7 +105,11 @@ impl Builder {
             }
             TagEnd::Item => self.begin(),
             TagEnd::TableCell => self.end_cell(),
-            TagEnd::Emphasis | TagEnd::Strong | TagEnd::Strikethrough | TagEnd::Image => {
+            TagEnd::Emphasis | TagEnd::Strong | TagEnd::Strikethrough => {
+                self.style.pop();
+            }
+            TagEnd::Image => {
+                self.end_image();
                 self.style.pop();
             }
             TagEnd::Link => self.link = None,
