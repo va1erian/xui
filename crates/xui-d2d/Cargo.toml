@@ -40,6 +40,10 @@ windows = { version = "0.62", default-features = false, features = [
 
 [target.'cfg(windows)'.dev-dependencies]
 softbuffer = { version = "0.4", default-features = false }
+# The file-dialog test presses a task dialog's buttons (`TDM_CLICK_BUTTON`).
+windows = { version = "0.62", default-features = false, features = [
+    "Win32_UI_Controls",
+] }
 
 [[test]]
 name = "exit_code"
