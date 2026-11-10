@@ -18,7 +18,7 @@ use crate::backend::{Cursor, Event, NodeKind, NodeSpec, Result, TextStyle};
 use crate::color::Color;
 use crate::geometry::Rect;
 use crate::message::MouseButton;
-use crate::property::{Properties, Property, Value};
+use crate::property::{Properties, Property, Value, node};
 use crate::units::Dip;
 
 mod geometry;
@@ -326,13 +326,19 @@ impl<M: 'static> Properties for Edit<M> {
         // automation client; it reports what it shows.
         let text = self.text();
         let value = mask::display(&text, self.is_password()).into_owned();
-        vec![Property {
-            name: "text",
-            value: Value::Text(value),
-        }]
+        vec![
+            Property {
+                name: "text",
+                value: Value::Text(value),
+            },
+            node::visible(self.control.ui(), self.id()),
+        ]
     }
 
     fn set_property(&self, name: &str, value: Value) -> bool {
+        if node::set_visible(self.control.ui(), self.id(), name, &value) {
+            return true;
+        }
         match (name, value) {
             ("text", Value::Text(text)) => {
                 self.set_text(&text);

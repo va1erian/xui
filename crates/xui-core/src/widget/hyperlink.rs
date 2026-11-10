@@ -10,7 +10,7 @@ use crate::app::Ui;
 use crate::backend::{Cursor, Event, NodeKind, NodeSpec, Result, TextStyle};
 use crate::geometry::{Point, Rect};
 use crate::message::MouseButton;
-use crate::property::{Properties, Property, Value};
+use crate::property::{Properties, Property, Value, node};
 use crate::theme::look::backdrop;
 use crate::units::Dip;
 
@@ -182,16 +182,27 @@ impl<M: 'static> HasText for Hyperlink<M> {
 
 impl<M: 'static> Properties for Hyperlink<M> {
     fn properties(&self) -> Vec<Property> {
-        vec![Property {
-            name: "text",
-            value: Value::Text(self.text()),
-        }]
+        vec![
+            Property {
+                name: "text",
+                value: Value::Text(self.text()),
+            },
+            node::enabled(self.control.ui(), self.id()),
+            node::visible(self.control.ui(), self.id()),
+        ]
     }
 
     fn set_property(&self, name: &str, value: Value) -> bool {
+        if node::set_visible(self.control.ui(), self.id(), name, &value) {
+            return true;
+        }
         match (name, value) {
             ("text", Value::Text(text)) => {
                 self.set_text(&text);
+                true
+            }
+            ("enabled", Value::Bool(enabled)) => {
+                self.set_enabled(enabled);
                 true
             }
             _ => false,

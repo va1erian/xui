@@ -26,7 +26,7 @@ use crate::arrange::Mounted;
 use crate::backend::{NodeKind, NodeSpec, Result, WidgetId};
 use crate::geometry::Rect;
 use crate::layout::Stack;
-use crate::property::{Properties, Property, Value};
+use crate::property::{Properties, Property, Value, node};
 use crate::units::{Dip, Px};
 use view::{bar_event, paint_viewport, set_offset, viewport_event};
 
@@ -201,16 +201,27 @@ impl<M: 'static> Drop for ScrollView<M> {
 
 impl<M: 'static> Properties for ScrollView<M> {
     fn properties(&self) -> Vec<Property> {
-        vec![Property {
-            name: "offset",
-            value: Value::Integer(i64::from(self.offset().value())),
-        }]
+        vec![
+            Property {
+                name: "offset",
+                value: Value::Integer(i64::from(self.offset().value())),
+            },
+            node::enabled(self.control.ui(), self.id()),
+            node::visible(self.control.ui(), self.id()),
+        ]
     }
 
     fn set_property(&self, name: &str, value: Value) -> bool {
+        if node::set_visible(self.control.ui(), self.id(), name, &value) {
+            return true;
+        }
         match (name, value) {
             ("offset", Value::Integer(px)) => {
                 self.scroll_to(Px(px as i32));
+                true
+            }
+            ("enabled", Value::Bool(enabled)) => {
+                self.set_enabled(enabled);
                 true
             }
             _ => false,

@@ -16,7 +16,7 @@ use crate::app::Ui;
 use crate::backend::{Cursor, Event, NodeKind, NodeSpec, Result, TextStyle};
 use crate::geometry::{Point, Rect};
 use crate::message::{Key, MouseButton};
-use crate::property::{Properties, Property, Value};
+use crate::property::{Properties, Property, Value, node};
 use crate::units::Dip;
 
 /// Maps new text to an optional app message.
@@ -297,16 +297,27 @@ impl<M: 'static> HasText for MultilineEdit<M> {
 
 impl<M: 'static> Properties for MultilineEdit<M> {
     fn properties(&self) -> Vec<Property> {
-        vec![Property {
-            name: "text",
-            value: Value::Text(self.text()),
-        }]
+        vec![
+            Property {
+                name: "text",
+                value: Value::Text(self.text()),
+            },
+            node::enabled(self.control.ui(), self.id()),
+            node::visible(self.control.ui(), self.id()),
+        ]
     }
 
     fn set_property(&self, name: &str, value: Value) -> bool {
+        if node::set_visible(self.control.ui(), self.id(), name, &value) {
+            return true;
+        }
         match (name, value) {
             ("text", Value::Text(text)) => {
                 self.set_text(&text);
+                true
+            }
+            ("enabled", Value::Bool(enabled)) => {
+                self.set_enabled(enabled);
                 true
             }
             _ => false,

@@ -8,7 +8,7 @@ use std::rc::Rc;
 use super::GridView;
 use super::model::{GridModel, TileSize};
 use crate::backend::WidgetId;
-use crate::property::{Properties, Property, Value};
+use crate::property::{Properties, Property, Value, node};
 
 impl<M: 'static> GridView<M> {
     /// Replaces the model and refreshes the view. The scroll resets and a
@@ -92,16 +92,27 @@ impl<M: 'static> GridView<M> {
 
 impl<M: 'static> Properties for GridView<M> {
     fn properties(&self) -> Vec<Property> {
-        vec![Property {
-            name: "selected",
-            value: Value::Integer(self.selected().map_or(-1, |index| index as i64)),
-        }]
+        vec![
+            Property {
+                name: "selected",
+                value: Value::Integer(self.selected().map_or(-1, |index| index as i64)),
+            },
+            node::enabled(self.control.ui(), self.id()),
+            node::visible(self.control.ui(), self.id()),
+        ]
     }
 
     fn set_property(&self, name: &str, value: Value) -> bool {
+        if node::set_visible(self.control.ui(), self.id(), name, &value) {
+            return true;
+        }
         match (name, value) {
             ("selected", Value::Integer(index)) => {
                 self.select((index >= 0).then_some(index as usize));
+                true
+            }
+            ("enabled", Value::Bool(enabled)) => {
+                self.set_enabled(enabled);
                 true
             }
             _ => false,

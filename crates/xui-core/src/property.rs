@@ -9,6 +9,7 @@
 //! the widget would do itself. [`Properties::schema`] describes the set for a
 //! designer's editors.
 
+pub(crate) mod node;
 mod value;
 
 pub use value::{Font, Value};

@@ -17,6 +17,86 @@ fn widgets_report_and_edit_properties() {
 }
 
 #[test]
+fn widgets_report_and_edit_visibility_and_enabled() {
+    use crate::widget::{ComboBox, Toolbar};
+
+    let (_backend, _core, ui) = setup();
+    let rect = Rect::new(0, 0, 120, 30);
+    let slider = Slider::new(&ui, rect, 0.0, 10.0).unwrap();
+    let combo = ComboBox::new(&ui, rect, &["a", "b"]).unwrap();
+    let panel = Panel::new(&ui, rect).unwrap();
+    let label = Label::new(&ui, rect, "hi").unwrap();
+    let radios = RadioGroup::new(&ui, rect, &["a", "b"]).unwrap();
+    let toolbar = Toolbar::new(&ui, rect, &["a"]).unwrap();
+
+    let widgets: [(&dyn Properties, WidgetId, bool); 6] = [
+        (&slider, slider.id(), true),
+        (&combo, combo.id(), true),
+        (&panel, panel.id(), true),
+        (&label, label.id(), false),
+        (&radios, radios.ids()[1], true),
+        (&toolbar, toolbar.id(), true),
+    ];
+    for (widget, id, has_enabled) in widgets {
+        assert_eq!(widget.property("visible"), Some(Value::Bool(true)));
+        assert!(widget.set_property("visible", Value::Bool(false)));
+        assert!(!ui.is_visible(id));
+        assert_eq!(widget.property("visible"), Some(Value::Bool(false)));
+        assert!(widget.set_property("visible", Value::Bool(true)));
+        assert!(ui.is_visible(id));
+
+        assert_eq!(widget.property("enabled").is_some(), has_enabled);
+        if has_enabled {
+            assert_eq!(widget.property("enabled"), Some(Value::Bool(true)));
+            assert!(widget.set_property("enabled", Value::Bool(false)));
+            assert_eq!(widget.property("enabled"), Some(Value::Bool(false)));
+            assert!(!ui.is_enabled(id));
+        } else {
+            assert!(!widget.set_property("enabled", Value::Bool(false)));
+        }
+    }
+}
+
+#[test]
+fn node_properties_reject_mismatched_values_and_empty_groups() {
+    let (_backend, _core, ui) = setup();
+    let rect = Rect::new(0, 0, 120, 30);
+    let slider = Slider::new(&ui, rect, 0.0, 10.0).unwrap();
+    assert!(!slider.set_property("visible", Value::Integer(0)));
+    assert!(!slider.set_property("enabled", Value::Text("no".into())));
+    assert!(ui.is_visible(slider.id()) && ui.is_enabled(slider.id()));
+
+    let empty = RadioGroup::new(&ui, rect, &[]).unwrap();
+    assert_eq!(empty.property("visible"), None);
+    assert!(!empty.set_property("visible", Value::Bool(false)));
+    assert!(!empty.set_property("enabled", Value::Bool(false)));
+}
+
+#[test]
+fn destroying_a_node_forgets_that_it_was_disabled() {
+    let (_backend, _core, ui) = setup();
+    let slider = Slider::new(&ui, Rect::new(0, 0, 120, 30), 0.0, 10.0).unwrap();
+    let id = slider.id();
+    slider.set_enabled(false);
+    assert!(!ui.is_enabled(id));
+    drop(slider);
+    assert!(
+        ui.is_enabled(id),
+        "a destroyed node leaves no record behind"
+    );
+}
+
+#[test]
+fn schema_lists_every_property_of_an_overriding_widget() {
+    let (_backend, _core, ui) = setup();
+    let label = Label::new(&ui, Rect::new(0, 0, 120, 30), "hi").unwrap();
+    let schema: Vec<_> = label.schema().iter().map(|info| info.name).collect();
+    let props: Vec<_> = label.properties().iter().map(|p| p.name).collect();
+    assert_eq!(schema, props);
+    assert!(schema.contains(&"visible"));
+}
+
+#[test]
 fn design_mode_suppresses_widget_input() {
     let (_backend, core, ui) = setup();
     let button = Button::new(&ui, Rect::new(0, 0, 80, 28), "Ok")

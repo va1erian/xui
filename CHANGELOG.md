@@ -4,6 +4,12 @@
 
 ### Added
 
+- **Every widget's `Properties` report `visible` and `enabled`.** A form
+  designer (LazyRAD) can now show, hide, enable and disable any widget through
+  `property`/`set_property`. `visible` is on every widget with a node and
+  `enabled` on every one with a `set_enabled`; each is the widget's own
+  setting, not one inherited from a container. `Ui::is_enabled(id)` reads the
+  state `Ui::set_enabled` set.
 - **`xui-markdown`, a read-only Markdown view.** `MarkdownView` shows CommonMark
   with GFM tables, strike-through and task lists, scrolled with the wheel, the
   keyboard and its own bar, with links reported through `on_link` (a `#slug`

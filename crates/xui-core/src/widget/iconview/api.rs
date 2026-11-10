@@ -11,7 +11,7 @@ use super::bar;
 use super::model::{IconModel, IconSize};
 use crate::backend::WidgetId;
 use crate::geometry::Point;
-use crate::property::{Properties, Property, PropertyInfo, PropertyType, Value};
+use crate::property::{Properties, Property, PropertyInfo, PropertyType, Value, node};
 use crate::widget::CellData;
 use crate::widget::SelectionMode;
 
@@ -246,10 +246,15 @@ impl<M: 'static> Properties for IconView<M> {
                 name: "icon_size",
                 value: Value::Enum(self.icon_size().name().to_owned()),
             },
+            node::enabled(self.control.ui(), self.id()),
+            node::visible(self.control.ui(), self.id()),
         ]
     }
 
     fn set_property(&self, name: &str, value: Value) -> bool {
+        if node::set_visible(self.control.ui(), self.id(), name, &value) {
+            return true;
+        }
         match (name, value) {
             ("selected", Value::Integer(index)) => {
                 self.select((index >= 0).then_some(index as usize));
@@ -262,6 +267,10 @@ impl<M: 'static> Properties for IconView<M> {
                 }
                 None => false,
             },
+            ("enabled", Value::Bool(enabled)) => {
+                self.set_enabled(enabled);
+                true
+            }
             _ => false,
         }
     }
@@ -272,6 +281,8 @@ impl<M: 'static> Properties for IconView<M> {
                 .described("Data", "The selected tile, or -1 for none."),
             PropertyInfo::new("icon_size", PropertyType::Enum(ICON_SIZES))
                 .described("Appearance", "The icon size: small, medium or large."),
+            node::ENABLED,
+            node::VISIBLE,
         ]
     }
 }

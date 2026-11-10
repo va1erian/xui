@@ -10,7 +10,7 @@ use super::ellipsis;
 use crate::app::Ui;
 use crate::backend::{NodeKind, NodeSpec, Result, TextStyle, WidgetId};
 use crate::geometry::{Point, Rect};
-use crate::property::{Properties, Property, Value};
+use crate::property::{Properties, Property, Value, node};
 use crate::theme::look::backdrop;
 use crate::units::Dip;
 
@@ -158,13 +158,20 @@ impl<M: 'static> StatusBar<M> {
 
 impl<M: 'static> Properties for StatusBar<M> {
     fn properties(&self) -> Vec<Property> {
-        vec![Property {
-            name: "text",
-            value: Value::Text(self.text(0).unwrap_or_default()),
-        }]
+        vec![
+            Property {
+                name: "text",
+                value: Value::Text(self.text(0).unwrap_or_default()),
+            },
+            node::enabled(self.control.ui(), self.id()),
+            node::visible(self.control.ui(), self.id()),
+        ]
     }
 
     fn set_property(&self, name: &str, value: Value) -> bool {
+        if node::set_visible(self.control.ui(), self.id(), name, &value) {
+            return true;
+        }
         match (name, value) {
             ("text", Value::Text(text)) => {
                 let mut parts = self.parts.borrow_mut();
@@ -175,6 +182,10 @@ impl<M: 'static> Properties for StatusBar<M> {
                 }
                 drop(parts);
                 self.control.invalidate();
+                true
+            }
+            ("enabled", Value::Bool(enabled)) => {
+                self.set_enabled(enabled);
                 true
             }
             _ => false,

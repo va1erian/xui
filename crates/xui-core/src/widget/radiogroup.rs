@@ -12,7 +12,7 @@ use crate::backend::{Event, NodeKind, NodeSpec, Result, TextStyle, WidgetId};
 use crate::geometry::{Point, Rect, Size};
 use crate::layout::Constraints;
 use crate::message::{Key, MouseButton};
-use crate::property::{Properties, Property, Value};
+use crate::property::{Properties, Property, Value, node};
 use crate::theme::look::{self, backdrop};
 use crate::units::Dip;
 
@@ -269,14 +269,35 @@ impl<M: 'static> Placeable<M> for RadioGroup<M> {
 
 impl<M: 'static> Properties for RadioGroup<M> {
     fn properties(&self) -> Vec<Property> {
-        vec![Property {
+        let mut props = vec![Property {
             name: "selected",
             value: Value::Integer(self.selected() as i64),
-        }]
+        }];
+        // The options share one state, so the first speaks for the group.
+        if let Some(first) = self.options.first() {
+            props.push(node::enabled(first.ui(), first.id()));
+            props.push(node::visible(first.ui(), first.id()));
+        }
+        props
     }
 
     fn set_property(&self, name: &str, value: Value) -> bool {
+        if self.options.is_empty() {
+            // An empty group has no node to show or enable.
+            if matches!(name, "visible" | "enabled") {
+                return false;
+            }
+        } else if let ("visible", Value::Bool(visible)) = (name, &value) {
+            for option in &self.options {
+                option.ui().set_visible(option.id(), *visible);
+            }
+            return true;
+        }
         match (name, value) {
+            ("enabled", Value::Bool(enabled)) => {
+                self.set_enabled(enabled);
+                true
+            }
             ("selected", Value::Integer(index)) if index >= 0 => {
                 self.select(index as usize);
                 true

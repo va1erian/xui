@@ -60,7 +60,11 @@ fn a_font_override_reaches_the_measure_and_the_property() {
             .iter()
             .map(|info| (info.name, info.ty))
             .collect::<Vec<_>>(),
-        [("text", PropertyType::Text), ("font", PropertyType::Font)]
+        [
+            ("text", PropertyType::Text),
+            ("font", PropertyType::Font),
+            ("visible", PropertyType::Bool),
+        ]
     );
 
     let title = Label::new(&ui, Rect::new(0, 0, 120, 30), "Big")

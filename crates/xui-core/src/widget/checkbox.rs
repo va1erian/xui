@@ -10,7 +10,7 @@ use crate::app::Ui;
 use crate::backend::{Event, NodeKind, NodeSpec, Result, TextStyle};
 use crate::geometry::{Point, Rect};
 use crate::message::{Key, MouseButton};
-use crate::property::{Properties, Property, Value};
+use crate::property::{Properties, Property, Value, node};
 use crate::theme::look::{self, backdrop};
 use crate::units::Dip;
 
@@ -265,10 +265,14 @@ impl<M: 'static> Properties for CheckBox<M> {
                 name: "enabled",
                 value: Value::Bool(self.is_enabled()),
             },
+            node::visible(self.control.ui(), self.id()),
         ]
     }
 
     fn set_property(&self, name: &str, value: Value) -> bool {
+        if node::set_visible(self.control.ui(), self.id(), name, &value) {
+            return true;
+        }
         match (name, value) {
             ("text", Value::Text(text)) => {
                 self.set_text(&text);
