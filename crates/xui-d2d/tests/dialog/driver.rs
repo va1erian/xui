@@ -79,12 +79,23 @@ fn find_dialog(title: &str) -> Option<HWND> {
     None
 }
 
-/// Sends a message to a window of the dialog's thread, giving up (`None`)
-/// rather than block if that thread stops answering.
-fn send(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM) -> Option<usize> {
+/// Sends a message whose `lparam` points into `data` to a window of the
+/// dialog's thread, giving up (`None`) rather than block if that thread stops
+/// answering. A message that timed out is still delivered later, with the
+/// same pointer (it is not copied between threads of one process), so `data`
+/// is then leaked to keep that late access valid; otherwise it is returned.
+fn send<T: ?Sized>(
+    hwnd: HWND,
+    msg: u32,
+    wparam: WPARAM,
+    mut data: Box<T>,
+    lparam: impl FnOnce(&mut T) -> LPARAM,
+) -> Option<(usize, Box<T>)> {
+    let lparam = lparam(&mut data);
     let mut result = 0;
-    // SAFETY: whatever `lparam` points at is owned by the caller and outlives
-    // this call; `result` outlives it too.
+    // SAFETY: `lparam` points into `data`, which lives until this call has
+    // returned and, if it timed out, forever (leaked below); `result` outlives
+    // the call, which writes it only before returning.
     let sent = unsafe {
         SendMessageTimeoutW(
             hwnd,
@@ -96,7 +107,11 @@ fn send(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM) -> Option<usize> {
             Some(&mut result),
         )
     };
-    (sent.0 != 0).then_some(result)
+    if sent.0 == 0 {
+        Box::leak(data);
+        return None;
+    }
+    Some((result, data))
 }
 
 fn class_of(hwnd: HWND) -> String {
@@ -107,10 +122,13 @@ fn class_of(hwnd: HWND) -> String {
 }
 
 fn text_of(hwnd: HWND) -> String {
-    let mut buffer = [0u16; 512];
-    let lparam = LPARAM(buffer.as_mut_ptr() as isize);
-    let len = send(hwnd, WM_GETTEXT, WPARAM(buffer.len()), lparam).unwrap_or(0);
-    utf16(&buffer[..len.min(buffer.len())])
+    const LEN: usize = 512;
+    let buffer: Box<[u16]> = vec![0u16; LEN].into_boxed_slice();
+    let sent = send(hwnd, WM_GETTEXT, WPARAM(LEN), buffer, |buffer| {
+        LPARAM(buffer.as_mut_ptr() as isize)
+    });
+    sent.map(|(len, buffer)| utf16(&buffer[..len.min(LEN)]))
+        .unwrap_or_default()
 }
 
 /// Text up to its first NUL: some controls count a terminator in the length
@@ -186,9 +204,10 @@ fn button(dialog: HWND, id: MESSAGEBOX_RESULT) -> Option<HWND> {
 }
 
 fn type_name(edit: HWND, text: &str) {
-    let text = HSTRING::from(text);
-    // The text outlives the send, which copies it.
-    send(edit, WM_SETTEXT, WPARAM(0), LPARAM(text.as_ptr() as isize));
+    let text = Box::new(HSTRING::from(text));
+    send(edit, WM_SETTEXT, WPARAM(0), text, |text| {
+        LPARAM(text.as_ptr() as isize)
+    });
 }
 
 /// What readiness looks at, kept so a timeout can say what was missing.
@@ -316,8 +335,15 @@ fn give_up(dialog: HWND, reason: &str) -> String {
     };
     blockers.into_iter().for_each(decline);
     // SAFETY: a state query on a window handle.
-    let enabled = within(CLOSE, || unsafe { IsWindowEnabled(dialog) }.as_bool());
-    if !(enabled && click(dialog, IDCANCEL).is_ok() && within(CLOSE, || gone(dialog))) {
+    let enabled = || unsafe { IsWindowEnabled(dialog) }.as_bool();
+    // It may close on its own (it was already closing when the answer failed).
+    if !within(CLOSE, || gone(dialog) || enabled()) {
+        abort(&format!("{reason}; a popup kept it disabled"));
+    }
+    if gone(dialog) {
+        return reason;
+    }
+    if !(click(dialog, IDCANCEL).is_ok() && within(CLOSE, || gone(dialog))) {
         abort(&format!("{reason}; it could not be closed"));
     }
     reason
