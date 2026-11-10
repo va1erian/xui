@@ -5,6 +5,8 @@
 #![allow(unsafe_code)]
 
 use std::io::Write;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
@@ -13,9 +15,9 @@ use windows::Win32::UI::Controls::TDM_CLICK_BUTTON;
 use windows::Win32::UI::Input::KeyboardAndMouse::IsWindowEnabled;
 use windows::Win32::UI::WindowsAndMessaging::{
     BM_CLICK, EnumChildWindows, EnumThreadWindows, FindWindowW, GW_OWNER, GetClassNameW,
-    GetDlgItem, GetParent, GetWindow, GetWindowTextW, GetWindowThreadProcessId, IDCANCEL, IDNO,
-    IDOK, IsWindow, IsWindowVisible, MESSAGEBOX_RESULT, PostMessageW, SendMessageW, WM_COMMAND,
-    WM_SETTEXT,
+    GetDlgItem, GetParent, GetWindow, GetWindowThreadProcessId, IDCANCEL, IDNO, IDOK, IsWindow,
+    IsWindowVisible, MESSAGEBOX_RESULT, PostMessageW, SMTO_ABORTIFHUNG, SendMessageTimeoutW,
+    WM_COMMAND, WM_GETTEXT, WM_SETTEXT,
 };
 use windows::core::{BOOL, HSTRING, w};
 
@@ -30,12 +32,37 @@ pub enum Answer {
     Cancel,
 }
 
-/// How long the dialog may take to appear, to become ready, and to close once
-/// answered. Generous: a coverage-instrumented CI runner is slow.
+/// How long the dialog may take to appear, to become ready (per wait), and to
+/// close once answered. Generous: a coverage-instrumented CI runner is slow.
 const APPEAR: Duration = Duration::from_secs(20);
 const READY: Duration = Duration::from_secs(20);
 const CLOSE: Duration = Duration::from_secs(10);
 const POLL: Duration = Duration::from_millis(50);
+/// How long a message sent to the dialog's thread may wait for it, in ms.
+const SEND_MS: u32 = 2000;
+
+/// The helper answering one dialog; `finish` once `file_dialog` returns.
+pub struct Driver {
+    helper: JoinHandle<Result<(), String>>,
+    returned: Arc<AtomicBool>,
+}
+
+impl Driver {
+    /// Tells the helper the dialog call returned and waits for its verdict.
+    pub fn finish(self) -> Result<(), String> {
+        self.returned.store(true, Ordering::SeqCst);
+        self.helper.join().expect("the dialog helper panicked")
+    }
+}
+
+/// Ends the process with `reason` when the test thread is stuck in
+/// `file_dialog` for good. The reason goes straight to stderr, since libtest's
+/// capture would never be printed.
+fn abort(reason: &str) -> ! {
+    let line = format!("{reason}, so the test binary aborts\n");
+    let _ = std::io::stderr().write_all(line.as_bytes());
+    std::process::abort()
+}
 
 fn find_dialog(title: &str) -> Option<HWND> {
     let deadline = Instant::now() + APPEAR;
@@ -52,6 +79,26 @@ fn find_dialog(title: &str) -> Option<HWND> {
     None
 }
 
+/// Sends a message to a window of the dialog's thread, giving up (`None`)
+/// rather than block if that thread stops answering.
+fn send(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM) -> Option<usize> {
+    let mut result = 0;
+    // SAFETY: whatever `lparam` points at is owned by the caller and outlives
+    // this call; `result` outlives it too.
+    let sent = unsafe {
+        SendMessageTimeoutW(
+            hwnd,
+            msg,
+            wparam,
+            lparam,
+            SMTO_ABORTIFHUNG,
+            SEND_MS,
+            Some(&mut result),
+        )
+    };
+    (sent.0 != 0).then_some(result)
+}
+
 fn class_of(hwnd: HWND) -> String {
     let mut buffer = [0u16; 64];
     // SAFETY: the buffer outlives the call, which writes at most its length.
@@ -61,9 +108,9 @@ fn class_of(hwnd: HWND) -> String {
 
 fn text_of(hwnd: HWND) -> String {
     let mut buffer = [0u16; 512];
-    // SAFETY: the buffer outlives the call, which writes at most its length.
-    let len = unsafe { GetWindowTextW(hwnd, &mut buffer) };
-    utf16(&buffer[..len.max(0) as usize])
+    let lparam = LPARAM(buffer.as_mut_ptr() as isize);
+    let len = send(hwnd, WM_GETTEXT, WPARAM(buffer.len()), lparam).unwrap_or(0);
+    utf16(&buffer[..len.min(buffer.len())])
 }
 
 /// Text up to its first NUL: some controls count a terminator in the length
@@ -119,14 +166,17 @@ fn describe(hwnd: HWND) -> String {
     format!("{} {:?} saying {texts:?}", class_of(hwnd), text_of(hwnd))
 }
 
-/// The edit control of the dialog's file-name box: the one edit whose parent
-/// is a combo box. Open nests it in a `ComboBoxEx32`, Save deeper in the
-/// dialog's view, and the file-type combo is a drop-down list without one.
+/// The edit control of the dialog's file-name box: the visible edit whose
+/// parent is a combo box. Open nests it in a `ComboBoxEx32`, Save deeper in
+/// the dialog's view; the file-type combo is a drop-down list without one, and
+/// the address bar's edit is hidden until it is used.
 fn name_edit(dialog: HWND) -> Option<HWND> {
     descendants(dialog).into_iter().find(|&hwnd| {
-        // SAFETY: a parent lookup on a window handle.
-        let parent = unsafe { GetParent(hwnd) };
-        class_of(hwnd) == "Edit" && parent.is_ok_and(|parent| class_of(parent) == "ComboBox")
+        // SAFETY: a visibility query and a parent lookup on window handles.
+        let (visible, parent) = unsafe { (IsWindowVisible(hwnd).as_bool(), GetParent(hwnd)) };
+        visible
+            && class_of(hwnd) == "Edit"
+            && parent.is_ok_and(|parent| class_of(parent) == "ComboBox")
     })
 }
 
@@ -137,15 +187,8 @@ fn button(dialog: HWND, id: MESSAGEBOX_RESULT) -> Option<HWND> {
 
 fn type_name(edit: HWND, text: &str) {
     let text = HSTRING::from(text);
-    // SAFETY: the text outlives the call, which copies it.
-    unsafe {
-        SendMessageW(
-            edit,
-            WM_SETTEXT,
-            Some(WPARAM(0)),
-            Some(LPARAM(text.as_ptr() as isize)),
-        )
-    };
+    // The text outlives the send, which copies it.
+    send(edit, WM_SETTEXT, WPARAM(0), LPARAM(text.as_ptr() as isize));
 }
 
 /// What readiness looks at, kept so a timeout can say what was missing.
@@ -222,16 +265,21 @@ fn click(dialog: HWND, id: MESSAGEBOX_RESULT) -> Result<(), String> {
         .map_err(|error| format!("button {} could not be pressed: {error}", id.0))
 }
 
-fn gone_within(window: HWND, limit: Duration) -> bool {
+/// Polls `done` until it holds or `limit` passes.
+fn within(limit: Duration, done: impl Fn() -> bool) -> bool {
     let deadline = Instant::now() + limit;
     while Instant::now() < deadline {
-        // SAFETY: a liveness query on a window handle.
-        if !unsafe { IsWindow(Some(window)) }.as_bool() {
+        if done() {
             return true;
         }
         thread::sleep(POLL);
     }
     false
+}
+
+fn gone(window: HWND) -> bool {
+    // SAFETY: a liveness query on a window handle.
+    !unsafe { IsWindow(Some(window)) }.as_bool()
 }
 
 /// Asks a prompt to close as Cancel, or as No when it has no Cancel (the
@@ -250,13 +298,14 @@ fn decline(popup: HWND) {
     }
 }
 
-/// Fails a dialog that is still open: names the popups blocking it, declines
+/// Fails a dialog that is still open: names the popups on its thread, declines
 /// each (its Cancel button, or No on a yes/no prompt such as the overwrite
-/// one), and only once they are gone cancels the dialog, so the dialog never
-/// handles a press from inside a nested modal loop. If the dialog still does
-/// not close, the test thread would block in `file_dialog` forever: the reason
-/// goes straight to stderr (libtest's capture would never be printed) and the
-/// process aborts rather than hang.
+/// one), and cancels the dialog only once it is enabled again, which a modal
+/// prompt over it prevents, so the dialog never handles a press from inside a
+/// nested modal loop. A popup that ignores the decline but is not modal (a
+/// tooltip, say) does not hold that up. If the dialog still does not close,
+/// the test thread would block in `file_dialog` forever, so the process aborts
+/// with the reason rather than hang.
 fn give_up(dialog: HWND, reason: &str) -> String {
     let blockers = popups(dialog);
     let reason = if blockers.is_empty() {
@@ -265,17 +314,11 @@ fn give_up(dialog: HWND, reason: &str) -> String {
         let names: Vec<String> = blockers.iter().copied().map(describe).collect();
         format!("{reason}; blocked by {}", names.join(", "))
     };
-    let declined = blockers.iter().all(|&popup| {
-        decline(popup);
-        gone_within(popup, CLOSE)
-    });
-    if declined {
-        let _ = click(dialog, IDCANCEL);
-    }
-    if !(declined && gone_within(dialog, CLOSE)) {
-        let line = format!("{reason}; it could not be closed, so the test binary aborts\n");
-        let _ = std::io::stderr().write_all(line.as_bytes());
-        std::process::abort();
+    blockers.into_iter().for_each(decline);
+    // SAFETY: a state query on a window handle.
+    let enabled = within(CLOSE, || unsafe { IsWindowEnabled(dialog) }.as_bool());
+    if !(enabled && click(dialog, IDCANCEL).is_ok() && within(CLOSE, || gone(dialog))) {
+        abort(&format!("{reason}; it could not be closed"));
     }
     reason
 }
@@ -298,16 +341,25 @@ fn drive(dialog: HWND, answer: Answer) -> Result<(), String> {
     }
 }
 
-/// Answers the dialog titled `title` from a helper thread.
-pub fn answer(title: &str, answer: Answer) -> JoinHandle<Result<(), String>> {
+/// Answers the dialog titled `title` from a helper thread. If no such dialog
+/// appears while the test thread is still in `file_dialog`, nothing would ever
+/// answer it, so the process aborts with the reason rather than hang.
+pub fn answer(title: &str, answer: Answer) -> Driver {
     let title = title.to_owned();
-    thread::spawn(move || {
-        let dialog =
-            find_dialog(&title).ok_or_else(|| format!("no dialog titled {title:?} appeared"))?;
+    let returned = Arc::new(AtomicBool::new(false));
+    let seen = Arc::clone(&returned);
+    let helper = thread::spawn(move || {
+        let Some(dialog) = find_dialog(&title) else {
+            let reason = format!("no dialog titled {title:?} appeared within {APPEAR:?}");
+            if seen.load(Ordering::SeqCst) {
+                return Err(reason);
+            }
+            abort(&reason);
+        };
         if let Err(reason) = drive(dialog, answer) {
             return Err(give_up(dialog, &reason));
         }
-        if gone_within(dialog, CLOSE) {
+        if within(CLOSE, || gone(dialog)) {
             Ok(())
         } else {
             Err(give_up(
@@ -315,5 +367,6 @@ pub fn answer(title: &str, answer: Answer) -> JoinHandle<Result<(), String>> {
                 "the dialog stayed open after it was answered",
             ))
         }
-    })
+    });
+    Driver { helper, returned }
 }

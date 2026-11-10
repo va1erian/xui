@@ -41,10 +41,7 @@ fn show(request: &FileDialogRequest, how: Answer) -> FileDialogOutcome {
     let window = backend.open_window(&PlatformSpec::new("owner")).unwrap();
     let driver = answer(&request.title, how);
     let outcome = backend.file_dialog(window, request);
-    driver
-        .join()
-        .unwrap()
-        .expect("the dialog could not be driven");
+    driver.finish().expect("the dialog could not be driven");
     backend.close_window(window);
     outcome
 }
