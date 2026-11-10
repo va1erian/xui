@@ -340,10 +340,9 @@ fn give_up(dialog: HWND, reason: &str) -> String {
     if !within(CLOSE, || gone(dialog) || enabled()) {
         abort(&format!("{reason}; a popup kept it disabled"));
     }
-    if gone(dialog) {
-        return reason;
-    }
-    if !(click(dialog, IDCANCEL).is_ok() && within(CLOSE, || gone(dialog))) {
+    // A press that fails because the dialog just closed still counts.
+    let _ = click(dialog, IDCANCEL);
+    if !within(CLOSE, || gone(dialog)) {
         abort(&format!("{reason}; it could not be closed"));
     }
     reason
