@@ -9,7 +9,7 @@ use super::control::{Control, HasText};
 use crate::app::Ui;
 use crate::backend::{NodeKind, NodeSpec, Result, TextStyle};
 use crate::geometry::Rect;
-use crate::property::{Font, Properties, Property, PropertyInfo, PropertyType, Value};
+use crate::property::{Font, Properties, Property, PropertyInfo, PropertyType, Value, node};
 use crate::theme::look::backdrop;
 use crate::units::Dip;
 
@@ -221,10 +221,14 @@ impl<M: 'static> Properties for Label<M> {
                 name: "font",
                 value: Value::Font(self.current_font()),
             },
+            node::visible(self.control.ui(), self.id()),
         ]
     }
 
     fn set_property(&self, name: &str, value: Value) -> bool {
+        if node::set_visible(self.control.ui(), self.id(), name, &value) {
+            return true;
+        }
         match (name, value) {
             ("text", Value::Text(text)) => {
                 self.set_text(&text);
@@ -244,6 +248,7 @@ impl<M: 'static> Properties for Label<M> {
                 .described("Appearance", "The label's text."),
             PropertyInfo::new("font", PropertyType::Font)
                 .described("Appearance", "The font the label paints in."),
+            node::VISIBLE,
         ]
     }
 }

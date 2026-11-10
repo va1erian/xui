@@ -13,7 +13,7 @@ use crate::backend::{NodeKind, NodeSpec, Result, WidgetId};
 use crate::geometry::Rect;
 use crate::geometry::Size;
 use crate::layout::Constraints;
-use crate::property::{Properties, Property, Value};
+use crate::property::{Properties, Property, Value, node};
 use crate::theme::look;
 
 /// A container node that owns child widgets.
@@ -132,11 +132,23 @@ impl<M: 'static> Placeable<M> for Panel<M> {
 
 impl<M: 'static> Properties for Panel<M> {
     fn properties(&self) -> Vec<Property> {
-        Vec::new()
+        vec![
+            node::enabled(self.control.ui(), self.id()),
+            node::visible(self.control.ui(), self.id()),
+        ]
     }
 
-    fn set_property(&self, _name: &str, _value: Value) -> bool {
-        false
+    fn set_property(&self, name: &str, value: Value) -> bool {
+        if node::set_visible(self.control.ui(), self.id(), name, &value) {
+            return true;
+        }
+        match (name, value) {
+            ("enabled", Value::Bool(enabled)) => {
+                self.set_enabled(enabled);
+                true
+            }
+            _ => false,
+        }
     }
 }
 

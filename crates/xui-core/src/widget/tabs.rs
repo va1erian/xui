@@ -23,7 +23,7 @@ use crate::backend::{Canvas, Event, NodeKind, NodeSpec, Result, TextStyle, Widge
 use crate::geometry::{Point, Rect};
 use crate::layout::Dock;
 use crate::message::MouseButton;
-use crate::property::{Properties, Property, Value};
+use crate::property::{Properties, Property, Value, node};
 use crate::theme::Theme;
 use crate::theme::look::{self, backdrop};
 use crate::units::Dip;
@@ -232,16 +232,27 @@ impl<M: 'static> Tabs<M> {
 
 impl<M: 'static> Properties for Tabs<M> {
     fn properties(&self) -> Vec<Property> {
-        vec![Property {
-            name: "selected",
-            value: Value::Integer(self.selected() as i64),
-        }]
+        vec![
+            Property {
+                name: "selected",
+                value: Value::Integer(self.selected() as i64),
+            },
+            node::enabled(self.control.ui(), self.id()),
+            node::visible(self.control.ui(), self.id()),
+        ]
     }
 
     fn set_property(&self, name: &str, value: Value) -> bool {
+        if node::set_visible(self.control.ui(), self.id(), name, &value) {
+            return true;
+        }
         match (name, value) {
             ("selected", Value::Integer(index)) if index >= 0 => {
                 self.select(index as usize);
+                true
+            }
+            ("enabled", Value::Bool(enabled)) => {
+                self.set_enabled(enabled);
                 true
             }
             _ => false,

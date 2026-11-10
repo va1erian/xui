@@ -13,7 +13,7 @@ use crate::backend::{Event, NodeKind, NodeSpec, Result, WidgetId};
 use crate::geometry::Rect;
 use crate::icon::IconRef;
 use crate::message::{Key, MouseButton};
-use crate::property::{Properties, Property, Value};
+use crate::property::{Properties, Property, Value, node};
 
 mod layout;
 mod paint;
@@ -360,13 +360,20 @@ impl<M: 'static> Toolbar<M> {
 
 impl<M: 'static> Properties for Toolbar<M> {
     fn properties(&self) -> Vec<Property> {
-        vec![Property {
-            name: "selected",
-            value: Value::Integer(self.activated.get()),
-        }]
+        vec![
+            Property {
+                name: "selected",
+                value: Value::Integer(self.activated.get()),
+            },
+            node::enabled(self.control.ui(), self.id()),
+            node::visible(self.control.ui(), self.id()),
+        ]
     }
 
     fn set_property(&self, name: &str, value: Value) -> bool {
+        if node::set_visible(self.control.ui(), self.id(), name, &value) {
+            return true;
+        }
         match (name, value) {
             ("selected", Value::Integer(index)) => {
                 let in_range = index >= 0 && (index as usize) < self.len();
@@ -374,6 +381,10 @@ impl<M: 'static> Properties for Toolbar<M> {
                 self.activated.set(index);
                 self.state.hover.set((index >= 0).then_some(index as usize));
                 self.control.invalidate();
+                true
+            }
+            ("enabled", Value::Bool(enabled)) => {
+                self.set_enabled(enabled);
                 true
             }
             _ => false,

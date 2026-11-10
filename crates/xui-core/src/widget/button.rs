@@ -13,7 +13,7 @@ use crate::backend::{Event, NodeKind, NodeSpec, Result, TextStyle};
 use crate::geometry::Rect;
 use crate::icon::{IconRef, draw_icon};
 use crate::message::{Key, MouseButton};
-use crate::property::{Properties, Property, Value};
+use crate::property::{Properties, Property, Value, node};
 use crate::theme::look::{self, backdrop, face};
 use crate::units::Dip;
 
@@ -351,14 +351,15 @@ impl<M: 'static> Properties for Button<M> {
                 name: "text",
                 value: Value::Text(self.text()),
             },
-            Property {
-                name: "enabled",
-                value: Value::Bool(self.is_enabled()),
-            },
+            node::enabled(self.control.ui(), self.id()),
+            node::visible(self.control.ui(), self.id()),
         ]
     }
 
     fn set_property(&self, name: &str, value: Value) -> bool {
+        if node::set_visible(self.control.ui(), self.id(), name, &value) {
+            return true;
+        }
         match (name, value) {
             ("text", Value::Text(text)) => {
                 self.set_text(&text);

@@ -34,7 +34,7 @@ use crate::app::Ui;
 use crate::backend::{NodeKind, NodeSpec, Result, WidgetId};
 use crate::geometry::{Point, Rect};
 use crate::icon::IconRef;
-use crate::property::{Properties, Property, Value};
+use crate::property::{Properties, Property, Value, node};
 
 use model::Node;
 
@@ -365,13 +365,22 @@ impl<M: 'static> Menu<M> {
 
 impl<M: 'static> Properties for Menu<M> {
     fn properties(&self) -> Vec<Property> {
-        vec![Property {
+        let mut props = vec![Property {
             name: "open",
             value: Value::Bool(self.is_open()),
-        }]
+        }];
+        if let Some(id) = self.id() {
+            props.push(node::visible(&self.rt.ui, id));
+        }
+        props
     }
 
     fn set_property(&self, name: &str, value: Value) -> bool {
+        if let Some(id) = self.id()
+            && node::set_visible(&self.rt.ui, id, name, &value)
+        {
+            return true;
+        }
         match (name, value) {
             ("open", Value::Bool(open)) => {
                 if open {

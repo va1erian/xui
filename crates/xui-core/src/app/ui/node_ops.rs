@@ -36,6 +36,7 @@ impl<M: 'static> Ui<M> {
     pub fn destroy(&self, id: WidgetId) {
         self.core.router().unregister(id);
         self.core.set_hidden(id, false);
+        self.core.set_disabled(id, false);
         self.core.backend().destroy(id);
     }
 
@@ -103,6 +104,12 @@ impl<M: 'static> Ui<M> {
     /// Enables or disables a node.
     pub fn set_enabled(&self, id: WidgetId, enabled: bool) {
         self.core.backend().set_enabled(id, enabled);
+        self.core.set_disabled(id, !enabled);
+    }
+
+    /// Whether a node is enabled, as last set through [`Ui::set_enabled`].
+    pub fn is_enabled(&self, id: WidgetId) -> bool {
+        !self.core.is_disabled(id)
     }
 
     /// Raises a node above its siblings in the z-order.

@@ -8,7 +8,7 @@ use std::collections::BTreeSet;
 use super::state::{ROW, Rows, header_px};
 use super::{CellData, ListModel, ListView, SortDirection, bar};
 use crate::backend::WidgetId;
-use crate::property::{Properties, Property, Value};
+use crate::property::{Properties, Property, Value, node};
 
 impl<M: 'static> ListView<M> {
     /// Raises the list above its siblings together with its scrollbar. Raising
@@ -279,16 +279,27 @@ impl<M: 'static> ListView<M> {
 
 impl<M: 'static> Properties for ListView<M> {
     fn properties(&self) -> Vec<Property> {
-        vec![Property {
-            name: "selected",
-            value: Value::Integer(self.selected().map_or(-1, |index| index as i64)),
-        }]
+        vec![
+            Property {
+                name: "selected",
+                value: Value::Integer(self.selected().map_or(-1, |index| index as i64)),
+            },
+            node::enabled(self.control.ui(), self.id()),
+            node::visible(self.control.ui(), self.id()),
+        ]
     }
 
     fn set_property(&self, name: &str, value: Value) -> bool {
+        if node::set_visible(self.control.ui(), self.id(), name, &value) {
+            return true;
+        }
         match (name, value) {
             ("selected", Value::Integer(index)) => {
                 self.select((index >= 0).then_some(index as usize));
+                true
+            }
+            ("enabled", Value::Bool(enabled)) => {
+                self.set_enabled(enabled);
                 true
             }
             _ => false,

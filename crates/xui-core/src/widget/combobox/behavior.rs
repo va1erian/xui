@@ -26,7 +26,7 @@ pub(super) fn popup_rect(field: Rect, dpi: u32, count: usize) -> Rect {
 }
 
 /// Shows or hides the popup to match `want`, moving it under the field first.
-fn set_open<M: 'static>(
+pub(super) fn set_open<M: 'static>(
     ui: &Ui<M>,
     (field, popup): (WidgetId, WidgetId),
     s: &Shared<M>,

@@ -9,7 +9,7 @@ use super::control::Control;
 use crate::app::Ui;
 use crate::backend::{NodeKind, NodeSpec, Result};
 use crate::geometry::Rect;
-use crate::property::{Properties, Property, Value};
+use crate::property::{Properties, Property, Value, node};
 use crate::theme::look::{self, backdrop};
 
 /// The corner radius of the bar.
@@ -129,10 +129,14 @@ impl<M: 'static> Properties for ProgressBar<M> {
                 name: "enabled",
                 value: Value::Bool(self.is_enabled()),
             },
+            node::visible(self.control.ui(), self.id()),
         ]
     }
 
     fn set_property(&self, name: &str, value: Value) -> bool {
+        if node::set_visible(self.control.ui(), self.id(), name, &value) {
+            return true;
+        }
         match (name, value) {
             ("value", Value::Integer(value)) => {
                 self.set_value(value.clamp(0, self.max() as i64) as i32);

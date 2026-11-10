@@ -41,7 +41,9 @@ created directly, since they are not placed in a layout.
   tooling: a value is typed (`Bool`, `Integer`, `Float`, `Text`, `Enum`,
   `Color`, `Font`, `Dip`, `Image`) and `schema()` describes each property
   (its type, category, description and whether it is read-only) for a
-  designer's editors. It is not the primary API.
+  designer's editors. Every widget with a node also reports `visible`, and every one
+  with a `set_enabled` reports `enabled`: each is the widget's own setting, not
+  one inherited from a hidden or disabled container. It is not the primary API.
 - **Models are borrowed.** `ListModel`, `TreeModel` and `GridModel` return
   borrowed data, so painting allocates nothing per visible item.
 

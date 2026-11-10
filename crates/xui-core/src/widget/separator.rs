@@ -8,7 +8,7 @@ use super::control::Control;
 use crate::app::Ui;
 use crate::backend::{NodeKind, NodeSpec, Result, WidgetId};
 use crate::geometry::{Point, Rect};
-use crate::property::{Properties, Property, Value};
+use crate::property::{Properties, Property, Value, node};
 use crate::theme::look::backdrop;
 
 /// The thickness of the divider line, in device pixels.
@@ -91,11 +91,11 @@ impl<M: 'static> Separator<M> {
 
 impl<M: 'static> Properties for Separator<M> {
     fn properties(&self) -> Vec<Property> {
-        Vec::new()
+        vec![node::visible(self.control.ui(), self.id())]
     }
 
-    fn set_property(&self, _name: &str, _value: Value) -> bool {
-        false
+    fn set_property(&self, name: &str, value: Value) -> bool {
+        node::set_visible(self.control.ui(), self.id(), name, &value)
     }
 }
 

@@ -12,7 +12,7 @@ use crate::backend::WidgetId;
 use crate::backend::{NodeKind, NodeSpec, Result, TextStyle};
 use crate::geometry::{Rect, Size};
 use crate::layout::{Constraints, Insets};
-use crate::property::{Properties, Property, Value};
+use crate::property::{Properties, Property, Value, node};
 use crate::theme::look::{self, backdrop};
 use crate::units::Dip;
 
@@ -142,13 +142,19 @@ impl<M: 'static> HasText for GroupBox<M> {
 
 impl<M: 'static> Properties for GroupBox<M> {
     fn properties(&self) -> Vec<Property> {
-        vec![Property {
-            name: "text",
-            value: Value::Text(self.text()),
-        }]
+        vec![
+            Property {
+                name: "text",
+                value: Value::Text(self.text()),
+            },
+            node::visible(self.control.ui(), self.id()),
+        ]
     }
 
     fn set_property(&self, name: &str, value: Value) -> bool {
+        if node::set_visible(self.control.ui(), self.id(), name, &value) {
+            return true;
+        }
         match (name, value) {
             ("text", Value::Text(text)) => {
                 self.set_text(&text);

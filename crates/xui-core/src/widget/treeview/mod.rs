@@ -26,7 +26,7 @@ use super::scrollbar::{self, ScrollBar};
 use crate::app::Ui;
 use crate::backend::{NodeKind, NodeSpec, Result, WidgetId};
 use crate::geometry::{Point, Rect};
-use crate::property::{Properties, Property, Value};
+use crate::property::{Properties, Property, Value, node};
 
 mod bar;
 mod events;
@@ -349,13 +349,24 @@ impl<M: 'static> TreeView<M> {
 
 impl<M: 'static> Properties for TreeView<M> {
     fn properties(&self) -> Vec<Property> {
-        vec![Property {
-            name: "selected",
-            value: Value::Integer(self.selected().map_or(-1, |id| id as i64)),
-        }]
+        vec![
+            Property {
+                name: "selected",
+                value: Value::Integer(self.selected().map_or(-1, |id| id as i64)),
+            },
+            node::enabled(self.control.ui(), self.id()),
+            node::visible(self.control.ui(), self.id()),
+        ]
     }
 
     fn set_property(&self, name: &str, value: Value) -> bool {
+        if node::set_visible(self.control.ui(), self.id(), name, &value) {
+            return true;
+        }
+        if let ("enabled", Value::Bool(enabled)) = (name, &value) {
+            self.set_enabled(*enabled);
+            return true;
+        }
         if name != "selected" {
             return false;
         }

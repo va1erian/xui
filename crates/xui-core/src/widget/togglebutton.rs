@@ -13,7 +13,7 @@ use crate::backend::{Event, NodeKind, NodeSpec, Result, TextStyle};
 use crate::geometry::Rect;
 use crate::icon::{IconRef, draw_icon};
 use crate::message::{Key, MouseButton};
-use crate::property::{Properties, Property, Value};
+use crate::property::{Properties, Property, Value, node};
 use crate::theme::look::{backdrop, face};
 use crate::units::Dip;
 
@@ -280,11 +280,17 @@ impl<M: 'static> Properties for ToggleButton<M> {
         vec![
             property("text", Value::Text(self.text())),
             property("checked", Value::Bool(self.is_checked())),
+            node::enabled(self.control.ui(), self.id()),
+            node::visible(self.control.ui(), self.id()),
         ]
     }
 
     fn set_property(&self, name: &str, value: Value) -> bool {
+        if node::set_visible(self.control.ui(), self.id(), name, &value) {
+            return true;
+        }
         match (name, value) {
+            ("enabled", Value::Bool(enabled)) => self.set_enabled(enabled),
             ("text", Value::Text(text)) => self.set_text(&text),
             ("checked", Value::Bool(checked)) => self.set_checked(checked),
             _ => return false,

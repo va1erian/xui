@@ -109,6 +109,8 @@ pub(crate) struct Core<M> {
     on_dpi_changed: RefCell<Option<DpiMapper<M>>>,
     /// Nodes hidden through [`Ui::set_visible`], which layout leaves out.
     hidden: RefCell<HashSet<u64>>,
+    /// Nodes disabled through [`Ui::set_enabled`].
+    disabled: RefCell<HashSet<u64>>,
     /// Mounted layouts, re-laid when the window resizes or its DPI changes,
     /// and once per delivered event after something marked them dirty.
     layout_hooks: RefCell<Vec<(usize, Rc<dyn LayoutHook>)>>,
@@ -147,6 +149,7 @@ impl<M> Core<M> {
             on_display_change: RefCell::new(None),
             on_dpi_changed: RefCell::new(None),
             hidden: RefCell::new(HashSet::new()),
+            disabled: RefCell::new(HashSet::new()),
             layout_hooks: RefCell::new(Vec::new()),
             next_layout_hook: Cell::new(0),
             layout_dirty: Cell::new(false),
@@ -254,12 +257,17 @@ impl<M> Core<M> {
 
     /// Records whether `id` is hidden, returning whether that changed it.
     pub(crate) fn set_hidden(&self, id: WidgetId, hidden: bool) -> bool {
-        let mut set = self.hidden.borrow_mut();
-        if hidden {
-            set.insert(id.raw())
-        } else {
-            set.remove(&id.raw())
-        }
+        flag(&self.hidden, id, hidden)
+    }
+
+    /// Records whether `id` is disabled.
+    pub(crate) fn set_disabled(&self, id: WidgetId, disabled: bool) {
+        flag(&self.disabled, id, disabled);
+    }
+
+    /// Whether `id` was disabled through [`Ui::set_enabled`].
+    pub(crate) fn is_disabled(&self, id: WidgetId) -> bool {
+        self.disabled.borrow().contains(&id.raw())
     }
 
     /// Whether `id` was hidden through [`Ui::set_visible`].
@@ -367,5 +375,15 @@ impl<M> Drop for Core<M> {
         // A worker may still hold a `Proxy`; closing the inbox makes its later
         // sends fail instead of queueing messages nobody will drain.
         self.inbox.close();
+    }
+}
+
+/// Adds `id` to `set` when `on`, removes it otherwise; whether that changed it.
+fn flag(set: &RefCell<HashSet<u64>>, id: WidgetId, on: bool) -> bool {
+    let mut set = set.borrow_mut();
+    if on {
+        set.insert(id.raw())
+    } else {
+        set.remove(&id.raw())
     }
 }

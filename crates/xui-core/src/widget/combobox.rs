@@ -11,7 +11,7 @@ use crate::app::Ui;
 use crate::backend::{NodeKind, NodeSpec, Result, WidgetId};
 use crate::geometry::Rect;
 use crate::icon::IconRef;
-use crate::property::{Properties, Property, Value};
+use crate::property::{Properties, Property, Value, node};
 use crate::units::Dip;
 
 type SelectMapper<M> = RefCell<Option<Box<dyn Fn(usize) -> Option<M>>>>;
@@ -46,7 +46,7 @@ pub struct ComboBox<M: 'static> {
 
 mod behavior;
 
-use behavior::{field_event, paint_field, paint_popup, popup_event, popup_rect};
+use behavior::{field_event, paint_field, paint_popup, popup_event, popup_rect, set_open};
 
 impl<M: 'static> ComboBox<M> {
     /// Creates a combo box over `items` at `bounds`, the first item selected.
@@ -183,16 +183,30 @@ impl<M: 'static> HasText for ComboBox<M> {
 
 impl<M: 'static> Properties for ComboBox<M> {
     fn properties(&self) -> Vec<Property> {
-        vec![Property {
-            name: "selected",
-            value: Value::Integer(self.selected() as i64),
-        }]
+        vec![
+            Property {
+                name: "selected",
+                value: Value::Integer(self.selected() as i64),
+            },
+            node::enabled(self.field.ui(), self.id()),
+            node::visible(self.field.ui(), self.id()),
+        ]
     }
 
     fn set_property(&self, name: &str, value: Value) -> bool {
+        let ui = self.field.ui();
+        if node::set_visible(ui, self.id(), name, &value) {
+            // A hidden box closes its list, which is a node of its own.
+            set_open(ui, (self.id(), self.popup.id()), &self.shared, false);
+            return true;
+        }
         match (name, value) {
             ("selected", Value::Integer(index)) if index >= 0 => {
                 self.select(index as usize);
+                true
+            }
+            ("enabled", Value::Bool(enabled)) => {
+                self.set_enabled(enabled);
                 true
             }
             _ => false,
@@ -256,6 +270,19 @@ mod tests {
         assert_eq!(combo.selected(), 2);
         assert_eq!(combo.text(), "three");
         assert_eq!(*log.borrow(), vec![2]);
+    }
+
+    #[test]
+    fn hiding_an_open_box_closes_its_list() {
+        let (backend, core, ui) = setup();
+        let combo = ComboBox::new(&ui, Rect::new(0, 0, 120, 28), &["one", "two"]).unwrap();
+        let rt = Runtime::primary(core, TestApp(Rc::default()));
+        rt.deliver(combo.id(), &down(5, 5));
+        assert!(visible(&backend, combo.popup.id()));
+        assert!(combo.set_property("visible", Value::Bool(false)));
+        assert!(!visible(&backend, combo.id()));
+        assert!(!visible(&backend, combo.popup.id()));
+        assert!(!combo.shared.open.get());
     }
 
     use crate::backend::headless::DrawOp;

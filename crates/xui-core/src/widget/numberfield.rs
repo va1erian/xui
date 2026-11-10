@@ -6,7 +6,7 @@ use crate::backend::{Canvas, Cursor, Event, NodeKind, NodeSpec, Result, TextStyl
 use crate::color::Color;
 use crate::geometry::{Point, Rect};
 use crate::message::{Key, MouseButton};
-use crate::property::{Properties, Property, Value};
+use crate::property::{Properties, Property, Value, node};
 use crate::theme::look;
 use crate::units::Dip;
 use std::cell::{Cell, RefCell};
@@ -311,10 +311,18 @@ impl<M: 'static> Properties for NumberField<M> {
             name,
             value: Value::Float(value),
         })
+        .chain([
+            node::enabled(self.control.ui(), self.id()),
+            node::visible(self.control.ui(), self.id()),
+        ])
         .collect()
     }
     fn set_property(&self, name: &str, value: Value) -> bool {
+        if node::set_visible(self.control.ui(), self.id(), name, &value) {
+            return true;
+        }
         match (name, value) {
+            ("enabled", Value::Bool(enabled)) => self.set_enabled(enabled),
             ("value", Value::Float(v)) => self.set_value(v),
             ("min", Value::Float(v)) => self.set_range(v, self.state.max.get()),
             ("max", Value::Float(v)) => self.set_range(self.state.min.get(), v),

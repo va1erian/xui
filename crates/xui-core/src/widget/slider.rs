@@ -10,7 +10,7 @@ use crate::app::Ui;
 use crate::backend::{Event, NodeKind, NodeSpec, Result};
 use crate::geometry::{Point, Rect};
 use crate::message::{Key, MouseButton};
-use crate::property::{Properties, Property, Value};
+use crate::property::{Properties, Property, Value, node};
 use crate::theme::look::{self, backdrop};
 use crate::units::Dip;
 
@@ -246,10 +246,15 @@ impl<M: 'static> Properties for Slider<M> {
                 name: "max",
                 value: Value::Float(self.max.get()),
             },
+            node::enabled(self.control.ui(), self.id()),
+            node::visible(self.control.ui(), self.id()),
         ]
     }
 
     fn set_property(&self, name: &str, value: Value) -> bool {
+        if node::set_visible(self.control.ui(), self.id(), name, &value) {
+            return true;
+        }
         match (name, value) {
             ("value", Value::Float(value)) => {
                 self.set_value(value);
@@ -261,6 +266,10 @@ impl<M: 'static> Properties for Slider<M> {
             }
             ("max", Value::Float(max)) => {
                 self.set_range(self.min.get(), max);
+                true
+            }
+            ("enabled", Value::Bool(enabled)) => {
+                self.set_enabled(enabled);
                 true
             }
             _ => false,
