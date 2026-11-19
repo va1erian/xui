@@ -82,6 +82,13 @@
   (up to 2048) and per-window gradient stop collections (up to 64) are kept
   between draws, so a repainted label or gradient allocates nothing on a hit.
 
+### Fixed
+
+- **`ListView::ensure_visible` in a hidden tab page no longer scrolls past
+  the rows.** The request was measured against a list with no size and left
+  the offset on the requested row; the offset is now clamped to the real view
+  when the list is placed or resized.
+
 ### Breaking changes
 
 - **The native-control path is gone; xui paints every widget itself.**

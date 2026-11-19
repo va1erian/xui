@@ -81,3 +81,52 @@ fn reordering_carries_the_selection_with_its_items() {
         "items that are gone are dropped"
     );
 }
+
+#[test]
+fn ensure_visible_in_a_hidden_tab_page_stays_within_the_rows_once_shown() {
+    use crate::arrange::tabs;
+    use crate::widget::Tabs;
+
+    let (_backend, core, ui) = setup();
+    let table = Handle::<ListView<u32>>::new();
+    let pages = Handle::<Tabs<u32>>::new();
+    let _mounted = ui
+        .mount(
+            column().child(
+                tabs()
+                    .page("One", column())
+                    .page(
+                        "Two",
+                        column().child(list().column("Row", super::Fill).bind(&table).fill(1)),
+                    )
+                    .bind(&pages)
+                    .fill(1),
+            ),
+        )
+        .unwrap();
+    let table = table.get();
+    table.set_model(rows(100));
+
+    // The list's page is hidden, so it has no size to scroll against yet.
+    assert_eq!(
+        ui.bounds(table.id()).height(),
+        0,
+        "a hidden page has no size"
+    );
+    table.ensure_visible(99);
+
+    pages.get().select(1);
+    core.flush_layout();
+
+    let shown = ui.bounds(table.id()).height();
+    assert!(shown > 0, "the page gave the list its size");
+    let state = table.state.borrow();
+    let body = shown - crate::widget::listview::state::header_px(state.has_header(), ui.dpi());
+    let visible = (body / ROW.to_px(ui.dpi()).value()) as usize;
+    assert!(visible > 0 && visible < 100, "{visible} rows fit");
+    assert_eq!(
+        state.offset,
+        100 - visible,
+        "row 99 is the last visible row, not scrolled past the end"
+    );
+}

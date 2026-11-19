@@ -158,6 +158,13 @@ impl State {
         }
     }
 
+    /// Pulls the scroll offset back so the last row ends the view, when the
+    /// body is `visible` rows tall: a request made before the list had a size
+    /// (`ensure_visible` in a hidden tab page) may have left it past the end.
+    pub(crate) fn clamp_offset(&mut self, visible: usize) {
+        self.offset = self.offset.min(self.len().saturating_sub(visible.max(1)));
+    }
+
     /// Scrolls just enough that `row` is fully visible in a body `visible`
     /// rows tall.
     pub(crate) fn ensure_visible(&mut self, row: usize, visible: usize) {

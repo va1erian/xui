@@ -305,6 +305,7 @@ impl<M: 'static> Placeable<M> for ListView<M> {
     fn placed(&self, ui: &Ui<M>, _rect: Rect) {
         // A layout moves only the list's own node; the scrollbar is a child
         // node, so re-lay it out against the list's new bounds.
+        bar::clamp_offset(ui, self.control.id(), &mut self.state.borrow_mut());
         bar::layout(ui, self.control.id(), &self.bar, &self.state.borrow());
     }
 }

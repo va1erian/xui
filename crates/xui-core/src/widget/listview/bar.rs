@@ -22,6 +22,17 @@ pub(crate) fn metrics<M: 'static>(ui: &Ui<M>, id: WidgetId, state: &State) -> Sc
     }
 }
 
+/// Re-clamps the scroll offset to the list's current size. A list with no body
+/// yet (a hidden tab page) keeps its offset, so a request made then is
+/// settled when the list gets its real size.
+pub(crate) fn clamp_offset<M: 'static>(ui: &Ui<M>, id: WidgetId, state: &mut State) {
+    let dpi = ui.dpi();
+    let body = body_height(state.has_header(), ui.bounds(id).height(), dpi);
+    if body > 0 {
+        state.clamp_offset((body / row_px(dpi)) as usize);
+    }
+}
+
 /// Lays the bar along the body's trailing edge and shows it only on overflow.
 pub(crate) fn layout<M: 'static>(ui: &Ui<M>, id: WidgetId, bar: &ScrollBar, state: &State) {
     let bounds = ui.bounds(id);
