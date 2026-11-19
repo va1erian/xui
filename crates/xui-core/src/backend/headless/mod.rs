@@ -76,6 +76,8 @@ struct State {
     captured: Option<WidgetId>,
     pointer_lock: Option<WidgetId>,
     moves: u32,
+    /// Run inside every `apply_moves`, after the moves are recorded.
+    move_hook: Option<std::rc::Rc<dyn Fn()>>,
     invalidations: u32,
     windows: HashMap<u64, SinkWindow>,
     nodes: HashMap<u64, Node>,
@@ -96,6 +98,12 @@ struct State {
 }
 
 impl HeadlessBackend {
+    /// Runs `hook` inside every later `apply_moves`: a stand-in for a
+    /// backend that runs a layout pass before the call returns.
+    pub(crate) fn on_moves(&self, hook: impl Fn() + 'static) {
+        self.state.borrow_mut().move_hook = Some(std::rc::Rc::new(hook));
+    }
+
     /// An empty backend.
     pub fn new() -> HeadlessBackend {
         HeadlessBackend {
@@ -108,6 +116,7 @@ impl HeadlessBackend {
                 captured: None,
                 pointer_lock: None,
                 moves: 0,
+                move_hook: None,
                 invalidations: 0,
                 windows: HashMap::new(),
                 nodes: HashMap::new(),

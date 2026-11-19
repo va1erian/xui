@@ -39,12 +39,25 @@ pub(crate) fn clamp_offset<M: 'static>(ui: &Ui<M>, id: WidgetId, state: &mut Sta
 }
 
 /// Lays the bar along the body's trailing edge and shows it only on overflow.
-pub(crate) fn layout<M: 'static>(ui: &Ui<M>, id: WidgetId, bar: &ScrollBar, state: &State) {
+///
+/// The state is borrowed only to read it: showing and moving the bar can run
+/// a layout pass before they return (a backend that applies moves at once),
+/// and that pass comes back into the list's own `placed`.
+pub(crate) fn layout<M: 'static>(
+    ui: &Ui<M>,
+    id: WidgetId,
+    bar: &ScrollBar,
+    state: &RefCell<State>,
+) {
+    let (has_header, len) = {
+        let state = state.borrow();
+        (state.has_header(), state.len())
+    };
     let bounds = ui.bounds(id);
     let dpi = ui.dpi();
-    let header = header_px(state.has_header(), dpi);
-    let body = body_height(state.has_header(), bounds.height(), dpi);
-    let overflows = state.len() as i32 * row_px(dpi) > body;
+    let header = header_px(has_header, dpi);
+    let body = body_height(has_header, bounds.height(), dpi);
+    let overflows = len as i32 * row_px(dpi) > body;
     let width = if overflows {
         scrollbar::THICKNESS.to_px(dpi).value()
     } else {

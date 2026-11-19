@@ -156,6 +156,11 @@ impl Backend for HeadlessBackend {
                 }
             }
         }
+        // What a backend that lays out as it applies moves would do here.
+        let hook = self.state.borrow().move_hook.clone();
+        if let Some(hook) = hook {
+            hook();
+        }
         // As the canvas backend does: a moved node has no native size
         // notification, so a resized one is told directly.
         for (id, rect) in resized {
