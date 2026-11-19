@@ -50,3 +50,28 @@ fn a_model_node_keeps_its_icon() {
         "the model's icon reaches the materialized row"
     );
 }
+
+#[test]
+fn refresh_rows_keeps_the_scroll_position_and_set_rows_resets_it() {
+    let (_runtime, tree) = harness_flat();
+    let rows = |count: usize, mark: &str| -> Vec<TreeRow> {
+        (0..count)
+            .map(|i| TreeRow::new(format!("row {i}{mark}"), 0))
+            .collect()
+    };
+    tree.set_rows(&rows(40, ""));
+    tree.state.borrow_mut().offset = 20;
+
+    // A relabelled copy of the same rows: the view stays where it was.
+    tree.refresh_rows(&rows(40, " *"));
+    assert_eq!(tree.state.borrow().offset, 20);
+    assert_eq!(tree.state.borrow().rows[20].label, "row 20 *");
+
+    // Fewer rows: the offset is clamped so the body is never blank.
+    tree.refresh_rows(&rows(22, ""));
+    let offset = tree.state.borrow().offset;
+    assert!(offset > 0 && offset < 22, "clamped, not reset: {offset}");
+
+    tree.set_rows(&rows(40, ""));
+    assert_eq!(tree.state.borrow().offset, 0);
+}
