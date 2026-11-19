@@ -18,15 +18,29 @@ pub(crate) struct Item {
     pub(crate) label: Option<String>,
     /// The item's hover tooltip, if any.
     pub(crate) tooltip: Option<String>,
+    /// `Some` for a checkable item: whether it is currently checked.
+    pub(crate) checked: Option<bool>,
 }
 
 impl Item {
+    /// An icon item with an optional label and tooltip (an empty tooltip
+    /// names none).
+    pub(super) fn icon(icon: IconRef, label: Option<&str>, tooltip: &str) -> Item {
+        Item {
+            icon: Some(icon),
+            label: label.map(str::to_string),
+            tooltip: (!tooltip.is_empty()).then(|| tooltip.to_string()),
+            checked: None,
+        }
+    }
+
     /// A text-only item.
     pub(super) fn text(label: &str) -> Item {
         Item {
             icon: None,
             label: Some(label.to_string()),
             tooltip: None,
+            checked: None,
         }
     }
 }
@@ -73,6 +87,17 @@ impl Entries {
     /// Item number `index` (separators not counted).
     pub(super) fn item(&self, index: usize) -> Option<&Item> {
         self.items().nth(index)
+    }
+
+    /// Item number `index`, mutably (separators not counted).
+    pub(super) fn item_mut(&mut self, index: usize) -> Option<&mut Item> {
+        self.0
+            .iter_mut()
+            .filter_map(|entry| match entry {
+                Entry::Item(item) => Some(item),
+                Entry::Separator => None,
+            })
+            .nth(index)
     }
 }
 

@@ -156,6 +156,7 @@ fn items(count: usize) -> strip::Entries {
             icon: Some(IconRef::Lucide(crate::icon::Lucide::Save)),
             label: None,
             tooltip: None,
+            checked: None,
         }));
     }
     entries
@@ -265,4 +266,84 @@ fn the_keyboard_cannot_reach_or_activate_a_clipped_item() {
         vec![1],
         "Right stops at the last visible item"
     );
+}
+
+#[test]
+fn a_checkable_item_flips_on_click_and_plain_items_do_not() {
+    use crate::icon::Lucide;
+
+    let (_backend, core, ui) = setup();
+    let toolbar = Toolbar::empty(&ui, Rect::new(0, 0, 90, 28))
+        .unwrap()
+        .item(Lucide::Save, "Save")
+        .toggle_item(Lucide::Eye, "Show")
+        .fill()
+        .on_click(|index| Some(index as u32));
+    let log = Rc::new(RefCell::new(Vec::new()));
+    let runtime = Runtime::primary(core, TestApp(Rc::clone(&log)));
+    assert_eq!(toolbar.is_checked(0), None, "a plain item is not checkable");
+    assert_eq!(toolbar.is_checked(1), Some(false));
+
+    for x in [20, 70] {
+        runtime.deliver(toolbar.id(), &down(x));
+        runtime.deliver(toolbar.id(), &up(x));
+    }
+    runtime.deliver(WidgetId::NONE, &Event::Wake);
+
+    assert_eq!(*log.borrow(), vec![0, 1], "both clicks are still reported");
+    assert_eq!(toolbar.is_checked(0), None);
+    assert_eq!(toolbar.is_checked(1), Some(true), "the click latched it");
+
+    runtime.deliver(toolbar.id(), &down(70));
+    runtime.deliver(toolbar.id(), &up(70));
+    assert_eq!(
+        toolbar.is_checked(1),
+        Some(false),
+        "a second click unlatches"
+    );
+}
+
+#[test]
+fn set_checked_changes_a_checkable_item_silently() {
+    use crate::icon::Lucide;
+
+    let (_backend, _core, ui) = setup();
+    let toolbar = Toolbar::empty(&ui, Rect::new(0, 0, 90, 28))
+        .unwrap()
+        .item(Lucide::Save, "Save")
+        .toggle_item_with_text(Lucide::Eye, "Show", "Show");
+
+    toolbar.set_checked(1, true);
+    toolbar.set_checked(0, true);
+    toolbar.set_checked(9, true);
+
+    assert_eq!(toolbar.is_checked(1), Some(true));
+    assert_eq!(toolbar.is_checked(0), None, "a plain item stays plain");
+    assert_eq!(toolbar.is_checked(9), None);
+    assert_eq!(toolbar.label(1).as_deref(), Some("Show"));
+}
+
+#[test]
+fn the_accessibility_tree_reports_each_items_checked_state() {
+    use crate::accessibility::Role;
+    use crate::icon::Lucide;
+
+    let (_backend, _core, ui) = setup();
+    let toolbar = Toolbar::empty(&ui, Rect::new(0, 0, 120, 28))
+        .unwrap()
+        .item(Lucide::Save, "Save")
+        .separator()
+        .toggle_item(Lucide::Eye, "Layer visible");
+    toolbar.set_checked(1, true);
+
+    let tree = toolbar.accessibility();
+    assert_eq!(tree.role, Role::ToolBar);
+    assert_eq!(tree.children.len(), 2, "separators are not nodes");
+    assert_eq!(tree.children[0].name, "Save");
+    assert_eq!(tree.children[0].checked, None);
+    assert_eq!(tree.children[1].name, "Layer visible");
+    assert_eq!(tree.children[1].checked, Some(true));
+
+    toolbar.set_enabled(false);
+    assert!(!toolbar.accessibility().children[1].enabled);
 }

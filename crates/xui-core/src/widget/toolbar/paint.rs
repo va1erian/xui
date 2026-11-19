@@ -67,6 +67,9 @@ pub(super) fn paint(canvas: &mut dyn Canvas, state: &State, selected: &Cell<bool
         let button = rect.shrink(highlight.min(rect.width() / 2).min(rect.height() / 2));
         if state.pressed.get() == Some(index) {
             canvas.fill_rounded_rect(button, RADIUS, theme.pressed);
+        } else if item.checked == Some(true) {
+            canvas.fill_rounded_rect(button, RADIUS, theme.selection);
+            canvas.stroke_rounded_rect(button, RADIUS, theme.accent, 1.0);
         } else if state.hover.get() == Some(index) {
             canvas.fill_rounded_rect(button, RADIUS, theme.hover);
         }

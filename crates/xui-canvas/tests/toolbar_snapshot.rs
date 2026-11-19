@@ -133,3 +133,36 @@ fn sizes_scale_at_144_dpi() {
     assert!(!painted(&image, (240, 246), (28, 32), bg));
     assert!(!painted(&image, (840, 1080), (0, 60), bg), "empty tail");
 }
+
+/// A toolbar of one plain and one checked tool, rendered on `theme`.
+fn render_checked(theme: Theme) -> Image {
+    try_render(Snapshot::new(Dip(160.0), Dip(40.0)).theme(theme), |ui| {
+        ui.root(
+            column().child(
+                toolbar()
+                    .toggle_item(Lucide::Eye, "Layer")
+                    .toggle_item(Lucide::Grid3x3, "Grid")
+                    .toggle_item(Lucide::Brush, "Brush")
+                    .checked(1, true),
+            ),
+        )?;
+        Ok(Host)
+    })
+    .expect("render")
+}
+
+#[test]
+fn a_checked_item_is_painted_from_the_themes_selection_token() {
+    for (name, theme) in [("light", Theme::light()), ("dark", Theme::dark())] {
+        let image = render_checked(theme);
+        image
+            .save_png(format!("../../target/snapshots/toolbar-checked-{name}.png"))
+            .expect("save");
+        let selection = [theme.selection.r, theme.selection.g, theme.selection.b, 255];
+        // The second button spans 40..80 px; its fill, inset from the accent
+        // outline, is the selection colour. The neighbours are not.
+        assert_eq!(image.pixel(47, 7), Some(selection), "{name}: checked fill");
+        assert_ne!(image.pixel(7, 7), Some(selection), "{name}: unchecked");
+        assert_ne!(image.pixel(87, 7), Some(selection), "{name}: unchecked");
+    }
+}

@@ -4,6 +4,12 @@
 
 ### Added
 
+- **Checkable toolbar items.** `Toolbar::toggle_item` and `toggle_item_with_text`
+  (and the same on the `toolbar()` builder, plus `checked(index, bool)`) add
+  items a click latches, painted from the theme's `selection` and `accent`
+  tokens. `Toolbar::is_checked` and `set_checked` read and set the state from
+  `update` (a radio group is `set_checked` on the others), and
+  `Toolbar::accessibility` reports each item's checked state.
 - **Nine more Lucide icons.** `Lucide::Brush`, `DoorOpen`, `Ghost`, `Grid3x3`,
   `Layers`, `Mountain`, `PaintBucket`, `ZoomIn` and `ZoomOut`, vendored from the
   same `lucide-static` 1.48.0 release as the rest and regenerated with

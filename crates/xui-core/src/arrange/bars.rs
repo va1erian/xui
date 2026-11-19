@@ -105,6 +105,38 @@ impl<M: 'static> Build<Toolbar<M>, M> {
         self.then(move |bar| bar.item_with_text(icon, &tooltip, &text))
     }
 
+    /// Appends a checkable icon button, unchecked: a click flips it before
+    /// `on_click` runs. Read or set the state through the toolbar handle
+    /// (`is_checked`, `set_checked`).
+    pub fn toggle_item(
+        self,
+        icon: impl Into<IconRef>,
+        tooltip: impl Into<String>,
+    ) -> Build<Toolbar<M>, M> {
+        let (icon, tooltip) = (icon.into(), tooltip.into());
+        self.then(move |bar| bar.toggle_item(icon, &tooltip))
+    }
+
+    /// Appends a checkable icon button with a label; see
+    /// [`toggle_item`](Build::toggle_item).
+    pub fn toggle_item_with_text(
+        self,
+        icon: impl Into<IconRef>,
+        tooltip: impl Into<String>,
+        text: impl Into<String>,
+    ) -> Build<Toolbar<M>, M> {
+        let (icon, tooltip, text) = (icon.into(), tooltip.into(), text.into());
+        self.then(move |bar| bar.toggle_item_with_text(icon, &tooltip, &text))
+    }
+
+    /// Starts item `index` checked (or not); ignored for a plain item.
+    pub fn checked(self, index: usize, checked: bool) -> Build<Toolbar<M>, M> {
+        self.then(move |bar| {
+            bar.set_checked(index, checked);
+            bar
+        })
+    }
+
     /// Appends a thin line between groups of buttons.
     pub fn separator(self) -> Build<Toolbar<M>, M> {
         self.then(Toolbar::separator)

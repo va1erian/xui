@@ -8,6 +8,7 @@ use std::rc::Rc;
 
 use super::control::Control;
 use super::tooltip::Tooltip;
+use crate::accessibility::{Node, Role};
 use crate::app::Ui;
 use crate::backend::{Event, NodeKind, NodeSpec, Result, WidgetId};
 use crate::geometry::Rect;
@@ -42,6 +43,15 @@ fn layout_of<M: 'static>(ui: &Ui<M>, id: WidgetId, state: &State) -> Layout {
         dpi,
         &mut |text| ui.measure_text(text, &style, dpi).width,
     )
+}
+
+/// Flips item `index` if it is checkable: a click latches its state.
+fn flip(state: &State, index: usize) {
+    if let Some(item) = state.entries.borrow_mut().item_mut(index)
+        && let Some(checked) = item.checked
+    {
+        item.checked = Some(!checked);
+    }
 }
 
 /// The hover tooltip text of item `index`, if it names one.
@@ -183,6 +193,7 @@ impl<M: 'static> Toolbar<M> {
                         }
                         let index = index?;
                         activated.set(index as i64);
+                        flip(&state, index);
                         let mapper = on_click.borrow();
                         mapper.as_ref().and_then(|mapper| mapper(index))
                     }
@@ -224,6 +235,7 @@ impl<M: 'static> Toolbar<M> {
                                 // A hover left over from a wider strip may now be clipped.
                                 let index = state.hover.get().filter(|&index| index < count)?;
                                 activated.set(index as i64);
+                                flip(&state, index);
                                 ui.invalidate(id);
                                 let mapper = on_click.borrow();
                                 mapper.as_ref().and_then(|mapper| mapper(index))
@@ -247,21 +259,38 @@ impl<M: 'static> Toolbar<M> {
 
     /// Appends an icon item with a hover tooltip.
     pub fn item(self, icon: impl Into<IconRef>, tooltip: &str) -> Toolbar<M> {
+        self.push(Item::icon(icon.into(), None, tooltip))
+    }
+
+    /// Appends a checkable icon item (an active tool, a visible layer),
+    /// unchecked. A click flips its state before `on_click` runs; read it with
+    /// [`Toolbar::is_checked`] and set it from `update` with
+    /// [`Toolbar::set_checked`].
+    pub fn toggle_item(self, icon: impl Into<IconRef>, tooltip: &str) -> Toolbar<M> {
         self.push(Item {
-            icon: Some(icon.into()),
-            label: None,
-            tooltip: (!tooltip.is_empty()).then(|| tooltip.to_string()),
+            checked: Some(false),
+            ..Item::icon(icon.into(), None, tooltip)
+        })
+    }
+
+    /// Appends a checkable icon item with a text label; see
+    /// [`Toolbar::toggle_item`].
+    pub fn toggle_item_with_text(
+        self,
+        icon: impl Into<IconRef>,
+        tooltip: &str,
+        text: &str,
+    ) -> Toolbar<M> {
+        self.push(Item {
+            checked: Some(false),
+            ..Item::icon(icon.into(), Some(text), tooltip)
         })
     }
 
     /// Appends an icon item with a hover tooltip and a text label after the
     /// icon.
     pub fn item_with_text(self, icon: impl Into<IconRef>, tooltip: &str, text: &str) -> Toolbar<M> {
-        self.push(Item {
-            icon: Some(icon.into()),
-            label: Some(text.to_string()),
-            tooltip: (!tooltip.is_empty()).then(|| tooltip.to_string()),
-        })
+        self.push(Item::icon(icon.into(), Some(text), tooltip))
     }
 
     /// Appends a thin vertical separator line after the last entry.
@@ -308,6 +337,59 @@ impl<M: 'static> Toolbar<M> {
     /// Whether the toolbar has no items.
     pub fn is_empty(&self) -> bool {
         self.len() == 0
+    }
+
+    /// Whether item `index` is checked. `None` when it does not exist or is
+    /// not checkable (see [`Toolbar::toggle_item`]).
+    pub fn is_checked(&self, index: usize) -> Option<bool> {
+        self.state
+            .entries
+            .borrow()
+            .item(index)
+            .and_then(|item| item.checked)
+    }
+
+    /// Checks or unchecks item `index` without raising `on_click`. Does
+    /// nothing for an item that is missing or not checkable.
+    pub fn set_checked(&self, index: usize, checked: bool) {
+        let changed = {
+            let mut entries = self.state.entries.borrow_mut();
+            match entries.item_mut(index) {
+                Some(item) if item.checked.is_some_and(|now| now != checked) => {
+                    item.checked = Some(checked);
+                    true
+                }
+                _ => false,
+            }
+        };
+        if changed {
+            self.control.invalidate();
+        }
+    }
+
+    /// Describes the toolbar to assistive technology: a tool bar whose
+    /// children are buttons, a checkable one carrying its checked state.
+    pub fn accessibility(&self) -> Node {
+        let entries = self.state.entries.borrow();
+        let enabled = self.state.enabled.get();
+        let items = entries.items().map(|item| {
+            let name = item
+                .label
+                .as_deref()
+                .or(item.tooltip.as_deref())
+                .unwrap_or_default();
+            let mut node = Node::new(Role::Button, name).invokable().enabled(enabled);
+            if let Some(tip) = &item.tooltip {
+                node = node.help(tip.as_str());
+            }
+            match item.checked {
+                Some(checked) => node.checked(checked),
+                None => node,
+            }
+        });
+        Node::new(Role::ToolBar, "")
+            .enabled(enabled)
+            .children(items)
     }
 
     /// Item `index`'s icon, if it has one.

@@ -23,11 +23,13 @@ fn entries(picture: &str) -> Entries {
                 icon,
                 label: None,
                 tooltip: None,
+                checked: None,
             }),
             'l' => Entry::Item(Item {
                 icon,
                 label: Some("Run".into()),
                 tooltip: None,
+                checked: None,
             }),
             't' => Entry::Item(Item::text("Open")),
             '|' => Entry::Separator,
