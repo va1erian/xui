@@ -50,12 +50,7 @@ impl<M: 'static> ListView<M> {
             state.anchor = anchor.filter(|row| *row < len);
             state.offset = offset.min(len.saturating_sub(1));
         }
-        bar::layout(
-            self.control.ui(),
-            self.control.id(),
-            &self.bar,
-            &self.state.borrow(),
-        );
+        bar::layout(self.control.ui(), self.control.id(), &self.bar, &self.state);
         self.control.invalidate();
     }
 
@@ -115,12 +110,7 @@ impl<M: 'static> ListView<M> {
         state.offset = 0;
         state.reveal = None;
         drop(state);
-        bar::layout(
-            self.control.ui(),
-            self.control.id(),
-            &self.bar,
-            &self.state.borrow(),
-        );
+        bar::layout(self.control.ui(), self.control.id(), &self.bar, &self.state);
         self.control.invalidate();
     }
 

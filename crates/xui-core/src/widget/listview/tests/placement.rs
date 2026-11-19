@@ -183,3 +183,33 @@ fn a_middle_row_asked_for_in_a_hidden_tab_page_is_revealed_when_it_is_shown() {
         "row 60 is shown: offset {offset}, {visible} rows visible"
     );
 }
+
+#[test]
+fn nothing_borrows_the_state_while_the_scrollbar_is_moved() {
+    // Direct2D applies moves at once and lays the window out before the call
+    // returns, which comes back into the list's `placed`. The list must not
+    // be holding its state then: it used to, and `set_model` panicked.
+    let (backend, _core, ui) = setup();
+    let table = Handle::<ListView<u32>>::new();
+    let _mounted = ui
+        .mount(column().child(list().column("Row", super::Fill).bind(&table).fill(1)))
+        .unwrap();
+    let table = table.get();
+    let state = Rc::clone(&table.state);
+    let free = Rc::new(std::cell::Cell::new(0u32));
+    let held = Rc::new(std::cell::Cell::new(0u32));
+    let (free_in, held_in) = (Rc::clone(&free), Rc::clone(&held));
+    backend.on_moves(move || match state.try_borrow_mut() {
+        Ok(_) => free_in.set(free_in.get() + 1),
+        Err(_) => held_in.set(held_in.get() + 1),
+    });
+
+    table.set_model(rows(100));
+    table.refresh_model(rows(40));
+    table.ensure_visible(30);
+    use crate::widget::placeable::Placeable as _;
+    table.placed(&ui, ui.bounds(table.id()));
+
+    assert!(free.get() >= 3, "the bar was moved {} times", free.get());
+    assert_eq!(held.get(), 0, "the state was borrowed during a move");
+}

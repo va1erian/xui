@@ -185,7 +185,7 @@ impl<M: 'static> ListView<M> {
             let mapper = bar::mapper(ui.clone(), control.id(), Rc::clone(&bar), Rc::clone(&state));
             bar_control.on_events(mapper);
         }
-        bar::layout(ui, control.id(), &bar, &state.borrow());
+        bar::layout(ui, control.id(), &bar, &state);
         ui.raise(bar.id());
 
         Ok(ListView {
@@ -214,12 +214,7 @@ impl<M: 'static> ListView<M> {
     /// Adds a pre-built [`Column`], e.g. one that is centred.
     pub fn add_column(self, column: Column) -> ListView<M> {
         self.state.borrow_mut().columns.push(column);
-        bar::layout(
-            self.control.ui(),
-            self.control.id(),
-            &self.bar,
-            &self.state.borrow(),
-        );
+        bar::layout(self.control.ui(), self.control.id(), &self.bar, &self.state);
         self.control.invalidate();
         self
     }
@@ -307,6 +302,6 @@ impl<M: 'static> Placeable<M> for ListView<M> {
         // A layout moves only the list's own node; the scrollbar is a child
         // node, so re-lay it out against the list's new bounds.
         bar::clamp_offset(ui, self.control.id(), &mut self.state.borrow_mut());
-        bar::layout(ui, self.control.id(), &self.bar, &self.state.borrow());
+        bar::layout(ui, self.control.id(), &self.bar, &self.state);
     }
 }

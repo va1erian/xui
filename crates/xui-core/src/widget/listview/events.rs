@@ -30,7 +30,7 @@ pub(crate) fn mapper<M: 'static>(
     move |event| {
         if let Event::Resize { .. } = event {
             bar::clamp_offset(&ui, id, &mut state.borrow_mut());
-            bar::layout(&ui, id, &bar, &state.borrow());
+            bar::layout(&ui, id, &bar, &state);
             return None;
         }
         // In design mode the editor handles input, not the widget.

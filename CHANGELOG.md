@@ -93,6 +93,10 @@
   the rows.** A row asked for while the list has no size is remembered and
   scrolled into view the usual way (just enough) when the list gets its real
   size, and the offset is clamped so the view never starts past the end.
+- **`ListView::set_model` no longer panics on the Direct2D backend.** The
+  list held its state while it moved its scrollbar; Direct2D lays the window
+  out before that call returns, which came back into the list ("RefCell
+  already borrowed"). The state is now read first and released.
 
 ### Breaking changes
 
