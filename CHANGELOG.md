@@ -4,6 +4,10 @@
 
 ### Added
 
+- **Nine more Lucide icons.** `Lucide::Brush`, `DoorOpen`, `Ghost`, `Grid3x3`,
+  `Layers`, `Mountain`, `PaintBucket`, `ZoomIn` and `ZoomOut`, vendored from the
+  same `lucide-static` 1.48.0 release as the rest and regenerated with
+  `generate.py`.
 - **Nearest-neighbour image scaling.** `Canvas::draw_image_sampled(image, rect,
   ImageSampling::Nearest)` magnifies pixel art with hard edges instead of
   blending; `ImageSampling::Smooth` is what `draw_image` does. A backend that

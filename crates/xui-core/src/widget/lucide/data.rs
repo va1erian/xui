@@ -107,6 +107,8 @@ pub enum Lucide {
     BookOpen,
     /// The `box` outline.
     Box,
+    /// The `brush` outline.
+    Brush,
     /// The `bug` outline.
     Bug,
     /// The `check` outline.
@@ -135,6 +137,8 @@ pub enum Lucide {
     Copy,
     /// The `disc` outline.
     Disc,
+    /// The `door-open` outline.
+    DoorOpen,
     /// The `download` outline.
     Download,
     /// The `ellipsis` outline.
@@ -157,6 +161,10 @@ pub enum Lucide {
     FolderOpen,
     /// The `folder` outline.
     Folder,
+    /// The `ghost` outline.
+    Ghost,
+    /// The `grid-3x3` outline.
+    Grid3x3,
     /// The `group` outline.
     Group,
     /// The `heading-1` outline.
@@ -181,6 +189,8 @@ pub enum Lucide {
     Info,
     /// The `italic` outline.
     Italic,
+    /// The `layers` outline.
+    Layers,
     /// The `layout-grid` outline.
     LayoutGrid,
     /// The `link` outline.
@@ -203,10 +213,14 @@ pub enum Lucide {
     Minus,
     /// The `monitor` outline.
     Monitor,
+    /// The `mountain` outline.
+    Mountain,
     /// The `mouse-pointer-2` outline.
     MousePointer2,
     /// The `package` outline.
     Package,
+    /// The `paint-bucket` outline.
+    PaintBucket,
     /// The `pause` outline.
     Pause,
     /// The `pencil` outline.
@@ -301,6 +315,10 @@ pub enum Lucide {
     X,
     /// The `zap` outline.
     Zap,
+    /// The `zoom-in` outline.
+    ZoomIn,
+    /// The `zoom-out` outline.
+    ZoomOut,
 }
 
 impl Lucide {
@@ -315,6 +333,7 @@ impl Lucide {
         Lucide::Bold,
         Lucide::BookOpen,
         Lucide::Box,
+        Lucide::Brush,
         Lucide::Bug,
         Lucide::Check,
         Lucide::ChevronDown,
@@ -329,6 +348,7 @@ impl Lucide {
         Lucide::Code,
         Lucide::Copy,
         Lucide::Disc,
+        Lucide::DoorOpen,
         Lucide::Download,
         Lucide::Ellipsis,
         Lucide::ExternalLink,
@@ -340,6 +360,8 @@ impl Lucide {
         Lucide::File,
         Lucide::FolderOpen,
         Lucide::Folder,
+        Lucide::Ghost,
+        Lucide::Grid3x3,
         Lucide::Group,
         Lucide::Heading1,
         Lucide::Heading2,
@@ -352,6 +374,7 @@ impl Lucide {
         Lucide::IndentIncrease,
         Lucide::Info,
         Lucide::Italic,
+        Lucide::Layers,
         Lucide::LayoutGrid,
         Lucide::Link,
         Lucide::ListOrdered,
@@ -363,8 +386,10 @@ impl Lucide {
         Lucide::Menu,
         Lucide::Minus,
         Lucide::Monitor,
+        Lucide::Mountain,
         Lucide::MousePointer2,
         Lucide::Package,
+        Lucide::PaintBucket,
         Lucide::Pause,
         Lucide::Pencil,
         Lucide::Play,
@@ -412,6 +437,8 @@ impl Lucide {
         Lucide::WrapText,
         Lucide::X,
         Lucide::Zap,
+        Lucide::ZoomIn,
+        Lucide::ZoomOut,
     ];
 }
 
