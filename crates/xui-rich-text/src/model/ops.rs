@@ -252,8 +252,15 @@ impl Document {
     /// follows a restyle of the selection.
     pub(crate) fn covered(&self, range: DocRange) -> Vec<(usize, usize, usize)> {
         let mut out = Vec::new();
-        for para in range.start.para..=range.end.para.min(self.paragraphs.len() - 1) {
-            let len = self.paragraphs[para].text.len();
+        let last = range.end.para.min(self.paragraphs.len() - 1);
+        for (para, paragraph) in self
+            .paragraphs
+            .iter()
+            .enumerate()
+            .take(last + 1)
+            .skip(range.start.para)
+        {
+            let len = paragraph.text.len();
             let lo = if para == range.start.para {
                 range.start.byte
             } else {
