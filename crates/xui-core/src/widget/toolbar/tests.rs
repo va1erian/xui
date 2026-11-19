@@ -347,3 +347,47 @@ fn the_accessibility_tree_reports_each_items_checked_state() {
     toolbar.set_enabled(false);
     assert!(!toolbar.accessibility().children[1].enabled);
 }
+
+/// The fill colours the toolbar painted for item rounded rectangles.
+fn fills(backend: &HeadlessBackend, id: WidgetId) -> Vec<crate::Color> {
+    backend
+        .ops(id)
+        .iter()
+        .filter_map(|op| match op {
+            crate::backend::headless::DrawOp::Rounded(_, _, color) => Some(*color),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn a_checked_item_keeps_its_selection_fill_and_still_shows_the_hover() {
+    use crate::icon::Lucide;
+
+    let (backend, _core, ui) = setup();
+    let theme = ui.theme();
+    let toolbar = Toolbar::empty(&ui, Rect::new(0, 0, 80, 28))
+        .unwrap()
+        .toggle_item(Lucide::Eye, "Layer")
+        .item(Lucide::Save, "Save")
+        .fill();
+    toolbar.set_checked(0, true);
+
+    backend.render(toolbar.id());
+    assert_eq!(fills(&backend, toolbar.id()), vec![theme.selection]);
+
+    toolbar.state.hover.set(Some(0));
+    backend.render(toolbar.id());
+    let hovered = fills(&backend, toolbar.id());
+    assert_eq!(hovered.len(), 1);
+    assert_ne!(hovered[0], theme.selection, "the hover cursor shows");
+    assert_ne!(hovered[0], theme.hover, "and it is still the checked item");
+
+    toolbar.state.hover.set(Some(1));
+    backend.render(toolbar.id());
+    assert_eq!(
+        fills(&backend, toolbar.id()),
+        vec![theme.selection, theme.hover],
+        "a plain item under the cursor keeps the plain hover"
+    );
+}

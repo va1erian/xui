@@ -153,6 +153,7 @@ fn render_checked(theme: Theme) -> Image {
 
 #[test]
 fn a_checked_item_is_painted_from_the_themes_selection_token() {
+    std::fs::create_dir_all("../../target/snapshots").expect("snapshot dir");
     for (name, theme) in [("light", Theme::light()), ("dark", Theme::dark())] {
         let image = render_checked(theme);
         image
