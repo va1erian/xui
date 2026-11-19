@@ -346,19 +346,20 @@ impl Canvas for SkiaCanvas<'_> {
             blit::unscaled(self.pixmap, pixmap, uploaded.opaque, dest, visible);
             return;
         }
-        // Map the image's own pixel rectangle onto the full destination
-        // rectangle; the filled source is only the visible slice of that map.
+        // The pattern carries the image-to-destination map, and exactly the
+        // visible device rectangle is filled: a clipped draw paints the same
+        // pixels the unclipped one would there, with no rounding in source
+        // space to leak past the clip or leave gaps.
         let scale_x = dest.width() as f32 / image.width() as f32;
         let scale_y = dest.height() as f32 / image.height() as f32;
-        let at = dest;
-        let transform =
-            Transform::from_row(scale_x, 0.0, 0.0, scale_y, at.left as f32, at.top as f32);
-        let source = sk_rect(Rect::new(
-            ((visible.left - dest.left) as f32 / scale_x).round() as i32,
-            ((visible.top - dest.top) as f32 / scale_y).round() as i32,
-            ((visible.right - dest.left) as f32 / scale_x).round() as i32,
-            ((visible.bottom - dest.top) as f32 / scale_y).round() as i32,
-        ));
+        let placement = Transform::from_row(
+            scale_x,
+            0.0,
+            0.0,
+            scale_y,
+            dest.left as f32,
+            dest.top as f32,
+        );
         let paint = Paint {
             shader: Pattern::new(
                 pixmap.as_ref(),
@@ -368,15 +369,15 @@ impl Canvas for SkiaCanvas<'_> {
                     ImageSampling::Nearest => FilterQuality::Nearest,
                 },
                 1.0,
-                Transform::identity(),
+                placement,
             ),
             anti_alias: true,
             ..Paint::default()
         };
         self.pixmap.fill_rect(
-            source,
+            sk_rect(visible),
             &paint,
-            transform,
+            Transform::identity(),
             geometry::pixel_mask(&self.clips, &self.mask),
         );
     }
