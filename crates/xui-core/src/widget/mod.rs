@@ -87,7 +87,7 @@ pub use scrollview::ScrollView;
 pub use separator::{Orientation, Separator};
 pub use slider::Slider;
 pub use split::Split;
-pub use statusbar::StatusBar;
+pub use statusbar::{PartWidth, StatusBar};
 pub use tabs::Tabs;
 pub use task_dialog::{TaskDialog, TaskDialogAction, TaskDialogIcon};
 pub use togglebutton::ToggleButton;

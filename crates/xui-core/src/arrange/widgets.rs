@@ -13,7 +13,7 @@ use crate::icon::IconRef;
 use crate::property::Font;
 use crate::widget::{
     Button, CheckBox, ColumnWidth, ComboBox, Edit, HasText, Hyperlink, Label, ListView,
-    MultilineEdit, NumberField, ProgressBar, Separator, Slider, StatusBar, ToggleButton,
+    MultilineEdit, NumberField, PartWidth, ProgressBar, Separator, Slider, StatusBar, ToggleButton,
 };
 
 /// A line of text.
@@ -269,6 +269,15 @@ pub fn status_bar<M: 'static>(parts: &[&str]) -> Build<StatusBar<M>, M> {
         let parts: Vec<&str> = parts.iter().map(String::as_str).collect();
         StatusBar::new(ui, Default::default(), &parts)
     })
+}
+
+impl<M: 'static> Build<StatusBar<M>, M> {
+    /// Sizes the parts (see [`StatusBar::set_widths`]); the default shares the
+    /// width equally.
+    pub fn widths(self, widths: &[PartWidth]) -> Build<StatusBar<M>, M> {
+        let widths = widths.to_vec();
+        self.then(move |bar| bar.widths(&widths))
+    }
 }
 
 /// A table or list of rows; add columns with [`column`](Build::column) and

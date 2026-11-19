@@ -53,10 +53,10 @@ pub use widget::{
     Column, ColumnWidth, ComboBox, Control, Dialog, DialogAction, Edit, Entry, FileDialog,
     FileSystem, Fill, FlowText, Glyph, GridModel, GridView, GroupBox, HasText, Hsv, HueSlider,
     Hyperlink, Icon, IconModel, IconSize, IconView, Label, ListModel, ListView, MaterialStatusBar,
-    Menu, MenuId, MenuScope, MultilineEdit, NodeId, NumberField, Panel, ProgressBar, RadioGroup,
-    RowIcon, Run, RunStyle, ScrollView, SelectionMode, Separator, Slider, SortDirection, Split,
-    StatusBar, StdFileSystem, Tabs, Tile, TilePaint, TileSize, ToggleButton, Toolbar, Tooltip,
-    TopBar, TopBarId, TreeModel, TreeNode, TreeRow, TreeView, natural_cmp,
+    Menu, MenuId, MenuScope, MultilineEdit, NodeId, NumberField, Panel, PartWidth, ProgressBar,
+    RadioGroup, RowIcon, Run, RunStyle, ScrollView, SelectionMode, Separator, Slider,
+    SortDirection, Split, StatusBar, StdFileSystem, Tabs, Tile, TilePaint, TileSize, ToggleButton,
+    Toolbar, Tooltip, TopBar, TopBarId, TreeModel, TreeNode, TreeRow, TreeView, natural_cmp,
 };
 
 /// The core types a frontend or a backend usually needs, in one `use`.
@@ -75,7 +75,7 @@ pub mod prelude {
         Button, CheckBox, ColorField, ColorPanel, ColorPicker, ComboBox, Edit, Fill, FlowText,
         GridView, GroupBox, HasText, Hsv, HueSlider, Hyperlink, IconView, Label, ListView,
         MaterialStatusBar, Menu, MenuId, MenuScope, MultilineEdit, NodeId, NumberField, Panel,
-        ProgressBar, RadioGroup, Run, ScrollView, Separator, Slider, Split, StatusBar, Tabs,
-        ToggleButton, Toolbar, TopBar, TopBarId, TreeRow, TreeView,
+        PartWidth, ProgressBar, RadioGroup, Run, ScrollView, Separator, Slider, Split, StatusBar,
+        Tabs, ToggleButton, Toolbar, TopBar, TopBarId, TreeRow, TreeView,
     };
 }
