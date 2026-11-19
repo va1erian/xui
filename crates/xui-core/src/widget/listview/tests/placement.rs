@@ -85,12 +85,14 @@ fn reordering_carries_the_selection_with_its_items() {
 
 /// A list on the second page of a tab control, with 100 rows, and the first
 /// page selected so the list has no size yet.
-fn hidden_list() -> (
+type HiddenList = (
     Rc<Core<u32>>,
     Ui<u32>,
     Handle<ListView<u32>>,
     Handle<Tabs<u32>>,
-) {
+);
+
+fn hidden_list() -> HiddenList {
     let (_backend, core, ui) = setup();
     let table = Handle::<ListView<u32>>::new();
     let pages = Handle::<Tabs<u32>>::new();

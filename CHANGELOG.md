@@ -20,10 +20,9 @@
   `generate.py`.
 - **Nearest-neighbour image scaling.** `Canvas::draw_image_sampled(image, rect,
   ImageSampling::Nearest)` magnifies pixel art with hard edges instead of
-  blending; `ImageSampling::Smooth` is what `draw_image` does. A backend that
-  does not override it falls back to `draw_image`; the canvas, Direct2D and
-  headless backends all do. The recording canvas adds
-  `DrawOp::ImageSampled`.
+  blending; `ImageSampling::Smooth` is what `draw_image` does. A `Canvas` that
+  does not override the method falls back to `draw_image`; the xui-canvas and
+  xui-d2d canvases both do.
 - **Every widget's `Properties` report `visible` and `enabled`.** A form
   designer (LazyRAD) can now show, hide, enable and disable any widget through
   `property`/`set_property`. `visible` is on every widget with a node and
@@ -84,14 +83,16 @@
 
 ### Fixed
 
-- **A one-line body `Label` is vertically centred in its box.** Beside buttons in a
-  centred row its text sat about 4 px high, because only titles and captions
-  were centred; a multi-line label still starts at the top.
-
+- **Every one-line body `Label` now paints vertically centred in its box**,
+  as titles and captions already did. At its natural height the text sits
+  about `TEXT_PADDING` (4 dip) lower than before, which lines it up with the
+  text of buttons beside it in a centred row; in a taller box (a row that
+  stretches it, or an explicit height) it stays centred instead of hugging the
+  top. Text containing a newline still starts at the top.
 - **`ListView::ensure_visible` in a hidden tab page no longer scrolls past
-  the rows.** The request was measured against a list with no size and left
-  the offset on the requested row; the offset is now clamped to the real view
-  when the list is placed or resized.
+  the rows.** A row asked for while the list has no size is remembered and
+  scrolled into view the usual way (just enough) when the list gets its real
+  size, and the offset is clamped so the view never starts past the end.
 
 ### Breaking changes
 

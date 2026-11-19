@@ -1,6 +1,12 @@
 #![forbid(unsafe_code)]
 
 //! [`Label`]: a painted, non-interactive text widget.
+//!
+//! Every one-line label (body, title or caption) paints vertically centred in
+//! its box, at any box height: at its natural height the text sits half of the
+//! label's vertical padding lower than the top edge, and in a taller box (a row
+//! that stretches it, or an explicit height) it stays centred. Text with a
+//! newline is the exception: it starts at the top of the box.
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
@@ -125,7 +131,8 @@ impl<M: 'static> Label<M> {
         })
     }
 
-    /// Sets the label as a page title: large, bold, vertically centred.
+    /// Sets the label as a page title: large and bold. Like every one-line
+    /// label it is vertically centred in its box.
     pub fn title(self) -> Label<M> {
         self.kind.set(Kind::Title);
         self.control.invalidate();

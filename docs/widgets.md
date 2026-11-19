@@ -53,7 +53,7 @@ created directly, since they are not placed in a layout.
 
 | Widget | Builder | Notable API |
 |---|---|---|
-| `Label<M>` | `label(text)`, `.title()`, `.caption()`, `.font(..)` | `HasText` (`text`/`set_text`), `font`/`set_font`/`current_font`, `set_selected` |
+| `Label<M>` | `label(text)`, `.title()`, `.caption()`, `.font(..)` | `HasText` (`text`/`set_text`), `font`/`set_font`/`current_font`, `set_selected`; every one-line label (body, title, caption) paints vertically centred in its box at any height, so a label beside buttons in a centred row lines up with their text and a stretched or fixed-height label keeps its text in the middle; text with a newline starts at the top |
 | `Hyperlink<M>` | `hyperlink(text)` | `on_click(Fn() -> Option<M>)` |
 | `FlowText<M>` | `flow_text().run(..)` | `run(Run<M>)`, `separator(&str)`, `preferred_height(Dip)`; runs are `Run::normal/weak/link`, with per-run `on_click` |
 | `Icon` | enum | `draw_icon(canvas, Icon, rect, color, dpi)`; `Icon::{Plus, Minus, Close, Check, ChevronDown, ChevronUp, Search, More}` |
