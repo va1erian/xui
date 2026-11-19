@@ -95,6 +95,9 @@ pub(crate) struct State {
     pub(crate) hover: Option<usize>,
     /// The first row drawn, i.e. the scroll position.
     pub(crate) offset: usize,
+    /// A row `ensure_visible` was asked to show while the body had no height
+    /// (a hidden tab page); revealed when the list first gets a real size.
+    pub(crate) reveal: Option<usize>,
     /// `(column, direction)` of the header sort arrow.
     pub(crate) sort: Option<(usize, SortDirection)>,
     /// The column boundary the pointer is dragging, if any.

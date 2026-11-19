@@ -22,14 +22,19 @@ pub(crate) fn metrics<M: 'static>(ui: &Ui<M>, id: WidgetId, state: &State) -> Sc
     }
 }
 
-/// Re-clamps the scroll offset to the list's current size. A list with no body
-/// yet (a hidden tab page) keeps its offset, so a request made then is
-/// settled when the list gets its real size.
+/// Settles the scroll offset against the list's current size: a row asked for
+/// while the list had no body is now scrolled into view the usual way, and the
+/// offset is clamped so the view never starts past the end. A list with no body
+/// yet (a hidden tab page) is left alone.
 pub(crate) fn clamp_offset<M: 'static>(ui: &Ui<M>, id: WidgetId, state: &mut State) {
     let dpi = ui.dpi();
     let body = body_height(state.has_header(), ui.bounds(id).height(), dpi);
     if body > 0 {
-        state.clamp_offset((body / row_px(dpi)) as usize);
+        let visible = (body / row_px(dpi)) as usize;
+        if let Some(row) = state.reveal.take() {
+            state.ensure_visible(row, visible);
+        }
+        state.clamp_offset(visible);
     }
 }
 

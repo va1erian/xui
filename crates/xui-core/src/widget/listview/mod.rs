@@ -143,6 +143,7 @@ impl<M: 'static> ListView<M> {
             anchor: focused,
             hover: None,
             offset: 0,
+            reveal: None,
             sort: None,
             resize: None,
             enabled: true,
