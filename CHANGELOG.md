@@ -5,8 +5,8 @@
 ### Added
 
 - **Sized status bar parts.** `StatusBar::set_widths` (and `.widths(..)` on the
-  builder) takes a `PartWidth` per part: `Weight(n)` shares the room left over
-  (the default, `Weight(1)`, is today's equal split), `Fixed(Dip)` and `Fit`
+  builder) takes a `PartWidth` per part: `Fill(n)` shares the room left over
+  (the default, `Fill(1)`, is today's equal split), `Fixed(Dip)` and `Auto`
   (the text plus padding).
 - **Checkable toolbar items.** `Toolbar::toggle_item` and `toggle_item_with_text`
   (and the same on the `toolbar()` builder, plus `checked(index, bool)`) add

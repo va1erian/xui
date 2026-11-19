@@ -43,8 +43,8 @@ fn main() -> Result<()> {
         ui.root(column().padding(16).gap(16).children((
             status_bar(&["Ready", "No notifications"]).bind(&demo.status),
             status_bar(&["Ready", "Ln 12, Col 4", "12:30"]).widths(&[
-                PartWidth::Weight(1),
-                PartWidth::Fit,
+                PartWidth::Fill(1),
+                PartWidth::Auto,
                 PartWidth::Fixed(Dip(64.0)),
             ]),
             button("Notify").on_click(Msg::Notify).width(240),

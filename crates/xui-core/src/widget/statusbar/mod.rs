@@ -29,7 +29,7 @@ const SELECTED_WIDTH: f32 = 2.0;
 
 /// A horizontal bar of text parts. By default the parts share the width
 /// equally; [`StatusBar::set_widths`] sizes them with [`PartWidth`] (a fixed
-/// width, a weight, or fit to the text).
+/// width, a share, or fit to the text).
 pub struct StatusBar<M: 'static> {
     control: Control<M>,
     parts: Rc<RefCell<Vec<String>>>,
@@ -160,7 +160,7 @@ impl<M: 'static> StatusBar<M> {
     }
 
     /// Sizes the parts: `widths[i]` is part `i`'s [`PartWidth`], and parts past
-    /// the end of `widths` take a weight of 1. An empty slice restores the
+    /// the end of `widths` take `Fill(1)`. An empty slice restores the
     /// equal split.
     ///
     /// ```
@@ -168,7 +168,7 @@ impl<M: 'static> StatusBar<M> {
     /// # use xui_core::widget::PartWidth;
     /// # fn demo<M: 'static>(bar: &StatusBar<M>) {
     /// // A stretching message, then a cursor position and a clock.
-    /// bar.set_widths(&[PartWidth::Weight(1), PartWidth::Fit, PartWidth::Fixed(Dip(72.0))]);
+    /// bar.set_widths(&[PartWidth::Fill(1), PartWidth::Auto, PartWidth::Fixed(Dip(72.0))]);
     /// # }
     /// ```
     pub fn set_widths(&self, widths: &[PartWidth]) {
@@ -328,8 +328,8 @@ mod tests {
         let bar = StatusBar::new(&ui, Rect::new(0, 0, 300, 24), &["Ready", "Ln 1", "12:00"])
             .unwrap()
             .widths(&[
-                PartWidth::Weight(1),
-                PartWidth::Fit,
+                PartWidth::Fill(1),
+                PartWidth::Auto,
                 PartWidth::Fixed(Dip(60.0)),
             ]);
 

@@ -6,31 +6,31 @@ use crate::units::Dip;
 
 /// How wide a status bar part is.
 ///
-/// A bar's parts default to [`PartWidth::Weight`] `(1)`, which shares the
+/// A bar's parts default to [`PartWidth::Fill`]`(1)`, which shares the
 /// width equally.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum PartWidth {
-    /// A share of the width left once the fixed and fit parts are placed,
-    /// proportional to the weight: weights 1 and 3 give a quarter and three
-    /// quarters. A weight of 0 takes no room.
-    Weight(u32),
+    /// A share of the width left once the fixed and auto parts are placed,
+    /// proportional to its number: 1 and 3 give a quarter and three
+    /// quarters. `Fill(0)` takes no room.
+    Fill(u32),
     /// A fixed width in design units (a clock, a cursor position).
     Fixed(Dip),
     /// As wide as the part's text plus its padding.
-    Fit,
+    Auto,
 }
 
 impl Default for PartWidth {
     fn default() -> PartWidth {
-        PartWidth::Weight(1)
+        PartWidth::Fill(1)
     }
 }
 
 /// The `(left, right)` span of each part along a bar `total` pixels wide, in
 /// pixels from the bar's left edge.
 ///
-/// `widths[i]` sizes part `i` (parts past its end are `Weight(1)`); `fit` is
-/// the padded text width of every part, used by [`PartWidth::Fit`]; `count`
+/// `widths[i]` sizes part `i` (parts past its end are `Fill(1)`); `fit` is
+/// the padded text width of every part, used by [`PartWidth::Auto`]; `count`
 /// is the number of parts. Spans are contiguous and stay inside the bar: a bar
 /// too narrow for its fixed and fit parts clips the last ones.
 pub(super) fn spans(
@@ -45,9 +45,9 @@ pub(super) fn spans(
     let mut weights = vec![0i64; count];
     for index in 0..count {
         match width_of(index) {
-            PartWidth::Weight(weight) => weights[index] = i64::from(weight),
+            PartWidth::Fill(share) => weights[index] = i64::from(share),
             PartWidth::Fixed(width) => rigid[index] = width.to_px(dpi).value().max(0),
-            PartWidth::Fit => rigid[index] = fit(index).max(0),
+            PartWidth::Auto => rigid[index] = fit(index).max(0),
         }
     }
     let room = i64::from((total - rigid.iter().sum::<i32>()).max(0));
@@ -95,19 +95,19 @@ mod tests {
 
     #[test]
     fn a_fixed_part_keeps_its_width_and_the_rest_share_the_remainder() {
-        let widths = [PartWidth::Weight(1), PartWidth::Fixed(Dip(60.0))];
+        let widths = [PartWidth::Fill(1), PartWidth::Fixed(Dip(60.0))];
         assert_eq!(spans_of(&widths, 2, 300), vec![(0, 240), (240, 300)]);
     }
 
     #[test]
     fn weights_divide_the_room_proportionally() {
-        let widths = [PartWidth::Weight(1), PartWidth::Weight(3)];
+        let widths = [PartWidth::Fill(1), PartWidth::Fill(3)];
         assert_eq!(spans_of(&widths, 2, 400), vec![(0, 100), (100, 400)]);
     }
 
     #[test]
     fn a_fit_part_takes_its_measured_width() {
-        let widths = [PartWidth::Fit, PartWidth::Weight(1), PartWidth::Fit];
+        let widths = [PartWidth::Auto, PartWidth::Fill(1), PartWidth::Auto];
         assert_eq!(
             spans_of(&widths, 3, 200),
             vec![(0, 10), (10, 170), (170, 200)]
@@ -123,14 +123,14 @@ mod tests {
 
     #[test]
     fn spans_scale_with_the_dpi() {
-        let widths = [PartWidth::Fixed(Dip(50.0)), PartWidth::Weight(1)];
+        let widths = [PartWidth::Fixed(Dip(50.0)), PartWidth::Fill(1)];
         let at_144 = spans(&widths, 2, 300, 144, &mut |_| 0);
         assert_eq!(at_144, vec![(0, 75), (75, 300)]);
     }
 
     #[test]
     fn all_zero_weights_leave_the_room_empty() {
-        let widths = [PartWidth::Weight(0), PartWidth::Weight(0)];
+        let widths = [PartWidth::Fill(0), PartWidth::Fill(0)];
         assert_eq!(spans_of(&widths, 2, 100), vec![(0, 0), (0, 0)]);
     }
 }
