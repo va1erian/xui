@@ -394,8 +394,8 @@ impl HighlightCache {
         let last = self.lines.len().min(line + BRACKET_SCAN_LINES);
         let first = line.saturating_sub(BRACKET_SCAN_LINES);
         if forward {
-            for current in line..last {
-                let found = self.lines[current]
+            for (current, scanned) in self.lines.iter().enumerate().take(last).skip(line) {
+                let found = scanned
                     .brackets()
                     .filter(|&(at, _)| current != line || at >= col)
                     .find(|&(_, c)| step(c));
