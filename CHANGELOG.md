@@ -81,6 +81,12 @@
   (up to 2048) and per-window gradient stop collections (up to 64) are kept
   between draws, so a repainted label or gradient allocates nothing on a hit.
 
+- `TreeView::refresh_rows` replaces flat rows with a fresh read of the same
+  tree and keeps the scroll position (clamped to the new rows), where
+  `set_rows` goes back to the top. For a tree whose labels or expansion
+  change while the user is scrolled down, as `ListView::refresh_model` is for
+  a list.
+
 ### Fixed
 
 - **Every one-line body `Label` now paints vertically centred in its box**,

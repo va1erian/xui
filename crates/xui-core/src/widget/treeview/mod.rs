@@ -299,6 +299,25 @@ impl<M: 'static> TreeView<M> {
         self.sync_bar();
     }
 
+    /// Replaces the flat rows with a fresh read of the same tree (a label
+    /// changed, a branch was expanded): unlike [`TreeView::set_rows`], the
+    /// scroll position is kept, clamped to the new rows, so the view does not
+    /// jump back to the top.
+    pub fn refresh_rows(&self, rows: &[TreeRow]) {
+        let offset = self.state.borrow().offset;
+        self.set_rows(rows);
+        {
+            let mut state = self.state.borrow_mut();
+            let ui = self.control.ui();
+            let row_px = flatten::ROW.to_px(ui.dpi()).value().max(1);
+            let visible = ((ui.bounds(self.control.id()).height().max(0) / row_px) as usize).max(1);
+            state.offset = offset;
+            state.clamp_offset(visible);
+        }
+        self.control.invalidate();
+        self.sync_bar();
+    }
+
     /// Replaces the tree with a model, reading its roots now and clearing the
     /// selection.
     pub fn set_model(&self, model: impl TreeModel + 'static) {

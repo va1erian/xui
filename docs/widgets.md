@@ -187,7 +187,7 @@ tree_view()
   image's identity), so per-row art stays cheap on every repaint.
 - Indent guides are selection-aware: they blend into the selected or hovered
   row's fill instead of crossing it with a high-contrast `border` line.
-- Runtime: `selected`, `select`, `checked`, `set_checked`, `set_rows`,
+- Runtime: `selected`, `select`, `checked`, `set_checked`, `set_rows`, `refresh_rows` (keeps the scroll position),
   `set_model`.
 - `tree_view_with(impl TreeModel)`: only roots are read up front; a
   branch's children are fetched on first expansion.
