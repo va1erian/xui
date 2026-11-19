@@ -15,6 +15,19 @@ use crate::geometry::{Point, Rect};
 use crate::image::Image;
 use crate::units::Dip;
 
+/// How [`Canvas::draw_image_sampled`] reads source pixels when it scales an
+/// image.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ImageSampling {
+    /// Blends neighbouring source pixels (bilinear): smooth, for photographs
+    /// and icons. What [`Canvas::draw_image`] does.
+    #[default]
+    Smooth,
+    /// Repeats the nearest source pixel: hard edges and no blended colours, for
+    /// pixel art (a tile map zoomed 2x to 4x).
+    Nearest,
+}
+
 /// How text is aligned inside the rectangle it is drawn into.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum TextAlign {
@@ -338,6 +351,18 @@ pub trait Canvas {
     /// identity ([`Image::id`](crate::image::Image::id)), so drawing the same
     /// image on every repaint — a row icon, a tile's art — is cheap.
     fn draw_image(&mut self, image: &Image, rect: Rect);
+
+    /// Draws `image` scaled into `rect` like [`Canvas::draw_image`], reading
+    /// source pixels the way `sampling` says.
+    ///
+    /// [`ImageSampling::Nearest`] keeps the hard pixel edges of pixel art when
+    /// the image is magnified. The default draws with [`Canvas::draw_image`],
+    /// which blends, so a backend that can sample by nearest neighbour
+    /// overrides it; the in-tree backends all do.
+    fn draw_image_sampled(&mut self, image: &Image, rect: Rect, sampling: ImageSampling) {
+        let _ = sampling;
+        self.draw_image(image, rect);
+    }
 
     /// Clips subsequent drawing to `rect` until the matching `pop_clip`.
     ///

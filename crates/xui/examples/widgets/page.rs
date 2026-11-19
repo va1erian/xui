@@ -116,7 +116,7 @@ fn views(parts: &Parts) -> Layout<Msg> {
 /// The third column: a scroll view, tabs and a split, each holding labels.
 fn containers() -> Layout<Msg> {
     let rows: Vec<Entry<Msg>> = (1..=6)
-        .map(|row| label(format!("Scroll row {row}")).height(40))
+        .map(|row| label(format!("Scroll row {row}")).height(46))
         .collect();
     column().gap(12).children((
         scroll(column().children(rows))

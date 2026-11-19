@@ -46,6 +46,10 @@ pub(crate) const MONITOR: &[PathSeg] = &[
     CubicTo(3.304, 3.092, 3.649, 3.0, 4.0, 3.0), Close, MoveTo(8.0, 21.0), LineTo(16.0, 21.0),
     MoveTo(12.0, 17.0), LineTo(12.0, 21.0),
 ];
+pub(crate) const MOUNTAIN: &[PathSeg] = &[
+    MoveTo(8.0, 3.0), LineTo(12.0, 11.0), LineTo(17.0, 6.0), LineTo(22.0, 21.0),
+    LineTo(2.0, 21.0), LineTo(8.0, 3.0), Close,
+];
 pub(crate) const MOUSE_POINTER_2: &[PathSeg] = &[
     MoveTo(4.037, 4.688), CubicTo(4.006, 4.615, 3.992, 4.536, 3.997, 4.457),
     CubicTo(4.003, 4.378, 4.027, 4.302, 4.068, 4.234),

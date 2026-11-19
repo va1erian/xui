@@ -2,7 +2,8 @@
 //! keeps the scroll position.
 
 use super::*;
-use crate::arrange::{Handle, LayoutExt as _, column, list};
+use crate::arrange::{Handle, LayoutExt as _, column, list, tabs};
+use crate::widget::Tabs;
 
 fn rows(count: usize) -> Vec<Vec<String>> {
     (0..count)
@@ -79,5 +80,106 @@ fn reordering_carries_the_selection_with_its_items() {
     assert!(
         table.selection().is_empty(),
         "items that are gone are dropped"
+    );
+}
+
+/// A list on the second page of a tab control, with 100 rows, and the first
+/// page selected so the list has no size yet.
+type HiddenList = (
+    Rc<Core<u32>>,
+    Ui<u32>,
+    Handle<ListView<u32>>,
+    Handle<Tabs<u32>>,
+);
+
+fn hidden_list() -> HiddenList {
+    let (_backend, core, ui) = setup();
+    let table = Handle::<ListView<u32>>::new();
+    let pages = Handle::<Tabs<u32>>::new();
+    let mounted = ui
+        .mount(
+            column().child(
+                tabs()
+                    .page("One", column())
+                    .page(
+                        "Two",
+                        column().child(list().column("Row", super::Fill).bind(&table).fill(1)),
+                    )
+                    .bind(&pages)
+                    .fill(1),
+            ),
+        )
+        .unwrap();
+    std::mem::forget(mounted);
+    table.get().set_model(rows(100));
+    assert_eq!(
+        ui.bounds(table.get().id()).height(),
+        0,
+        "a hidden page has no size"
+    );
+    (core, ui, table, pages)
+}
+
+/// How many whole rows the shown list has room for.
+fn visible_rows_of(table: &ListView<u32>, ui: &Ui<u32>) -> usize {
+    let state = table.state.borrow();
+    let body = ui.bounds(table.id()).height()
+        - crate::widget::listview::state::header_px(state.has_header(), ui.dpi());
+    assert!(body > 0, "the page gave the list its size");
+    (body / ROW.to_px(ui.dpi()).value()) as usize
+}
+
+#[test]
+fn ensure_visible_of_the_last_row_in_a_hidden_tab_page_ends_the_view() {
+    let (core, ui, table, pages) = hidden_list();
+    let table = table.get();
+    table.ensure_visible(99);
+
+    pages.get().select(1);
+    core.flush_layout();
+
+    let visible = visible_rows_of(&table, &ui);
+    assert!(visible > 0 && visible < 100, "{visible} rows fit");
+    assert_eq!(
+        table.state.borrow().offset,
+        100 - visible,
+        "row 99 is the last visible row, not scrolled past the end"
+    );
+}
+
+#[test]
+fn ensure_visible_of_a_row_that_fits_in_a_hidden_tab_page_does_not_scroll() {
+    let (core, ui, table, pages) = hidden_list();
+    let table = table.get();
+    table.ensure_visible(5);
+
+    pages.get().select(1);
+    core.flush_layout();
+
+    assert!(
+        visible_rows_of(&table, &ui) > 5,
+        "row 5 fits without scrolling"
+    );
+    assert_eq!(
+        table.state.borrow().offset,
+        0,
+        "scroll just enough: not at all"
+    );
+}
+
+#[test]
+fn a_middle_row_asked_for_in_a_hidden_tab_page_is_revealed_when_it_is_shown() {
+    let (core, ui, table, pages) = hidden_list();
+    let table = table.get();
+    table.ensure_visible(60);
+
+    pages.get().select(1);
+    core.flush_layout();
+
+    let visible = visible_rows_of(&table, &ui);
+    let offset = table.state.borrow().offset;
+    assert!(
+        (offset..offset + visible).contains(&60),
+        "row 60 is shown: offset {offset}, {visible} rows visible"
     );
 }

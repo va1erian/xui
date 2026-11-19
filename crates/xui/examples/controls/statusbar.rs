@@ -1,5 +1,7 @@
 //! Demonstrates the portable [`StatusBar`]: a button writes into its second
-//! part, so the bar itself is the live result.
+//! part, so the bar itself is the live result. The first bar shares its width
+//! equally (the default); the second sizes its parts with [`PartWidth`]: a
+//! message that stretches, a part fit to its text and a fixed-width clock.
 //!
 //! Run with:
 //!
@@ -40,6 +42,11 @@ fn main() -> Result<()> {
         let demo = Demo::default();
         ui.root(column().padding(16).gap(16).children((
             status_bar(&["Ready", "No notifications"]).bind(&demo.status),
+            status_bar(&["Ready", "Ln 12, Col 4", "12:30"]).widths(&[
+                PartWidth::Fill(1),
+                PartWidth::Auto,
+                PartWidth::Fixed(Dip(64.0)),
+            ]),
             button("Notify").on_click(Msg::Notify).width(240),
         )))?;
         Ok(demo)

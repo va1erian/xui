@@ -2,7 +2,7 @@
 
 //! The headless backend's recording canvas and its draw-op log.
 
-use crate::backend::canvas::{Canvas, TextMetrics, TextStyle};
+use crate::backend::canvas::{Canvas, ImageSampling, TextMetrics, TextStyle};
 use crate::backend::paint::{Corner, LinearGradient, RadialGradient, Rgba, Stroke};
 use crate::backend::text::TextLayout;
 use crate::color::Color;
@@ -49,6 +49,8 @@ pub enum DrawOp {
     ShapedText(Point, Rgba),
     /// Draws an image scaled into the rectangle.
     Image(Rect, Image),
+    /// Draws an image scaled into the rectangle with an explicit sampling.
+    ImageSampled(Rect, Image, ImageSampling),
     /// Pushes a clip.
     Clip(Rect),
     /// Pushes a rounded clip.
@@ -270,6 +272,12 @@ impl Canvas for RecordingCanvas {
     fn draw_image(&mut self, image: &Image, rect: Rect) {
         let rect = self.rect(rect);
         self.ops.push(DrawOp::Image(rect, image.clone()));
+    }
+
+    fn draw_image_sampled(&mut self, image: &Image, rect: Rect, sampling: ImageSampling) {
+        let rect = self.rect(rect);
+        self.ops
+            .push(DrawOp::ImageSampled(rect, image.clone(), sampling));
     }
 
     fn push_clip(&mut self, rect: Rect) {

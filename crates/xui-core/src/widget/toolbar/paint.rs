@@ -65,10 +65,26 @@ pub(super) fn paint(canvas: &mut dyn Canvas, state: &State, selected: &Cell<bool
             bounds.bottom,
         );
         let button = rect.shrink(highlight.min(rect.width() / 2).min(rect.height() / 2));
-        if state.pressed.get() == Some(index) {
-            canvas.fill_rounded_rect(button, RADIUS, theme.pressed);
-        } else if state.hover.get() == Some(index) {
-            canvas.fill_rounded_rect(button, RADIUS, theme.hover);
+        let checked = item.checked == Some(true);
+        let hovered = state.hover.get() == Some(index);
+        // A checked item keeps its selection fill under the hover (or keyboard)
+        // cursor: the two are blended, so both stay readable.
+        let fill = if state.pressed.get() == Some(index) {
+            Some(theme.pressed)
+        } else if checked {
+            Some(if hovered {
+                theme.selection.lerp(theme.hover, 0.5)
+            } else {
+                theme.selection
+            })
+        } else {
+            hovered.then_some(theme.hover)
+        };
+        if let Some(fill) = fill {
+            canvas.fill_rounded_rect(button, RADIUS, fill);
+        }
+        if checked {
+            canvas.stroke_rounded_rect(button, RADIUS, theme.accent, 1.0);
         }
         let (icon_rect, text_rect) = content_rects(rect, item.icon.is_some(), &item.label, dpi);
         if let Some(icon) = item.icon {

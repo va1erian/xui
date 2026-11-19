@@ -232,8 +232,8 @@ impl Layout {
     pub fn selection_rects(&self, doc: &Document, a: DocPos, b: DocPos) -> Vec<Rect> {
         let (a, b) = if a <= b { (a, b) } else { (b, a) };
         let mut out = Vec::new();
-        for index in a.para..=b.para.min(self.paras.len().saturating_sub(1)) {
-            let para = &self.paras[index];
+        let last = b.para.min(self.paras.len().saturating_sub(1));
+        for (index, para) in self.paras.iter().enumerate().take(last + 1).skip(a.para) {
             let text = doc.paragraphs()[index].text();
             let lo = if index == a.para { a.byte } else { 0 };
             let hi = if index == b.para { b.byte } else { text.len() };

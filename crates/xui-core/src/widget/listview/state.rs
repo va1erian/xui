@@ -95,6 +95,9 @@ pub(crate) struct State {
     pub(crate) hover: Option<usize>,
     /// The first row drawn, i.e. the scroll position.
     pub(crate) offset: usize,
+    /// A row `ensure_visible` was asked to show while the body had no height
+    /// (a hidden tab page); revealed when the list first gets a real size.
+    pub(crate) reveal: Option<usize>,
     /// `(column, direction)` of the header sort arrow.
     pub(crate) sort: Option<(usize, SortDirection)>,
     /// The column boundary the pointer is dragging, if any.
@@ -156,6 +159,13 @@ impl State {
         if self.anchor.is_none() {
             self.anchor = Some(row);
         }
+    }
+
+    /// Pulls the scroll offset back so the last row ends the view, when the
+    /// body is `visible` rows tall: a request made before the list had a size
+    /// (`ensure_visible` in a hidden tab page) may have left it past the end.
+    pub(crate) fn clamp_offset(&mut self, visible: usize) {
+        self.offset = self.offset.min(self.len().saturating_sub(visible.max(1)));
     }
 
     /// Scrolls just enough that `row` is fully visible in a body `visible`

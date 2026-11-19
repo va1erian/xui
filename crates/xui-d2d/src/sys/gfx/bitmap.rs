@@ -6,9 +6,12 @@ use windows::Win32::Graphics::Direct2D::Common::{
     D2D_SIZE_U, D2D1_ALPHA_MODE_PREMULTIPLIED, D2D1_PIXEL_FORMAT,
 };
 use windows::Win32::Graphics::Direct2D::{
-    D2D1_BITMAP_INTERPOLATION_MODE_LINEAR, D2D1_BITMAP_PROPERTIES, ID2D1Bitmap,
+    D2D1_BITMAP_INTERPOLATION_MODE_LINEAR, D2D1_BITMAP_INTERPOLATION_MODE_NEAREST_NEIGHBOR,
+    D2D1_BITMAP_PROPERTIES, ID2D1Bitmap,
 };
 use windows::Win32::Graphics::Dxgi::Common::DXGI_FORMAT_B8G8R8A8_UNORM;
+
+use xui_core::backend::ImageSampling;
 
 use super::RectF;
 use super::shapes::rect_f;
@@ -48,7 +51,15 @@ impl BitmapCache {
 impl Target {
     /// Draws the RGBA image `id` (`width` x `height`, top-down) into `dest`.
     /// The pixels are converted and uploaded the first time `id` is seen.
-    pub(crate) fn draw_image(&self, id: u64, width: u32, height: u32, rgba: &[u8], dest: RectF) {
+    pub(crate) fn draw_image(
+        &self,
+        id: u64,
+        width: u32,
+        height: u32,
+        rgba: &[u8],
+        dest: RectF,
+        sampling: ImageSampling,
+    ) {
         let Some(bitmap) = self.bitmap(id, width, height, rgba) else {
             return;
         };
@@ -58,7 +69,10 @@ impl Target {
                 &bitmap,
                 Some(&rect_f(dest)),
                 1.0,
-                D2D1_BITMAP_INTERPOLATION_MODE_LINEAR,
+                match sampling {
+                    ImageSampling::Smooth => D2D1_BITMAP_INTERPOLATION_MODE_LINEAR,
+                    ImageSampling::Nearest => D2D1_BITMAP_INTERPOLATION_MODE_NEAREST_NEIGHBOR,
+                },
                 None,
             )
         };

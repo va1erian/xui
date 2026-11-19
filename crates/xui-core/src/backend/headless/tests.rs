@@ -3,7 +3,7 @@ use crate::image::Image;
 use crate::{Cap, Corner, Dash, GradientStop, LinearGradient, RadialGradient, Rgba, Stroke};
 
 use super::*;
-use crate::backend::{Backend, Event, FontSpec, NodeKind, NodeSpec, ParentRef};
+use crate::backend::{Backend, Event, FontSpec, ImageSampling, NodeKind, NodeSpec, ParentRef};
 use crate::geometry::Point;
 use crate::message::MouseButton;
 use crate::router::Router;
@@ -82,6 +82,32 @@ fn a_drawn_image_is_recorded() {
         [DrawOp::Image(rect, recorded)] => {
             assert_eq!(*rect, Rect::new(0, 5, 10, 15));
             assert_eq!(recorded.pixel(0, 0), Some([9, 8, 7, 255]));
+        }
+        other => panic!("unexpected ops: {other:?}"),
+    }
+}
+
+#[test]
+fn a_sampled_image_records_its_sampling() {
+    let backend = HeadlessBackend::new();
+    let window = backend.open_window(&PlatformSpec::new("t")).unwrap();
+    let node_id = backend
+        .create(ParentRef::Window(window), &node(NodeKind::Custom))
+        .unwrap();
+
+    let image = Image::from_rgba(1, 1, vec![9, 8, 7, 255]).unwrap();
+    backend.set_painter(
+        node_id,
+        Rc::new(move |canvas| {
+            canvas.draw_image_sampled(&image, Rect::new(0, 5, 10, 15), ImageSampling::Nearest);
+        }),
+    );
+    backend.render(node_id);
+
+    match backend.ops(node_id).as_slice() {
+        [DrawOp::ImageSampled(rect, _, sampling)] => {
+            assert_eq!(*rect, Rect::new(0, 5, 10, 15));
+            assert_eq!(*sampling, ImageSampling::Nearest);
         }
         other => panic!("unexpected ops: {other:?}"),
     }

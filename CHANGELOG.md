@@ -4,6 +4,25 @@
 
 ### Added
 
+- **Sized status bar parts.** `StatusBar::set_widths` (and `.widths(..)` on the
+  builder) takes a `PartWidth` per part: `Fill(n)` shares the room left over
+  (the default, `Fill(1)`, is today's equal split), `Fixed(Dip)` and `Auto`
+  (the text plus padding).
+- **Checkable toolbar items.** `Toolbar::toggle_item` and `toggle_item_with_text`
+  (and the same on the `toolbar()` builder, plus `checked(index, bool)`) add
+  items a click latches, painted from the theme's `selection` and `accent`
+  tokens. `Toolbar::is_checked` and `set_checked` read and set the state from
+  `update` (a radio group is `set_checked` on the others), and
+  `Toolbar::accessibility` reports each item's checked state.
+- **Nine more Lucide icons.** `Lucide::Brush`, `DoorOpen`, `Ghost`, `Grid3x3`,
+  `Layers`, `Mountain`, `PaintBucket`, `ZoomIn` and `ZoomOut`, vendored from the
+  same `lucide-static` 1.48.0 release as the rest and regenerated with
+  `generate.py`.
+- **Nearest-neighbour image scaling.** `Canvas::draw_image_sampled(image, rect,
+  ImageSampling::Nearest)` magnifies pixel art with hard edges instead of
+  blending; `ImageSampling::Smooth` is what `draw_image` does. A `Canvas` that
+  does not override the method falls back to `draw_image`; the xui-canvas and
+  xui-d2d canvases both do.
 - **Every widget's `Properties` report `visible` and `enabled`.** A form
   designer (LazyRAD) can now show, hide, enable and disable any widget through
   `property`/`set_property`. `visible` is on every widget with a node and
@@ -61,6 +80,19 @@
 - **`xui-d2d` reuses shaped text and gradient stops.** DirectWrite layouts
   (up to 2048) and per-window gradient stop collections (up to 64) are kept
   between draws, so a repainted label or gradient allocates nothing on a hit.
+
+### Fixed
+
+- **Every one-line body `Label` now paints vertically centred in its box**,
+  as titles and captions already did. At its natural height the text sits
+  about `TEXT_PADDING` (4 dip) lower than before, which lines it up with the
+  text of buttons beside it in a centred row; in a taller box (a row that
+  stretches it, or an explicit height) it stays centred instead of hugging the
+  top. Text containing a newline still starts at the top.
+- **`ListView::ensure_visible` in a hidden tab page no longer scrolls past
+  the rows.** A row asked for while the list has no size is remembered and
+  scrolled into view the usual way (just enough) when the list gets its real
+  size, and the offset is clamped so the view never starts past the end.
 
 ### Breaking changes
 

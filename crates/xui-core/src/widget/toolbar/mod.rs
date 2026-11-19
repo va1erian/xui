@@ -15,11 +15,13 @@ use crate::icon::IconRef;
 use crate::message::{Key, MouseButton};
 use crate::property::{Properties, Property, Value, node};
 
+mod checked;
 mod layout;
 mod paint;
 mod place;
 mod strip;
 
+use checked::flip;
 use layout::{Layout, Mode};
 use strip::{Entry, Item, State};
 
@@ -183,6 +185,7 @@ impl<M: 'static> Toolbar<M> {
                         }
                         let index = index?;
                         activated.set(index as i64);
+                        flip(&state, index);
                         let mapper = on_click.borrow();
                         mapper.as_ref().and_then(|mapper| mapper(index))
                     }
@@ -224,6 +227,7 @@ impl<M: 'static> Toolbar<M> {
                                 // A hover left over from a wider strip may now be clipped.
                                 let index = state.hover.get().filter(|&index| index < count)?;
                                 activated.set(index as i64);
+                                flip(&state, index);
                                 ui.invalidate(id);
                                 let mapper = on_click.borrow();
                                 mapper.as_ref().and_then(|mapper| mapper(index))
@@ -247,21 +251,13 @@ impl<M: 'static> Toolbar<M> {
 
     /// Appends an icon item with a hover tooltip.
     pub fn item(self, icon: impl Into<IconRef>, tooltip: &str) -> Toolbar<M> {
-        self.push(Item {
-            icon: Some(icon.into()),
-            label: None,
-            tooltip: (!tooltip.is_empty()).then(|| tooltip.to_string()),
-        })
+        self.push(Item::icon(icon.into(), None, tooltip))
     }
 
     /// Appends an icon item with a hover tooltip and a text label after the
     /// icon.
     pub fn item_with_text(self, icon: impl Into<IconRef>, tooltip: &str, text: &str) -> Toolbar<M> {
-        self.push(Item {
-            icon: Some(icon.into()),
-            label: Some(text.to_string()),
-            tooltip: (!tooltip.is_empty()).then(|| tooltip.to_string()),
-        })
+        self.push(Item::icon(icon.into(), Some(text), tooltip))
     }
 
     /// Appends a thin vertical separator line after the last entry.

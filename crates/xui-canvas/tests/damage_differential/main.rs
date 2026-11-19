@@ -170,11 +170,9 @@ impl Twin {
         let mut gone = vec![at];
         loop {
             let before = gone.len();
-            for candidate in 0..self.nodes.len() {
+            for (candidate, node) in self.nodes.iter().enumerate() {
                 if !gone.contains(&candidate)
-                    && self.nodes[candidate]
-                        .parent
-                        .is_some_and(|parent| gone.contains(&parent))
+                    && node.parent.is_some_and(|parent| gone.contains(&parent))
                 {
                     gone.push(candidate);
                 }

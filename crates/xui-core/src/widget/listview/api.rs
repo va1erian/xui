@@ -113,6 +113,7 @@ impl<M: 'static> ListView<M> {
         state.anchor = state.focused;
         state.hover = None;
         state.offset = 0;
+        state.reveal = None;
         drop(state);
         bar::layout(
             self.control.ui(),
@@ -182,6 +183,12 @@ impl<M: 'static> ListView<M> {
         let header = self.state.borrow().has_header();
         let bounds = self.control.bounds();
         let body = (bounds.height() - header_px(header, dpi)).max(0);
+        if body == 0 {
+            // No viewport to scroll against yet: remember the row and reveal
+            // it once the list is sized (see `bar::clamp_offset`).
+            self.state.borrow_mut().reveal = Some(row);
+            return;
+        }
         let visible = ((body / ROW.to_px(dpi).value().max(1)) as usize).max(1);
         self.state.borrow_mut().ensure_visible(row, visible);
         self.control.invalidate();

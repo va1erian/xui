@@ -3,7 +3,7 @@
 //! Alignment and clip regressions for the software canvas, kept out of the
 //! main `tests` module so neither file grows past the repo's file-size limit.
 
-use xui_core::backend::TextAlign;
+use xui_core::backend::{ImageSampling, TextAlign};
 use xui_core::geometry::Rect;
 use xui_core::image::Image;
 use xui_core::{Canvas, Color, Corner, Dip, TextStyle};
@@ -294,6 +294,62 @@ fn a_clipped_image_is_cropped_not_squashed() {
         Some([0, 0, 0, 255]),
         "the clipped-away half is not squeezed in"
     );
+}
+
+/// A 4x2 image of eight distinct colours, drawn at 4x into a 16x8 rectangle on
+/// a black 20x12 surface, with `clip` pushed first (none when `None`).
+fn scaled_under_clip(sampling: ImageSampling, clip: Option<Rect>) -> RgbaImage {
+    let mut pixels = Vec::new();
+    for index in 0..8u8 {
+        pixels.extend_from_slice(&[30 * index + 20, 255 - 30 * index, 90 + 10 * index, 255]);
+    }
+    let image = Image::from_rgba(4, 2, pixels).expect("image");
+    let mut surface = Surface::new(20, 12);
+    surface.fill(Color::rgb(0, 0, 0));
+    surface.with_canvas(Rect::new(0, 0, 20, 12), |canvas| {
+        if let Some(clip) = clip {
+            canvas.push_clip(clip);
+        }
+        canvas.draw_image_sampled(&image, Rect::new(2, 2, 18, 10), sampling);
+    });
+    surface.to_image()
+}
+
+/// Under a rectangular clip at an offset that is not a multiple of the scale, a
+/// scaled image paints exactly the pixels the unclipped draw paints inside the
+/// clip, and nothing outside it: no spill past the clip, no gaps within it.
+#[test]
+fn a_clipped_scaled_image_matches_the_unclipped_draw_inside_the_clip() {
+    for sampling in [ImageSampling::Nearest, ImageSampling::Smooth] {
+        let whole = scaled_under_clip(sampling, None);
+        for clip in [
+            Rect::new(3, 2, 18, 10),
+            Rect::new(4, 2, 18, 10),
+            Rect::new(5, 2, 18, 10),
+            Rect::new(2, 2, 8, 10),
+            Rect::new(2, 2, 11, 10),
+            Rect::new(2, 3, 18, 7),
+            Rect::new(5, 5, 14, 9),
+        ] {
+            let clipped = scaled_under_clip(sampling, Some(clip));
+            for y in 0..12 {
+                for x in 0..20 {
+                    let inside =
+                        x >= clip.left && x < clip.right && y >= clip.top && y < clip.bottom;
+                    let expected = if inside {
+                        whole.pixel(x as u32, y as u32)
+                    } else {
+                        Some([0, 0, 0, 255])
+                    };
+                    assert_eq!(
+                        clipped.pixel(x as u32, y as u32),
+                        expected,
+                        "{sampling:?} under {clip:?}: pixel ({x}, {y})"
+                    );
+                }
+            }
+        }
+    }
 }
 
 /// A rounded clip under a rectangular clip as large as the integer range: the

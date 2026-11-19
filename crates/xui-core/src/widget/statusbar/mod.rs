@@ -14,6 +14,10 @@ use crate::property::{Properties, Property, Value, node};
 use crate::theme::look::backdrop;
 use crate::units::Dip;
 
+mod spans;
+
+pub use spans::PartWidth;
+
 /// The design size of a part's text.
 const TEXT_SIZE: Dip = Dip(12.0);
 /// The horizontal inset of a part's text from its cell edge.
@@ -23,10 +27,13 @@ const BORDER_WIDTH: f32 = 1.0;
 /// The width of the designer's selection outline.
 const SELECTED_WIDTH: f32 = 2.0;
 
-/// A horizontal bar of text parts. The parts share the width equally.
+/// A horizontal bar of text parts. By default the parts share the width
+/// equally; [`StatusBar::set_widths`] sizes them with [`PartWidth`] (a fixed
+/// width, a share, or fit to the text).
 pub struct StatusBar<M: 'static> {
     control: Control<M>,
     parts: Rc<RefCell<Vec<String>>>,
+    widths: Rc<RefCell<Vec<PartWidth>>>,
     enabled: Rc<Cell<bool>>,
 }
 
@@ -38,6 +45,8 @@ impl<M: 'static> StatusBar<M> {
             parts.iter().map(|part| part.to_string()).collect(),
         ));
         let enabled = Rc::new(Cell::new(true));
+        let widths: Rc<RefCell<Vec<PartWidth>>> = Rc::new(RefCell::new(Vec::new()));
+        let widths_for_paint = Rc::clone(&widths);
         let theme = ui.theme_handle();
         let selected = control.selected_handle();
         let parts_for_paint = Rc::clone(&state);
@@ -56,14 +65,21 @@ impl<M: 'static> StatusBar<M> {
             );
 
             let parts = parts_for_paint.borrow();
-            let count = parts.len() as i32;
-            if count > 0 {
+            if !parts.is_empty() {
                 let padding = PADDING.to_px(dpi).value();
-                let width = bounds.width();
+                let measure_style = TextStyle::new(theme.text, TEXT_SIZE);
+                let spans = spans::spans(
+                    &widths_for_paint.borrow(),
+                    parts.len(),
+                    bounds.width(),
+                    dpi,
+                    &mut |index| {
+                        canvas.measure_text(&parts[index], &measure_style).width + 2 * padding
+                    },
+                );
                 for (index, part) in parts.iter().enumerate() {
-                    let index = index as i32;
-                    let left = bounds.left + width * index / count;
-                    let right = bounds.left + width * (index + 1) / count;
+                    let (left, right) = spans[index];
+                    let (left, right) = (bounds.left + left, bounds.left + right);
                     if index > 0 {
                         canvas.draw_line(
                             Point::new(left, bounds.top),
@@ -103,6 +119,7 @@ impl<M: 'static> StatusBar<M> {
         Ok(StatusBar {
             control,
             parts: state,
+            widths,
             enabled,
         })
     }
@@ -140,6 +157,29 @@ impl<M: 'static> StatusBar<M> {
     pub fn set_parts(&self, parts: &[&str]) {
         *self.parts.borrow_mut() = parts.iter().map(|part| part.to_string()).collect();
         self.control.invalidate();
+    }
+
+    /// Sizes the parts: `widths[i]` is part `i`'s [`PartWidth`], and parts past
+    /// the end of `widths` take `Fill(1)`. An empty slice restores the
+    /// equal split.
+    ///
+    /// ```
+    /// # use xui_core::prelude::*;
+    /// # use xui_core::widget::PartWidth;
+    /// # fn demo<M: 'static>(bar: &StatusBar<M>) {
+    /// // A stretching message, then a cursor position and a clock.
+    /// bar.set_widths(&[PartWidth::Fill(1), PartWidth::Auto, PartWidth::Fixed(Dip(72.0))]);
+    /// # }
+    /// ```
+    pub fn set_widths(&self, widths: &[PartWidth]) {
+        *self.widths.borrow_mut() = widths.to_vec();
+        self.control.invalidate();
+    }
+
+    /// Builder form of [`StatusBar::set_widths`].
+    pub fn widths(self, widths: &[PartWidth]) -> StatusBar<M> {
+        self.set_widths(widths);
+        self
     }
 
     /// Enables or disables the bar. A disabled bar dims its text.
@@ -197,11 +237,12 @@ impl<M: 'static> Properties for StatusBar<M> {
 mod tests {
     use std::rc::Rc;
 
-    use super::StatusBar;
+    use super::{PartWidth, StatusBar};
     use crate::app::{Core, Ui};
     use crate::backend::headless::{DrawOp, HeadlessBackend};
     use crate::backend::{Backend, PlatformSpec};
     use crate::geometry::Rect;
+    use crate::units::Dip;
 
     fn setup() -> (Rc<HeadlessBackend>, Rc<Core<u32>>, Ui<u32>) {
         let backend = Rc::new(HeadlessBackend::new());
@@ -269,6 +310,55 @@ mod tests {
             first_right <= 100,
             "the first part's text must stay within its half of the bar: {first_right}"
         );
+    }
+
+    /// The x of the left edge of the text drawn for `text`, and its right.
+    fn text_span(ops: &[DrawOp], wanted: &str) -> (i32, i32) {
+        ops.iter()
+            .find_map(|op| match op {
+                DrawOp::Text(rect, text, _) if text == wanted => Some((rect.left, rect.right)),
+                _ => None,
+            })
+            .unwrap_or_else(|| panic!("{wanted:?} was painted: {ops:?}"))
+    }
+
+    #[test]
+    fn sized_parts_paint_at_their_widths() {
+        let (backend, _core, ui) = setup();
+        let bar = StatusBar::new(&ui, Rect::new(0, 0, 300, 24), &["Ready", "Ln 1", "12:00"])
+            .unwrap()
+            .widths(&[
+                PartWidth::Fill(1),
+                PartWidth::Auto,
+                PartWidth::Fixed(Dip(60.0)),
+            ]);
+
+        backend.render(bar.id());
+        let ops = backend.ops(bar.id());
+        let (ready_left, ready_right) = text_span(&ops, "Ready");
+        let (fit_left, fit_right) = text_span(&ops, "Ln 1");
+        let (clock_left, clock_right) = text_span(&ops, "12:00");
+        let padding = 6;
+        // The fixed part is 60 px wide and flush right, its text inset.
+        assert_eq!(clock_right, 300 - padding);
+        assert_eq!(clock_left, 240 + padding);
+        // The fit part ends where the fixed one begins, and is narrower than
+        // an equal third; the stretching part takes all that is left.
+        assert_eq!(fit_right, 240 - padding);
+        assert!(fit_right - fit_left < 100 - 2 * padding, "fit is narrow");
+        assert_eq!(ready_left, padding);
+        assert_eq!(ready_right, fit_left - 2 * padding);
+    }
+
+    #[test]
+    fn the_default_still_splits_equally() {
+        let (backend, _core, ui) = setup();
+        let bar = StatusBar::new(&ui, Rect::new(0, 0, 300, 24), &["A", "B", "C"]).unwrap();
+
+        backend.render(bar.id());
+        let ops = backend.ops(bar.id());
+        assert_eq!(text_span(&ops, "B").0, 100 + 6);
+        assert_eq!(text_span(&ops, "C").0, 200 + 6);
     }
 
     #[test]

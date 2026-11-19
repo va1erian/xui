@@ -29,6 +29,7 @@ pub(crate) fn mapper<M: 'static>(
 ) -> impl Fn(&Event) -> Option<M> + 'static {
     move |event| {
         if let Event::Resize { .. } = event {
+            bar::clamp_offset(&ui, id, &mut state.borrow_mut());
             bar::layout(&ui, id, &bar, &state.borrow());
             return None;
         }

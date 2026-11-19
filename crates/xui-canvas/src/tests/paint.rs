@@ -1,4 +1,5 @@
 use super::*;
+use xui_core::backend::ImageSampling;
 
 #[test]
 fn a_filled_rectangle_lands_on_the_surface() {
@@ -229,6 +230,67 @@ fn a_drawn_image_lands_on_the_surface() {
         Some([0, 0, 0, 255]),
         "outside stays clear"
     );
+}
+
+/// A 2x2 image of red, green, blue and white pixels.
+fn four_colour_image() -> Image {
+    let pixels = vec![
+        255, 0, 0, 255, 0, 255, 0, 255, //
+        0, 0, 255, 255, 255, 255, 255, 255,
+    ];
+    Image::from_rgba(2, 2, pixels).expect("image")
+}
+
+#[test]
+fn nearest_sampling_keeps_hard_edges_when_magnified() {
+    let image = four_colour_image();
+    let palette = [
+        [255, 0, 0, 255],
+        [0, 255, 0, 255],
+        [0, 0, 255, 255],
+        [255, 255, 255, 255],
+    ];
+
+    let mut surface = Surface::new(8, 8);
+    surface.fill(Color::rgb(0, 0, 0));
+    surface.with_canvas(Rect::new(0, 0, 8, 8), |canvas| {
+        canvas.draw_image_sampled(&image, Rect::new(0, 0, 8, 8), ImageSampling::Nearest);
+    });
+    let rendered = surface.to_image();
+
+    for y in 0..8u32 {
+        for x in 0..8u32 {
+            let expected = palette[((y / 4) * 2 + x / 4) as usize];
+            assert_eq!(
+                rendered.pixel(x, y),
+                Some(expected),
+                "pixel ({x}, {y}) is exactly one source colour"
+            );
+        }
+    }
+}
+
+#[test]
+fn smooth_sampling_still_blends_when_magnified() {
+    let image = four_colour_image();
+    let mut surface = Surface::new(8, 8);
+    surface.fill(Color::rgb(0, 0, 0));
+    surface.with_canvas(Rect::new(0, 0, 8, 8), |canvas| {
+        canvas.draw_image_sampled(&image, Rect::new(0, 0, 8, 8), ImageSampling::Smooth);
+    });
+    let rendered = surface.to_image();
+
+    let palette = [
+        [255, 0, 0, 255],
+        [0, 255, 0, 255],
+        [0, 0, 255, 255],
+        [255, 255, 255, 255],
+    ];
+    let blended = (0..8u32)
+        .flat_map(|y| (0..8u32).map(move |x| (x, y)))
+        .filter(|&(x, y)| rendered.pixel(x, y).is_some_and(|p| !palette.contains(&p)))
+        .count();
+    assert!(blended > 0, "bilinear scaling blends neighbouring colours");
 }
 
 #[test]
