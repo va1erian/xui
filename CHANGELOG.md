@@ -4,6 +4,12 @@
 
 ### Added
 
+- **Nearest-neighbour image scaling.** `Canvas::draw_image_sampled(image, rect,
+  ImageSampling::Nearest)` magnifies pixel art with hard edges instead of
+  blending; `ImageSampling::Smooth` is what `draw_image` does. A backend that
+  does not override it falls back to `draw_image`; the canvas, Direct2D and
+  headless backends all do. The recording canvas adds
+  `DrawOp::ImageSampled`.
 - **Every widget's `Properties` report `visible` and `enabled`.** A form
   designer (LazyRAD) can now show, hide, enable and disable any widget through
   `property`/`set_property`. `visible` is on every widget with a node and

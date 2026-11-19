@@ -33,7 +33,9 @@ mod text;
 #[cfg(test)]
 pub(crate) mod headless;
 
-pub use canvas::{Canvas, TextAlign, TextMetrics, TextStyle, TextVAlign, TextWeight};
+pub use canvas::{
+    Canvas, ImageSampling, TextAlign, TextMetrics, TextStyle, TextVAlign, TextWeight,
+};
 pub use cursor::Cursor;
 pub use dialog::{FileDialogMode, FileDialogOutcome, FileDialogRequest, FileFilter};
 pub use event::{Event, TimerId};

@@ -10,8 +10,8 @@
 use std::rc::Rc;
 
 use xui_core::backend::{
-    Canvas, Corner, LinearGradient, PathGradient, PathPlacement, PathSeg, RadialGradient, Rgba,
-    Stroke, TextLayout, TextMetrics, TextStyle,
+    Canvas, Corner, ImageSampling, LinearGradient, PathGradient, PathPlacement, PathSeg,
+    RadialGradient, Rgba, Stroke, TextLayout, TextMetrics, TextStyle,
 };
 use xui_core::color::Color;
 use xui_core::geometry::{Point, Rect};
@@ -267,12 +267,17 @@ impl Canvas for D2dCanvas {
     }
 
     fn draw_image(&mut self, image: &Image, rect: Rect) {
+        self.draw_image_sampled(image, rect, ImageSampling::Smooth);
+    }
+
+    fn draw_image_sampled(&mut self, image: &Image, rect: Rect, sampling: ImageSampling) {
         self.target.draw_image(
             image.id(),
             image.width(),
             image.height(),
             image.pixels(),
             self.rect(rect),
+            sampling,
         );
     }
 

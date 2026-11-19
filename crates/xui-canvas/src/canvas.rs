@@ -11,8 +11,8 @@
 use tiny_skia::{FilterQuality, Mask, Paint, PathBuilder, Pattern, Pixmap, SpreadMode, Transform};
 
 use xui_core::backend::{
-    Canvas, Corner, LinearGradient, PathGradient, PathPlacement, PathSeg, RadialGradient, Rgba,
-    Stroke, TextLayout, TextMetrics, TextStyle,
+    Canvas, Corner, ImageSampling, LinearGradient, PathGradient, PathPlacement, PathSeg,
+    RadialGradient, Rgba, Stroke, TextLayout, TextMetrics, TextStyle,
 };
 use xui_core::color::Color;
 use xui_core::geometry::{Point, Rect};
@@ -313,6 +313,10 @@ impl Canvas for SkiaCanvas<'_> {
     }
 
     fn draw_image(&mut self, image: &Image, rect: Rect) {
+        self.draw_image_sampled(image, rect, ImageSampling::Smooth);
+    }
+
+    fn draw_image_sampled(&mut self, image: &Image, rect: Rect, sampling: ImageSampling) {
         let dest = self.map_rect(rect);
         if dest.is_empty() {
             return;
@@ -359,7 +363,10 @@ impl Canvas for SkiaCanvas<'_> {
             shader: Pattern::new(
                 pixmap.as_ref(),
                 SpreadMode::Pad,
-                FilterQuality::Bilinear,
+                match sampling {
+                    ImageSampling::Smooth => FilterQuality::Bilinear,
+                    ImageSampling::Nearest => FilterQuality::Nearest,
+                },
                 1.0,
                 Transform::identity(),
             ),
