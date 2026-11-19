@@ -84,6 +84,10 @@
 
 ### Fixed
 
+- **A one-line body `Label` is vertically centred in its box.** Beside buttons in a
+  centred row its text sat about 4 px high, because only titles and captions
+  were centred; a multi-line label still starts at the top.
+
 - **`ListView::ensure_visible` in a hidden tab page no longer scrolls past
   the rows.** The request was measured against a list with no size and left
   the offset on the requested row; the offset is now clamped to the real view

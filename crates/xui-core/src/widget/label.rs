@@ -105,7 +105,13 @@ impl<M: 'static> Label<M> {
             backdrop(canvas, theme.background);
             let kind = kind_for_paint.get();
             let text = kind.shown(&text_for_paint.borrow());
-            let style = kind.style(&theme, font_for_paint.borrow().as_ref());
+            let mut style = kind.style(&theme, font_for_paint.borrow().as_ref());
+            // A one-line body label sits on the box's centre line, like a
+            // button's text beside it in a centred row; a multi-line one keeps
+            // starting at the top.
+            if kind == Kind::Body && !text.contains('\n') {
+                style = style.middle();
+            }
             canvas.draw_text(&text, bounds, &style);
             if selected.get() {
                 canvas.stroke_rect(bounds, theme.accent, 2.0);
