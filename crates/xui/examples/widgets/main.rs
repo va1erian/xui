@@ -44,6 +44,7 @@ enum Msg {
     ContextMenu,
     Link,
     Theme(usize),
+    Animations(bool),
     Tab(usize),
     SplitPane(f32),
     Swatch(Color),
@@ -107,6 +108,10 @@ impl App for Gallery {
                 DialogAction::Accept(text) => format!("dialog: accepted {text}"),
                 DialogAction::Cancel => "dialog: cancelled".to_string(),
             },
+            Msg::Animations(on) => {
+                ui.set_animations(on);
+                format!("animations: {}", if on { "on" } else { "off" })
+            }
             Msg::Theme(choice) => {
                 let dark = choice == 1;
                 ui.set_theme(if dark { Theme::dark() } else { Theme::light() });

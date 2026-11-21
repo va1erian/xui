@@ -58,9 +58,16 @@ fn controls(parts: &Parts, dark: bool) -> Layout<Msg> {
         }),
         progress(100).value(40).bind(&parts.bar),
         hyperlink("Open docs").on_click(Msg::Link).bind(&parts.link),
-        radio_group(&["Light", "Dark"])
-            .selected(usize::from(dark))
-            .on_select(Msg::Theme),
+        row().gap(10).children((
+            radio_group(&["Light", "Dark"])
+                .selected(usize::from(dark))
+                .on_select(Msg::Theme)
+                .fill(1),
+            // Off, every animated widget on the page changes at once.
+            checkbox("Animations")
+                .checked(true)
+                .on_toggle(Msg::Animations),
+        )),
         menus::top(),
         row().gap(8).children(buttons),
     ))
