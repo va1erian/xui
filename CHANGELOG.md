@@ -12,14 +12,17 @@
   motion tokens. A change is instant under the system's reduced-motion
   setting, after `Ui::set_animations(false)`, in design mode and on a backend
   with no clock, which is the headless default, so existing snapshots are
-  unchanged. No widget animates yet. See `docs/motion.md`.
+  unchanged. See `docs/motion.md`.
 - **Frames at the display's refresh rate.** `Backend::now` and
   `Backend::request_frame` (both defaulted) and `Event::Frame` let a backend
   pace animation frames to the monitor a window is on. `WinitBackend` and
-  `D2dBackend` implement them; `D2dBackend` no longer depends on `SetTimer`,
-  which cannot tick faster than about 64 times a second. A backend that
-  implements neither is ticked with a 16 ms timer. The headless backends gain
-  `set_now`, `advance` and `frame_requests` for tests.
+  `D2dBackend` implement them; `D2dBackend` ticks frames from a
+  high-resolution timer in its message loop rather than `SetTimer`, which
+  cannot tick faster than about 64 times a second. A backend that implements
+  neither is ticked with a 16 ms timer. The headless backends gain `set_now`,
+  `advance` and `frame_requests` for tests, and `OffscreenBackend::inject`
+  now delivers window-level events (`Frame`, `Wake`, `Timer`, `Close`, ...)
+  to the window even while a node has the focus.
 - **Tabs underline travels.** Selecting a tab (a click or `Tabs::select`)
   slides and resizes the accent underline from the old tab to the new one with
   `Motion::TRAVEL`. The selection and the change message are immediate; with

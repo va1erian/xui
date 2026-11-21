@@ -2,8 +2,10 @@
 
 xui has a small, portable foundation for animation: timing curves, an eased
 value over time, a clock abstraction, the system's reduced-motion setting, and
-a driver that moves a value frame by frame at the display's refresh rate. No
-widget animates yet: see [What does not exist](#what-does-not-exist).
+a driver that moves a value frame by frame at the display's refresh rate.
+Buttons, check boxes, toggle buttons, number fields, progress bars, tabs,
+menus, combo boxes and tree views animate with it; see [What does not
+exist](#what-does-not-exist) for the limits.
 
 The value types live in `xui_core::motion` and are portable: no platform
 dependency, no `unsafe`, no clock read, no thread, no file system. They use
@@ -188,10 +190,12 @@ backend.advance(Duration::from_millis(50));
 backend.inject(window, WidgetId::NONE, Event::Frame);
 ```
 
+The offscreen backend's `inject(window, Event::Frame)` does the same, and so
+does `Stage::inject(Event::Frame)`.
+
 ## What does not exist
 
-- **Animated widgets.** No widget uses the driver yet; `docs/plans/animations.md`
-  lists them.
 - **Per-node opacity and 2D transform** in the compositing path. A widget
   cannot be faded or translated as a unit: an animation is drawn by the
   widget's own painter (a colour blend, a clip, a moved rectangle).
+- **Smooth scrolling**, and a page transition for `Tabs`.

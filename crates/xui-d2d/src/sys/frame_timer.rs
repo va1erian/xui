@@ -4,7 +4,7 @@
 
 use std::time::Duration;
 
-use windows::Win32::Foundation::{CloseHandle, HANDLE, WAIT_OBJECT_0, WAIT_TIMEOUT};
+use windows::Win32::Foundation::{CloseHandle, HANDLE, WAIT_OBJECT_0};
 use windows::Win32::System::Threading::{
     CREATE_WAITABLE_TIMER_HIGH_RESOLUTION, CreateWaitableTimerExW, INFINITE, SetWaitableTimer,
     TIMER_ALL_ACCESS,
@@ -54,29 +54,38 @@ impl FrameTimer {
         // SAFETY: `self.0` is a live waitable timer and `relative` outlives the
         // call; the wait only reads the one-element handle array.
         unsafe {
-            if SetWaitableTimer(self.0, &relative, 0, None, None, false).is_err() {
-                // Unarmed, the handle would never wake the wait: time out in
-                // whole milliseconds instead, so the loop cannot spin.
-                let millis = (delay.as_millis() as u32).clamp(1, 1000);
-                let woke =
-                    MsgWaitForMultipleObjectsEx(None, millis, QS_ALLINPUT, MWMO_INPUTAVAILABLE);
-                return if woke == WAIT_TIMEOUT {
-                    Woke::Timer
-                } else {
-                    Woke::Message
-                };
+            if SetWaitableTimer(self.0, &relative, 0, None, None, false).is_ok() {
+                // With one handle, `WAIT_OBJECT_0` is the timer and the next
+                // value is input.
+                let woke = MsgWaitForMultipleObjectsEx(
+                    Some(&[self.0]),
+                    INFINITE,
+                    QS_ALLINPUT,
+                    MWMO_INPUTAVAILABLE,
+                );
+                if woke == WAIT_OBJECT_0 {
+                    return Woke::Timer;
+                }
+                if woke.0 == WAIT_OBJECT_0.0 + 1 {
+                    return Woke::Message;
+                }
             }
-            let woke = MsgWaitForMultipleObjectsEx(
-                Some(&[self.0]),
-                INFINITE,
-                QS_ALLINPUT,
-                MWMO_INPUTAVAILABLE,
-            );
-            if woke == WAIT_OBJECT_0 {
-                Woke::Timer
-            } else {
-                Woke::Message
-            }
+        }
+        Self::wait_millis(delay)
+    }
+
+    /// The fallback when the timer cannot be armed or the wait failed, which
+    /// would otherwise spin the loop: time out in whole milliseconds instead.
+    fn wait_millis(delay: Duration) -> Woke {
+        let millis = (delay.as_millis() as u32).clamp(1, 1000);
+        // SAFETY: no handles are waited on; the call only reads the queue state.
+        let woke =
+            unsafe { MsgWaitForMultipleObjectsEx(None, millis, QS_ALLINPUT, MWMO_INPUTAVAILABLE) };
+        // With no handles, `WAIT_OBJECT_0` is input.
+        if woke == WAIT_OBJECT_0 {
+            Woke::Message
+        } else {
+            Woke::Timer
         }
     }
 }

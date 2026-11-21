@@ -1,7 +1,8 @@
 # Plan: optional widget animations
 
-Status: steps 0 and 1 (the pacing probe and the driver) are implemented; no
-widget animates yet. `docs/motion.md` documents what exists.
+Status: implemented, except the tab page nudge (child clipping is opt-in on
+both backends, see "Notes per widget") and smooth scrolling. `docs/motion.md`
+documents the driver.
 
 Goal: short, informative animations on the portable widgets, on every backend,
 at any frame rate, built on `xui_core::motion` (`Easing`, `Tween`, `Clock`,
@@ -79,7 +80,7 @@ fn request_frame(&self, window: WindowId) -> bool { false }
 
 | Backend | `now` | `request_frame` |
 |---|---|---|
-| `WinitBackend`, GL host | `MonotonicClock` | yes, paced to the monitor (see "Frame pacing") |
+| `WinitBackend`, GL host | a monotonic clock | yes, paced to the monitor (see "Frame pacing") |
 | `D2dBackend` | `Instant`-based | yes, paced to the monitor |
 | `OffscreenBackend`, `HeadlessBackend` | `None` until a test calls `set_now`/`advance` | yes: the test delivers `Event::Frame` itself |
 | any other | `None` (default) | `false` (default): 16 ms timer |
@@ -95,7 +96,7 @@ macOS-native) gets animations by implementing one method over its own clock.
 ### `Ui` API (`app/ui/motion.rs`)
 
 ```rust
-pub fn animate(&self, id: WidgetId, value: &Animated, to: f32, motion: Motion);
+pub fn animate(&self, id: WidgetId, value: &Rc<Animated>, to: f32, motion: Motion);
 pub fn animate_with(&self, id, value: &Rc<Animated>, to, motion, step: impl Fn(f32) + 'static);
 pub fn frame_time(&self) -> Duration;     // what painters sample with
 pub fn set_animations(&self, on: bool);   // default on
@@ -173,11 +174,11 @@ Two parts, each in `src/sys/`:
    `dmDisplayFrequency`), re-read per request. That value is whole hertz, so
    240.08 Hz is paced at 240: one repeated frame every 12 s of continuous
    animation, which no 200 ms animation can show.
-2. **A present that does not hold the frame back:**
-   `D2D1_PRESENT_OPTIONS_IMMEDIATELY` alongside `RETAIN_CONTENTS`. The
-   desktop compositor still shows whole frames, so there is no tearing in a
-   window, and the pacing is entirely the timer's. The measurements below
-   are why.
+2. **The present stays the default** (`RETAIN_CONTENTS` alone). Its wait for
+   vblank coalesces repaints driven by a 1000 Hz mouse (hover, drags) to the
+   display rate, which is worth keeping. The wait is on the primary monitor's
+   vblank, so with a slower primary a window on a faster monitor is capped at
+   the primary's rate. The measurements below are why this was weighed.
 
 `crates/xui-d2d/examples/frame_pacing.rs` measures this: it repaints a small
 window on every monitor under each combination (present option x tick source)
@@ -201,15 +202,17 @@ by median interval:
   the fastest monitor as primary that costs nothing. With a slower primary it
   should hold a window on the 240 Hz panel to the primary's rate; that
   arrangement was not run.
-- `IMMEDIATELY` with the timer reaches the same rates and does not depend on
-  which monitor is primary, so that is the choice. The probe measures
+- `IMMEDIATELY` reached the same rates without depending on the primary, but
+  it removes the vblank throttle on input-driven repaints, so it is not used;
+  pacing repaints ourselves would be the prerequisite, and is future work. The
+  probe measures
   intervals, not what the eye sees: the timer is not phase-locked to vblank,
   so an occasional repeated frame is possible and has to be judged on screen
   once a real animation exists.
 
 Not covered: the modal move/size loop and native menus run Windows' own
-message loop, not `sys/pump.rs`, so an animation in flight while the user
-drags the window border falls back to the `SetTimer` rate for that time.
+message loop, not `sys/pump.rs`, so no frame is delivered while the user drags
+the window border or a native menu is open; animations resume when it ends.
 
 ## 2. The animations
 

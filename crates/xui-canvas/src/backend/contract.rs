@@ -424,6 +424,9 @@ impl Backend for WinitBackend {
     }
 
     fn request_frame(&self, window: WindowId) -> bool {
+        if !self.shared.windows.borrow().contains_key(&window.raw()) {
+            return false;
+        }
         // Read at each request so a window dragged to another monitor follows
         // that monitor's rate.
         let millihertz = self

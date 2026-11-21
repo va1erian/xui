@@ -130,12 +130,18 @@ impl OffscreenBackend {
     /// captured node receives every pointer move and release, even outside its
     /// bounds. A move over a different node first tells the node it left
     /// (`MouseLeave`), and a press first moves the keyboard focus to the node
-    /// it lands on (`KillFocus`, `SetFocus`), as the windowed backend does. An
-    /// event without a position (a key or a character) goes to the focused
-    /// node in `window`, if any.
+    /// it lands on (`KillFocus`, `SetFocus`), as the windowed backend does. A
+    /// positionless input event (a key or a character) goes to the focused
+    /// node in `window`, if any. Any other positionless event (`Frame`, `Timer`,
+    /// `Wake`, `Close`, `Resize`, ...) is about the window, not a node: it goes
+    /// to the window (`WidgetId::NONE`) whatever has the focus, as the windowed
+    /// backend delivers it.
     pub fn inject(&self, window: WindowId, event: Event) -> bool {
         let Some((x, y)) = event.position() else {
-            return self.inject_to_focus(window, &event);
+            if event.is_input() {
+                return self.inject_to_focus(window, &event);
+            }
+            return self.deliver(window, WidgetId::NONE, &event);
         };
         let captured = *self.captured.borrow();
         let target = match captured {

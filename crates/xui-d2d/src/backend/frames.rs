@@ -44,37 +44,38 @@ pub(super) fn slot(due: Duration, now: Duration, period: Duration) -> Duration {
 /// The frames asked for and the last one delivered, by window.
 #[derive(Default)]
 pub(super) struct Pacer {
-    pending: HashMap<u64, Duration>,
+    /// Each pending frame's due time and the period it was asked at.
+    pending: HashMap<u64, (Duration, Duration)>,
     last: HashMap<u64, Duration>,
 }
 
 impl Pacer {
-    /// Records a frame request. Asking again while one is pending changes
-    /// nothing.
+    /// Records a frame request, with the refresh `period` of the window's
+    /// display. Asking again while one is pending changes nothing.
     fn request(&mut self, window: u64, now: Duration, period: Duration) {
         let last = self.last.get(&window).copied();
         self.pending
             .entry(window)
-            .or_insert_with(|| deadline(now, last, period));
+            .or_insert_with(|| (deadline(now, last, period), period));
     }
 
     /// How long until the earliest pending frame, zero when it is due.
     fn until_next(&self, now: Duration) -> Option<Duration> {
-        let due = self.pending.values().min()?;
+        let (due, _) = self.pending.values().min_by_key(|(due, _)| *due)?;
         Some(due.saturating_sub(now))
     }
 
-    /// Removes one due frame, if any, and records its time, so the next
-    /// request is paced from it. Called before the frame is delivered, since
-    /// the handler asks again.
-    fn take_due(&mut self, now: Duration, period: impl Fn(u64) -> Duration) -> Option<u64> {
-        let (&window, &due) = self
+    /// Removes one frame due at `now`, if any, and records its time, so the
+    /// next request is paced from it. Called before the frame is delivered,
+    /// since the handler asks again.
+    fn take_due(&mut self, now: Duration) -> Option<u64> {
+        let (&window, &(due, period)) = self
             .pending
             .iter()
-            .filter(|(_, due)| **due <= now)
-            .min_by_key(|(_, due)| **due)?;
+            .filter(|(_, (due, _))| *due <= now)
+            .min_by_key(|(_, (due, _))| *due)?;
         self.pending.remove(&window);
-        self.last.insert(window, slot(due, now, period(window)));
+        self.last.insert(window, slot(due, now, period));
         Some(window)
     }
 
@@ -91,8 +92,8 @@ impl Shared {
         self.clock.elapsed()
     }
 
-    /// The refresh period of the display `window` is on, read now so a window
-    /// dragged to another monitor follows it.
+    /// The refresh period of the display `window` is on, read at each request
+    /// so a window dragged to another monitor follows it.
     fn period_of(&self, window: u64) -> Duration {
         let hwnd = self.windows.borrow().get(&window).map(|state| state.hwnd);
         period(hwnd.map_or(0, sys::refresh_hz))
@@ -126,14 +127,14 @@ impl Frames for Shared {
     }
 
     fn deliver_due(&self) {
-        // The pacer is not borrowed while a frame runs: the handler asks for
-        // the next one, and may close windows.
+        // One reading of the clock for the whole call: a handler that takes
+        // longer than a period and asks again is not delivered twice, which
+        // would run frames back to back without pumping messages. The pacer
+        // is not borrowed while a frame runs: the handler asks for the next
+        // one, and may close windows.
+        let now = self.elapsed();
         loop {
-            let now = self.elapsed();
-            let due = self
-                .pacer
-                .borrow_mut()
-                .take_due(now, |window| self.period_of(window));
+            let due = self.pacer.borrow_mut().take_due(now);
             let Some(window) = due else {
                 break;
             };
@@ -196,18 +197,18 @@ mod tests {
         pacer.request(1, ms(10), ms(16));
         pacer.request(1, ms(12), ms(16));
         assert_eq!(pacer.until_next(ms(10)), Some(Duration::ZERO));
-        assert_eq!(pacer.take_due(ms(10), |_| ms(16)), Some(1));
-        assert_eq!(pacer.take_due(ms(10), |_| ms(16)), None);
+        assert_eq!(pacer.take_due(ms(10)), Some(1));
+        assert_eq!(pacer.take_due(ms(10)), None);
     }
 
     #[test]
     fn a_delivered_frame_paces_the_next_request() {
         let mut pacer = Pacer::default();
         pacer.request(1, Duration::ZERO, ms(16));
-        assert_eq!(pacer.take_due(ms(2), |_| ms(16)), Some(1));
+        assert_eq!(pacer.take_due(ms(2)), Some(1));
         pacer.request(1, ms(2), ms(16));
         assert_eq!(pacer.until_next(ms(2)), Some(ms(14)));
-        assert_eq!(pacer.take_due(ms(10), |_| ms(16)), None);
+        assert_eq!(pacer.take_due(ms(10)), None);
     }
 
     #[test]

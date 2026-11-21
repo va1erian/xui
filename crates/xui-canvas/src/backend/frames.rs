@@ -12,12 +12,20 @@ use xui_core::backend::WindowId;
 /// The refresh rate assumed when the monitor's is unknown, in millihertz.
 const FALLBACK_MILLIHERTZ: u32 = 60_000;
 
+/// The lowest refresh rate taken at its word, in millihertz. Windows reports a
+/// frequency of 0 or 1 for "hardware default" and `winit` passes it on (as
+/// whole hertz times 1000), which would pace frames one per second; no real
+/// display refreshes below this.
+const MIN_PLAUSIBLE_MILLIHERTZ: u32 = 10_000;
+
 /// The time between two refreshes of a display running at `millihertz`, as
-/// `winit` reports it (for example `240080` for 240.08 Hz). `None` and `0` mean
-/// the rate is unknown and give the period of 60 Hz.
+/// `winit` reports it: whole hertz times 1000 on Windows, possibly fractional
+/// elsewhere (`59940` for 59.94 Hz). `None` and anything under
+/// [`MIN_PLAUSIBLE_MILLIHERTZ`] mean the rate is unknown and give the period
+/// of 60 Hz.
 pub(crate) fn refresh_period(millihertz: Option<u32>) -> Duration {
     let millihertz = millihertz
-        .filter(|&rate| rate > 0)
+        .filter(|&rate| rate >= MIN_PLAUSIBLE_MILLIHERTZ)
         .unwrap_or(FALLBACK_MILLIHERTZ);
     Duration::from_nanos(1_000_000_000_000 / u64::from(millihertz))
 }
@@ -54,24 +62,20 @@ impl Frames {
             .or_insert_with(|| frame_deadline(now, last, period));
     }
 
-    /// Removes and returns the windows whose frame is due at `now`, recording
-    /// each deadline as that window's last frame. The caller delivers after
-    /// this returns, so the handler's own `request_frame` schedules the next
-    /// one.
-    pub(crate) fn take_due(&mut self, now: Instant) -> Vec<WindowId> {
-        let due: Vec<(u64, Instant)> = self
+    /// Removes and returns the window whose frame is due at `now`, the
+    /// earliest first, recording its deadline as its last frame. The caller
+    /// delivers after this returns, so the handler's own `request_frame`
+    /// schedules the next one.
+    pub(crate) fn take_due(&mut self, now: Instant) -> Option<WindowId> {
+        let (window, at) = self
             .pending
             .iter()
             .filter(|(_, at)| **at <= now)
-            .map(|(window, at)| (*window, *at))
-            .collect();
-        for (window, at) in &due {
-            self.pending.remove(window);
-            self.last.insert(*window, *at);
-        }
-        due.into_iter()
-            .map(|(window, _)| WindowId::from_raw(window))
-            .collect()
+            .min_by_key(|(_, at)| **at)
+            .map(|(window, at)| (*window, *at))?;
+        self.pending.remove(&window);
+        self.last.insert(window, at);
+        Some(WindowId::from_raw(window))
     }
 
     /// The earliest pending deadline, for the event loop's wake-up.
@@ -113,6 +117,14 @@ mod tests {
     }
 
     #[test]
+    fn a_hardware_default_rate_is_sixty_hertz() {
+        let sixty = refresh_period(Some(60_000));
+        assert_eq!(refresh_period(Some(1_000)), sixty, "Windows reports 1 Hz");
+        assert_eq!(refresh_period(Some(9_999)), sixty);
+        assert_eq!(refresh_period(Some(10_000)), Duration::from_millis(100));
+    }
+
+    #[test]
     fn the_first_frame_is_due_at_once() {
         let now = Instant::now();
         assert_eq!(frame_deadline(now, None, 16 * MS), now);
@@ -140,7 +152,7 @@ mod tests {
         let start = Instant::now();
         frames.request(window, start, period);
         let delivered = start + 3 * MS;
-        assert_eq!(frames.take_due(delivered), vec![window]);
+        assert_eq!(frames.take_due(delivered), Some(window));
         frames.request(window, delivered, period);
         assert_eq!(frames.next_deadline(), Some(start + period));
     }
@@ -153,7 +165,7 @@ mod tests {
         let start = Instant::now();
         frames.request(window, start, period);
         let delivered = start + 40 * MS;
-        assert_eq!(frames.take_due(delivered), vec![window]);
+        assert_eq!(frames.take_due(delivered), Some(window));
         frames.request(window, delivered, period);
         assert_eq!(frames.next_deadline(), Some(delivered));
     }
@@ -174,17 +186,31 @@ mod tests {
         let (a, b) = (WindowId::from_raw(1), WindowId::from_raw(2));
         let now = Instant::now();
         frames.request(a, now, 16 * MS);
-        frames.take_due(now);
+        assert_eq!(frames.take_due(now), Some(a));
         frames.request(a, now, 16 * MS);
         frames.request(b, now, 16 * MS);
         assert_eq!(
             frames.take_due(now),
-            vec![b],
+            Some(b),
             "a is still inside its period"
         );
+        assert_eq!(frames.take_due(now), None);
         frames.forget(a);
         assert_eq!(frames.next_deadline(), None);
         frames.request(a, now, 16 * MS);
         assert_eq!(frames.next_deadline(), Some(now), "forgotten history");
+    }
+
+    #[test]
+    fn the_earliest_due_window_comes_first() {
+        let mut frames = Frames::default();
+        let (a, b) = (WindowId::from_raw(1), WindowId::from_raw(2));
+        let now = Instant::now();
+        frames.request(a, now + 2 * MS, 16 * MS);
+        frames.request(b, now, 16 * MS);
+        let later = now + 5 * MS;
+        assert_eq!(frames.take_due(later), Some(b));
+        assert_eq!(frames.take_due(later), Some(a));
+        assert_eq!(frames.take_due(later), None);
     }
 }

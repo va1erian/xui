@@ -33,13 +33,17 @@ enum Turn {
 fn turn(frames: &dyn Frames) -> Turn {
     let mut msg = MSG::default();
     if let (Some(timer), Some(delay)) = (frames.timer(), frames.until_next()) {
-        if timer.wait(delay) == Woke::Timer {
+        // A frame already due is delivered without waiting, so a flood of
+        // messages cannot starve it.
+        if delay.is_zero() || timer.wait(delay) == Woke::Timer {
             frames.deliver_due();
             return Turn::Continue;
         }
+        // One message per turn, so `run_nested`'s `keep_going` is re-checked
+        // between messages. A spurious wake finds none.
         // SAFETY: the standard message calls on the thread that owns the windows.
         unsafe {
-            while PeekMessageW(&mut msg, None, 0, 0, PM_REMOVE).as_bool() {
+            if PeekMessageW(&mut msg, None, 0, 0, PM_REMOVE).as_bool() {
                 if msg.message == WM_QUIT {
                     return Turn::Quit(msg.wParam.0 as i32);
                 }
