@@ -13,6 +13,7 @@ use crate::backend::{Event, NodeKind, NodeSpec, Result, TextStyle};
 use crate::geometry::Rect;
 use crate::icon::{IconRef, draw_icon};
 use crate::message::{Key, MouseButton};
+use crate::motion::{Animated, Motion};
 use crate::property::{Properties, Property, Value, node};
 use crate::theme::look::{backdrop, face};
 use crate::units::Dip;
@@ -41,6 +42,8 @@ pub struct ToggleButton<M: 'static> {
     text: Rc<RefCell<String>>,
     icon: Rc<Cell<Option<IconRef>>>,
     checked: Rc<Cell<bool>>,
+    /// How latched the face looks: 0 unchecked, 1 checked, easing between.
+    latch: Rc<Animated>,
     enabled: Rc<Cell<bool>>,
     hover: Rc<Cell<bool>>,
     pressed: Rc<Cell<bool>>,
@@ -56,6 +59,7 @@ impl<M: 'static> ToggleButton<M> {
         let control = Control::new(ui, &spec)?;
         let label = Rc::new(RefCell::new(text.to_string()));
         let checked = Rc::new(Cell::new(false));
+        let latch = Rc::new(Animated::new(0.0));
         let enabled = Rc::new(Cell::new(true));
         let hover = Rc::new(Cell::new(false));
         let pressed = Rc::new(Cell::new(false));
@@ -65,7 +69,8 @@ impl<M: 'static> ToggleButton<M> {
         {
             let label = Rc::clone(&label);
             let icon = Rc::clone(&icon);
-            let checked = Rc::clone(&checked);
+            let latch = Rc::clone(&latch);
+            let time = ui.frame_time_handle();
             let enabled = Rc::clone(&enabled);
             let hover = Rc::clone(&hover);
             let pressed = Rc::clone(&pressed);
@@ -74,15 +79,15 @@ impl<M: 'static> ToggleButton<M> {
             control.set_painter(Rc::new(move |canvas| {
                 let theme = theme.get();
                 let bounds = canvas.bounds();
-                let checked = checked.get();
+                let latched = latch.value(time.get());
                 let bg = pick(hover.get(), theme.hover, theme.surface);
                 let fill = pick(pressed.get(), theme.pressed, bg);
                 backdrop(canvas, theme.background);
-                let fill = if checked { theme.accent } else { fill };
+                let fill = fill.lerp(theme.accent, latched);
                 face(canvas, bounds, RADIUS, fill, &theme);
                 let border = pick(hover.get(), theme.border_focused, theme.border);
                 canvas.stroke_rounded_rect(bounds, RADIUS, border, 1.0);
-                let base = pick(checked, theme.text_on_accent, theme.text);
+                let base = theme.text.lerp(theme.text_on_accent, latched);
                 let color = pick(enabled.get(), base, theme.text_disabled);
                 let text = label.borrow();
                 let (icon_rect, text_rect) =
@@ -103,6 +108,7 @@ impl<M: 'static> ToggleButton<M> {
 
         {
             let checked = Rc::clone(&checked);
+            let latch = Rc::clone(&latch);
             let enabled = Rc::clone(&enabled);
             let hover = Rc::clone(&hover);
             let pressed = Rc::clone(&pressed);
@@ -150,6 +156,7 @@ impl<M: 'static> ToggleButton<M> {
                 }
                 let state = !checked.get();
                 checked.set(state);
+                ui.animate(id, &latch, f32::from(u8::from(state)), Motion::QUICK);
                 let mapper = on_toggle.borrow();
                 if let Some(mapper) = mapper.as_ref() {
                     return mapper(state);
@@ -164,6 +171,7 @@ impl<M: 'static> ToggleButton<M> {
             text: label,
             icon,
             checked,
+            latch,
             enabled,
             hover,
             pressed,
@@ -235,7 +243,12 @@ impl<M: 'static> ToggleButton<M> {
 
     /// Sets the checked state without raising the toggle event.
     pub fn set_checked(&self, checked: bool) {
-        self.checked.set(checked);
+        if self.checked.replace(checked) != checked {
+            let target = f32::from(u8::from(checked));
+            self.control
+                .ui()
+                .animate(self.id(), &self.latch, target, Motion::QUICK);
+        }
         self.control.invalidate();
     }
 

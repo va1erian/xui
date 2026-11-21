@@ -3,7 +3,7 @@ use std::rc::Rc;
 
 use super::ToggleButton;
 use crate::app::{App, Core, Runtime, Ui};
-use crate::backend::headless::HeadlessBackend;
+use crate::backend::headless::{DrawOp, HeadlessBackend};
 use crate::backend::{Backend, Event, PlatformSpec, WidgetId};
 use crate::geometry::Rect;
 use crate::icon::{IconRef, Lucide};
@@ -130,4 +130,87 @@ fn hovering_repaints_once_then_stays_quiet() {
     );
     runtime.deliver(button.id(), &Event::MouseLeave);
     assert_eq!(backend.invalidations(), before + 2, "leaving repaints");
+}
+
+/// Toggles from the keyboard, which leaves no hover on the face.
+fn space(runtime: &Runtime<TestApp>, target: WidgetId) {
+    let key = Event::KeyDown {
+        key: crate::message::Key::SPACE,
+        modifiers: Modifiers::NONE,
+        repeat: 1,
+        system: false,
+    };
+    runtime.deliver(target, &key);
+    runtime.deliver(WidgetId::NONE, &Event::Wake);
+}
+
+/// A toggle button on its own backend, and a runtime to deliver events to.
+fn with_backend() -> (Rc<HeadlessBackend>, ToggleButton<u32>, Rc<Runtime<TestApp>>) {
+    let backend = Rc::new(HeadlessBackend::new());
+    let window = backend.open_window(&PlatformSpec::new("test")).unwrap();
+    let core = Core::new(backend.clone(), window);
+    let ui = Ui::new(Rc::clone(&core));
+    let button = ToggleButton::new(&ui, Rect::new(0, 0, 80, 28), "Bold").unwrap();
+    let log = Rc::new(RefCell::new(Vec::new()));
+    (backend, button, Runtime::primary(core, TestApp { log }))
+}
+
+fn ops(backend: &HeadlessBackend, button: &ToggleButton<u32>) -> Vec<DrawOp> {
+    backend.render(button.id());
+    backend.ops(button.id())
+}
+
+/// What a checked button paints with no animation at all.
+fn settled_checked() -> Vec<DrawOp> {
+    let (backend, button, _runtime) = with_backend();
+    button.set_checked(true);
+    assert_eq!(backend.frame_requests(), 0);
+    ops(&backend, &button)
+}
+
+#[test]
+fn a_toggle_fades_the_face_to_the_checked_colours() {
+    use std::time::Duration;
+
+    let (backend, button, runtime) = with_backend();
+    backend.set_now(Duration::ZERO);
+    let unchecked = ops(&backend, &button);
+    let checked = settled_checked();
+
+    space(&runtime, button.id());
+    assert!(button.is_checked(), "the state changes at once");
+    backend.advance(Duration::from_millis(20));
+    runtime.deliver(WidgetId::NONE, &Event::Frame);
+    let midway = ops(&backend, &button);
+    assert_ne!(midway, unchecked);
+    assert_ne!(midway, checked);
+
+    backend.advance(Duration::from_millis(200));
+    runtime.deliver(WidgetId::NONE, &Event::Frame);
+    assert_eq!(ops(&backend, &button), checked);
+    assert_eq!(backend.frame_requests(), 2, "and no frame asked for after");
+}
+
+#[test]
+fn set_checked_animates_without_raising_anything() {
+    use std::time::Duration;
+
+    let (backend, button, runtime) = with_backend();
+    backend.set_now(Duration::ZERO);
+    let unchecked = ops(&backend, &button);
+    button.set_checked(true);
+    backend.advance(Duration::from_millis(20));
+    runtime.deliver(WidgetId::NONE, &Event::Frame);
+    assert_ne!(ops(&backend, &button), unchecked);
+    backend.advance(Duration::from_millis(200));
+    runtime.deliver(WidgetId::NONE, &Event::Frame);
+    assert_eq!(ops(&backend, &button), settled_checked());
+}
+
+#[test]
+fn without_a_clock_a_toggle_paints_the_checked_picture_at_once() {
+    let (backend, button, runtime) = with_backend();
+    space(&runtime, button.id());
+    assert_eq!(ops(&backend, &button), settled_checked());
+    assert_eq!(backend.frame_requests(), 0);
 }

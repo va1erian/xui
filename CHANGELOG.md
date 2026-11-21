@@ -23,6 +23,9 @@
 - **Animated check box.** Toggling a `CheckBox` draws the check mark in (or
   out) over `Motion::QUICK`; the state and the message are unchanged and
   immediate, and without animations it paints as before.
+- **Animated toggle button.** A `ToggleButton`'s face and label colours ease
+  between unchecked and checked over `Motion::QUICK`, for a click, a key and
+  `set_checked` alike (which still raises no event).
 - **Sized status bar parts.** `StatusBar::set_widths` (and `.widths(..)` on the
   builder) takes a `PartWidth` per part: `Fill(n)` shares the room left over
   (the default, `Fill(1)`, is today's equal split), `Fixed(Dip)` and `Auto`
