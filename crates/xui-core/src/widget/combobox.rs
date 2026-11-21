@@ -13,6 +13,7 @@ use crate::geometry::Rect;
 use crate::icon::IconRef;
 use crate::property::{Properties, Property, Value, node};
 use crate::units::Dip;
+use crate::widget::popup::Unroll;
 
 type SelectMapper<M> = RefCell<Option<Box<dyn Fn(usize) -> Option<M>>>>;
 
@@ -32,6 +33,8 @@ struct Shared<M: 'static> {
     icons: RefCell<Vec<Option<IconRef>>>,
     selected: Cell<usize>,
     open: Cell<bool>,
+    /// The list opening and closing.
+    unroll: Rc<Unroll>,
     hover: Cell<Option<usize>>,
     enabled: Cell<bool>,
     on_select: SelectMapper<M>,
@@ -56,6 +59,7 @@ impl<M: 'static> ComboBox<M> {
             icons: RefCell::new(vec![None; items.len()]),
             selected: Cell::new(0),
             open: Cell::new(false),
+            unroll: Unroll::new(),
             hover: Cell::new(None),
             enabled: Cell::new(true),
             on_select: RefCell::new(None),
@@ -368,5 +372,80 @@ mod tests {
             },
         );
         assert!(!visible(&backend, popup), "Escape closes the popup");
+    }
+
+    fn frame(backend: &HeadlessBackend, rt: &Rc<Runtime<TestApp>>, ms: u64) {
+        backend.advance(std::time::Duration::from_millis(ms));
+        rt.deliver(WidgetId::NONE, &Event::Frame);
+    }
+
+    fn popup_bounds(backend: &HeadlessBackend, combo: &ComboBox<u32>) -> Rect {
+        backend.node(combo.popup.id()).expect("node").1
+    }
+
+    #[test]
+    fn the_list_unrolls_open_and_rolls_shut() {
+        let (backend, core, ui) = setup();
+        backend.set_now(std::time::Duration::ZERO);
+        let combo = ComboBox::new(&ui, Rect::new(0, 0, 120, 28), &["one", "two", "three"])
+            .unwrap()
+            .on_select(|i| Some(i as u32));
+        let log = Rc::new(RefCell::new(Vec::new()));
+        let rt = Runtime::primary(core, TestApp(Rc::clone(&log)));
+        let popup = combo.popup.id();
+        let full = popup_rect(Rect::new(0, 0, 120, 28), ui.dpi(), 3);
+
+        rt.deliver(combo.id(), &down(5, 5));
+        let start = popup_bounds(&backend, &combo);
+        assert!(visible(&backend, popup));
+        assert_eq!((start.left, start.top), (full.left, full.top));
+        assert!(start.height() < full.height());
+        frame(&backend, &rt, 20);
+        let part = popup_bounds(&backend, &combo);
+        assert!(part.height() > start.height() && part.height() < full.height());
+        frame(&backend, &rt, 500);
+        assert_eq!(popup_bounds(&backend, &combo), full);
+        let requests = backend.frame_requests();
+        frame(&backend, &rt, 500);
+        assert_eq!(backend.frame_requests(), requests);
+
+        // A pick closes it, but the message is not held back.
+        let row = ROW.to_px(ui.dpi()).value().max(1);
+        rt.deliver(popup, &down(5, row + row / 2));
+        rt.deliver(WidgetId::NONE, &Event::Wake);
+        assert_eq!(*log.borrow(), vec![1]);
+        assert!(visible(&backend, popup), "still rolling shut");
+        frame(&backend, &rt, 20);
+        assert!(popup_bounds(&backend, &combo).height() < full.height());
+        rt.deliver(popup, &down(5, row / 2));
+        rt.deliver(WidgetId::NONE, &Event::Wake);
+        assert_eq!(*log.borrow(), vec![1], "a list rolling shut takes no input");
+        frame(&backend, &rt, 500);
+        assert!(!visible(&backend, popup));
+
+        // Reopened while rolling shut, it ends open.
+        rt.deliver(combo.id(), &down(5, 5));
+        rt.deliver(combo.id(), &down(5, 5));
+        frame(&backend, &rt, 20);
+        rt.deliver(combo.id(), &down(5, 5));
+        frame(&backend, &rt, 500);
+        assert!(visible(&backend, popup));
+        assert_eq!(popup_bounds(&backend, &combo), full);
+    }
+
+    #[test]
+    fn without_a_clock_the_list_opens_and_closes_at_once() {
+        let (backend, core, ui) = setup();
+        let combo = ComboBox::new(&ui, Rect::new(0, 0, 120, 28), &["one", "two"]).unwrap();
+        let rt = Runtime::primary(core, TestApp(Rc::default()));
+        rt.deliver(combo.id(), &down(5, 5));
+        assert_eq!(
+            popup_bounds(&backend, &combo),
+            popup_rect(Rect::new(0, 0, 120, 28), ui.dpi(), 2)
+        );
+        assert!(visible(&backend, combo.popup.id()));
+        rt.deliver(combo.id(), &down(5, 5));
+        assert!(!visible(&backend, combo.popup.id()));
+        assert_eq!(backend.frame_requests(), 0);
     }
 }

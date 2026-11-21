@@ -39,6 +39,12 @@
 - **Animated number field.** A stepper click or Up/Down key rolls the old text
   out and the new text in, vertically and clipped, over `Motion::REVEAL`.
   Typing, `set_value` and a step clamped at the range's end do not roll.
+- **Menu popups unroll.** A menu opening from closed grows from its top edge in
+  140 ms and rolls shut in 80 ms; the picked item's message is raised at once.
+  Moving along the bar swaps the popup instantly. No change with animations
+  off or without a clock.
+- **ComboBox list unrolls.** The drop-down list opens and closes like a menu
+  popup, through the same helper, and takes no input while it rolls shut.
 - **Sized status bar parts.** `StatusBar::set_widths` (and `.widths(..)` on the
   builder) takes a `PartWidth` per part: `Fill(n)` shares the room left over
   (the default, `Fill(1)`, is today's equal split), `Fixed(Dip)` and `Auto`
