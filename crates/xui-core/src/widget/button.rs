@@ -13,6 +13,7 @@ use crate::backend::{Event, NodeKind, NodeSpec, Result, TextStyle};
 use crate::geometry::Rect;
 use crate::icon::{IconRef, draw_icon};
 use crate::message::{Key, MouseButton};
+use crate::motion::{Animated, Motion};
 use crate::property::{Properties, Property, Value, node};
 use crate::theme::look::{self, backdrop, face};
 use crate::units::Dip;
@@ -63,6 +64,9 @@ impl<M: 'static> Button<M> {
         let icon = Rc::new(Cell::new(None));
         let on_click: ClickMapper<M> = Rc::new(RefCell::new(None));
         let primary = Rc::new(Cell::new(false));
+        // How much of the pressed colour is left on the face after a click:
+        // 1 when it is raised, easing to 0.
+        let flash = Rc::new(Animated::new(0.0));
 
         {
             let state = Rc::clone(&state);
@@ -71,6 +75,8 @@ impl<M: 'static> Button<M> {
             let theme = ui.theme_handle();
             let selected = control.selected_handle();
             let primary = Rc::clone(&primary);
+            let flash = Rc::clone(&flash);
+            let time = ui.frame_time_handle();
             control.set_painter(Rc::new(move |canvas| {
                 let theme = theme.get();
                 let state = state.get();
@@ -88,6 +94,15 @@ impl<M: 'static> Button<M> {
                     (false, ButtonState::Hover) => theme.hover,
                     (false, ButtonState::Pressed) => theme.pressed,
                 };
+                // A click leaves the pressed colour fading out of the face,
+                // so one too quick to see held down, or made from the
+                // keyboard, still shows.
+                let pressed = if primary {
+                    look::shaded(theme.accent, &theme)
+                } else {
+                    theme.pressed
+                };
+                let fill = fill.lerp(pressed, flash.value(time.get()));
                 let bounds = canvas.bounds();
                 let dpi = canvas.dpi();
                 if primary {
@@ -127,6 +142,7 @@ impl<M: 'static> Button<M> {
         {
             let state = Rc::clone(&state);
             let on_click = Rc::clone(&on_click);
+            let flash = Rc::clone(&flash);
             let ui = ui.clone();
             let id = control.id();
             control.on_events(move |event| {
@@ -184,6 +200,8 @@ impl<M: 'static> Button<M> {
                 }
                 ui.invalidate(id);
                 if activate {
+                    flash.jump(1.0);
+                    ui.animate(id, &flash, 0.0, Motion::QUICK);
                     let mapper = on_click.borrow();
                     if let Some(mapper) = mapper.as_ref() {
                         return mapper();
