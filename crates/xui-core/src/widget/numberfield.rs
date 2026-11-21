@@ -6,6 +6,7 @@ use crate::backend::{Canvas, Cursor, Event, NodeKind, NodeSpec, Result, TextStyl
 use crate::color::Color;
 use crate::geometry::{Point, Rect};
 use crate::message::{Key, MouseButton};
+use crate::motion::{Animated, Motion};
 use crate::property::{Properties, Property, Value, node};
 use crate::theme::look;
 use crate::units::Dip;
@@ -70,6 +71,12 @@ struct State {
     max: Cell<f64>,
     step: Cell<f64>,
     text: RefCell<String>,
+    /// The text a step rolls away from, rewritten on each step.
+    old_text: RefCell<String>,
+    /// How far the roll has come, from 0 to 1.
+    roll: Rc<Animated>,
+    /// `1.0` when the roll was an increment (text moves up), `-1.0` a decrement.
+    roll_dir: Cell<f32>,
     caret: Cell<usize>,
     focused: Cell<bool>,
     enabled: Cell<bool>,
@@ -109,6 +116,9 @@ impl<M: 'static> NumberField<M> {
             max: Cell::new(max),
             step: Cell::new(if step > 0.0 { step } else { DEFAULT_STEP }),
             text: RefCell::new(min.to_string()),
+            old_text: RefCell::new(String::new()),
+            roll: Rc::new(Animated::new(1.0)),
+            roll_dir: Cell::new(1.0),
             caret: Cell::new(min.to_string().chars().count()),
             focused: Cell::new(false),
             enabled: Cell::new(true),
@@ -120,6 +130,7 @@ impl<M: 'static> NumberField<M> {
             let theme = ui.theme_handle();
             let selected = control.selected_handle();
             let ui = ui.clone();
+            let time = ui.frame_time_handle();
             control.set_painter(Rc::new(move |canvas| {
                 let theme = theme.get();
                 let b = canvas.bounds();
@@ -148,8 +159,27 @@ impl<M: 'static> NumberField<M> {
                 let tr = Rect::new(b.left + pad, b.top, (sl - pad).max(b.left + pad), b.bottom);
                 let style = TextStyle::new(color, TEXT_SIZE).middle();
                 let value = s.text.borrow();
-                canvas.draw_text(&value, tr, &style);
-                if s.focused.get() {
+                let now = time.get();
+                let rolling = s.roll.is_running(now);
+                if rolling {
+                    // The old text leaves one way as the new one enters from
+                    // the other, both clipped to the text rectangle.
+                    let height = tr.height() as f32;
+                    let progress = s.roll.value(now);
+                    let dir = s.roll_dir.get();
+                    let shifted = |offset: f32| {
+                        let dy = offset.round() as i32;
+                        Rect::new(tr.left, tr.top + dy, tr.right, tr.bottom + dy)
+                    };
+                    canvas.push_clip(tr);
+                    let old = s.old_text.borrow();
+                    canvas.draw_text(&old, shifted(-dir * height * progress), &style);
+                    canvas.draw_text(&value, shifted(dir * height * (1.0 - progress)), &style);
+                    canvas.pop_clip();
+                } else {
+                    canvas.draw_text(&value, tr, &style);
+                }
+                if s.focused.get() && !rolling {
                     let prefix: String = value.chars().take(s.caret.get()).collect();
                     let x = (tr.left + ui.measure_text(&prefix, &style, dpi).width).min(tr.right);
                     canvas.draw_line(Point::new(x, tr.top), Point::new(x, tr.bottom), color, 1.0);
@@ -183,7 +213,20 @@ impl<M: 'static> NumberField<M> {
                     let parsed = raw.parse::<f64>().ok().filter(|v| v.is_finite());
                     apply(parsed.map_or(s.value.get(), |v| s.clamp(v)))
                 };
-                let step_by = |delta: f64| apply(s.clamp(s.value.get() + delta * s.step.get()));
+                let step_by = |delta: f64| {
+                    {
+                        let mut old = s.old_text.borrow_mut();
+                        old.clear();
+                        old.push_str(&s.text.borrow());
+                    }
+                    let changed = apply(s.clamp(s.value.get() + delta * s.step.get()));
+                    if changed {
+                        s.roll_dir.set(if delta > 0.0 { 1.0 } else { -1.0 });
+                        s.roll.jump(0.0);
+                        ui.animate(id, &s.roll, 1.0, Motion::REVEAL);
+                    }
+                    changed
+                };
                 match event {
                     Event::SetFocus => {
                         s.focused.set(true);

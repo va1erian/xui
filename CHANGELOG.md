@@ -28,6 +28,9 @@
   `set_checked` alike (which still raises no event).
 - **Animated progress bar.** `ProgressBar::set_value` eases the painted fill to
   the new fraction over `Motion::TRAVEL`; `value()` reports the new value at once.
+- **Animated number field.** A stepper click or Up/Down key rolls the old text
+  out and the new text in, vertically and clipped, over `Motion::REVEAL`.
+  Typing, `set_value` and a step clamped at the range's end do not roll.
 - **Sized status bar parts.** `StatusBar::set_widths` (and `.widths(..)` on the
   builder) takes a `PartWidth` per part: `Fill(n)` shares the room left over
   (the default, `Fill(1)`, is today's equal split), `Fixed(Dip)` and `Auto`
