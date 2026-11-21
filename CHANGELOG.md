@@ -26,6 +26,8 @@
 - **Animated toggle button.** A `ToggleButton`'s face and label colours ease
   between unchecked and checked over `Motion::QUICK`, for a click, a key and
   `set_checked` alike (which still raises no event).
+- **Animated progress bar.** `ProgressBar::set_value` eases the painted fill to
+  the new fraction over `Motion::TRAVEL`; `value()` reports the new value at once.
 - **Sized status bar parts.** `StatusBar::set_widths` (and `.widths(..)` on the
   builder) takes a `PartWidth` per part: `Fill(n)` shares the room left over
   (the default, `Fill(1)`, is today's equal split), `Fixed(Dip)` and `Auto`

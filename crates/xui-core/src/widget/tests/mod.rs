@@ -16,6 +16,7 @@ mod edit_password;
 mod label;
 mod misc;
 mod node_props;
+mod progressbar;
 mod slider;
 
 struct TestApp {

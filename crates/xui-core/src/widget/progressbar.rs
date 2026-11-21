@@ -9,17 +9,21 @@ use super::control::Control;
 use crate::app::Ui;
 use crate::backend::{NodeKind, NodeSpec, Result};
 use crate::geometry::Rect;
+use crate::motion::{Animated, Motion};
 use crate::property::{Properties, Property, Value, node};
 use crate::theme::look::{self, backdrop};
 
 /// The corner radius of the bar.
 const RADIUS: f32 = 6.0;
 
-/// A read-only progress indicator.
+/// A read-only progress indicator. The fill eases to a new value over
+/// [`Motion::TRAVEL`]; [`ProgressBar::value`] reports it at once.
 pub struct ProgressBar<M: 'static> {
     control: Control<M>,
     value: Rc<Cell<i32>>,
     max: Rc<Cell<i32>>,
+    /// The fraction of the bar the fill shows, easing to the value's.
+    shown: Rc<Animated>,
     enabled: Rc<Cell<bool>>,
 }
 
@@ -29,10 +33,13 @@ impl<M: 'static> ProgressBar<M> {
         let control = Control::new(ui, &NodeSpec::new(NodeKind::ProgressBar, bounds))?;
         let value = Rc::new(Cell::new(0));
         let max = Rc::new(Cell::new(max.max(1)));
+        let shown = Rc::new(Animated::new(0.0));
 
         {
             let value = Rc::clone(&value);
             let max = Rc::clone(&max);
+            let shown = Rc::clone(&shown);
+            let time = ui.frame_time_handle();
             let theme = ui.theme_handle();
             let selected = control.selected_handle();
             control.set_painter(Rc::new(move |canvas| {
@@ -49,8 +56,14 @@ impl<M: 'static> ProgressBar<M> {
                 canvas.fill_rounded_rect(bounds, RADIUS, groove);
 
                 let max = max.get().max(1);
-                let filled =
-                    (bounds.width() as i64 * value.get().clamp(0, max) as i64 / max as i64) as i32;
+                let now = time.get();
+                // Only while the fill is catching up does it follow the
+                // easing; at rest it is exactly the value's share.
+                let filled = if shown.is_running(now) {
+                    (bounds.width() as f32 * shown.value(now)).round() as i32
+                } else {
+                    (bounds.width() as i64 * value.get().clamp(0, max) as i64 / max as i64) as i32
+                };
                 if filled > 0 {
                     let fill =
                         Rect::new(bounds.left, bounds.top, bounds.left + filled, bounds.bottom);
@@ -66,6 +79,7 @@ impl<M: 'static> ProgressBar<M> {
             control,
             value,
             max,
+            shown,
             enabled: Rc::new(Cell::new(true)),
         })
     }
@@ -82,7 +96,14 @@ impl<M: 'static> ProgressBar<M> {
 
     /// Sets the current value, clamped to the range.
     pub fn set_value(&self, value: i32) {
-        self.value.set(value.clamp(0, self.max.get()));
+        let value = value.clamp(0, self.max.get());
+        self.value.set(value);
+        let fraction = value as f32 / self.max.get() as f32;
+        if self.shown.target() != fraction {
+            self.control
+                .ui()
+                .animate(self.id(), &self.shown, fraction, Motion::TRAVEL);
+        }
         self.control.invalidate();
     }
 
