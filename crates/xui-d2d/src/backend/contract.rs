@@ -3,6 +3,7 @@
 //! The [`Backend`] contract over the window procedure and the scene.
 
 use std::rc::Rc;
+use std::time::Duration;
 
 use xui_core::backend::{
     Backend, BackendError, Cursor, Event, FileDialogOutcome, FileDialogRequest, FontSpec,
@@ -24,7 +25,7 @@ impl Backend for D2dBackend {
     }
 
     fn run(&self) -> i32 {
-        sys::run_loop()
+        sys::run_loop(&*self.shared)
     }
 
     fn run_with(&self, window: WindowId, on_ready: &mut dyn FnMut()) -> i32 {
@@ -102,7 +103,9 @@ impl Backend for D2dBackend {
             return Err(BackendError::Other("no such window".into()));
         };
         sys::show(hwnd);
-        sys::run_nested(|| self.shared.windows.borrow().contains_key(&window.raw()));
+        sys::run_nested(&*self.shared, || {
+            self.shared.windows.borrow().contains_key(&window.raw())
+        });
         Ok(())
     }
 
@@ -393,6 +396,14 @@ impl Backend for D2dBackend {
         };
         sys::set_dark_title_bar(hwnd, theme.is_dark);
         self.shared.invalidate_window(window);
+    }
+
+    fn now(&self) -> Option<Duration> {
+        Some(self.shared.elapsed())
+    }
+
+    fn request_frame(&self, window: WindowId) -> bool {
+        self.shared.request_frame(window)
     }
 
     fn set_timer(&self, window: WindowId, millis: u32) -> TimerId {

@@ -12,6 +12,7 @@
 
 mod design;
 mod launch;
+mod motion;
 mod proxy;
 mod runtime;
 mod secondary;
@@ -128,6 +129,8 @@ pub(crate) struct Core<M> {
     /// Values kept alive as long as the window: the layout [`Ui::root`]
     /// mounted.
     retained: RefCell<Vec<Box<dyn Any>>>,
+    /// What is animating in the window, and the frames that move it.
+    motion: motion::Driver,
 }
 
 impl<M> Core<M> {
@@ -156,6 +159,7 @@ impl<M> Core<M> {
             layout_retries: Cell::new(0),
             result: RefCell::new(None),
             retained: RefCell::new(Vec::new()),
+            motion: motion::Driver::new(),
         })
     }
 
@@ -177,6 +181,16 @@ impl<M> Core<M> {
     /// The window's current theme, shared with the widgets' painters.
     pub(crate) fn theme(&self) -> Rc<Cell<Theme>> {
         Rc::clone(&self.theme)
+    }
+
+    /// The window's animation driver.
+    pub(crate) fn motion(&self) -> &motion::Driver {
+        &self.motion
+    }
+
+    /// Advances the window's animations by one frame.
+    pub(crate) fn frame(&self) {
+        self.motion.frame(self.backend.as_ref(), self.window);
     }
 
     /// The window's root design-mode scope.

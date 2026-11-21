@@ -13,6 +13,7 @@
 
 mod app;
 mod contract;
+mod frames;
 mod gl;
 mod native;
 mod pointer_lock;
@@ -168,6 +169,10 @@ pub(crate) struct Shared {
     /// Repeating timers: window, next due instant and period. A timer fires,
     /// is rescheduled one period on, and lives until killed.
     pub(crate) timers: RefCell<HashMap<usize, (WindowId, Instant, Duration)>>,
+    /// Pending `request_frame`s and each window's last frame.
+    pub(crate) frames: RefCell<frames::Frames>,
+    /// The origin of [`Backend::now`](xui_core::backend::Backend::now).
+    pub(crate) origin: Instant,
     pub(crate) next_window: Cell<u64>,
     pub(crate) next_widget: Cell<u64>,
     pub(crate) next_timer: Cell<usize>,
@@ -284,6 +289,8 @@ impl WinitBackend {
                 pointer_lock: RefCell::new(None),
                 native: RefCell::new(HashMap::new()),
                 timers: RefCell::new(HashMap::new()),
+                frames: RefCell::new(frames::Frames::default()),
+                origin: Instant::now(),
                 next_window: Cell::new(1),
                 next_widget: Cell::new(1),
                 next_timer: Cell::new(1),

@@ -7,9 +7,9 @@ use windows::Win32::Graphics::Direct2D::Common::{
 };
 use windows::Win32::Graphics::Direct2D::{
     D2D1_FEATURE_LEVEL_DEFAULT, D2D1_HWND_RENDER_TARGET_PROPERTIES,
-    D2D1_PRESENT_OPTIONS_RETAIN_CONTENTS, D2D1_RENDER_TARGET_PROPERTIES,
-    D2D1_RENDER_TARGET_TYPE_DEFAULT, D2D1_RENDER_TARGET_USAGE_NONE, ID2D1HwndRenderTarget,
-    ID2D1Layer, ID2D1SolidColorBrush,
+    D2D1_PRESENT_OPTIONS_IMMEDIATELY, D2D1_PRESENT_OPTIONS_RETAIN_CONTENTS,
+    D2D1_RENDER_TARGET_PROPERTIES, D2D1_RENDER_TARGET_TYPE_DEFAULT, D2D1_RENDER_TARGET_USAGE_NONE,
+    ID2D1HwndRenderTarget, ID2D1Layer, ID2D1SolidColorBrush,
 };
 use windows::Win32::Graphics::Dxgi::Common::DXGI_FORMAT_B8G8R8A8_UNORM;
 use windows_numerics::Matrix3x2;
@@ -67,7 +67,11 @@ impl Target {
                 width: width.max(1) as u32,
                 height: height.max(1) as u32,
             },
-            presentOptions: D2D1_PRESENT_OPTIONS_RETAIN_CONTENTS,
+            // The default present waits on the primary monitor's vblank whichever
+            // monitor the window is on (measured by the `frame_pacing`
+            // example). The compositor still shows whole frames, so nothing
+            // tears in a window; the frame timer paces the frames instead.
+            presentOptions: D2D1_PRESENT_OPTIONS_RETAIN_CONTENTS | D2D1_PRESENT_OPTIONS_IMMEDIATELY,
         };
         let rt = factory::with(|f| {
             // SAFETY: both property structs are valid for the call.

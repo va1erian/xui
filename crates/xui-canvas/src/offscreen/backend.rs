@@ -257,4 +257,13 @@ impl Backend for OffscreenBackend {
     }
 
     fn kill_timer(&self, _window: WindowId, _id: TimerId) {}
+
+    fn now(&self) -> Option<std::time::Duration> {
+        self.now.get()
+    }
+
+    fn request_frame(&self, _window: WindowId) -> bool {
+        self.frame_requests.set(self.frame_requests.get() + 1);
+        true
+    }
 }

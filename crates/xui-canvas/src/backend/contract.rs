@@ -86,6 +86,7 @@ impl Backend for WinitBackend {
             .timers
             .borrow_mut()
             .retain(|_, (owner, _, _)| *owner != window);
+        self.shared.frames.borrow_mut().forget(window);
     }
 
     fn set_window_title(&self, window: WindowId, title: &str) {
@@ -416,6 +417,28 @@ impl Backend for WinitBackend {
             .borrow_mut()
             .insert(id, (window, Instant::now() + period, period));
         TimerId(id)
+    }
+
+    fn now(&self) -> Option<std::time::Duration> {
+        Some(self.shared.origin.elapsed())
+    }
+
+    fn request_frame(&self, window: WindowId) -> bool {
+        // Read at each request so a window dragged to another monitor follows
+        // that monitor's rate.
+        let millihertz = self
+            .window_handle(window, |handle| {
+                handle
+                    .current_monitor()
+                    .and_then(|monitor| monitor.refresh_rate_millihertz())
+            })
+            .flatten();
+        self.shared.frames.borrow_mut().request(
+            window,
+            Instant::now(),
+            super::frames::refresh_period(millihertz),
+        );
+        true
     }
 
     fn kill_timer(&self, _window: WindowId, id: TimerId) {

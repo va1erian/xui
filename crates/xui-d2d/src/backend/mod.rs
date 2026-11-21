@@ -6,17 +6,20 @@
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::rc::{Rc, Weak};
+use std::time::Instant;
 
 use xui_core::Theme;
 use xui_core::backend::{Event, WidgetId, WindowId};
 use xui_core::router::WidgetHost;
 
+use crate::sys::frame_timer::FrameTimer;
 use crate::sys::gfx::{DwShaper, Target};
 use crate::sys::surface::SurfaceWindow;
 use crate::sys::window::Hwnd;
 
 mod canvas;
 mod contract;
+mod frames;
 mod handler;
 mod input;
 mod keys;
@@ -64,6 +67,13 @@ pub(crate) struct Shared {
     orphans: RefCell<Vec<(WindowId, std::sync::Weak<SurfaceWindow>)>>,
     /// Timer id to the window that owns it.
     timers: RefCell<HashMap<usize, u64>>,
+    /// The frames asked for and delivered.
+    pacer: RefCell<frames::Pacer>,
+    /// What the loops wait on between frames; `None` where Windows has no
+    /// high-resolution timer, so frames cannot be paced.
+    frame_timer: Option<FrameTimer>,
+    /// When the backend was created: the origin of `Backend::now`.
+    clock: Instant,
     next_window: Cell<u64>,
     next_widget: Cell<u64>,
     next_timer: Cell<usize>,
@@ -121,6 +131,9 @@ impl D2dBackend {
                 swallow_escape: Cell::new(false),
                 orphans: RefCell::new(Vec::new()),
                 timers: RefCell::new(HashMap::new()),
+                pacer: RefCell::new(frames::Pacer::default()),
+                frame_timer: FrameTimer::new(),
+                clock: Instant::now(),
                 next_window: Cell::new(1),
                 next_widget: Cell::new(1),
                 next_timer: Cell::new(1),

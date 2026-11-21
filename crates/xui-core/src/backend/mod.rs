@@ -53,6 +53,7 @@ pub use text::{FontSpec, TextHit, TextLayout, TextShaper};
 
 use std::fmt;
 use std::rc::Rc;
+use std::time::Duration;
 
 use crate::geometry::Rect;
 use crate::image::Image;
@@ -422,6 +423,30 @@ pub trait Backend {
     /// Windows reads it (the Direct2D and windowed canvas backends);
     /// macOS, Linux and the headless backends report `false`.
     fn prefers_reduced_motion(&self) -> bool {
+        false
+    }
+
+    /// The time since an arbitrary origin, from a clock that never goes
+    /// backwards, or `None` when the backend has no clock.
+    ///
+    /// The front layer times animations with it and never reads a clock
+    /// itself. `None` (the default) makes every animation an instant change,
+    /// which is also how a headless render stays the same on every run.
+    fn now(&self) -> Option<Duration> {
+        None
+    }
+
+    /// Asks for one [`Event::Frame`] on `window`, delivered to the window (no
+    /// target) once, at the next refresh of the display the window is on.
+    ///
+    /// It is one-shot, like a browser's `requestAnimationFrame`: the front
+    /// layer asks again from each frame while something still animates, so an
+    /// idle window is never ticked. Asking twice before the frame is delivered
+    /// still delivers one. `false` (the default) means the backend has no
+    /// frame pacing, and the front layer falls back to a
+    /// [`Backend::set_timer`] of about one 60 Hz frame.
+    fn request_frame(&self, window: WindowId) -> bool {
+        let _ = window;
         false
     }
 

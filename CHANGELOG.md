@@ -4,6 +4,22 @@
 
 ### Added
 
+- **An animation driver.** `motion::Animated` is a value that eases to its
+  latest target and can be turned round mid-flight; `Ui::animate` (and
+  `animate_with`, which also runs a closure per frame) starts one and repaints
+  its node on every frame until it lands. A painter reads it with
+  `Ui::frame_time`. `Motion::QUICK`, `REVEAL`, `TRAVEL` and `EXIT` are the
+  motion tokens. A change is instant under the system's reduced-motion
+  setting, after `Ui::set_animations(false)`, in design mode and on a backend
+  with no clock, which is the headless default, so existing snapshots are
+  unchanged. No widget animates yet. See `docs/motion.md`.
+- **Frames at the display's refresh rate.** `Backend::now` and
+  `Backend::request_frame` (both defaulted) and `Event::Frame` let a backend
+  pace animation frames to the monitor a window is on. `WinitBackend` and
+  `D2dBackend` implement them; `D2dBackend` no longer depends on `SetTimer`,
+  which cannot tick faster than about 64 times a second. A backend that
+  implements neither is ticked with a 16 ms timer. The headless backends gain
+  `set_now`, `advance` and `frame_requests` for tests.
 - **Sized status bar parts.** `StatusBar::set_widths` (and `.widths(..)` on the
   builder) takes a `PartWidth` per part: `Fill(n)` shares the room left over
   (the default, `Fill(1)`, is today's equal split), `Fixed(Dip)` and `Auto`

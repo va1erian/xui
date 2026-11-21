@@ -4,10 +4,12 @@
 
 pub(crate) mod clipboard;
 pub(crate) mod dialog;
+pub(crate) mod frame_timer;
 pub(crate) mod gfx;
 pub(super) mod message_window;
 pub(crate) mod pointer_lock;
 mod pump;
+pub(crate) mod refresh;
 pub(crate) mod settings;
 pub(crate) mod surface;
 pub(crate) mod window;

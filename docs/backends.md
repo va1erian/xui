@@ -122,6 +122,16 @@ xui_core::app("Hello")
   Other per-draw allocations (gradient brushes, path geometries, rounded-clip
   layers) remain, and every `WM_PAINT` replans all nodes: the damage list of
   [the canvas backend](#repainting-only-what-changed) is not shared yet.
+- **Frame pacing:** `request_frame` is served by a high-resolution waitable
+  timer the message loop waits on next to the queue, set to the refresh period
+  of the monitor the window is on (read at each request, so a dragged window
+  follows its monitor). The render target presents with
+  `D2D1_PRESENT_OPTIONS_IMMEDIATELY`, since the default present waits on the
+  primary monitor's vblank whatever monitor the window is on; the compositor
+  still shows whole frames. Where the timer cannot be created (before Windows 10
+  1803) `request_frame` returns `false` and the core falls back to a 16 ms
+  timer. While Windows runs its own modal loop (dragging or sizing a window
+  border, a native menu) pending frames wait until it ends.
 - Not covered: IME, UI Automation, borderless windows and Mica/Acrylic, drag
   regions, window icon, `capture`, `GlWidget`.
 

@@ -113,6 +113,16 @@ impl<A: App> Runtime<A> {
                     self.on_close();
                     return true;
                 }
+                Event::Frame => {
+                    self.core.frame();
+                    return true;
+                }
+                // The animation driver's own tick, on a backend with no frame
+                // pacing: the app's timer mapping never sees it.
+                Event::Timer { id } if self.core.motion().owns_timer(*id) => {
+                    self.core.frame();
+                    return true;
+                }
                 Event::Timer { id } => {
                     let mapped = self.core.on_timer.borrow().as_ref().and_then(|f| f(*id));
                     if let Some(msg) = mapped {
