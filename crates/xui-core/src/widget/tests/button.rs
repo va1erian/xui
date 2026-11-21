@@ -211,3 +211,23 @@ fn the_hover_colour_fades_in_and_out() {
     frame(16);
     assert_eq!(backend.frame_requests(), asked, "nothing moves any more");
 }
+
+#[test]
+fn a_button_disabled_mid_flash_paints_the_plain_disabled_face() {
+    use std::time::Duration;
+
+    let (backend, core, ui) = setup();
+    backend.set_now(Duration::ZERO);
+    let button = Button::new(&ui, Rect::new(0, 0, 80, 28), "Ok").unwrap();
+    let log = Rc::new(RefCell::new(Vec::new()));
+    let runtime = Runtime::primary(
+        core,
+        TestApp {
+            log: Rc::clone(&log),
+        },
+    );
+    click(&runtime, button.id());
+    // What a submit handler does to its own button.
+    button.set_enabled(false);
+    assert_eq!(face(&backend, &button), ui.theme().surface);
+}

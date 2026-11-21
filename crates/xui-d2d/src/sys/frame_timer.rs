@@ -4,7 +4,7 @@
 
 use std::time::Duration;
 
-use windows::Win32::Foundation::{CloseHandle, HANDLE, WAIT_OBJECT_0};
+use windows::Win32::Foundation::{CloseHandle, HANDLE, WAIT_FAILED, WAIT_OBJECT_0};
 use windows::Win32::System::Threading::{
     CREATE_WAITABLE_TIMER_HIGH_RESOLUTION, CreateWaitableTimerExW, INFINITE, SetWaitableTimer,
     TIMER_ALL_ACCESS,
@@ -83,10 +83,14 @@ impl FrameTimer {
             unsafe { MsgWaitForMultipleObjectsEx(None, millis, QS_ALLINPUT, MWMO_INPUTAVAILABLE) };
         // With no handles, `WAIT_OBJECT_0` is input.
         if woke == WAIT_OBJECT_0 {
-            Woke::Message
-        } else {
-            Woke::Timer
+            return Woke::Message;
         }
+        if woke == WAIT_FAILED {
+            // Even this wait failed: block for the time it should have taken,
+            // so the loop cannot spin.
+            std::thread::sleep(Duration::from_millis(u64::from(millis)));
+        }
+        Woke::Timer
     }
 }
 

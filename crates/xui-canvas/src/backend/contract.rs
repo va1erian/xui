@@ -410,6 +410,11 @@ impl Backend for WinitBackend {
     }
 
     fn set_timer(&self, window: WindowId, millis: u32) -> TimerId {
+        // A closed window has no sink left to tick, and nothing would ever
+        // stop the timer.
+        if !self.shared.windows.borrow().contains_key(&window.raw()) {
+            return TimerId(0);
+        }
         let id = self.shared.next_timer.get();
         self.shared.next_timer.set(id + 1);
         let period = std::time::Duration::from_millis(u64::from(millis.max(1)));

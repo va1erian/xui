@@ -130,3 +130,20 @@ fn without_animation_the_page_changes_at_once() {
     assert_eq!(backend.clip(tabs.id()), None);
     assert_eq!(backend.frame_requests(), 0);
 }
+
+#[test]
+fn dropping_the_tabs_mid_scroll_leaves_nothing_behind() {
+    let (backend, runtime, tabs, pages) = paged();
+    tabs.select(1);
+    frame_after(&runtime, &backend, 60);
+    drop(tabs);
+    drop(pages);
+    let (asked, painted) = (backend.frame_requests(), backend.invalidations());
+    frame_after(&runtime, &backend, 60);
+    frame_after(&runtime, &backend, 60);
+    assert_eq!(backend.invalidations(), painted, "nothing is repainted");
+    assert!(
+        backend.frame_requests() <= asked + 1,
+        "and the frames stop at once"
+    );
+}

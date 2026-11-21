@@ -314,7 +314,7 @@ where
         if let Some(theme) = ready_core.backend().system_theme() {
             ui.set_theme(theme);
         }
-        let app = make(&mut ui);
+        let app = ready_core.building(|| make(&mut ui));
         ready_runtime.prime(app);
     };
 

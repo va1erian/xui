@@ -456,3 +456,28 @@ fn dropping_the_runtime_releases_a_step_that_holds_the_ui() {
     drop(runtime);
     assert_eq!(Rc::strong_count(&held), 1, "the step went with the window");
 }
+
+#[test]
+fn nothing_animates_while_the_app_is_built() {
+    let (backend, window, core, ui) = setup();
+    backend.set_now(Duration::ZERO);
+    let node = backend
+        .create(
+            ParentRef::Window(window),
+            &NodeSpec::new(NodeKind::Custom, Rect::default()),
+        )
+        .unwrap();
+    let value = Rc::new(Animated::new(0.0));
+
+    // What a builder's `.checked(true)` does: the state a widget starts in.
+    core.building(|| {
+        assert!(!ui.animations());
+        ui.animate(node, &value, 1.0, LINEAR);
+    });
+    assert_eq!(value.value(Duration::ZERO), 1.0, "it starts there");
+    assert_eq!(backend.frame_requests(), 0);
+
+    assert!(ui.animations(), "and animates once the app exists");
+    ui.animate(node, &value, 0.0, LINEAR);
+    assert_eq!(backend.frame_requests(), 1);
+}

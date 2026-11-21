@@ -20,8 +20,11 @@ at any frame rate, built on `xui_core::motion` (`Easing`, `Tween`, `Clock`,
   `apply_moves`. A backend only has to run painters and deliver a timer, which
   all of them already do, so the animations are identical everywhere.
 - **Input is never delayed.** The message is emitted and the state changes at
-  once; the animation only shows how the picture gets there. Hit-testing uses
-  the final state.
+  once; the animation only shows how the picture gets there. A widget that
+  animates inside its own painter (tree, tab strip, number field, button,
+  check box) is hit-tested in its final state. A node that is itself moved or
+  resized (an unrolling popup, the two pages of a tab scroll) is hit-tested
+  where it is drawn, for the length of the animation.
 - **Quick.** 80 to 200 ms, `ExpoOut` for things that appear (most of the move
   is in the first frames, so it reads well even at 30 fps), `CubicInOut` for
   things that travel. No overshoot, no bounce, no loop: the existing curves
@@ -30,7 +33,7 @@ at any frame rate, built on `xui_core::motion` (`Easing`, `Tween`, `Clock`,
   motion, when the app calls `Ui::set_animations(false)`, in design mode, and
   on a backend with no clock.
 - **Idle costs nothing.** Frames are requested one at a time, only while
-  something animates. No allocation per frame.
+  something animates. No allocation per frame, in the driver or in a widget.
 - **Every refresh rate.** Frames are paced to the monitor the window is on,
   not to a fixed 60 Hz.
 
@@ -220,13 +223,13 @@ The last frame is always exactly the picture painted today.
 
 | Widget | Trigger | What is drawn | Motion | Tells the user |
 |---|---|---|---|---|
-| **Button** | release / Space / Enter | press is instant; on activation the face eases from `pressed` back to its resting fill (`Color::lerp`) | QUICK | the click registered. Keyboard activation has no feedback at all today |
+| **Button** | pointer enters or leaves; release / Space / Enter | the hover colour fades in and out; on activation the face eases from `pressed` back to its resting fill (`Color::lerp`) | QUICK | the button is live under the pointer, and the click registered. Keyboard activation had no feedback at all |
 | **Menu open** | first popup of a menu, submenu | popup node unrolls from its anchor edge: `step` grows the node's height via `apply_moves`, rows stay anchored at the top | REVEAL | where the menu came from |
 | **Menu close** | pick, Esc, click away | the same in reverse; the pick's message is already emitted | EXIT | it closed on purpose, not vanished |
 | **Tree node** | expand / collapse | children are clipped to a growing or shrinking band under the node; rows below slide with its edge; the chevron rotates with the same value | REVEAL | which rows belong to the node, and where the rest went |
-| **Tabs** | select | the accent underline slides and resizes from the old tab to the new; the new page starts offset a few dip in the direction of travel and settles | TRAVEL / REVEAL | direction: which side the new page is on |
+| **Tabs** | select | the accent underline slides and resizes from the old tab to the new; the new page scrolls in from the side its tab is on while the old one scrolls out | TRAVEL | direction: which side the new page is on |
 | **NumberField** | stepper, Up/Down | old text rolls out and new rolls in, up for an increment, down for a decrement, clipped to the text rect | REVEAL | the direction of the change, not just a different number |
-| **Checkbox, ToggleButton** | toggle | mark draws in; a switch thumb slides | QUICK | new state vs. old |
+| **Checkbox, ToggleButton** | toggle | the check mark wipes in or out; a toggle button's face and label colours ease between its two states | QUICK | new state vs. old |
 | **ProgressBar** | `set_value` | fill eases to the new value instead of jumping | TRAVEL | progress is continuous; coarse updates stop looking like stalls |
 | **ComboBox list** | open / close | same unroll as the menu, shared helper | REVEAL / EXIT | same |
 
@@ -271,9 +274,10 @@ widget's offset model; it is a separate plan.
   reduced motion and a clockless backend all land on the final value with one
   invalidate; dropping a widget mid-animation clears its entry; two widgets
   animating share one timer.
-- Per widget, on `OffscreenBackend` with a scripted clock: a snapshot at the
-  start, one mid-way and one at the end, and **the end snapshot equals the
-  render with animations off**. A mid-way snapshot differs from both.
+- Per widget, on `HeadlessBackend` with a scripted clock, comparing recorded
+  draw commands and node bounds: the picture at the start, mid-way and at the
+  end, and **the end equals the picture with animations off**. The mid-way
+  picture differs from both.
 - Frame-rate independence: stepping the clock in 33 ms, 16 ms and 7 ms
   increments reaches the same value at the same elapsed time.
 - Gallery: an "Animations" switch on the `widgets` gallery page that drives
@@ -291,18 +295,17 @@ Each step is its own PR and leaves `main` shippable.
    ("What does not exist" loses the driver and the tokens).
 2. Button, Checkbox, ToggleButton (painter-only, proves the driver).
 3. NumberField roll, ProgressBar.
-4. Tabs underline, then the page nudge if clipping holds.
+4. Tabs underline and page scroll.
 5. Menu and ComboBox popup unroll (needs `animate_with`).
 6. Tree expand/collapse.
 
 Steps 2 to 6 touch disjoint files once step 1 is in, so they can run in
 parallel.
 
-## Open decisions
+## Decisions taken
 
-- **Tabs:** underline plus a short page nudge (recommended), or a full-width
-  page slide. The full slide keeps the outgoing page alive and moving for the
-  whole animation, which is more code and more repaint for little more
-  information.
-- **Default:** on, with the OS setting and `set_animations` to turn it off
-  (recommended), or off until an app opts in.
+- **Tabs:** a full-width page scroll, not a nudge: asked for after trying the
+  underline alone.
+- **Default:** on, with the OS setting and `Ui::set_animations` to turn it
+  off.
+- **Direct2D present:** the default one; see "Frame pacing".

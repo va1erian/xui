@@ -58,6 +58,9 @@ impl Removed {
 pub(crate) struct Driver {
     /// The application's switch ([`Ui::set_animations`](super::Ui)).
     enabled: Cell<bool>,
+    /// Set while the app is being built: the state a widget is given then is
+    /// where it starts, not a change to show.
+    building: Cell<bool>,
     /// The time of the frame being painted, shared with the painters.
     frame_time: Rc<Cell<Duration>>,
     active: RefCell<Vec<Entry>>,
@@ -75,6 +78,7 @@ impl Driver {
     pub(crate) fn new() -> Driver {
         Driver {
             enabled: Cell::new(true),
+            building: Cell::new(false),
             frame_time: Rc::new(Cell::new(Duration::ZERO)),
             active: RefCell::new(Vec::new()),
             in_frame: Cell::new(false),
@@ -89,9 +93,15 @@ impl Driver {
         self.enabled.set(on);
     }
 
-    /// Whether the application left animations on.
+    /// Whether a change would animate: the application left animations on
+    /// and the app is not being built.
     pub(crate) fn enabled(&self) -> bool {
-        self.enabled.get()
+        self.enabled.get() && !self.building.get()
+    }
+
+    /// Marks the start and the end of building the app.
+    pub(crate) fn set_building(&self, building: bool) {
+        self.building.set(building);
     }
 
     /// The time of the frame being painted.
@@ -118,7 +128,7 @@ impl Driver {
     ) {
         let (id, value, step) = entry;
         self.remove(Removed::Value(id, Rc::clone(value)));
-        let now = backend.now().filter(|_| animate && self.enabled.get());
+        let now = backend.now().filter(|_| animate && self.enabled());
         let Some(now) = now.filter(|_| self.schedule(backend, window)) else {
             value.jump(to);
             if let Some(step) = &step {
@@ -187,11 +197,17 @@ impl Driver {
                 false
             }),
         }
+        // A step that ran late in the frame may have removed an entry that
+        // ran before it, and dropping an entry may remove another (a step
+        // that owns a widget): go round until nothing more is removed.
+        loop {
+            let removed = self.removed.take();
+            if removed.is_empty() {
+                break;
+            }
+            entries.retain(|entry| !removed.iter().any(|removed| removed.covers(entry)));
+        }
         self.in_frame.set(false);
-        // A step that ran early in the frame may have removed an entry that
-        // ran before it.
-        entries.retain(|entry| !self.was_removed(entry));
-        self.removed.take();
         // What the steps started comes after what was already moving.
         let mut started = self.active.take();
         entries.append(&mut started);

@@ -108,7 +108,11 @@ impl<M: 'static> Button<M> {
                 // A click leaves the pressed colour fading out of the face,
                 // so one too quick to see held down, or made from the
                 // keyboard, still shows.
-                let fill = fill.lerp(pressed, flash.value(now));
+                let fill = if state == ButtonState::Disabled {
+                    fill
+                } else {
+                    fill.lerp(pressed, flash.value(now))
+                };
                 let bounds = canvas.bounds();
                 let dpi = canvas.dpi();
                 if primary {

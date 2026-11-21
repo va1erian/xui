@@ -188,6 +188,16 @@ impl<M> Core<M> {
         &self.motion
     }
 
+    /// Runs `make`, which builds the window's app, with animations held: a
+    /// check box built checked starts checked, it does not animate there
+    /// when the window opens.
+    pub(crate) fn building<T>(&self, make: impl FnOnce() -> T) -> T {
+        self.motion.set_building(true);
+        let made = make();
+        self.motion.set_building(false);
+        made
+    }
+
     /// Advances the window's animations by one frame.
     pub(crate) fn frame(&self) {
         self.motion.frame(self.backend.as_ref(), self.window);

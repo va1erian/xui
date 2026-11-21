@@ -36,7 +36,8 @@
 - **Animated tabs.** Selecting a tab (a click or `Tabs::select`) slides the
   accent underline to the new tab and scrolls the new page in from the side
   its tab is on, while the old page scrolls out. The selection and its
-  message change at once.
+  message change at once. During the scroll both pages are hit-tested where
+  they are drawn.
 - **`TreeView` expands and collapses with a short animation.** The rows of the
   node are revealed in a band under it while the rows below slide with its
   edge, and the chevron turns. The model, hit-testing and scrollbar change at
@@ -54,7 +55,8 @@
   Typing, `set_value` and a step clamped at the range's end do not roll.
 - **Menu popups unroll.** A menu opening from closed grows from its top edge in
   140 ms and rolls shut in 80 ms; the picked item's message is raised at once.
-  Moving along the bar swaps the popup instantly. No change with animations
+  Moving along the bar swaps the popup instantly. While it grows or shrinks
+  the popup is hit-tested at the size it is drawn. No change with animations
   off or without a clock.
 - **ComboBox list unrolls.** The drop-down list opens and closes like a menu
   popup, through the same helper, and takes no input while it rolls shut.

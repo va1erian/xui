@@ -5,11 +5,13 @@
 //!
 //! Pages are child nodes, so the scroll moves them. While it runs the old
 //! page stays visible and the container clips its children, so a page that is
-//! partly outside is not drawn over the container's neighbours. A layout of
+//! partly outside is not drawn over the container's neighbours. Both pages
+//! are hit-tested where they are drawn, so for the length of the scroll a
+//! press lands on whatever is under the pointer at that moment. A layout of
 //! the container meanwhile keeps both where the scroll is; another selection
 //! or a removed page ends it at once.
 
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use super::{Shared, page_area};
@@ -32,6 +34,10 @@ pub(super) struct Slide {
     /// 0 when the old page fills the page area, 1 when the new one does.
     progress: Rc<Animated>,
     flight: Cell<Option<Flight>>,
+    /// The moves of one frame and the children hidden on the last, kept so a
+    /// frame allocates nothing.
+    moves: RefCell<Vec<(WidgetId, Rect)>>,
+    hidden: RefCell<Vec<WidgetId>>,
 }
 
 impl Slide {
@@ -39,6 +45,8 @@ impl Slide {
         Slide {
             progress: Rc::new(Animated::new(1.0)),
             flight: Cell::new(None),
+            moves: RefCell::default(),
+            hidden: RefCell::default(),
         }
     }
 
@@ -113,26 +121,30 @@ fn place<M: 'static>(ui: &Ui<M>, s: &Shared<M>, progress: f32) {
         s.slide.flight.set(None);
         ui.set_clip(s.id, None);
     }
-    let pages = s.pages.borrow();
-    let children = |index: usize| pages.get(index).map(Vec::as_slice).unwrap_or_default();
-    let (incoming, outgoing) = (children(s.selected.get()), children(flight.from));
-    let mut moves = Vec::with_capacity(incoming.len() + outgoing.len());
-    let to = scrolled(page, progress, flight.direction, 0);
-    moves.extend(incoming.iter().map(|&child| (child, to)));
-    if progress < 1.0 {
-        let from = scrolled(page, progress, flight.direction, 1);
-        moves.extend(outgoing.iter().map(|&child| (child, from)));
+    // The buffers are taken out for the frame: moving or hiding a node may
+    // run a layout, which comes back here.
+    let (mut moves, mut hidden) = (s.slide.moves.take(), s.slide.hidden.take());
+    {
+        let pages = s.pages.borrow();
+        let children = |index: usize| pages.get(index).map(Vec::as_slice).unwrap_or_default();
+        let (incoming, outgoing) = (children(s.selected.get()), children(flight.from));
+        let to = scrolled(page, progress, flight.direction, 0);
+        moves.extend(incoming.iter().map(|&child| (child, to)));
+        if progress < 1.0 {
+            let from = scrolled(page, progress, flight.direction, 1);
+            moves.extend(outgoing.iter().map(|&child| (child, from)));
+        } else {
+            hidden.extend_from_slice(outgoing);
+        }
     }
-    let hide: Vec<WidgetId> = if progress >= 1.0 {
-        outgoing.to_vec()
-    } else {
-        Vec::new()
-    };
-    drop(pages);
     ui.apply_moves(&moves);
-    for child in hide {
+    for &child in &hidden {
         ui.set_visible(child, false);
     }
+    moves.clear();
+    hidden.clear();
+    s.slide.moves.replace(moves);
+    s.slide.hidden.replace(hidden);
 }
 
 #[cfg(test)]
