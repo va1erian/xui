@@ -168,7 +168,7 @@ impl Shared {
             .get(&window.raw())
             .and_then(|state| state.sink.clone());
         let handled = sink.is_some_and(|sink| sink.deliver(target, event));
-        if !target.is_none() && marks_target(event) {
+        if !target.is_none() && marks_target(event) && !self.is_steady(target) {
             self.invalidate(target);
         }
         handled
@@ -176,6 +176,11 @@ impl Shared {
 
     fn window_of(&self, id: WidgetId) -> Option<WindowId> {
         self.scene.borrow().window_of(id)
+    }
+
+    /// Whether `id` promised its picture does not depend on input.
+    fn is_steady(&self, id: WidgetId) -> bool {
+        self.scene.borrow().get(id).is_some_and(|node| node.steady)
     }
 
     fn hwnd_of(&self, window: WindowId) -> Option<Hwnd> {
@@ -191,7 +196,7 @@ impl Shared {
 }
 
 /// Events that can change how their target looks, so it is repainted even
-/// when the widget forgets to ask.
+/// when the widget forgets to ask, unless the node is `NodeSpec::steady`.
 fn marks_target(event: &Event) -> bool {
     matches!(
         event,

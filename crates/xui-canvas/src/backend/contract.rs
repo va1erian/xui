@@ -161,6 +161,7 @@ impl Backend for WinitBackend {
         node.text = spec.text.clone();
         node.popup = spec.popup;
         node.contained = spec.contained;
+        node.steady = spec.steady;
         node.tab_stop = spec.tab_stop;
         node.wants_tab = spec.wants_tab;
         self.shared.nodes.borrow_mut().insert(id, node);

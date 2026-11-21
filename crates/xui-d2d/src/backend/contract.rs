@@ -149,6 +149,7 @@ impl Backend for D2dBackend {
         node.tab_stop = spec.tab_stop;
         node.wants_tab = spec.wants_tab;
         node.contained = spec.contained;
+        node.steady = spec.steady;
         shared.scene.borrow_mut().insert(id, node);
         if spec.popup {
             shared.place_surfaces(window);

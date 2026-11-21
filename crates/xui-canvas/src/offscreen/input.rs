@@ -12,13 +12,13 @@ use xui_core::backend::{Event, WidgetId, WindowId};
 use super::OffscreenBackend;
 use super::geometry::translate;
 use crate::geometry::{absolute_bounds, hit_test};
-use crate::scene::{event_marks_target, tab_press};
+use crate::scene::tab_press;
 
 impl OffscreenBackend {
     /// Sends `event` to `target`'s window sink, then marks `target`'s place
     /// stale when the event is one that can change how it looks, so a widget
     /// that forgets to invalidate cannot leave old pixels behind (see
-    /// [`event_marks_target`]).
+    /// `Scene::mark_after`).
     pub(super) fn deliver(&self, window: WindowId, target: WidgetId, event: &Event) -> bool {
         let sink = self
             .windows
@@ -26,9 +26,7 @@ impl OffscreenBackend {
             .get(&window.raw())
             .and_then(|entry| entry.sink.clone());
         let handled = sink.is_some_and(|sink| sink.deliver(target, event));
-        if !target.is_none() && event_marks_target(event) {
-            self.nodes.borrow_mut().invalidate(target);
-        }
+        self.nodes.borrow_mut().mark_after(target, event);
         handled
     }
 

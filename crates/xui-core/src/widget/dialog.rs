@@ -129,7 +129,12 @@ impl<M: 'static> Dialog<M> {
             action: Rc::new(RefCell::new(None)),
             open: Cell::new(false),
         });
-        let scrim = Control::new(ui, &NodeSpec::new(NodeKind::Custom, Rect::default()))?;
+        // Steady: the scrim only catches input, and it spans the window, so it
+        // must not be repainted each time the pointer moves off it onto a button.
+        let scrim = Control::new(
+            ui,
+            &NodeSpec::new(NodeKind::Custom, Rect::default()).steady(),
+        )?;
         let scrim_id = scrim.id();
         shared.nodes.borrow_mut().push(scrim_id);
 

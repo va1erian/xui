@@ -146,6 +146,18 @@ pub struct NodeSpec {
     /// often, such as a video or a 3D view, beside other busy painters. A backend
     /// may ignore the flag.
     pub contained: bool,
+    /// Whether the node's picture does not depend on the input it receives: it
+    /// has no hover, pressed or focused look, and repaints itself when it does
+    /// change.
+    ///
+    /// After delivering a press, a key, a focus change or the pointer leaving,
+    /// a backend repaints the target's whole area, so a widget that changes
+    /// its look and forgets to invalidate cannot leave old pixels behind. For
+    /// a large node that only catches input (a modal scrim covers the window)
+    /// that repaints everything under it each time the pointer moves off it
+    /// onto a button. A steady node is left alone. A backend may ignore the
+    /// flag.
+    pub steady: bool,
 }
 
 impl NodeSpec {
@@ -162,6 +174,7 @@ impl NodeSpec {
             wants_tab: false,
             popup: false,
             contained: false,
+            steady: false,
         }
     }
 
@@ -203,6 +216,13 @@ impl NodeSpec {
     /// [`NodeSpec::contained`].
     pub fn contained(mut self) -> NodeSpec {
         self.contained = true;
+        self
+    }
+
+    /// Promises the node's picture does not depend on input. See
+    /// [`NodeSpec::steady`].
+    pub fn steady(mut self) -> NodeSpec {
+        self.steady = true;
         self
     }
 }

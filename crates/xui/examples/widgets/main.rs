@@ -7,6 +7,8 @@
 //! cargo run -p xui --features canvas --example widgets
 //! ```
 //!
+//! On Windows, `XUI_BACKEND=d2d` shows the same page on the Direct2D backend.
+//!
 //! `XUI_DEMO_AUTOCLOSE_MS` makes it quit itself, for headless smoke runs.
 //! `XUI_SNAPSHOT=<dir>` saves a light and a dark screenshot instead of
 //! opening a window. `XUI_GALLERY_THEME=dark`, `XUI_GALLERY_MENU`,
@@ -131,7 +133,15 @@ fn show_context(menu: &Menu<Msg>, ui: &Ui<Msg>, x: f32, y: f32) {
 }
 
 fn main() -> Result<()> {
-    xui::app("xui widgets").size(1296, 664).run(move |ui| {
+    let launch = xui::app("xui widgets").size(1296, 664);
+    // `XUI_BACKEND=d2d` shows the same page on the Direct2D backend.
+    #[cfg(windows)]
+    let launch = if std::env::var("XUI_BACKEND").as_deref() == Ok("d2d") {
+        launch.backend(std::rc::Rc::new(xui_d2d::D2dBackend::new()))
+    } else {
+        launch
+    };
+    launch.run(move |ui| {
         let gallery_env = |name: &str| std::env::var(name).is_ok();
         let dark = std::env::var("XUI_GALLERY_THEME").as_deref() == Ok("dark");
         let parts = page::Parts::default();

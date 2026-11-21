@@ -146,7 +146,7 @@ widgets use them instead of their own numbers:
 
 | Token | Duration | Curve | For |
 |---|---|---|---|
-| `Motion::QUICK` | 100 ms | `ExpoOut` | a change of state in place: a press released, a mark drawn |
+| `Motion::QUICK` | 180 ms | `CubicOut` | a change of state in place: a hover, a press released, a mark drawn |
 | `Motion::REVEAL` | 140 ms | `ExpoOut` | something appearing: a popup, a tree node opening |
 | `Motion::TRAVEL` | 180 ms | `CubicInOut` | something moving from one place to another |
 | `Motion::EXIT` | 80 ms | `QuadIn` | something leaving |

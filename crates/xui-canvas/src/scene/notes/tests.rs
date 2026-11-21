@@ -288,3 +288,25 @@ fn every_input_and_focus_event_marks_its_target_but_a_pointer_move() {
     };
     assert!(!event_marks_target(&motion));
 }
+
+#[test]
+fn a_steady_node_is_not_marked_by_input_but_repaints_when_it_asks() {
+    let mut scene = settled();
+    let scrim = painting(&mut scene, 1, top(), WINDOW);
+    let button = painting(&mut scene, 2, top(), Rect::new(100, 100, 200, 140));
+    scene.get_mut(scrim).expect("the scrim").steady = true;
+    taken(&mut scene);
+
+    // The pointer moving off a window-sized scrim must not repaint the window.
+    assert!(!scene.mark_after(scrim, &xui_core::backend::Event::MouseLeave));
+    assert!(taken(&mut scene).is_empty());
+
+    assert!(scene.mark_after(button, &xui_core::backend::Event::MouseLeave));
+    assert!(!taken(&mut scene).is_empty(), "an ordinary node is marked");
+
+    assert!(scene.invalidate(scrim));
+    assert!(
+        !taken(&mut scene).is_empty(),
+        "its own invalidate still counts"
+    );
+}

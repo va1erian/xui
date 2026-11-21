@@ -26,6 +26,9 @@ pub(super) struct Node {
     pub(super) tab_stop: bool,
     pub(super) wants_tab: bool,
     pub(super) contained: bool,
+    /// Its picture does not depend on input (`NodeSpec::steady`), so
+    /// delivering an event does not repaint it.
+    pub(super) steady: bool,
     seq: u64,
 }
 
@@ -45,6 +48,7 @@ impl Node {
             tab_stop: false,
             wants_tab: false,
             contained: false,
+            steady: false,
             seq: 0,
         }
     }

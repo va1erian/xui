@@ -98,7 +98,12 @@ impl<M: 'static> FileDialog<M> {
             open: Cell::new(false),
         });
 
-        let scrim = Control::new(ui, &NodeSpec::new(NodeKind::Custom, Rect::default()))?;
+        // Steady: the scrim only catches input, and it spans the window, so it
+        // must not be repainted each time the pointer moves off it onto a button.
+        let scrim = Control::new(
+            ui,
+            &NodeSpec::new(NodeKind::Custom, Rect::default()).steady(),
+        )?;
         let layout = Rc::new(Cell::new(Layout::default()));
         {
             let shared = Rc::clone(&shared);

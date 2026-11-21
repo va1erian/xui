@@ -23,6 +23,16 @@
   `advance` and `frame_requests` for tests, and `OffscreenBackend::inject`
   now delivers window-level events (`Frame`, `Wake`, `Timer`, `Close`, ...)
   to the window even while a node has the focus.
+- **`NodeSpec::steady`.** A node whose picture does not depend on input opts
+  out of the repaint the backends make after delivering a press, a key, a
+  focus change or the pointer leaving. The scrims of `Dialog`, `TaskDialog`
+  and `FileDialog` are steady: moving the pointer from the scrim onto one of
+  the dialog's buttons used to repaint the whole window under the translucent
+  layer, which in a debug build delayed the button's hover by a second or more.
+- **Button hover fades.** A `Button`'s hover colour eases in and out under the
+  pointer. `Motion::QUICK` is now 180 ms on a cubic curve, so the hover, the
+  click flash and the check box and toggle button changes are visible.
+- **The `widgets` example runs on Direct2D** with `XUI_BACKEND=d2d` (Windows).
 - **Animated tabs.** Selecting a tab (a click or `Tabs::select`) slides the
   accent underline to the new tab and scrolls the new page in from the side
   its tab is on, while the old page scrolls out. The selection and its

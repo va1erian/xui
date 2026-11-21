@@ -164,3 +164,50 @@ fn without_animation_a_click_paints_as_it_always_did() {
     assert_eq!(face(&backend, &button), ui.theme().hover);
     assert_eq!(backend.frame_requests(), 0);
 }
+
+#[test]
+fn the_hover_colour_fades_in_and_out() {
+    use std::time::Duration;
+
+    let (backend, core, ui) = setup();
+    backend.set_now(Duration::ZERO);
+    let button = Button::new(&ui, Rect::new(0, 0, 80, 28), "Ok").unwrap();
+    let log = Rc::new(RefCell::new(Vec::new()));
+    let runtime = Runtime::primary(
+        core,
+        TestApp {
+            log: Rc::clone(&log),
+        },
+    );
+    let theme = ui.theme();
+    let frame = |millis| {
+        backend.advance(Duration::from_millis(millis));
+        runtime.deliver(WidgetId::NONE, &Event::Frame);
+    };
+
+    runtime.deliver(
+        button.id(),
+        &Event::MouseMove {
+            x: 5,
+            y: 5,
+            modifiers: Modifiers::NONE,
+        },
+    );
+    assert_eq!(face(&backend, &button), theme.surface, "it starts cold");
+    frame(60);
+    let warming = face(&backend, &button);
+    assert_ne!(warming, theme.surface);
+    assert_ne!(warming, theme.hover);
+    frame(300);
+    assert_eq!(face(&backend, &button), theme.hover);
+
+    runtime.deliver(button.id(), &Event::MouseLeave);
+    assert_eq!(face(&backend, &button), theme.hover, "and cools from there");
+    frame(60);
+    assert_ne!(face(&backend, &button), theme.hover);
+    frame(300);
+    assert_eq!(face(&backend, &button), theme.surface);
+    let asked = backend.frame_requests();
+    frame(16);
+    assert_eq!(backend.frame_requests(), asked, "nothing moves any more");
+}

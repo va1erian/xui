@@ -26,6 +26,11 @@ xui-icons = { path = "../xui-icons", optional = true }
 xui-rich-text = { path = "../xui-rich-text", optional = true }
 xui-markdown = { path = "../xui-markdown", optional = true }
 
+# The `widgets` example can show its page on the Direct2D backend
+# (`XUI_BACKEND=d2d`), so the two backends can be compared side by side.
+[target.'cfg(windows)'.dev-dependencies]
+xui-d2d = { path = "../xui-d2d" }
+
 [[example]]
 name = "widgets"
 path = "examples/widgets/main.rs"

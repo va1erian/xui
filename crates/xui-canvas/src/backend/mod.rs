@@ -232,10 +232,7 @@ impl Shared {
             .get(&window.raw())
             .and_then(|state| state.sink.clone());
         let handled = sink.is_some_and(|sink| sink.deliver(target, event));
-        if !target.is_none()
-            && crate::scene::event_marks_target(event)
-            && self.nodes.borrow_mut().invalidate(target)
-        {
+        if self.nodes.borrow_mut().mark_after(target, event) {
             self.request_redraw(window);
         }
         handled

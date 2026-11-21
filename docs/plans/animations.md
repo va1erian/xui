@@ -57,7 +57,7 @@ impl Animated {
 /// A duration and a curve. The presets are the motion tokens.
 pub struct Motion { pub duration: Duration, pub easing: Easing }
 impl Motion {
-    pub const QUICK: Motion;   // 100 ms, ExpoOut   (press, check, hover)
+    pub const QUICK: Motion;   // 180 ms, CubicOut  (press, check, hover)
     pub const REVEAL: Motion;  // 140 ms, ExpoOut   (menu, tree node, number)
     pub const TRAVEL: Motion;  // 180 ms, CubicInOut (tab underline, progress)
     pub const EXIT: Motion;    //  80 ms, QuadIn    (closing)

@@ -21,8 +21,11 @@ pub struct Motion {
 }
 
 impl Motion {
-    /// A small change of state in place: a press released, a mark drawn.
-    pub const QUICK: Motion = Motion::new(Duration::from_millis(100), Easing::expo_out());
+    /// A small change of state in place: a hover, a press released, a mark
+    /// drawn. Long and even enough to be seen: an exponential curve is nearly
+    /// done within the first few frames, which reads as no animation at all
+    /// on something this small.
+    pub const QUICK: Motion = Motion::new(Duration::from_millis(180), Easing::CubicOut);
     /// Something appearing: a popup unrolling, a tree node opening.
     pub const REVEAL: Motion = Motion::new(Duration::from_millis(140), Easing::expo_out());
     /// Something travelling from one place to another: a tab underline.
