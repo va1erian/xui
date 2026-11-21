@@ -23,10 +23,10 @@
   `advance` and `frame_requests` for tests, and `OffscreenBackend::inject`
   now delivers window-level events (`Frame`, `Wake`, `Timer`, `Close`, ...)
   to the window even while a node has the focus.
-- **Tabs underline travels.** Selecting a tab (a click or `Tabs::select`)
-  slides and resizes the accent underline from the old tab to the new one with
-  `Motion::TRAVEL`. The selection and the change message are immediate; with
-  animations off the underline is in place at once.
+- **Animated tabs.** Selecting a tab (a click or `Tabs::select`) slides the
+  accent underline to the new tab and scrolls the new page in from the side
+  its tab is on, while the old page scrolls out. The selection and its
+  message change at once.
 - **`TreeView` expands and collapses with a short animation.** The rows of the
   node are revealed in a band under it while the rows below slide with its
   edge, and the chevron turns. The model, hit-testing and scrollbar change at

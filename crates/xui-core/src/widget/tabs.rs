@@ -9,6 +9,7 @@
 //! the app's message.
 
 mod pages;
+mod slide;
 mod strip;
 #[cfg(test)]
 mod tests;
@@ -16,6 +17,7 @@ mod tests;
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
+use self::slide::Slide;
 use self::strip::{Underline, paint_strip, select_tab, strip_event};
 use super::Panel;
 use super::control::Control;
@@ -53,6 +55,8 @@ struct Shared<M: 'static> {
     hover: Cell<Option<usize>>,
     /// Where the selected tab's accent underline is, travelling between tabs.
     underline: Underline,
+    /// The scroll from the previous page to the selected one.
+    slide: Slide,
     on_change: ChangeMapper<M>,
 }
 
@@ -85,6 +89,7 @@ impl<M: 'static> Tabs<M> {
             selected: Cell::new(0),
             hover: Cell::new(None),
             underline: Underline::new(),
+            slide: Slide::new(),
             on_change: RefCell::new(None),
         });
         {
@@ -164,6 +169,8 @@ impl<M: 'static> Tabs<M> {
         if index >= s.pages.borrow().len() {
             return None;
         }
+        // Page indices are about to shift under a scroll in flight.
+        s.slide.end(&self.scoped, s.id);
         s.titles.borrow_mut().remove(index);
         let children = s.pages.borrow_mut().remove(index);
         for &child in &children {
@@ -274,22 +281,15 @@ fn lay_out<M>(ui: &Ui<M>, s: &Shared<M>) -> Option<Rect> {
     // Visibility does not depend on bounds, so apply it even while the
     // container has none.
     let selected = s.selected.get();
+    // A page scrolling out stays shown until it is gone.
+    let leaving = s.slide.outgoing();
     for (index, children) in s.pages.borrow().iter().enumerate() {
         for &child in children {
-            ui.set_visible(child, index == selected);
+            ui.set_visible(child, index == selected || Some(index) == leaving);
         }
     }
-    let node = ui.bounds(s.id);
-    if node.is_empty() {
-        return None;
-    }
-    // Children are parented to the container, so they are placed in its own
-    // coordinates: start the strip and page at the origin.
-    let bounds = Rect::from_size(node.size());
+    let (strip, page) = areas(ui, s)?;
     let dpi = ui.dpi();
-    let areas = Dock::new().top(STRIP).split(bounds, dpi);
-    let strip = areas.top.unwrap_or(bounds);
-    let page = areas.fill;
 
     let style = TextStyle::new(ui.theme().text, TEXT);
     let padding = PADDING.to_px(dpi).value().max(0);
@@ -307,10 +307,32 @@ fn lay_out<M>(ui: &Ui<M>, s: &Shared<M>) -> Option<Rect> {
     *s.tabs.borrow_mut() = tabs;
 
     let mut moves: Vec<(WidgetId, Rect)> = vec![(s.strip_id, strip)];
-    if let Some(children) = s.pages.borrow().get(selected) {
+    if leaving.is_none()
+        && let Some(children) = s.pages.borrow().get(selected)
+    {
         moves.extend(children.iter().map(|&child| (child, page)));
     }
     ui.apply_moves(&moves);
+    if leaving.is_some() {
+        slide::keep(ui, s);
+    }
     ui.invalidate(s.strip_id);
     selected_tab
+}
+
+/// The strip and the page area, in the container's own coordinates (its
+/// children are placed in them), or `None` while the container has no bounds.
+fn areas<M>(ui: &Ui<M>, s: &Shared<M>) -> Option<(Rect, Rect)> {
+    let node = ui.bounds(s.id);
+    if node.is_empty() {
+        return None;
+    }
+    let bounds = Rect::from_size(node.size());
+    let areas = Dock::new().top(STRIP).split(bounds, ui.dpi());
+    Some((areas.top.unwrap_or(bounds), areas.fill))
+}
+
+/// The area the selected page fills.
+fn page_area<M>(ui: &Ui<M>, s: &Shared<M>) -> Option<Rect> {
+    areas(ui, s).map(|(_, page)| page)
 }

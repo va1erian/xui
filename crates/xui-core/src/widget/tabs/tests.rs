@@ -11,6 +11,8 @@ use crate::message::{Modifiers, MouseButton};
 use crate::property::{Properties, Value};
 use crate::widget::Label;
 
+mod scroll;
+
 struct TestApp(Rc<RefCell<Vec<usize>>>);
 
 impl App for TestApp {
@@ -376,4 +378,17 @@ fn removing_or_renaming_a_page_mid_flight_ends_the_flight_in_place() {
     assert_eq!((line.left, line.right), (first.left, first.right));
     frame_after(&runtime, &backend, 400);
     assert_eq!(underline(&backend, &tabs), line);
+}
+
+#[test]
+fn a_layout_pass_after_a_selection_does_not_cut_the_travel_short() {
+    let (backend, runtime, tabs) = animated();
+    let (first, second) = (tabs.shared.tabs.borrow()[0], tabs.shared.tabs.borrow()[1]);
+    tabs.select(1);
+    // What a mounted layout does once the event is handled.
+    tabs.relayout();
+    frame_after(&runtime, &backend, 90);
+    tabs.relayout();
+    let mid = underline(&backend, &tabs);
+    assert!(mid.left > first.left && mid.left < second.left, "{mid:?}");
 }

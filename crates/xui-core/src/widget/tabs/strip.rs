@@ -6,7 +6,7 @@
 use std::rc::Rc;
 use std::time::Duration;
 
-use super::{ACCENT, PADDING, Shared, TEXT, lay_out};
+use super::{ACCENT, PADDING, Shared, TEXT, lay_out, slide};
 use crate::app::Ui;
 use crate::backend::{Canvas, Event, TextStyle, WidgetId};
 use crate::geometry::{Point, Rect};
@@ -30,10 +30,15 @@ impl Underline {
         }
     }
 
-    /// Puts the underline under `tab` at once, ending any flight.
+    /// Puts the underline under `tab` at once, unless it is already there or
+    /// on its way there: a layout pass that follows a selection must not cut
+    /// the travel short.
     pub(super) fn settle(&self, tab: Rect) {
-        self.left.jump(tab.left as f32);
-        self.right.jump(tab.right as f32);
+        let (left, right) = (tab.left as f32, tab.right as f32);
+        if self.left.target() != left || self.right.target() != right {
+            self.left.jump(left);
+            self.right.jump(right);
+        }
     }
 
     /// Slides the underline to `tab` from where it is now, even mid-flight.
@@ -53,19 +58,23 @@ impl Underline {
 
 /// Selects `index` and slides the underline to it; `false` when `index` is out
 /// of range or already selected. The change event is the caller's.
-pub(super) fn select_tab<M: 'static>(ui: &Ui<M>, s: &Shared<M>, index: usize) -> bool {
-    if index >= s.pages.borrow().len() || s.selected.get() == index {
+pub(super) fn select_tab<M: 'static>(ui: &Ui<M>, s: &Rc<Shared<M>>, index: usize) -> bool {
+    let previous = s.selected.get();
+    if index >= s.pages.borrow().len() || previous == index {
         return false;
     }
+    // A scroll still in flight lands before the next one starts.
+    s.slide.end(ui, s.id);
     s.selected.set(index);
     if let Some(tab) = lay_out(ui, s) {
         s.underline.travel_to(ui, s.strip_id, tab);
     }
+    slide::start(ui, s, previous);
     true
 }
 
 /// Selects `index` for a click and raises the change event.
-fn choose<M: 'static>(ui: &Ui<M>, s: &Shared<M>, index: usize) {
+fn choose<M: 'static>(ui: &Ui<M>, s: &Rc<Shared<M>>, index: usize) {
     if !select_tab(ui, s, index) {
         return;
     }
@@ -135,7 +144,7 @@ pub(super) fn paint_strip<M>(s: &Shared<M>, canvas: &mut dyn Canvas, theme: Them
 }
 
 /// Handles strip input: hover highlights, a click selects.
-pub(super) fn strip_event<M: 'static>(s: &Shared<M>, ui: &Ui<M>, event: &Event) -> Option<M> {
+pub(super) fn strip_event<M: 'static>(s: &Rc<Shared<M>>, ui: &Ui<M>, event: &Event) -> Option<M> {
     if ui.is_design_mode() && event.is_input() {
         return None;
     }

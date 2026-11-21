@@ -1,8 +1,7 @@
 # Plan: optional widget animations
 
-Status: implemented, except the tab page nudge (child clipping is opt-in on
-both backends, see "Notes per widget") and smooth scrolling. `docs/motion.md`
-documents the driver.
+Status: implemented, except smooth scrolling. `docs/motion.md` documents the
+driver.
 
 Goal: short, informative animations on the portable widgets, on every backend,
 at any frame rate, built on `xui_core::motion` (`Easing`, `Tween`, `Clock`,
@@ -252,10 +251,13 @@ widget's offset model; it is a separate plan.
   painted while they shrink although `expanded` is already false: the painter
   treats that subtree as visible until the animation ends. The scrollbar goes
   to its final range at once. `draw_chevron` takes an angle instead of a bool.
-- **Tabs.** The underline is painter-only in the strip. The page nudge moves
-  the selected page's children with one `apply_moves` per frame and depends on
-  children being clipped to the container on every backend; verify that
-  first, and ship the underline alone if it does not hold.
+- **Tabs.** The underline is painter-only in the strip. The page change is a
+  full scroll: the new page comes in from the side its tab is on while the
+  old one leaves the other way. Pages are child nodes, so the scroll moves
+  them with one `apply_moves` per frame; the old page stays visible until it
+  is gone, and the container clips its children (`Ui::set_clip`) for the
+  duration, because clipping to a parent is opt-in on both backends. A layout
+  pass meanwhile keeps both pages where the scroll is.
 - **NumberField.** Keeps the previous text in an existing-style `RefCell`
   (written once per step, not per frame). The caret is hidden during the
   roll. Typing and `set_value` do not animate. The file is at 413 lines:

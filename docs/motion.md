@@ -198,4 +198,4 @@ does `Stage::inject(Event::Frame)`.
 - **Per-node opacity and 2D transform** in the compositing path. A widget
   cannot be faded or translated as a unit: an animation is drawn by the
   widget's own painter (a colour blend, a clip, a moved rectangle).
-- **Smooth scrolling**, and a page transition for `Tabs`.
+- **Smooth scrolling.**
