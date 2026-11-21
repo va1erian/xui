@@ -309,3 +309,150 @@ fn without_frame_pacing_a_timer_ticks_and_is_killed_at_the_end() {
         "the app never saw the driver's timer"
     );
 }
+
+#[test]
+fn a_step_may_restart_its_own_value_without_a_duplicate() {
+    let rig = Rig::new();
+    let value = Rc::new(Animated::new(0.0));
+    let calls = Rc::new(Cell::new(0));
+    let (ui, node, again, count) = (
+        rig.ui.clone(),
+        rig.node,
+        Rc::clone(&value),
+        Rc::clone(&calls),
+    );
+    rig.ui
+        .animate_with(rig.node, &value, 10.0, LINEAR, move |v| {
+            count.set(count.get() + 1);
+            if v == 10.0 {
+                // Bounce back: the same value, started from inside its own step.
+                ui.animate(node, &again, 0.0, LINEAR);
+            }
+        });
+    rig.frame(ms(100));
+    assert_eq!(calls.get(), 1);
+    assert_eq!(value.target(), 0.0);
+
+    let painted = rig.backend.invalidations();
+    rig.frame(ms(50));
+    assert_eq!(rig.read(&value), 5.0);
+    assert_eq!(rig.backend.invalidations(), painted + 1, "one entry only");
+    assert_eq!(calls.get(), 1, "the replaced step is not called again");
+}
+
+#[test]
+fn a_step_that_lands_a_value_instantly_silences_its_old_step() {
+    let rig = Rig::new();
+    let (first, second) = (Rc::new(Animated::new(0.0)), Rc::new(Animated::new(0.0)));
+    let late_calls = Rc::new(Cell::new(0));
+    let count = Rc::clone(&late_calls);
+    // `second` is started after `first`, so its entry runs later in a frame.
+    let (ui, node, target) = (rig.ui.clone(), rig.node, Rc::clone(&second));
+    rig.ui
+        .animate_with(rig.node, &first, 1.0, LINEAR, move |_| {
+            ui.set_animations(false);
+            ui.animate(node, &target, 3.0, LINEAR);
+            ui.set_animations(true);
+        });
+    rig.ui
+        .animate_with(rig.node, &second, 9.0, LINEAR, move |_| {
+            count.set(count.get() + 1)
+        });
+
+    rig.frame(ms(50));
+    assert_eq!(rig.read(&second), 3.0, "landed where the step sent it");
+    assert_eq!(late_calls.get(), 0, "its old step never ran");
+}
+
+#[test]
+fn destroying_a_node_from_a_step_stops_what_else_animates_on_it() {
+    let rig = Rig::new();
+    let (closing, hover) = (Rc::new(Animated::new(1.0)), Rc::new(Animated::new(0.0)));
+    // The hover is started first, so it has already run when the step that
+    // destroys the node does.
+    rig.ui
+        .animate(rig.node, &hover, 1.0, Motion::new(ms(500), Easing::Linear));
+    let (ui, node) = (rig.ui.clone(), rig.node);
+    rig.ui
+        .animate_with(rig.node, &closing, 0.0, LINEAR, move |v| {
+            if v == 0.0 {
+                ui.destroy(node);
+            }
+        });
+    rig.frame(ms(100));
+    assert_eq!(
+        rig.backend.frame_requests(),
+        1,
+        "nothing left: no next frame"
+    );
+
+    let painted = rig.backend.invalidations();
+    rig.frame(ms(16));
+    assert_eq!(rig.backend.invalidations(), painted);
+}
+
+#[test]
+fn a_value_shared_by_two_nodes_animates_on_both() {
+    let rig = Rig::new();
+    let other = rig
+        .backend
+        .create(
+            ParentRef::Window(rig.ui.window()),
+            &NodeSpec::new(NodeKind::Custom, Rect::default()),
+        )
+        .unwrap();
+    let value = Rc::new(Animated::new(0.0));
+    rig.ui.animate(rig.node, &value, 1.0, LINEAR);
+    rig.ui.animate(other, &value, 1.0, LINEAR);
+    let painted = rig.backend.invalidations();
+    rig.frame(ms(50));
+    assert_eq!(rig.backend.invalidations(), painted + 2);
+}
+
+#[test]
+fn a_backend_that_can_neither_pace_nor_time_makes_the_change_instant() {
+    let rig = Rig::new();
+    rig.backend.set_frame_pacing(false);
+    rig.backend.set_timers_available(false);
+    let value = Rc::new(Animated::new(0.0));
+    let painted = rig.backend.invalidations();
+    rig.ui.animate(rig.node, &value, 10.0, LINEAR);
+    assert_eq!(rig.read(&value), 10.0);
+    assert_eq!(rig.backend.invalidations(), painted + 1);
+}
+
+#[test]
+fn a_clock_lost_mid_flight_lands_everything() {
+    let rig = Rig::new();
+    let value = Rc::new(Animated::new(0.0));
+    let stepped = Rc::new(Cell::new(f32::NAN));
+    let sink = Rc::clone(&stepped);
+    rig.ui
+        .animate_with(rig.node, &value, 10.0, LINEAR, move |v| sink.set(v));
+    rig.frame(ms(30));
+    rig.backend.clear_now();
+    assert!(rig.runtime.deliver(WidgetId::NONE, &Event::Frame));
+    assert_eq!(rig.read(&value), 10.0);
+    assert_eq!(stepped.get(), 10.0);
+    assert_eq!(
+        rig.backend.frame_requests(),
+        2,
+        "and nothing is asked for after"
+    );
+}
+
+#[test]
+fn dropping_the_runtime_releases_a_step_that_holds_the_ui() {
+    let rig = Rig::new();
+    let value = Rc::new(Animated::new(0.0));
+    let held = Rc::new(());
+    let (ui, token) = (rig.ui.clone(), Rc::clone(&held));
+    rig.ui
+        .animate_with(rig.node, &value, 1.0, LINEAR, move |_| {
+            let _ = (&ui, &token);
+        });
+    assert_eq!(Rc::strong_count(&held), 2);
+    let Rig { runtime, .. } = rig;
+    drop(runtime);
+    assert_eq!(Rc::strong_count(&held), 1, "the step went with the window");
+}

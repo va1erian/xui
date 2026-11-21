@@ -25,6 +25,19 @@ impl HeadlessBackend {
         state.now = Some(state.now.unwrap_or_default().saturating_add(by));
     }
 
+    /// Takes the clock away again, like a backend that lost it.
+    pub fn clear_now(&self) {
+        self.state.borrow_mut().now = None;
+    }
+
+    /// Scripts whether [`Backend::set_timer`] can start a timer (the default)
+    /// or fails with `TimerId(0)`.
+    ///
+    /// [`Backend::set_timer`]: crate::backend::Backend::set_timer
+    pub fn set_timers_available(&self, on: bool) {
+        self.state.borrow_mut().timers_available = on;
+    }
+
     /// Scripts whether [`Backend::request_frame`] is honoured. `false` is a
     /// backend with no frame pacing, which the front layer ticks with a timer.
     ///

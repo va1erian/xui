@@ -110,6 +110,10 @@ struct State {
     frame_requests: u32,
     /// The timers started and not yet killed.
     timers: Vec<TimerId>,
+    /// Whether [`Backend::set_timer`] can start one.
+    ///
+    /// [`Backend::set_timer`]: super::Backend::set_timer
+    timers_available: bool,
 }
 
 impl HeadlessBackend {
@@ -142,6 +146,7 @@ impl HeadlessBackend {
                 frame_pacing: true,
                 frame_requests: 0,
                 timers: Vec::new(),
+                timers_available: true,
             }),
         }
     }

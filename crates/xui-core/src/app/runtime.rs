@@ -245,6 +245,8 @@ impl<A: App> Drop for Runtime<A> {
         super::secondary::unregister_window(self.core.window());
         // The root layout holds a `Ui`, so it would keep this core alive.
         self.core.release_retained();
+        // So would an animation whose step holds one.
+        self.core.motion().clear();
     }
 }
 

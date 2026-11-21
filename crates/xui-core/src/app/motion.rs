@@ -30,6 +30,30 @@ struct Entry {
     step: Option<Step>,
 }
 
+impl Entry {
+    fn is(&self, id: WidgetId, value: &Rc<Animated>) -> bool {
+        self.id == id && Rc::ptr_eq(&self.value, value)
+    }
+}
+
+/// What was removed while a frame had the entries out of [`Driver::active`],
+/// where a removal cannot reach them.
+enum Removed {
+    /// Everything animating on a node, which was destroyed.
+    Node(WidgetId),
+    /// One value on one node, which was started again.
+    Value(WidgetId, Rc<Animated>),
+}
+
+impl Removed {
+    fn covers(&self, entry: &Entry) -> bool {
+        match self {
+            Removed::Node(id) => entry.id == *id,
+            Removed::Value(id, value) => entry.is(*id, value),
+        }
+    }
+}
+
 /// A window's animations.
 pub(crate) struct Driver {
     /// The application's switch ([`Ui::set_animations`](super::Ui)).
@@ -37,6 +61,10 @@ pub(crate) struct Driver {
     /// The time of the frame being painted, shared with the painters.
     frame_time: Rc<Cell<Duration>>,
     active: RefCell<Vec<Entry>>,
+    /// Set while [`Driver::frame`] runs the entries, with what was removed
+    /// meanwhile.
+    in_frame: Cell<bool>,
+    removed: RefCell<Vec<Removed>>,
     /// A frame was requested from the backend and has not arrived.
     requested: Cell<bool>,
     /// The timer ticking the frames on a backend with no frame pacing.
@@ -49,6 +77,8 @@ impl Driver {
             enabled: Cell::new(true),
             frame_time: Rc::new(Cell::new(Duration::ZERO)),
             active: RefCell::new(Vec::new()),
+            in_frame: Cell::new(false),
+            removed: RefCell::new(Vec::new()),
             requested: Cell::new(false),
             fallback: Cell::new(None),
         }
@@ -87,10 +117,10 @@ impl Driver {
         motion: Motion,
     ) {
         let (id, value, step) = entry;
+        self.remove(Removed::Value(id, Rc::clone(value)));
         let now = backend.now().filter(|_| animate && self.enabled.get());
         let Some(now) = now.filter(|_| self.schedule(backend, window)) else {
             value.jump(to);
-            self.forget(value);
             if let Some(step) = &step {
                 step(to);
             }
@@ -98,7 +128,6 @@ impl Driver {
             return;
         };
         value.retarget(to, now, motion);
-        self.forget(value);
         self.active.borrow_mut().push(Entry {
             id,
             value: Rc::clone(value),
@@ -109,48 +138,99 @@ impl Driver {
 
     /// Drops what is animating on `id`, when its node is destroyed.
     pub(crate) fn cancel(&self, id: WidgetId) {
-        self.active.borrow_mut().retain(|entry| entry.id != id);
+        self.remove(Removed::Node(id));
+    }
+
+    /// Drops every animation, when the window goes: a step may hold the
+    /// window's `Ui`, which would keep the window alive.
+    pub(crate) fn clear(&self) {
+        let entries = self.active.take();
+        // Dropped outside the borrow: a step may own a widget, whose drop
+        // cancels its animations here.
+        drop(entries);
     }
 
     /// Advances one frame: latches the time, steps and repaints what is
     /// moving, and asks for the next frame while anything still is.
     pub(crate) fn frame(&self, backend: &dyn Backend, window: WindowId) {
         self.requested.set(false);
-        let Some(now) = backend.now() else {
-            return;
-        };
-        self.frame_time.set(now);
-        // A step may start another animation, so run them outside the borrow.
+        // A step may start or cancel an animation, so the entries are run
+        // outside the borrow, and what is removed meanwhile is noted.
         let mut entries = self.active.take();
-        entries.retain(|entry| {
-            if let Some(step) = &entry.step {
-                step(entry.value.value(now));
+        self.in_frame.set(true);
+        match backend.now() {
+            Some(now) => {
+                self.frame_time.set(now);
+                entries.retain(|entry| {
+                    if self.was_removed(entry) {
+                        return false;
+                    }
+                    if let Some(step) = &entry.step {
+                        step(entry.value.value(now));
+                    }
+                    backend.invalidate(entry.id);
+                    // The frame that reaches the target is the entry's last.
+                    entry.value.is_running(now)
+                });
             }
-            backend.invalidate(entry.id);
-            // The frame that reaches the target is the entry's last.
-            entry.value.is_running(now)
-        });
-        {
-            let mut active = self.active.borrow_mut();
-            // What a step started replaces an older entry for the same value.
-            entries.retain(|old| !active.iter().any(|new| Rc::ptr_eq(&new.value, &old.value)));
-            entries.append(&mut active);
-            *active = entries;
+            // The backend lost its clock: nothing can move any more, so
+            // everything lands where it was going.
+            None => entries.retain(|entry| {
+                if !self.was_removed(entry) {
+                    let to = entry.value.target();
+                    entry.value.jump(to);
+                    if let Some(step) = &entry.step {
+                        step(to);
+                    }
+                    backend.invalidate(entry.id);
+                }
+                false
+            }),
         }
-        if self.active.borrow().is_empty() {
-            if let Some(timer) = self.fallback.take() {
-                backend.kill_timer(window, timer);
-            }
-        } else {
+        self.in_frame.set(false);
+        // A step that ran early in the frame may have removed an entry that
+        // ran before it.
+        entries.retain(|entry| !self.was_removed(entry));
+        self.removed.take();
+        // What the steps started comes after what was already moving.
+        let mut started = self.active.take();
+        entries.append(&mut started);
+        let idle = entries.is_empty();
+        self.active.replace(entries);
+        if !idle {
             self.schedule(backend, window);
+        } else if let Some(timer) = self.fallback.take() {
+            backend.kill_timer(window, timer);
         }
     }
 
-    /// Removes the entry animating `value`, if any.
-    fn forget(&self, value: &Rc<Animated>) {
-        self.active
-            .borrow_mut()
-            .retain(|entry| !Rc::ptr_eq(&entry.value, value));
+    /// Whether `entry` was removed since the running frame took it.
+    fn was_removed(&self, entry: &Entry) -> bool {
+        self.removed
+            .borrow()
+            .iter()
+            .any(|removed| removed.covers(entry))
+    }
+
+    /// Removes the entries `what` covers. They are dropped outside the borrow:
+    /// a step may own a widget, whose drop comes back here.
+    fn remove(&self, what: Removed) {
+        let mut dropped = Vec::new();
+        {
+            let mut active = self.active.borrow_mut();
+            let mut at = 0;
+            while at < active.len() {
+                if what.covers(&active[at]) {
+                    dropped.push(active.remove(at));
+                } else {
+                    at += 1;
+                }
+            }
+        }
+        drop(dropped);
+        if self.in_frame.get() {
+            self.removed.borrow_mut().push(what);
+        }
     }
 
     /// Makes sure a frame is coming; `false` when the backend can neither

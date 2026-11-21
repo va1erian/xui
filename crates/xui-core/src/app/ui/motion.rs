@@ -26,7 +26,8 @@ impl<M: 'static> Ui<M> {
     }
 
     /// Turns the window's animations on (the default) or off. Off, every
-    /// change is instant, as it is under [`Ui::prefers_reduced_motion`].
+    /// change started from then on is instant, as it is under
+    /// [`Ui::prefers_reduced_motion`]; a value already moving finishes.
     pub fn set_animations(&self, on: bool) {
         self.core.motion().set_enabled(on);
     }
@@ -50,6 +51,10 @@ impl<M: 'static> Ui<M> {
     /// node is repainted once, so a widget needs no second code path. Frames
     /// are paced by the backend to the display's refresh rate, and stop when
     /// nothing is moving.
+    ///
+    /// The animation ends when `id` is destroyed through [`Ui::destroy`] (so
+    /// when the widget owning it is dropped), not when a node above it is. A
+    /// value shared by two nodes is animated on each separately.
     pub fn animate(&self, id: WidgetId, value: &Rc<Animated>, to: f32, motion: Motion) {
         self.start(id, value, None, to, motion);
     }

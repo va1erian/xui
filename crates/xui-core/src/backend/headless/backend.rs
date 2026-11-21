@@ -318,6 +318,9 @@ impl Backend for HeadlessBackend {
 
     fn set_timer(&self, _window: WindowId, _millis: u32) -> TimerId {
         let mut state = self.state.borrow_mut();
+        if !state.timers_available {
+            return TimerId(0);
+        }
         let id = TimerId(state.next_timer as usize);
         state.next_timer += 1;
         state.timers.push(id);
