@@ -9,7 +9,11 @@ part of these rules.
 
 - **`unsafe` only in `src/sys/`.** Every other module starts with
   `#![forbid(unsafe_code)]`. Each `unsafe` block carries a `// SAFETY:` comment
-  explaining why its contract holds.
+  explaining why its contract holds. Two exceptions, both outside the library
+  and both held to the same `// SAFETY:` rule: a test that has to read the
+  screen or drive a native control keeps its `unsafe` in one module marked
+  `#![allow(unsafe_code)]`, and `crates/xui-d2d/examples/frame_pacing.rs`
+  calls Win32 directly because it measures the system, not xui.
 - **No `windows` types in the public API.** They may be private fields; callers
   only ever see xui types.
 - **xui owns its widgets.** Every widget is painted by xui itself; no backend
