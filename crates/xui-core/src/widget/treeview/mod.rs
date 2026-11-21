@@ -26,6 +26,7 @@ use super::scrollbar::{self, ScrollBar};
 use crate::app::Ui;
 use crate::backend::{NodeKind, NodeSpec, Result, WidgetId};
 use crate::geometry::{Point, Rect};
+use crate::motion::Animated;
 use crate::property::{Properties, Property, Value, node};
 
 mod bar;
@@ -35,6 +36,7 @@ mod icon;
 mod model;
 mod paint;
 mod place;
+mod reveal;
 
 #[cfg(test)]
 mod tests;
@@ -118,6 +120,7 @@ impl<M: 'static> TreeView<M> {
         let guides = Rc::new(Cell::new(true));
         let mappers = Rc::new(Mappers::new());
         let bar = Rc::new(ScrollBar::new(bar_control.id()));
+        let opening = Rc::new(Animated::new(1.0));
 
         {
             let state = Rc::clone(&state);
@@ -128,12 +131,19 @@ impl<M: 'static> TreeView<M> {
             let guides = Rc::clone(&guides);
             let theme = ui.theme_handle();
             let outline = control.selected_handle();
+            let opening = Rc::clone(&opening);
+            let time = ui.frame_time_handle();
             control.set_painter(Rc::new(move |canvas| {
+                let state = state.borrow();
+                let row = flatten::ROW.to_px(canvas.dpi()).value().max(1);
+                let reveal =
+                    reveal::active(&state, &opening, time.get(), row, canvas.bounds().height());
                 paint::paint(
                     canvas,
-                    &state.borrow(),
+                    &state,
                     &theme.get(),
                     paint::Options {
+                        reveal,
                         current: selected.get(),
                         hover: hover.get(),
                         enabled: enabled.get(),
@@ -166,6 +176,7 @@ impl<M: 'static> TreeView<M> {
                 tri_state: Rc::clone(&tri_state),
                 mappers: Rc::clone(&mappers),
                 bar: Rc::clone(&bar),
+                opening,
             };
             control.on_events(move |event| input.handle(event));
         }

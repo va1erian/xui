@@ -11,6 +11,7 @@ use std::rc::Rc;
 
 use super::icon::RowIcon;
 use super::model::{CheckState, NodeId, TreeModel, TreeRow};
+use super::reveal::Reveal;
 use crate::geometry::Rect;
 use crate::units::Dip;
 
@@ -91,6 +92,8 @@ pub(crate) struct State {
     pub(crate) source: Source,
     /// The first visible slot drawn, i.e. the scroll position.
     pub(crate) offset: usize,
+    /// The expand/collapse animation in flight, if any.
+    pub(crate) reveal: Option<Reveal>,
 }
 
 impl State {
@@ -105,6 +108,7 @@ impl State {
             rows,
             source: Source::Flat,
             offset: 0,
+            reveal: None,
         }
     }
 
@@ -122,6 +126,7 @@ impl State {
             rows,
             source: Source::Model(model),
             offset: 0,
+            reveal: None,
         }
     }
 
@@ -276,6 +281,12 @@ pub(crate) fn row_at(dpi: u32, y: i32, count: usize, offset: usize) -> Option<us
 /// Whether the row at `index` is shown: every ancestor row (the nearest
 /// preceding row at each smaller depth) must be expanded.
 pub(crate) fn is_visible(rows: &[FlatNode], index: usize) -> bool {
+    is_visible_with(rows, index, None)
+}
+
+/// [`is_visible`] with the row `open` counted as expanded: how the painter
+/// keeps a collapsing node's rows on screen until its animation ends.
+pub(crate) fn is_visible_with(rows: &[FlatNode], index: usize, open: Option<usize>) -> bool {
     let mut depth = rows[index].depth;
     let mut i = index;
     while depth > 0 {
@@ -292,7 +303,9 @@ pub(crate) fn is_visible(rows: &[FlatNode], index: usize) -> bool {
             }
         }
         match parent {
-            Some(p) if rows[p].expandable && rows[p].expanded => depth = parent_depth,
+            Some(p) if rows[p].expandable && (rows[p].expanded || open == Some(p)) => {
+                depth = parent_depth
+            }
             _ => return false,
         }
     }

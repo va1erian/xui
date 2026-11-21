@@ -9,10 +9,12 @@ use std::rc::Rc;
 use super::Mappers;
 use super::flatten::{self, FlatNode, State};
 use super::model::NodeId;
+use super::reveal;
 use crate::app::Ui;
 use crate::backend::{Event, WidgetId};
 use crate::geometry::Point;
 use crate::message::{Key, MouseButton};
+use crate::motion::{Animated, Motion};
 use crate::widget::scrollbar::ScrollBar;
 
 /// The shared handles an event mapper reads and writes.
@@ -27,6 +29,8 @@ pub(crate) struct Input<M: 'static> {
     pub(crate) tri_state: Rc<Cell<bool>>,
     pub(crate) mappers: Rc<Mappers<M>>,
     pub(crate) bar: Rc<ScrollBar>,
+    /// The expand/collapse progress the painter reads.
+    pub(crate) opening: Rc<Animated>,
 }
 
 impl<M: 'static> Input<M> {
@@ -248,16 +252,21 @@ impl<M: 'static> Input<M> {
 
     /// Expands or collapses the row at `index`, raising `on_toggle`.
     fn expand(&self, index: usize, expanded: bool) -> Option<M> {
-        let id = {
+        let (id, to) = {
             let mut state = self.state.borrow_mut();
+            let before = state.visible_len();
             if !state.set_expanded(index, expanded) {
                 return None;
             }
             let visible = self.visible_slots();
             state.clamp_offset(visible);
-            state.rows[index].id
+            let to = reveal::begin(&mut state, &self.opening, index, expanded, before);
+            (state.rows[index].id, to)
         };
         self.ui.invalidate(self.id);
+        if let Some(to) = to {
+            self.ui.animate(self.id, &self.opening, to, Motion::REVEAL);
+        }
         self.sync_bar();
         self.mappers
             .toggle
