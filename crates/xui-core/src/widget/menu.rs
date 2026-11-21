@@ -35,6 +35,7 @@ use crate::backend::{NodeKind, NodeSpec, Result, WidgetId};
 use crate::geometry::{Point, Rect};
 use crate::icon::IconRef;
 use crate::property::{Properties, Property, Value, node};
+use crate::widget::popup::Unroll;
 
 use model::Node;
 
@@ -131,6 +132,9 @@ struct View {
     pub(super) bar_open: Option<usize>,
     /// One entry per open popup, outermost first.
     pub(super) levels: Vec<Level>,
+    /// The popups rolling shut, by nesting depth: they are no longer in
+    /// `levels`, but their painters still need what they showed.
+    pub(super) closing: Vec<(usize, Level)>,
 }
 
 /// The path and highlight of one open popup.
@@ -161,6 +165,8 @@ struct Runtime<M: 'static> {
     pub(super) open: RefCell<Vec<Open>>,
     /// The pooled popup nodes, indexed by nesting depth.
     pub(super) pool: RefCell<Vec<WidgetId>>,
+    /// How each pooled node opens and closes, parallel to `pool`.
+    pub(super) unrolls: RefCell<Vec<Rc<Unroll>>>,
     /// Maps a chosen command to an app message.
     pub(super) on_select: SelectMapper<M>,
     /// Maps a check/radio toggle to an app message.
@@ -181,6 +187,7 @@ impl<M: 'static> Runtime<M> {
             view: Rc::new(RefCell::new(View::default())),
             open: RefCell::new(Vec::new()),
             pool: RefCell::new(Vec::new()),
+            unrolls: RefCell::new(Vec::new()),
             on_select: RefCell::new(None),
             on_toggle: RefCell::new(None),
             bar: Cell::new(None),
@@ -266,6 +273,7 @@ impl<M: 'static> Menu<M> {
                 break;
             };
             self.rt.pool.borrow_mut().push(control.id());
+            self.rt.unrolls.borrow_mut().push(Unroll::new());
             {
                 let model = Rc::clone(&self.rt.model);
                 let view = Rc::clone(&self.rt.view);

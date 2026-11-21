@@ -57,7 +57,12 @@ pub(super) fn popup(
 ) {
     let bounds = canvas.bounds();
     popup::paint(canvas, theme, theme.raised);
-    let Some(level) = view.levels.get(depth) else {
+    let closing = view.closing.iter().find(|(at, _)| *at == depth);
+    let Some(level) = view
+        .levels
+        .get(depth)
+        .or_else(|| closing.map(|(_, level)| level))
+    else {
         return;
     };
     let dpi = canvas.dpi();

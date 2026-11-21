@@ -16,6 +16,7 @@ mod keyboard;
 mod opening;
 mod painting;
 mod surfaces;
+mod unroll;
 
 struct TestApp(Rc<RefCell<Vec<u32>>>);
 
