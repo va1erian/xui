@@ -5,6 +5,7 @@
 
 use super::flatten::{self, State};
 use super::model::{CheckState, NodeId};
+use super::reveal::Active;
 use crate::Color;
 use crate::backend::{Canvas, TextStyle};
 use crate::geometry::{Point, Rect};
@@ -21,6 +22,8 @@ pub(crate) struct Options {
     pub(crate) checkboxes: bool,
     pub(crate) outline: bool,
     pub(crate) guides: bool,
+    /// The expand/collapse animation to paint, if one is in flight.
+    pub(crate) reveal: Option<Active>,
 }
 
 /// Paints `state` into `canvas` from semantic theme tokens.
@@ -39,17 +42,41 @@ pub(crate) fn paint(canvas: &mut dyn Canvas, state: &State, theme: &Theme, optio
             0
         };
     let mut slot = 0;
+    let mut node_bottom = bounds.top;
+    let open = options.reveal.map(|reveal| reveal.node);
     for (index, node) in state.rows.iter().enumerate() {
-        if !flatten::is_visible(&state.rows, index) {
+        if !flatten::is_visible_with(&state.rows, index, open) {
             continue;
+        }
+        if open == Some(index) {
+            node_bottom = bounds.top + row_height * (slot as i32 + 1 - state.offset as i32);
         }
         if slot < state.offset {
             slot += 1;
             continue;
         }
-        let top = bounds.top + row_height * (slot - state.offset) as i32;
+        let mut top = bounds.top + row_height * (slot - state.offset) as i32;
         slot += 1;
-        if top >= bounds.bottom {
+        let mut clipped = false;
+        if let Some(reveal) = options.reveal {
+            if reveal.contains(index) {
+                // Final positions, shown through the band under the node.
+                let band = reveal.band_height(row_height);
+                if top >= bounds.bottom || top >= node_bottom + band {
+                    continue;
+                }
+                canvas.push_clip(Rect::new(
+                    bounds.left,
+                    node_bottom,
+                    bounds.right,
+                    node_bottom + band,
+                ));
+                clipped = true;
+            } else if reveal.after(index) {
+                top -= reveal.shift(row_height);
+            }
+        }
+        if top >= bounds.bottom && !clipped {
             break;
         }
         let rect = Rect::new(bounds.left, top, right, top + row_height);
@@ -90,7 +117,12 @@ pub(crate) fn paint(canvas: &mut dyn Canvas, state: &State, theme: &Theme, optio
 
         let level = flatten::level_x(dpi, bounds.left, node.depth);
         if node.expandable {
-            draw_chevron(canvas, dpi, level, top, row_height, node.expanded, color);
+            let amount = match options.reveal {
+                Some(reveal) if open == Some(index) => reveal.amount(),
+                _ if node.expanded => 1.0,
+                _ => 0.0,
+            };
+            draw_chevron(canvas, dpi, level, top, row_height, amount, color);
         }
         if options.checkboxes {
             let square = flatten::checkbox_rect(dpi, bounds.left, top, node.depth);
@@ -116,6 +148,9 @@ pub(crate) fn paint(canvas: &mut dyn Canvas, state: &State, theme: &Theme, optio
         );
         let style = TextStyle::new(color, flatten::TEXT).middle();
         canvas.draw_text(&node.label, label, &style);
+        if clipped {
+            canvas.pop_clip();
+        }
     }
 
     if options.outline {
@@ -140,24 +175,29 @@ fn draw_chevron(
     level: i32,
     top: i32,
     row_height: i32,
-    expanded: bool,
+    amount: f32,
     color: crate::Color,
 ) {
     let chevron = flatten::chevron_px(dpi);
     let (cx, cy) = (level + chevron / 2, top + row_height / 2);
     let half = (chevron / 5).max(2);
-    let triangle = if expanded {
+    let triangle = if amount >= 1.0 {
         [
             Point::new(cx - half, cy - half),
             Point::new(cx + half, cy - half),
             Point::new(cx, cy + half),
         ]
     } else {
-        [
-            Point::new(cx - half, cy - half),
-            Point::new(cx - half, cy + half),
-            Point::new(cx + half, cy),
-        ]
+        let collapsed = [(-half, -half), (-half, half), (half, 0)];
+        // Turn the right-pointing triangle a quarter turn clockwise.
+        let (sin, cos) = (amount.max(0.0) * std::f32::consts::FRAC_PI_2).sin_cos();
+        collapsed.map(|(x, y)| {
+            let (x, y) = (x as f32, y as f32);
+            Point::new(
+                cx + (x * cos - y * sin).round() as i32,
+                cy + (x * sin + y * cos).round() as i32,
+            )
+        })
     };
     canvas.fill_polygon(&triangle, color);
 }

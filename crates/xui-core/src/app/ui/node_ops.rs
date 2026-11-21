@@ -35,6 +35,7 @@ impl<M: 'static> Ui<M> {
     /// `Core`), and leaving it in the router would keep the whole window alive.
     pub fn destroy(&self, id: WidgetId) {
         self.core.router().unregister(id);
+        self.core.motion().cancel(id);
         self.core.set_hidden(id, false);
         self.core.set_disabled(id, false);
         self.core.backend().destroy(id);

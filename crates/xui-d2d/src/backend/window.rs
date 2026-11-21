@@ -74,6 +74,7 @@ impl Shared {
         self.timers
             .borrow_mut()
             .retain(|_, owner| *owner != window.raw());
+        self.forget_frames(window);
         self.windows.borrow_mut().remove(&window.raw())
     }
 

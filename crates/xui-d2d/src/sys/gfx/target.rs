@@ -67,6 +67,13 @@ impl Target {
                 width: width.max(1) as u32,
                 height: height.max(1) as u32,
             },
+            // The default present's wait for vblank is what coalesces repaints
+            // driven by a 1000 Hz mouse (hover, drags) to the display rate;
+            // presenting immediately would remove that throttle. The cost: the
+            // wait is on the PRIMARY monitor's vblank, so with a slower primary
+            // a window on a faster monitor is capped at the primary's rate
+            // (`examples/frame_pacing.rs`: 240/160/60 fps on the matching
+            // monitors with a 240 Hz primary).
             presentOptions: D2D1_PRESENT_OPTIONS_RETAIN_CONTENTS,
         };
         let rt = factory::with(|f| {

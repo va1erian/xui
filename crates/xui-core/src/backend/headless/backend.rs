@@ -304,12 +304,30 @@ impl Backend for HeadlessBackend {
         self.state.borrow().prefers_reduced_motion
     }
 
-    fn set_timer(&self, _window: WindowId, _millis: u32) -> TimerId {
-        let mut state = self.state.borrow_mut();
-        let id = state.next_timer;
-        state.next_timer += 1;
-        TimerId(id as usize)
+    fn now(&self) -> Option<std::time::Duration> {
+        self.state.borrow().now
     }
 
-    fn kill_timer(&self, _window: WindowId, _id: TimerId) {}
+    fn request_frame(&self, _window: WindowId) -> bool {
+        let mut state = self.state.borrow_mut();
+        if state.frame_pacing {
+            state.frame_requests += 1;
+        }
+        state.frame_pacing
+    }
+
+    fn set_timer(&self, _window: WindowId, _millis: u32) -> TimerId {
+        let mut state = self.state.borrow_mut();
+        if !state.timers_available {
+            return TimerId(0);
+        }
+        let id = TimerId(state.next_timer as usize);
+        state.next_timer += 1;
+        state.timers.push(id);
+        id
+    }
+
+    fn kill_timer(&self, _window: WindowId, id: TimerId) {
+        self.state.borrow_mut().timers.retain(|timer| *timer != id);
+    }
 }

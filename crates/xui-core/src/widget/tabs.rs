@@ -9,23 +9,25 @@
 //! the app's message.
 
 mod pages;
+mod slide;
+mod strip;
 #[cfg(test)]
 mod tests;
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
+use self::slide::Slide;
+use self::strip::{Underline, paint_strip, select_tab, strip_event};
 use super::Panel;
 use super::control::Control;
 use crate::app::Ui;
 use crate::arrange::Mounted;
-use crate::backend::{Canvas, Event, NodeKind, NodeSpec, Result, TextStyle, WidgetId};
-use crate::geometry::{Point, Rect};
+use crate::backend::{NodeKind, NodeSpec, Result, TextStyle, WidgetId};
+use crate::geometry::Rect;
 use crate::layout::Dock;
-use crate::message::MouseButton;
 use crate::property::{Properties, Property, Value, node};
-use crate::theme::Theme;
-use crate::theme::look::{self, backdrop};
+use crate::theme::look::backdrop;
 use crate::units::Dip;
 
 /// The strip's height.
@@ -51,6 +53,10 @@ struct Shared<M: 'static> {
     tabs: RefCell<Vec<Rect>>,
     selected: Cell<usize>,
     hover: Cell<Option<usize>>,
+    /// Where the selected tab's accent underline is, travelling between tabs.
+    underline: Underline,
+    /// The scroll from the previous page to the selected one.
+    slide: Slide,
     on_change: ChangeMapper<M>,
 }
 
@@ -82,6 +88,8 @@ impl<M: 'static> Tabs<M> {
             tabs: RefCell::new(Vec::new()),
             selected: Cell::new(0),
             hover: Cell::new(None),
+            underline: Underline::new(),
+            slide: Slide::new(),
             on_change: RefCell::new(None),
         });
         {
@@ -93,8 +101,9 @@ impl<M: 'static> Tabs<M> {
         {
             let shared = Rc::clone(&shared);
             let theme = ui.theme_handle();
+            let time = ui.frame_time_handle();
             strip.set_painter(Rc::new(move |canvas| {
-                paint_strip(&shared, canvas, theme.get())
+                paint_strip(&shared, canvas, theme.get(), time.get())
             }));
         }
         {
@@ -160,6 +169,8 @@ impl<M: 'static> Tabs<M> {
         if index >= s.pages.borrow().len() {
             return None;
         }
+        // Page indices are about to shift under a scroll in flight.
+        s.slide.end(&self.scoped, s.id);
         s.titles.borrow_mut().remove(index);
         let children = s.pages.borrow_mut().remove(index);
         for &child in &children {
@@ -201,11 +212,7 @@ impl<M: 'static> Tabs<M> {
 
     /// Selects `index` programmatically without raising the change event.
     pub fn select(&self, index: usize) {
-        if index >= self.shared.pages.borrow().len() || self.shared.selected.get() == index {
-            return;
-        }
-        self.shared.selected.set(index);
-        relayout(&self.scoped, &self.shared);
+        select_tab(&self.scoped, &self.shared, index);
     }
 
     /// Moves/resizes the container and re-lays the pages out.
@@ -260,27 +267,29 @@ impl<M: 'static> Properties for Tabs<M> {
     }
 }
 
-/// Carves the strip off the top, sizes the tabs and places the selected page.
+/// [`lay_out`], then puts the underline under the selected tab at once.
 fn relayout<M>(ui: &Ui<M>, s: &Shared<M>) {
+    if let Some(tab) = lay_out(ui, s) {
+        s.underline.settle(tab);
+    }
+}
+
+/// Carves the strip off the top, sizes the tabs and places the selected page.
+/// Returns the selected tab's rectangle, or `None` when the container has no
+/// bounds yet or there is no such tab.
+fn lay_out<M>(ui: &Ui<M>, s: &Shared<M>) -> Option<Rect> {
     // Visibility does not depend on bounds, so apply it even while the
     // container has none.
     let selected = s.selected.get();
+    // A page scrolling out stays shown until it is gone.
+    let leaving = s.slide.outgoing();
     for (index, children) in s.pages.borrow().iter().enumerate() {
         for &child in children {
-            ui.set_visible(child, index == selected);
+            ui.set_visible(child, index == selected || Some(index) == leaving);
         }
     }
-    let node = ui.bounds(s.id);
-    if node.is_empty() {
-        return;
-    }
-    // Children are parented to the container, so they are placed in its own
-    // coordinates: start the strip and page at the origin.
-    let bounds = Rect::from_size(node.size());
+    let (strip, page) = areas(ui, s)?;
     let dpi = ui.dpi();
-    let areas = Dock::new().top(STRIP).split(bounds, dpi);
-    let strip = areas.top.unwrap_or(bounds);
-    let page = areas.fill;
 
     let style = TextStyle::new(ui.theme().text, TEXT);
     let padding = PADDING.to_px(dpi).value().max(0);
@@ -294,115 +303,36 @@ fn relayout<M>(ui: &Ui<M>, s: &Shared<M>) {
         x += width;
     }
     drop(titles);
+    let selected_tab = tabs.get(selected).copied();
     *s.tabs.borrow_mut() = tabs;
 
     let mut moves: Vec<(WidgetId, Rect)> = vec![(s.strip_id, strip)];
-    if let Some(children) = s.pages.borrow().get(selected) {
+    if leaving.is_none()
+        && let Some(children) = s.pages.borrow().get(selected)
+    {
         moves.extend(children.iter().map(|&child| (child, page)));
     }
     ui.apply_moves(&moves);
+    if leaving.is_some() {
+        slide::keep(ui, s);
+    }
     ui.invalidate(s.strip_id);
+    selected_tab
 }
 
-/// Selects `index`, re-lays out and raises the change event.
-fn choose<M>(ui: &Ui<M>, s: &Shared<M>, index: usize) {
-    if index >= s.pages.borrow().len() || s.selected.get() == index {
-        return;
-    }
-    s.selected.set(index);
-    s.hover.set(None);
-    relayout(ui, s);
-    let mapped = s.on_change.borrow().as_ref().and_then(|f| f(index));
-    if let Some(msg) = mapped {
-        ui.emit(msg);
-    }
-}
-
-/// The tab under `x` (the strip's own coordinate).
-fn tab_at<M>(s: &Shared<M>, x: i32) -> Option<usize> {
-    s.tabs
-        .borrow()
-        .iter()
-        .position(|rect| x >= rect.left && x < rect.right)
-}
-
-/// Paints the strip: each tab's background, title and the selected underline.
-fn paint_strip<M>(s: &Shared<M>, canvas: &mut dyn Canvas, theme: Theme) {
-    let bounds = canvas.bounds();
-    look::band(canvas, &theme);
-    // Tab rectangles are in the strip's own coordinates; a painter draws in the
-    // canvas's surface coordinates, whose origin is the strip's top-left.
-    let (ox, oy) = (bounds.left, bounds.top);
-    // The tab was sized with this padding on both sides of the title.
-    let padding = PADDING.to_px(canvas.dpi()).value().max(0);
-    let titles = s.titles.borrow();
-    let tabs = s.tabs.borrow();
-    for (index, local) in tabs.iter().enumerate() {
-        let rect = local.offset(ox, oy);
-        let selected = index == s.selected.get();
-        if selected {
-            look::face(canvas, rect, 0.0, theme.raised, &theme);
-        } else if s.hover.get() == Some(index) {
-            canvas.fill_rect(rect, theme.hover);
-        }
-        let color = if selected {
-            theme.text
-        } else {
-            theme.text_secondary
-        };
-        let style = TextStyle::new(color, TEXT).middle();
-        let text = Rect::new(
-            rect.left + padding,
-            rect.top,
-            rect.right,
-            (rect.bottom - ACCENT).max(rect.top),
-        );
-        canvas.draw_text(&titles[index], text, &style);
-        if selected {
-            canvas.fill_rect(
-                Rect::new(rect.left, rect.bottom - ACCENT, rect.right, rect.bottom),
-                theme.accent,
-            );
-        }
-    }
-    drop(tabs);
-    drop(titles);
-    canvas.draw_line(
-        Point::new(bounds.left, bounds.bottom - 1),
-        Point::new(bounds.right, bounds.bottom - 1),
-        theme.border,
-        1.0,
-    );
-}
-
-/// Handles strip input: hover highlights, a click selects.
-fn strip_event<M>(s: &Shared<M>, ui: &Ui<M>, event: &Event) -> Option<M> {
-    if ui.is_design_mode() && event.is_input() {
+/// The strip and the page area, in the container's own coordinates (its
+/// children are placed in them), or `None` while the container has no bounds.
+fn areas<M>(ui: &Ui<M>, s: &Shared<M>) -> Option<(Rect, Rect)> {
+    let node = ui.bounds(s.id);
+    if node.is_empty() {
         return None;
     }
-    match event {
-        Event::MouseMove { x, .. } => {
-            let hover = tab_at(s, *x);
-            if s.hover.get() != hover {
-                s.hover.set(hover);
-                ui.invalidate(s.strip_id);
-            }
-        }
-        Event::MouseLeave => {
-            if s.hover.replace(None).is_some() {
-                ui.invalidate(s.strip_id);
-            }
-        }
-        Event::MouseUp {
-            x,
-            button: MouseButton::Left,
-            ..
-        } => {
-            if let Some(index) = tab_at(s, *x) {
-                choose(ui, s, index);
-            }
-        }
-        _ => {}
-    }
-    None
+    let bounds = Rect::from_size(node.size());
+    let areas = Dock::new().top(STRIP).split(bounds, ui.dpi());
+    Some((areas.top.unwrap_or(bounds), areas.fill))
+}
+
+/// The area the selected page fills.
+fn page_area<M>(ui: &Ui<M>, s: &Shared<M>) -> Option<Rect> {
+    areas(ui, s).map(|(_, page)| page)
 }

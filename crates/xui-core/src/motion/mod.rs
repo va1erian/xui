@@ -6,9 +6,9 @@
 //! This is the backend-independent foundation of animation. It computes values;
 //! it does not draw, schedule or own a timer, and it never reads the system
 //! clock, so it uses nothing that is unavailable on `wasm32` and runs the same
-//! in a headless test. What moves a widget (per-node opacity and transform, a
-//! frame driver) builds on it separately. See `docs/motion.md` for what exists
-//! and what does not.
+//! in a headless test. An [`Animated`] value is what a widget shares with its
+//! painter, and [`Ui::animate`](crate::Ui::animate) starts one and schedules
+//! its frames. See `docs/motion.md` for what exists and what does not.
 //!
 //! [`Backend::prefers_reduced_motion`](crate::Backend::prefers_reduced_motion)
 //! and [`Ui::prefers_reduced_motion`](crate::Ui::prefers_reduced_motion) carry
@@ -30,10 +30,12 @@
 //! assert!(slide.is_finished(Duration::from_millis(350)));
 //! ```
 
+mod animated;
 mod clock;
 mod easing;
 mod tween;
 
+pub use animated::{Animated, Motion};
 pub use clock::{Clock, ManualClock};
 pub use easing::{DEFAULT_EXPONENT, Easing};
 pub use tween::Tween;

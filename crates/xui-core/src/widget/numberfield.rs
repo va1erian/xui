@@ -6,6 +6,7 @@ use crate::backend::{Canvas, Cursor, Event, NodeKind, NodeSpec, Result, TextStyl
 use crate::color::Color;
 use crate::geometry::{Point, Rect};
 use crate::message::{Key, MouseButton};
+use crate::motion::{Animated, Motion};
 use crate::property::{Properties, Property, Value, node};
 use crate::theme::look;
 use crate::units::Dip;
@@ -70,6 +71,12 @@ struct State {
     max: Cell<f64>,
     step: Cell<f64>,
     text: RefCell<String>,
+    /// The text a step rolls away from, rewritten on each step.
+    old_text: RefCell<String>,
+    /// How far the roll has come, from 0 to 1.
+    roll: Rc<Animated>,
+    /// `1.0` when the roll was an increment (text moves up), `-1.0` a decrement.
+    roll_dir: Cell<f32>,
     caret: Cell<usize>,
     focused: Cell<bool>,
     enabled: Cell<bool>,
@@ -109,6 +116,9 @@ impl<M: 'static> NumberField<M> {
             max: Cell::new(max),
             step: Cell::new(if step > 0.0 { step } else { DEFAULT_STEP }),
             text: RefCell::new(min.to_string()),
+            old_text: RefCell::new(String::new()),
+            roll: Rc::new(Animated::new(1.0)),
+            roll_dir: Cell::new(1.0),
             caret: Cell::new(min.to_string().chars().count()),
             focused: Cell::new(false),
             enabled: Cell::new(true),
@@ -120,6 +130,7 @@ impl<M: 'static> NumberField<M> {
             let theme = ui.theme_handle();
             let selected = control.selected_handle();
             let ui = ui.clone();
+            let time = ui.frame_time_handle();
             control.set_painter(Rc::new(move |canvas| {
                 let theme = theme.get();
                 let b = canvas.bounds();
@@ -148,8 +159,27 @@ impl<M: 'static> NumberField<M> {
                 let tr = Rect::new(b.left + pad, b.top, (sl - pad).max(b.left + pad), b.bottom);
                 let style = TextStyle::new(color, TEXT_SIZE).middle();
                 let value = s.text.borrow();
-                canvas.draw_text(&value, tr, &style);
-                if s.focused.get() {
+                let now = time.get();
+                let rolling = s.roll.is_running(now);
+                if rolling {
+                    // The old text leaves one way as the new one enters from
+                    // the other, both clipped to the text rectangle.
+                    let height = tr.height() as f32;
+                    let progress = s.roll.value(now);
+                    let dir = s.roll_dir.get();
+                    let shifted = |offset: f32| {
+                        let dy = offset.round() as i32;
+                        Rect::new(tr.left, tr.top + dy, tr.right, tr.bottom + dy)
+                    };
+                    canvas.push_clip(tr);
+                    let old = s.old_text.borrow();
+                    canvas.draw_text(&old, shifted(-dir * height * progress), &style);
+                    canvas.draw_text(&value, shifted(dir * height * (1.0 - progress)), &style);
+                    canvas.pop_clip();
+                } else {
+                    canvas.draw_text(&value, tr, &style);
+                }
+                if s.focused.get() && !rolling {
                     let prefix: String = value.chars().take(s.caret.get()).collect();
                     let x = (tr.left + ui.measure_text(&prefix, &style, dpi).width).min(tr.right);
                     canvas.draw_line(Point::new(x, tr.top), Point::new(x, tr.bottom), color, 1.0);
@@ -183,7 +213,20 @@ impl<M: 'static> NumberField<M> {
                     let parsed = raw.parse::<f64>().ok().filter(|v| v.is_finite());
                     apply(parsed.map_or(s.value.get(), |v| s.clamp(v)))
                 };
-                let step_by = |delta: f64| apply(s.clamp(s.value.get() + delta * s.step.get()));
+                let step_by = |delta: f64| {
+                    {
+                        let mut old = s.old_text.borrow_mut();
+                        old.clear();
+                        old.push_str(&s.text.borrow());
+                    }
+                    let changed = apply(s.clamp(s.value.get() + delta * s.step.get()));
+                    if changed {
+                        s.roll_dir.set(if delta > 0.0 { 1.0 } else { -1.0 });
+                        s.roll.jump(0.0);
+                        ui.animate(id, &s.roll, 1.0, Motion::REVEAL);
+                    }
+                    changed
+                };
                 match event {
                     Event::SetFocus => {
                         s.focused.set(true);
@@ -332,81 +375,4 @@ impl<M: 'static> Properties for NumberField<M> {
     }
 }
 #[cfg(test)]
-mod tests {
-    use super::NumberField;
-    use crate::app::{Core, Ui};
-    use crate::backend::headless::HeadlessBackend;
-    use crate::backend::{Backend, Event, PlatformSpec};
-    use crate::geometry::Rect;
-    use crate::message::{Key, Modifiers, MouseButton};
-    use std::cell::RefCell;
-    use std::rc::Rc;
-
-    fn harness() -> (Rc<Core<()>>, Ui<()>) {
-        let backend = Rc::new(HeadlessBackend::new());
-        let window = backend.open_window(&PlatformSpec::new("test")).unwrap();
-        let core = Core::new(backend, window);
-        (Rc::clone(&core), Ui::new(Rc::clone(&core)))
-    }
-
-    fn number(ui: &Ui<()>, max: f64) -> NumberField<()> {
-        NumberField::new(ui, Rect::new(0, 0, 160, 28), 0.0, max, 5.0).unwrap()
-    }
-    fn record(log: &Rc<RefCell<Vec<f64>>>, value: f64) -> Option<()> {
-        log.borrow_mut().push(value);
-        None
-    }
-    fn key(k: Key) -> Event {
-        Event::KeyDown {
-            key: k,
-            modifiers: Modifiers::NONE,
-            repeat: 1,
-            system: false,
-        }
-    }
-    fn down(x: i32, y: i32) -> Event {
-        Event::MouseDown {
-            x,
-            y,
-            button: MouseButton::Left,
-            modifiers: Modifiers::NONE,
-        }
-    }
-
-    #[test]
-    fn clicking_the_plus_stepper_commits_the_next_value() {
-        let (core, ui) = harness();
-        let seen = Rc::new(RefCell::new(Vec::new()));
-        let log = Rc::clone(&seen);
-        let field = number(&ui, 100.0).on_commit(move |v| record(&log, v));
-        core.router().dispatch(field.id(), &down(150, 5));
-        assert_eq!((field.value(), seen.borrow().clone()), (5.0, vec![5.0]));
-    }
-
-    #[test]
-    fn typing_then_return_commits_and_clamps_to_max() {
-        let (core, ui) = harness();
-        let seen = Rc::new(RefCell::new(Vec::new()));
-        let log = Rc::clone(&seen);
-        let field = number(&ui, 50.0).on_commit(move |v| record(&log, v));
-        core.router().dispatch(field.id(), &Event::SetFocus);
-        for c in ['9', '9'] {
-            core.router().dispatch(field.id(), &Event::Char(c));
-        }
-        core.router().dispatch(field.id(), &key(Key::RETURN));
-        assert_eq!((field.value(), seen.borrow().clone()), (50.0, vec![50.0]));
-    }
-
-    #[test]
-    fn set_value_raises_nothing() {
-        let (_core, ui) = harness();
-        let seen = Rc::new(RefCell::new(Vec::new()));
-        let (a, b) = (Rc::clone(&seen), Rc::clone(&seen));
-        let field = number(&ui, 100.0)
-            .on_change(move |v| record(&a, v))
-            .on_commit(move |v| record(&b, v));
-        field.set_value(42.0);
-        assert_eq!(field.value(), 42.0);
-        assert!(seen.borrow().is_empty(), "set_value raised nothing");
-    }
-}
+mod tests;

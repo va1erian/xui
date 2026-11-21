@@ -10,9 +10,10 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
+use std::time::Duration;
 
 use super::dialog::{FileDialogOutcome, FileDialogRequest};
-use super::event::Event;
+use super::event::{Event, TimerId};
 use super::ids::{WidgetId, WindowId};
 use super::node::{NodeKind, ParentRef};
 use super::{Painter, PlatformSpec};
@@ -22,6 +23,7 @@ use crate::theme::Theme;
 
 mod backend;
 mod canvas;
+mod frames;
 #[cfg(test)]
 mod tests;
 mod text;
@@ -95,6 +97,23 @@ struct State {
     ///
     /// [`Backend::prefers_reduced_motion`]: super::Backend::prefers_reduced_motion
     prefers_reduced_motion: bool,
+    /// The answer [`Backend::now`] gives: `None` until a test scripts a time.
+    ///
+    /// [`Backend::now`]: super::Backend::now
+    now: Option<Duration>,
+    /// Whether [`Backend::request_frame`] is honoured (the default) or
+    /// refused, like a backend with no frame pacing.
+    ///
+    /// [`Backend::request_frame`]: super::Backend::request_frame
+    frame_pacing: bool,
+    /// How many frames were asked for.
+    frame_requests: u32,
+    /// The timers started and not yet killed.
+    timers: Vec<TimerId>,
+    /// Whether [`Backend::set_timer`] can start one.
+    ///
+    /// [`Backend::set_timer`]: super::Backend::set_timer
+    timers_available: bool,
 }
 
 impl HeadlessBackend {
@@ -123,6 +142,11 @@ impl HeadlessBackend {
                 file_dialog: FileDialogOutcome::Declined,
                 file_dialog_request: None,
                 prefers_reduced_motion: false,
+                now: None,
+                frame_pacing: true,
+                frame_requests: 0,
+                timers: Vec::new(),
+                timers_available: true,
             }),
         }
     }

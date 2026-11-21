@@ -86,6 +86,7 @@ impl Backend for WinitBackend {
             .timers
             .borrow_mut()
             .retain(|_, (owner, _, _)| *owner != window);
+        self.shared.frames.borrow_mut().forget(window);
     }
 
     fn set_window_title(&self, window: WindowId, title: &str) {
@@ -160,6 +161,7 @@ impl Backend for WinitBackend {
         node.text = spec.text.clone();
         node.popup = spec.popup;
         node.contained = spec.contained;
+        node.steady = spec.steady;
         node.tab_stop = spec.tab_stop;
         node.wants_tab = spec.wants_tab;
         self.shared.nodes.borrow_mut().insert(id, node);
@@ -408,6 +410,11 @@ impl Backend for WinitBackend {
     }
 
     fn set_timer(&self, window: WindowId, millis: u32) -> TimerId {
+        // A closed window has no sink left to tick, and nothing would ever
+        // stop the timer.
+        if !self.shared.windows.borrow().contains_key(&window.raw()) {
+            return TimerId(0);
+        }
         let id = self.shared.next_timer.get();
         self.shared.next_timer.set(id + 1);
         let period = std::time::Duration::from_millis(u64::from(millis.max(1)));
@@ -416,6 +423,31 @@ impl Backend for WinitBackend {
             .borrow_mut()
             .insert(id, (window, Instant::now() + period, period));
         TimerId(id)
+    }
+
+    fn now(&self) -> Option<std::time::Duration> {
+        Some(self.shared.origin.elapsed())
+    }
+
+    fn request_frame(&self, window: WindowId) -> bool {
+        if !self.shared.windows.borrow().contains_key(&window.raw()) {
+            return false;
+        }
+        // Read at each request so a window dragged to another monitor follows
+        // that monitor's rate.
+        let millihertz = self
+            .window_handle(window, |handle| {
+                handle
+                    .current_monitor()
+                    .and_then(|monitor| monitor.refresh_rate_millihertz())
+            })
+            .flatten();
+        self.shared.frames.borrow_mut().request(
+            window,
+            Instant::now(),
+            super::frames::refresh_period(millihertz),
+        );
+        true
     }
 
     fn kill_timer(&self, _window: WindowId, id: TimerId) {

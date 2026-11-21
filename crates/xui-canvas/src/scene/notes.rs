@@ -206,6 +206,21 @@ impl Scene {
         true
     }
 
+    /// Marks `id`'s place stale after `event` was delivered to it, when the
+    /// event is one that can change how a node looks (see
+    /// [`event_marks_target`]) and the node did not promise otherwise
+    /// ([`NodeSpec::steady`](xui_core::backend::NodeSpec::steady)). Returns
+    /// whether anything was marked.
+    pub(crate) fn mark_after(&mut self, id: WidgetId, event: &xui_core::backend::Event) -> bool {
+        if id.is_none() || !event_marks_target(event) {
+            return false;
+        }
+        if self.get(id).is_some_and(|node| node.steady) {
+            return false;
+        }
+        self.invalidate(id)
+    }
+
     /// A node asked for `rect`, in its own coordinates, to be repainted. The
     /// rectangle is honoured as given, even where it leaves the node's bounds
     /// (a painter that draws far outside its node says so this way); it is
@@ -234,7 +249,10 @@ impl Scene {
 /// focus change, a capture change or the pointer leaving. The backends mark the
 /// target's place stale after delivering one, whether or not the node reported
 /// the event handled, so a widget that changes its paint and forgets to
-/// invalidate cannot leave stale pixels behind.
+/// invalidate cannot leave stale pixels behind. A node created
+/// [`steady`](xui_core::backend::NodeSpec::steady) is exempt: a modal scrim
+/// spans the window, and marking it each time the pointer moves off it onto a
+/// button would repaint the whole window.
 ///
 /// "Handled" is not a reliable signal: a host reports it only when the widget's
 /// mapper returned a message, and a widget that repaints in response to a key

@@ -129,3 +129,21 @@ fn a_backend_that_leaves_reduced_motion_alone_reports_no_preference() {
     let backend = DeferredBackend { dpi: Cell::new(96) };
     assert!(!backend.prefers_reduced_motion());
 }
+
+#[test]
+fn a_backend_that_implements_no_clock_and_no_frames_gets_instant_changes() {
+    use crate::motion::{Animated, Motion};
+
+    // `DeferredBackend` leaves `now` and `request_frame` at their defaults.
+    let backend: Rc<dyn Backend> = Rc::new(DeferredBackend { dpi: Cell::new(96) });
+    let window = backend.open_window(&PlatformSpec::new("plain")).unwrap();
+    assert_eq!(backend.now(), None);
+    assert!(!backend.request_frame(window));
+
+    let core: Rc<Core<u32>> = Core::new(Rc::clone(&backend), window);
+    let ui = Ui::new(core);
+    assert!(!ui.animations());
+    let value = Rc::new(Animated::new(0.0));
+    ui.animate(WidgetId::from_raw(1), &value, 1.0, Motion::TRAVEL);
+    assert_eq!(value.value(ui.frame_time()), 1.0);
+}

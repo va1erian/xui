@@ -139,6 +139,10 @@ pub enum Event {
         /// The timer that fired.
         id: TimerId,
     },
+    /// The frame asked for with
+    /// [`Backend::request_frame`](super::Backend::request_frame) is due: the
+    /// front layer advances what is animating and repaints it.
+    Frame,
     /// The window moved to a monitor with a different DPI.
     ///
     /// `dpi` is the new dots-per-inch (96 = 100%). A native backend that can

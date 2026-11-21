@@ -36,13 +36,13 @@ pub(super) fn set_open<M: 'static>(
         return;
     }
     if want {
-        ui.apply_moves(&[(popup, popup_rect(ui.bounds(field), ui.dpi(), s.items.len()))]);
-    }
-    ui.set_visible(popup, want);
-    if want {
+        let rect = popup_rect(ui.bounds(field), ui.dpi(), s.items.len());
+        s.unroll.open(ui, popup, rect, true);
         // The popup is a sibling created before the widgets below it, so raise
         // it above them or the list draws behind them.
         ui.raise(popup);
+    } else {
+        s.unroll.close(ui, popup, || {});
     }
     ui.invalidate(field);
     ui.invalidate(popup);
@@ -180,7 +180,8 @@ pub(super) fn popup_event<M: 'static>(
     popup: WidgetId,
     event: &Event,
 ) -> Option<M> {
-    if (ui.is_design_mode() && event.is_input()) || !s.enabled.get() {
+    // A list rolling shut is already closed: it takes no input.
+    if (ui.is_design_mode() && event.is_input()) || !s.enabled.get() || !s.open.get() {
         return None;
     }
     if let Event::MouseMove { y, .. } = event {

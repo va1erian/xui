@@ -13,6 +13,7 @@ use crate::backend::{Event, NodeKind, NodeSpec, Result, TextStyle};
 use crate::geometry::Rect;
 use crate::icon::{IconRef, draw_icon};
 use crate::message::{Key, MouseButton};
+use crate::motion::{Animated, Motion};
 use crate::property::{Properties, Property, Value, node};
 use crate::theme::look::{self, backdrop, face};
 use crate::units::Dip;
@@ -52,6 +53,9 @@ pub struct Button<M: 'static> {
     icon: Rc<Cell<Option<IconRef>>>,
     on_click: ClickMapper<M>,
     primary: Rc<Cell<bool>>,
+    /// How much of the hover colour is on the face: 1 under the pointer,
+    /// easing to 0 once it leaves.
+    warm: Rc<Animated>,
 }
 
 impl<M: 'static> Button<M> {
@@ -63,6 +67,10 @@ impl<M: 'static> Button<M> {
         let icon = Rc::new(Cell::new(None));
         let on_click: ClickMapper<M> = Rc::new(RefCell::new(None));
         let primary = Rc::new(Cell::new(false));
+        // How much of the pressed colour is left on the face after a click:
+        // 1 when it is raised, easing to 0.
+        let flash = Rc::new(Animated::new(0.0));
+        let warm = Rc::new(Animated::new(0.0));
 
         {
             let state = Rc::clone(&state);
@@ -71,6 +79,9 @@ impl<M: 'static> Button<M> {
             let theme = ui.theme_handle();
             let selected = control.selected_handle();
             let primary = Rc::clone(&primary);
+            let flash = Rc::clone(&flash);
+            let warm = Rc::clone(&warm);
+            let time = ui.frame_time_handle();
             control.set_painter(Rc::new(move |canvas| {
                 let theme = theme.get();
                 let state = state.get();
@@ -78,15 +89,29 @@ impl<M: 'static> Button<M> {
                 // Paint the node's background so the rounded face's corners do
                 // not show the uninitialised back buffer.
                 backdrop(canvas, theme.background);
-                let fill = match (primary, state) {
-                    (true, ButtonState::Hover) => {
-                        theme.accent.lerp(Color::rgb(255, 255, 255), 0.12)
-                    }
-                    (true, ButtonState::Pressed) => look::shaded(theme.accent, &theme),
-                    (true, _) => theme.accent,
-                    (false, ButtonState::Normal | ButtonState::Disabled) => theme.surface,
-                    (false, ButtonState::Hover) => theme.hover,
-                    (false, ButtonState::Pressed) => theme.pressed,
+                let (rest, hot, pressed) = if primary {
+                    (
+                        theme.accent,
+                        theme.accent.lerp(Color::rgb(255, 255, 255), 0.12),
+                        look::shaded(theme.accent, &theme),
+                    )
+                } else {
+                    (theme.surface, theme.hover, theme.pressed)
+                };
+                let now = time.get();
+                let fill = match state {
+                    ButtonState::Pressed => pressed,
+                    ButtonState::Disabled => rest,
+                    // The hover colour fades in and out under the pointer.
+                    ButtonState::Normal | ButtonState::Hover => rest.lerp(hot, warm.value(now)),
+                };
+                // A click leaves the pressed colour fading out of the face,
+                // so one too quick to see held down, or made from the
+                // keyboard, still shows.
+                let fill = if state == ButtonState::Disabled {
+                    fill
+                } else {
+                    fill.lerp(pressed, flash.value(now))
                 };
                 let bounds = canvas.bounds();
                 let dpi = canvas.dpi();
@@ -127,6 +152,8 @@ impl<M: 'static> Button<M> {
         {
             let state = Rc::clone(&state);
             let on_click = Rc::clone(&on_click);
+            let flash = Rc::clone(&flash);
+            let warm = Rc::clone(&warm);
             let ui = ui.clone();
             let id = control.id();
             control.on_events(move |event| {
@@ -182,8 +209,18 @@ impl<M: 'static> Button<M> {
                     }
                     _ => return None,
                 }
-                ui.invalidate(id);
+                let under_pointer =
+                    matches!(state.get(), ButtonState::Hover | ButtonState::Pressed);
+                let heat = f32::from(u8::from(under_pointer));
+                // Starting the fade repaints the face; otherwise ask for it.
+                if warm.target() != heat {
+                    ui.animate(id, &warm, heat, Motion::QUICK);
+                } else {
+                    ui.invalidate(id);
+                }
                 if activate {
+                    flash.jump(1.0);
+                    ui.animate(id, &flash, 0.0, Motion::QUICK);
                     let mapper = on_click.borrow();
                     if let Some(mapper) = mapper.as_ref() {
                         return mapper();
@@ -201,6 +238,7 @@ impl<M: 'static> Button<M> {
             icon,
             on_click,
             primary,
+            warm,
         })
     }
 
@@ -292,6 +330,8 @@ impl<M: 'static> Button<M> {
         } else {
             ButtonState::Disabled
         });
+        // Enabled again, it starts cold whatever it was when it was disabled.
+        self.warm.jump(0.0);
         self.control.set_enabled(enabled);
         self.control.invalidate();
     }

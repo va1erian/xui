@@ -10,6 +10,7 @@ use crate::backend::{
 use crate::geometry::Rect;
 use crate::theme::Theme;
 
+mod animation;
 mod boot;
 mod delivery;
 mod reduced_motion;

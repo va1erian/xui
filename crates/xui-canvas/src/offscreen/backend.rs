@@ -83,6 +83,7 @@ impl Backend for OffscreenBackend {
         node.text = spec.text.clone();
         node.popup = spec.popup;
         node.contained = spec.contained;
+        node.steady = spec.steady;
         node.tab_stop = spec.tab_stop;
         node.wants_tab = spec.wants_tab;
         self.nodes.borrow_mut().insert(id, node);
@@ -257,4 +258,13 @@ impl Backend for OffscreenBackend {
     }
 
     fn kill_timer(&self, _window: WindowId, _id: TimerId) {}
+
+    fn now(&self) -> Option<std::time::Duration> {
+        self.now.get()
+    }
+
+    fn request_frame(&self, _window: WindowId) -> bool {
+        self.frame_requests.set(self.frame_requests.get() + 1);
+        true
+    }
 }

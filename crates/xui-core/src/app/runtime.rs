@@ -113,6 +113,16 @@ impl<A: App> Runtime<A> {
                     self.on_close();
                     return true;
                 }
+                Event::Frame => {
+                    self.core.frame();
+                    return true;
+                }
+                // The animation driver's own tick, on a backend with no frame
+                // pacing: the app's timer mapping never sees it.
+                Event::Timer { id } if self.core.motion().owns_timer(*id) => {
+                    self.core.frame();
+                    return true;
+                }
                 Event::Timer { id } => {
                     let mapped = self.core.on_timer.borrow().as_ref().and_then(|f| f(*id));
                     if let Some(msg) = mapped {
@@ -235,6 +245,8 @@ impl<A: App> Drop for Runtime<A> {
         super::secondary::unregister_window(self.core.window());
         // The root layout holds a `Ui`, so it would keep this core alive.
         self.core.release_retained();
+        // So would an animation whose step holds one.
+        self.core.motion().clear();
     }
 }
 
@@ -302,7 +314,7 @@ where
         if let Some(theme) = ready_core.backend().system_theme() {
             ui.set_theme(theme);
         }
-        let app = make(&mut ui);
+        let app = ready_core.building(|| make(&mut ui));
         ready_runtime.prime(app);
     };
 

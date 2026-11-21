@@ -21,7 +21,6 @@ mod notes;
 mod tab;
 
 use damage::Damage;
-pub(crate) use notes::event_marks_target;
 pub(crate) use tab::tab_press;
 
 use xui_core::backend::{Painter, ParentRef, WidgetId, WindowId};
@@ -56,6 +55,10 @@ pub(crate) struct Node {
     /// ([`NodeSpec::contained`](xui_core::backend::NodeSpec::contained)), so
     /// neither its reach nor its damage takes the overdraw margin.
     pub(crate) contained: bool,
+    /// Its picture does not depend on input
+    /// ([`NodeSpec::steady`](xui_core::backend::NodeSpec::steady)), so
+    /// delivering an event does not mark it stale.
+    pub(crate) steady: bool,
     /// Whether Tab moves the focus here.
     pub(crate) tab_stop: bool,
     /// Whether the node keeps Tab for itself while it has the focus.
@@ -78,6 +81,7 @@ impl Node {
             clip: None,
             popup: false,
             contained: false,
+            steady: false,
             tab_stop: false,
             wants_tab: false,
         }

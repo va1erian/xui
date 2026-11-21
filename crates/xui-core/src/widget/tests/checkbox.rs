@@ -76,3 +76,71 @@ fn a_checkbox_reports_its_checked_property() {
     checkbox.set_property("checked", Value::Bool(true));
     assert!(checkbox.is_checked());
 }
+
+fn ops(backend: &HeadlessBackend, checkbox: &CheckBox<u32>) -> Vec<DrawOp> {
+    backend.render(checkbox.id());
+    backend.ops(checkbox.id())
+}
+
+/// What a checked box paints with no animation at all.
+fn settled_checked() -> Vec<DrawOp> {
+    let (backend, _core, ui) = setup();
+    let checkbox = CheckBox::new(&ui, Rect::new(0, 0, 160, 28), "Agree").unwrap();
+    checkbox.set_checked(true);
+    assert_eq!(backend.frame_requests(), 0);
+    ops(&backend, &checkbox)
+}
+
+#[test]
+fn a_toggle_draws_the_mark_in_and_settles_on_the_checked_picture() {
+    use std::time::Duration;
+
+    let (backend, core, ui) = setup();
+    backend.set_now(Duration::ZERO);
+    let checkbox = CheckBox::new(&ui, Rect::new(0, 0, 160, 28), "Agree").unwrap();
+    let runtime = Runtime::primary(
+        core,
+        TestApp {
+            log: Rc::new(RefCell::new(Vec::new())),
+        },
+    );
+    let unchecked = ops(&backend, &checkbox);
+    let checked = settled_checked();
+
+    runtime.deliver(checkbox.id(), &key(Key::SPACE));
+    assert!(checkbox.is_checked(), "the state changes at once");
+    backend.advance(Duration::from_millis(20));
+    runtime.deliver(WidgetId::NONE, &Event::Frame);
+    let midway = ops(&backend, &checkbox);
+    assert_ne!(midway, unchecked);
+    assert_ne!(midway, checked);
+
+    backend.advance(Duration::from_millis(200));
+    runtime.deliver(WidgetId::NONE, &Event::Frame);
+    assert_eq!(ops(&backend, &checkbox), checked);
+    assert_eq!(backend.frame_requests(), 2, "and no frame asked for after");
+
+    // Unchecking draws it back out to the plain box.
+    runtime.deliver(checkbox.id(), &key(Key::SPACE));
+    backend.advance(Duration::from_millis(20));
+    runtime.deliver(WidgetId::NONE, &Event::Frame);
+    assert_ne!(ops(&backend, &checkbox), unchecked);
+    backend.advance(Duration::from_millis(200));
+    runtime.deliver(WidgetId::NONE, &Event::Frame);
+    assert_eq!(ops(&backend, &checkbox), unchecked);
+}
+
+#[test]
+fn without_a_clock_a_toggle_paints_the_checked_picture_at_once() {
+    let (backend, core, ui) = setup();
+    let checkbox = CheckBox::new(&ui, Rect::new(0, 0, 160, 28), "Agree").unwrap();
+    let runtime = Runtime::primary(
+        core,
+        TestApp {
+            log: Rc::new(RefCell::new(Vec::new())),
+        },
+    );
+    runtime.deliver(checkbox.id(), &key(Key::SPACE));
+    assert_eq!(ops(&backend, &checkbox), settled_checked());
+    assert_eq!(backend.frame_requests(), 0);
+}

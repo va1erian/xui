@@ -55,7 +55,7 @@ impl App<'_> {
         WindowId::from_raw(raw)
     }
 
-    /// Fires any due timers and arms the next wake-up.
+    /// Fires any due timers and frame requests and arms the next wake-up.
     fn timers(&self, event_loop: &ActiveEventLoop) {
         let now = Instant::now();
         let due: Vec<(usize, WindowId)> = self
@@ -83,12 +83,21 @@ impl App<'_> {
             self.shared
                 .deliver(window, WidgetId::NONE, &Event::Timer { id: TimerId(id) });
         }
+        // One at a time, taken out and stamped before delivery: the handler
+        // asks for its next frame from inside it, and `now` is not re-read so
+        // that request waits for the next pass.
+        loop {
+            let due = self.shared.frames.borrow_mut().take_due(now);
+            let Some(window) = due else { break };
+            self.shared.deliver(window, WidgetId::NONE, &Event::Frame);
+        }
         let next = self
             .shared
             .timers
             .borrow()
             .values()
             .map(|(_, at, _)| *at)
+            .chain(self.shared.frames.borrow().next_deadline())
             .min();
         match next {
             Some(at) => event_loop.set_control_flow(ControlFlow::WaitUntil(at)),

@@ -27,6 +27,7 @@ mod input;
 mod present;
 #[cfg(test)]
 mod tests;
+mod time;
 
 use gl_fallback::GlContent;
 pub use present::PresentedFrame;
@@ -86,6 +87,10 @@ pub struct OffscreenBackend {
     /// What `Backend::prefers_reduced_motion` answers; `false` unless a test
     /// scripts it with [`OffscreenBackend::set_prefers_reduced_motion`].
     prefers_reduced_motion: std::cell::Cell<bool>,
+    /// What `Backend::now` answers; `None` (no clock) unless a test scripts it.
+    now: std::cell::Cell<Option<std::time::Duration>>,
+    /// How many frames `Backend::request_frame` was asked for.
+    frame_requests: std::cell::Cell<u32>,
 }
 
 impl Default for OffscreenBackend {
@@ -115,6 +120,8 @@ impl OffscreenBackend {
             dpi: DEFAULT_DPI,
             run_hook: RefCell::new(None),
             prefers_reduced_motion: std::cell::Cell::new(false),
+            now: std::cell::Cell::new(None),
+            frame_requests: std::cell::Cell::new(0),
         }
     }
 

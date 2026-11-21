@@ -25,6 +25,7 @@ mod geometry;
 mod model;
 mod navigation;
 mod paint;
+mod reveal;
 mod selection;
 
 thread_local! {

@@ -4,6 +4,62 @@
 
 ### Added
 
+- **An animation driver.** `motion::Animated` is a value that eases to its
+  latest target and can be turned round mid-flight; `Ui::animate` (and
+  `animate_with`, which also runs a closure per frame) starts one and repaints
+  its node on every frame until it lands. A painter reads it with
+  `Ui::frame_time`. `Motion::QUICK`, `REVEAL`, `TRAVEL` and `EXIT` are the
+  motion tokens. A change is instant under the system's reduced-motion
+  setting, after `Ui::set_animations(false)`, in design mode and on a backend
+  with no clock, which is the headless default, so existing snapshots are
+  unchanged. See `docs/motion.md`.
+- **Frames at the display's refresh rate.** `Backend::now` and
+  `Backend::request_frame` (both defaulted) and `Event::Frame` let a backend
+  pace animation frames to the monitor a window is on. `WinitBackend` and
+  `D2dBackend` implement them; `D2dBackend` ticks frames from a
+  high-resolution timer in its message loop rather than `SetTimer`, which
+  cannot tick faster than about 64 times a second. A backend that implements
+  neither is ticked with a 16 ms timer. The headless backends gain `set_now`,
+  `advance` and `frame_requests` for tests, and `OffscreenBackend::inject`
+  now delivers window-level events (`Frame`, `Wake`, `Timer`, `Close`, ...)
+  to the window even while a node has the focus.
+- **`NodeSpec::steady`.** A node whose picture does not depend on input opts
+  out of the repaint the backends make after delivering a press, a key, a
+  focus change or the pointer leaving. The scrims of `Dialog`, `TaskDialog`
+  and `FileDialog` are steady: moving the pointer from the scrim onto one of
+  the dialog's buttons used to repaint the whole window under the translucent
+  layer, which in a debug build delayed the button's hover by a second or more.
+- **Button hover fades.** A `Button`'s hover colour eases in and out under the
+  pointer. `Motion::QUICK` is now 180 ms on a cubic curve, so the hover, the
+  click flash and the check box and toggle button changes are visible.
+- **The `widgets` example runs on Direct2D** with `XUI_BACKEND=d2d` (Windows).
+- **Animated tabs.** Selecting a tab (a click or `Tabs::select`) slides the
+  accent underline to the new tab and scrolls the new page in from the side
+  its tab is on, while the old page scrolls out. The selection and its
+  message change at once. During the scroll both pages are hit-tested where
+  they are drawn.
+- **`TreeView` expands and collapses with a short animation.** The rows of the
+  node are revealed in a band under it while the rows below slide with its
+  edge, and the chevron turns. The model, hit-testing and scrollbar change at
+  once; with animations off the tree paints as before.
+- **Animated check box.** Toggling a `CheckBox` draws the check mark in (or
+  out) over `Motion::QUICK`; the state and the message are unchanged and
+  immediate, and without animations it paints as before.
+- **Animated toggle button.** A `ToggleButton`'s face and label colours ease
+  between unchecked and checked over `Motion::QUICK`, for a click, a key and
+  `set_checked` alike (which still raises no event).
+- **Animated progress bar.** `ProgressBar::set_value` eases the painted fill to
+  the new fraction over `Motion::TRAVEL`; `value()` reports the new value at once.
+- **Animated number field.** A stepper click or Up/Down key rolls the old text
+  out and the new text in, vertically and clipped, over `Motion::REVEAL`.
+  Typing, `set_value` and a step clamped at the range's end do not roll.
+- **Menu popups unroll.** A menu opening from closed grows from its top edge in
+  140 ms and rolls shut in 80 ms; the picked item's message is raised at once.
+  Moving along the bar swaps the popup instantly. While it grows or shrinks
+  the popup is hit-tested at the size it is drawn. No change with animations
+  off or without a clock.
+- **ComboBox list unrolls.** The drop-down list opens and closes like a menu
+  popup, through the same helper, and takes no input while it rolls shut.
 - **Sized status bar parts.** `StatusBar::set_widths` (and `.widths(..)` on the
   builder) takes a `PartWidth` per part: `Fill(n)` shares the room left over
   (the default, `Fill(1)`, is today's equal split), `Fixed(Dip)` and `Auto`

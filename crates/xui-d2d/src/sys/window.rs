@@ -484,4 +484,5 @@ pub(crate) fn apply_suggested_rect(hwnd: Hwnd, msg: Msg) -> Option<Rect> {
     ))
 }
 
-pub(crate) use super::pump::{post_quit, run_loop, run_nested};
+pub(crate) use super::pump::{Frames, post_quit, run_loop, run_nested};
+pub(crate) use super::refresh::refresh_hz;

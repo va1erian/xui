@@ -191,7 +191,7 @@ where
     core.theme().set(theme);
     backend.set_theme(window, &theme);
     let mut ui = Ui::new(Rc::clone(&core));
-    let app = make(&mut ui);
+    let app = core.building(|| make(&mut ui));
     let runtime = Runtime::new(Rc::clone(&core), app, false);
     let host: Rc<dyn Host> = Rc::clone(&runtime) as Rc<dyn Host>;
     backend.set_event_sink(

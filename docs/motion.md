@@ -1,14 +1,16 @@
 # Motion
 
 xui has a small, portable foundation for animation: timing curves, an eased
-value over time, a clock abstraction and the system's reduced-motion setting.
-It computes values. It does not yet move a widget: see [What does not
-exist](#what-does-not-exist).
+value over time, a clock abstraction, the system's reduced-motion setting, and
+a driver that moves a value frame by frame at the display's refresh rate.
+Buttons, check boxes, toggle buttons, number fields, progress bars, tabs,
+menus, combo boxes and tree views animate with it; see [What does not
+exist](#what-does-not-exist) for the limits.
 
-Everything here lives in `xui_core::motion` and is portable: no platform
-dependency, no `unsafe`, no clock read, no thread, no file system. It uses
-nothing that is unavailable on `wasm32` (it has not yet been compiled for it in
-CI), and it runs the same in a headless test.
+The value types live in `xui_core::motion` and are portable: no platform
+dependency, no `unsafe`, no clock read, no thread, no file system. They use
+nothing that is unavailable on `wasm32` (not yet compiled for it in CI), and
+they run the same in a headless test. Time and frames come from the backend.
 
 ## Easing
 
@@ -105,13 +107,95 @@ let duration = if ui.prefers_reduced_motion() {
 | `OffscreenBackend` | `false` unless a test scripts it with `set_prefers_reduced_motion`; it never reads the machine's setting, so a headless render is the same everywhere |
 | any other `Backend` | `false` unless it overrides the method (the default) |
 
+## Animating a value
+
+An `Animated` is a value that eases to its latest target. A widget shares one
+with its painter through an `Rc`, starts it with `Ui::animate`, and the painter
+reads it with the time of the frame being painted:
+
+```rust
+use std::rc::Rc;
+use xui_core::motion::{Animated, Motion};
+
+let press = Rc::new(Animated::new(0.0));
+
+// In the event handler: the state changes at once, the picture follows.
+ui.animate(id, &press, 1.0, Motion::QUICK);
+
+// In the painter (`time` is `ui.frame_time_handle()`, captured once):
+let amount = press.value(time.get());
+let fill = theme.surface.lerp(theme.pressed, amount);
+```
+
+- **Interruptible.** Animating a value that is already moving turns it round
+  from where it is. There is no jump and no queue.
+- **Any frame rate.** A value depends only on the time, so an animation lasts
+  the same wall time at 30, 60 or 240 fps; a slow frame lands further along
+  the curve.
+- **One instant per frame.** `Ui::frame_time` is latched once per frame, so
+  every painter of a frame agrees.
+- **Idle costs nothing.** Frames are requested one at a time, only while a
+  value is moving.
+- `Ui::animate_with` also calls a closure with the value on each frame, for
+  the few animations that must move a node (a popup unrolling) rather than
+  only repaint it.
+- Destroying a node drops what was animating on it.
+
+`Motion` is a duration and an `Easing`. Its constants are the motion tokens;
+widgets use them instead of their own numbers:
+
+| Token | Duration | Curve | For |
+|---|---|---|---|
+| `Motion::QUICK` | 180 ms | `CubicOut` | a change of state in place: a hover, a press released, a mark drawn |
+| `Motion::REVEAL` | 140 ms | `ExpoOut` | something appearing: a popup, a tree node opening |
+| `Motion::TRAVEL` | 180 ms | `CubicInOut` | something moving from one place to another |
+| `Motion::EXIT` | 80 ms | `QuadIn` | something leaving |
+
+### When a change is instant
+
+`Ui::animate` lands on the target at once, with a single repaint, when
+`Ui::animations()` is `false`:
+
+- the system asks for reduced motion (`Ui::prefers_reduced_motion`);
+- the application called `Ui::set_animations(false)`;
+- the handle is in design mode;
+- the backend has no clock (`Backend::now` is `None`).
+
+A widget therefore needs no second code path, and the last frame of an
+animation is always the picture it would have painted without one.
+
+### Frames and time
+
+Two `Backend` methods feed the driver:
+
+| | `Backend::now` | `Backend::request_frame` |
+|---|---|---|
+| `WinitBackend` | a monotonic clock | one `Event::Frame` per refresh of the window's monitor |
+| `D2dBackend` | a monotonic clock | one `Event::Frame` per refresh of the window's monitor |
+| `OffscreenBackend`, `HeadlessBackend` | `None` until a test calls `set_now` or `advance` | recorded; the test delivers `Event::Frame` |
+| any other `Backend` | `None` (the default) | `false` (the default) |
+
+`request_frame` is one-shot, like a browser's `requestAnimationFrame`. A
+backend that returns `false` is ticked with a 16 ms `set_timer` instead, which
+the application's `Ui::on_timer` never sees. Because the headless backends have
+no clock unless a test gives them one, snapshots and existing tests render
+exactly as they would with no animation.
+
+To test an animated widget, script the clock and deliver the frames:
+
+```rust
+backend.set_now(Duration::ZERO);
+// ... trigger the change ...
+backend.advance(Duration::from_millis(50));
+backend.inject(window, WidgetId::NONE, Event::Frame);
+```
+
+The offscreen backend's `inject(window, Event::Frame)` does the same, and so
+does `Stage::inject(Event::Frame)`.
+
 ## What does not exist
 
 - **Per-node opacity and 2D transform** in the compositing path. A widget
-  cannot yet be faded or translated as a unit; that is a separate, later step.
-- A frame driver or scheduler that samples tweens and requests repaints, region
-  repaint, and animated widgets.
-- Motion presets (slide, fade, turnstile) and their tokens.
-
-Until those exist, `motion` is the part an application or a later driver builds
-on: sample a `Tween` with a `Clock`, honour `prefers_reduced_motion`.
+  cannot be faded or translated as a unit: an animation is drawn by the
+  widget's own painter (a colour blend, a clip, a moved rectangle).
+- **Smooth scrolling.**

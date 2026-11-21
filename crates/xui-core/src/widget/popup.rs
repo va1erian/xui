@@ -9,6 +9,12 @@
 //! face colour rather than only a rounded rectangle: the corners of a native
 //! popup window are square, and the rounded face left them to the suppressed
 //! erase (the off-screen buffer), where they showed as black pixels.
+//!
+//! [`Unroll`] is the other thing they share: the popup opening and closing.
+
+mod unroll;
+
+pub(crate) use unroll::Unroll;
 
 use crate::backend::Canvas;
 use crate::color::Color;

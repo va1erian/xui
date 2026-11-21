@@ -53,6 +53,9 @@ let backend: Rc<dyn Backend> = Rc::new(WinitBackend::new());
   `Unsupported`, so `Ui::open_modal` is unavailable on this backend).
   Non-modal secondary windows (`Ui::open_window`), multiple top-level windows
   and timers all work.
+- Animation frames (`request_frame`) are scheduled next to the timers, at the
+  refresh rate of the window's monitor. Like the timers, they do not run while
+  the platform is inside a live resize, where `about_to_wait` does not run.
 - **One event loop per process.** `WinitBackend::new` must run on the main
   thread; you cannot tear the loop down and build another in the same process.
 
@@ -122,6 +125,18 @@ xui_core::app("Hello")
   Other per-draw allocations (gradient brushes, path geometries, rounded-clip
   layers) remain, and every `WM_PAINT` replans all nodes: the damage list of
   [the canvas backend](#repainting-only-what-changed) is not shared yet.
+- **Frame pacing:** `request_frame` is served by a high-resolution waitable
+  timer the message loop waits on next to the queue, set to the refresh period
+  of the monitor the window is on (read at each request, so a dragged window
+  follows its monitor). The render target keeps the default present, whose wait
+  for vblank coalesces repaints driven by a 1000 Hz mouse (hover, drags) to the
+  display rate. That wait is on the primary monitor's vblank, so with a slower
+  primary a window on a faster monitor is capped at the primary's rate; pacing
+  repaints ourselves, which would lift the cap, is future work. Where the timer
+  cannot be created (before Windows 10 1803) `request_frame` returns `false`
+  and the core falls back to a 16 ms timer. While Windows runs its own modal
+  loop (dragging or sizing a window border, a native menu) no frame is
+  delivered until it ends.
 - Not covered: IME, UI Automation, borderless windows and Mica/Acrylic, drag
   regions, window icon, `capture`, `GlWidget`.
 
