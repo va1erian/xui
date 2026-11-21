@@ -6,10 +6,12 @@ use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use super::control::{Control, HasText};
+use crate::Color;
 use crate::app::Ui;
-use crate::backend::{Event, NodeKind, NodeSpec, Result, TextStyle};
+use crate::backend::{Canvas, Event, NodeKind, NodeSpec, Result, TextStyle};
 use crate::geometry::{Point, Rect};
 use crate::message::{Key, MouseButton};
+use crate::motion::{Animated, Motion};
 use crate::property::{Properties, Property, Value, node};
 use crate::theme::look::{self, backdrop};
 use crate::units::Dip;
@@ -24,11 +26,41 @@ const BOX: Dip = Dip(16.0);
 /// The gap between the box and the label.
 const GAP: Dip = Dip(8.0);
 
+/// Draws the check mark as two strokes, wiped in from the left to `shown`
+/// (1 is the whole mark).
+fn draw_mark(canvas: &mut dyn Canvas, square: Rect, color: Color, shown: f32) {
+    let x = square.left as f32;
+    let y = square.top as f32;
+    let s = square.width() as f32;
+    let wipe = shown < 1.0;
+    if wipe {
+        let edge = square.left + (s * shown).ceil() as i32;
+        canvas.push_clip(Rect::new(square.left, square.top, edge, square.bottom));
+    }
+    canvas.draw_line(
+        Point::new((x + s * 0.22) as i32, (y + s * 0.52) as i32),
+        Point::new((x + s * 0.42) as i32, (y + s * 0.72) as i32),
+        color,
+        2.0,
+    );
+    canvas.draw_line(
+        Point::new((x + s * 0.42) as i32, (y + s * 0.72) as i32),
+        Point::new((x + s * 0.78) as i32, (y + s * 0.28) as i32),
+        color,
+        2.0,
+    );
+    if wipe {
+        canvas.pop_clip();
+    }
+}
+
 /// A check box with a label.
 pub struct CheckBox<M: 'static> {
     control: Control<M>,
     text: Rc<RefCell<String>>,
     checked: Rc<Cell<bool>>,
+    /// How checked the box looks: 0 unchecked, 1 checked, easing between.
+    mark: Rc<Animated>,
     enabled: Rc<Cell<bool>>,
     on_toggle: ToggleMapper<M>,
 }
@@ -44,12 +76,14 @@ impl<M: 'static> CheckBox<M> {
         )?;
         let label = Rc::new(RefCell::new(text.to_string()));
         let checked = Rc::new(Cell::new(false));
+        let mark = Rc::new(Animated::new(0.0));
         let enabled = Rc::new(Cell::new(true));
         let on_toggle: ToggleMapper<M> = Rc::new(RefCell::new(None));
 
         {
             let label = Rc::clone(&label);
-            let checked = Rc::clone(&checked);
+            let mark = Rc::clone(&mark);
+            let time = ui.frame_time_handle();
             let enabled = Rc::clone(&enabled);
             let theme = ui.theme_handle();
             let selected = control.selected_handle();
@@ -65,15 +99,18 @@ impl<M: 'static> CheckBox<M> {
                 let top = bounds.top + (bounds.height() - box_size) / 2;
                 let square = Rect::new(bounds.left, top, bounds.left + box_size, top + box_size);
                 let fancy = look::decorated(&theme) && enabled;
+                let shown = mark.value(time.get());
                 if fancy {
                     // A filled, glowing box when checked; an inset well when not.
                     let center = Point::new(square.left + box_size / 2, square.top + box_size / 2);
-                    if checked.get() {
+                    if shown >= 1.0 {
                         look::glow(canvas, center, box_size as f32 / 2.0, &theme);
                         look::face(canvas, square, 3.0, theme.accent, &theme);
                     } else {
-                        canvas.fill_rounded_rect(square, 3.0, theme.input_background);
-                        canvas.stroke_rounded_rect(square, 3.0, theme.input_border, 1.0);
+                        let fill = theme.input_background.lerp(theme.accent, shown);
+                        let border = theme.input_border.lerp(theme.accent, shown);
+                        canvas.fill_rounded_rect(square, 3.0, fill);
+                        canvas.stroke_rounded_rect(square, 3.0, border, 1.0);
                     }
                 } else {
                     canvas.fill_rect(square, theme.input_background);
@@ -89,8 +126,7 @@ impl<M: 'static> CheckBox<M> {
                         1.0,
                     );
                 }
-                if checked.get() {
-                    // A check mark drawn as two strokes.
+                if shown > 0.0 {
                     let color = if fancy {
                         theme.text_on_accent
                     } else if enabled {
@@ -98,21 +134,7 @@ impl<M: 'static> CheckBox<M> {
                     } else {
                         theme.text_disabled
                     };
-                    let x = square.left as f32;
-                    let y = square.top as f32;
-                    let s = box_size as f32;
-                    canvas.draw_line(
-                        Point::new((x + s * 0.22) as i32, (y + s * 0.52) as i32),
-                        Point::new((x + s * 0.42) as i32, (y + s * 0.72) as i32),
-                        color,
-                        2.0,
-                    );
-                    canvas.draw_line(
-                        Point::new((x + s * 0.42) as i32, (y + s * 0.72) as i32),
-                        Point::new((x + s * 0.78) as i32, (y + s * 0.28) as i32),
-                        color,
-                        2.0,
-                    );
+                    draw_mark(canvas, square, color, shown);
                 }
 
                 let text_rect =
@@ -135,6 +157,7 @@ impl<M: 'static> CheckBox<M> {
             let checked = Rc::clone(&checked);
             let enabled = Rc::clone(&enabled);
             let on_toggle = Rc::clone(&on_toggle);
+            let mark = Rc::clone(&mark);
             let pressed = Rc::new(Cell::new(false));
             let ui = ui.clone();
             let id = control.id();
@@ -174,6 +197,7 @@ impl<M: 'static> CheckBox<M> {
                 }
                 let state = !checked.get();
                 checked.set(state);
+                ui.animate(id, &mark, f32::from(u8::from(state)), Motion::QUICK);
                 ui.invalidate(id);
                 let mapper = on_toggle.borrow();
                 if let Some(mapper) = mapper.as_ref() {
@@ -187,6 +211,7 @@ impl<M: 'static> CheckBox<M> {
             control,
             text: label,
             checked,
+            mark,
             enabled,
             on_toggle,
         })
@@ -211,7 +236,12 @@ impl<M: 'static> CheckBox<M> {
 
     /// Sets the checked state without raising the toggle event.
     pub fn set_checked(&self, checked: bool) {
-        self.checked.set(checked);
+        if self.checked.replace(checked) != checked {
+            let target = f32::from(u8::from(checked));
+            self.control
+                .ui()
+                .animate(self.id(), &self.mark, target, Motion::QUICK);
+        }
         self.control.invalidate();
     }
 

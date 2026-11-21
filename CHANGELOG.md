@@ -20,6 +20,9 @@
   which cannot tick faster than about 64 times a second. A backend that
   implements neither is ticked with a 16 ms timer. The headless backends gain
   `set_now`, `advance` and `frame_requests` for tests.
+- **Animated check box.** Toggling a `CheckBox` draws the check mark in (or
+  out) over `Motion::QUICK`; the state and the message are unchanged and
+  immediate, and without animations it paints as before.
 - **Sized status bar parts.** `StatusBar::set_widths` (and `.widths(..)` on the
   builder) takes a `PartWidth` per part: `Fill(n)` shares the room left over
   (the default, `Fill(1)`, is today's equal split), `Fixed(Dip)` and `Auto`
