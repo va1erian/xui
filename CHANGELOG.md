@@ -20,6 +20,10 @@
   which cannot tick faster than about 64 times a second. A backend that
   implements neither is ticked with a 16 ms timer. The headless backends gain
   `set_now`, `advance` and `frame_requests` for tests.
+- **Tabs underline travels.** Selecting a tab (a click or `Tabs::select`)
+  slides and resizes the accent underline from the old tab to the new one with
+  `Motion::TRAVEL`. The selection and the change message are immediate; with
+  animations off the underline is in place at once.
 - **Sized status bar parts.** `StatusBar::set_widths` (and `.widths(..)` on the
   builder) takes a `PartWidth` per part: `Fill(n)` shares the room left over
   (the default, `Fill(1)`, is today's equal split), `Fixed(Dip)` and `Auto`

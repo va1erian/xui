@@ -1,5 +1,6 @@
 use std::cell::RefCell;
 use std::rc::Rc;
+use std::time::Duration;
 
 use super::Tabs;
 use crate::app::{App, Core, Runtime, Ui};
@@ -261,4 +262,118 @@ fn a_page_added_while_the_container_has_no_bounds_starts_hidden() {
         backend.node(b.id()).unwrap().3,
         "the successor of a removed page is shown without bounds"
     );
+}
+
+/// The accent underline in the last render of the strip.
+fn underline(backend: &HeadlessBackend, tabs: &Tabs<usize>) -> Rect {
+    use crate::backend::headless::DrawOp;
+    let accent = tabs.scoped.theme().accent;
+    backend.render(tabs.shared.strip_id);
+    backend
+        .ops(tabs.shared.strip_id)
+        .iter()
+        .find_map(|op| match op {
+            DrawOp::Fill(rect, color) if *color == accent => Some(*rect),
+            _ => None,
+        })
+        .expect("an underline was painted")
+}
+
+fn frame_after(runtime: &Rc<Runtime<TestApp>>, backend: &HeadlessBackend, millis: u64) {
+    backend.advance(Duration::from_millis(millis));
+    runtime.deliver(WidgetId::NONE, &Event::Frame);
+}
+
+/// Tabs "A", "B", "C" in a running app, with a clock.
+fn animated() -> (Rc<HeadlessBackend>, Rc<Runtime<TestApp>>, Tabs<usize>) {
+    let (backend, core, ui) = setup();
+    backend.set_now(Duration::ZERO);
+    let tabs = Tabs::new(&ui, Rect::new(0, 0, 300, 120)).unwrap();
+    let (a, b, c) = (label(&tabs, "a"), label(&tabs, "b"), label(&tabs, "c"));
+    let tabs = tabs
+        .page("A", &[a.id()])
+        .page("B", &[b.id()])
+        .page("C", &[c.id()])
+        .on_change(Some);
+    let runtime = Runtime::primary(core, TestApp(Rc::new(RefCell::new(Vec::new()))));
+    (backend, runtime, tabs)
+}
+
+#[test]
+fn a_click_slides_the_underline_to_the_new_tab() {
+    let (backend, runtime, tabs) = animated();
+    let (first, second) = (tabs.shared.tabs.borrow()[0], tabs.shared.tabs.borrow()[1]);
+    let bottom = underline(&backend, &tabs).bottom;
+    assert_eq!(underline(&backend, &tabs).left, first.left);
+
+    runtime.deliver(tabs.shared.strip_id, &click(second.left + 2));
+    assert_eq!(tabs.selected(), 1, "the selection changes at once");
+    let start = underline(&backend, &tabs);
+    assert_eq!((start.left, start.right), (first.left, first.right));
+
+    frame_after(&runtime, &backend, 90);
+    let mid = underline(&backend, &tabs);
+    assert!(mid.left > first.left && mid.left < second.left, "{mid:?}");
+    assert!(
+        mid.right > first.right && mid.right < second.right,
+        "{mid:?}"
+    );
+    assert_eq!(mid.bottom, bottom);
+
+    frame_after(&runtime, &backend, 200);
+    let end = underline(&backend, &tabs);
+    assert_eq!(
+        (end.left, end.right),
+        (second.left, second.right),
+        "the last frame is the picture without animation"
+    );
+    assert_eq!(backend.frame_requests(), 2, "no frame is asked for after");
+}
+
+#[test]
+fn selecting_during_a_flight_starts_from_where_the_underline_is() {
+    let (backend, runtime, tabs) = animated();
+    tabs.select(2);
+    frame_after(&runtime, &backend, 90);
+    let before = underline(&backend, &tabs);
+
+    tabs.select(0);
+    assert_eq!(underline(&backend, &tabs), before, "no jump");
+    frame_after(&runtime, &backend, 400);
+    let first = tabs.shared.tabs.borrow()[0];
+    let end = underline(&backend, &tabs);
+    assert_eq!((end.left, end.right), (first.left, first.right));
+}
+
+#[test]
+fn without_a_clock_the_underline_is_in_place_at_once() {
+    let (backend, _core, ui) = setup();
+    let tabs = Tabs::new(&ui, Rect::new(0, 0, 300, 120)).unwrap();
+    let tabs = tabs.page("A", &[]).page("B", &[]);
+    tabs.select(1);
+    let second = tabs.shared.tabs.borrow()[1];
+    let line = underline(&backend, &tabs);
+    assert_eq!((line.left, line.right), (second.left, second.right));
+    assert_eq!(backend.frame_requests(), 0);
+}
+
+#[test]
+fn removing_or_renaming_a_page_mid_flight_ends_the_flight_in_place() {
+    let (backend, runtime, tabs) = animated();
+    tabs.select(2);
+    frame_after(&runtime, &backend, 50);
+    tabs.remove_page(2);
+    assert_eq!(tabs.selected(), 1);
+    let second = tabs.shared.tabs.borrow()[1];
+    let line = underline(&backend, &tabs);
+    assert_eq!((line.left, line.right), (second.left, second.right));
+
+    tabs.select(0);
+    frame_after(&runtime, &backend, 50);
+    assert!(tabs.rename_page(0, "A much longer title"));
+    let first = tabs.shared.tabs.borrow()[0];
+    let line = underline(&backend, &tabs);
+    assert_eq!((line.left, line.right), (first.left, first.right));
+    frame_after(&runtime, &backend, 400);
+    assert_eq!(underline(&backend, &tabs), line);
 }
