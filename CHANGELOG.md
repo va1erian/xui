@@ -20,6 +20,10 @@
   which cannot tick faster than about 64 times a second. A backend that
   implements neither is ticked with a 16 ms timer. The headless backends gain
   `set_now`, `advance` and `frame_requests` for tests.
+- **`TreeView` expands and collapses with a short animation.** The rows of the
+  node are revealed in a band under it while the rows below slide with its
+  edge, and the chevron turns. The model, hit-testing and scrollbar change at
+  once; with animations off the tree paints as before.
 - **Sized status bar parts.** `StatusBar::set_widths` (and `.widths(..)` on the
   builder) takes a `PartWidth` per part: `Fill(n)` shares the room left over
   (the default, `Fill(1)`, is today's equal split), `Fixed(Dip)` and `Auto`
