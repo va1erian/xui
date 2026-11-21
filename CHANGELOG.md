@@ -28,6 +28,17 @@
   node are revealed in a band under it while the rows below slide with its
   edge, and the chevron turns. The model, hit-testing and scrollbar change at
   once; with animations off the tree paints as before.
+- **Animated check box.** Toggling a `CheckBox` draws the check mark in (or
+  out) over `Motion::QUICK`; the state and the message are unchanged and
+  immediate, and without animations it paints as before.
+- **Animated toggle button.** A `ToggleButton`'s face and label colours ease
+  between unchecked and checked over `Motion::QUICK`, for a click, a key and
+  `set_checked` alike (which still raises no event).
+- **Animated progress bar.** `ProgressBar::set_value` eases the painted fill to
+  the new fraction over `Motion::TRAVEL`; `value()` reports the new value at once.
+- **Animated number field.** A stepper click or Up/Down key rolls the old text
+  out and the new text in, vertically and clipped, over `Motion::REVEAL`.
+  Typing, `set_value` and a step clamped at the range's end do not roll.
 - **Sized status bar parts.** `StatusBar::set_widths` (and `.widths(..)` on the
   builder) takes a `PartWidth` per part: `Fill(n)` shares the room left over
   (the default, `Fill(1)`, is today's equal split), `Fixed(Dip)` and `Auto`
