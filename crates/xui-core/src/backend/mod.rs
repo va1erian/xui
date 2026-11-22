@@ -21,6 +21,7 @@ mod clipboard;
 mod cursor;
 mod dialog;
 mod event;
+mod icon;
 mod ids;
 mod native;
 mod node;
@@ -39,6 +40,7 @@ pub use canvas::{
 pub use cursor::Cursor;
 pub use dialog::{FileDialogMode, FileDialogOutcome, FileDialogRequest, FileFilter};
 pub use event::{Event, TimerId};
+pub use icon::WindowIcon;
 pub use ids::{WidgetId, WindowId};
 pub use native::NativeWindowHandle;
 pub use node::{NodeKind, NodeOptions, NodeSpec, ParentRef};
@@ -154,10 +156,12 @@ pub trait Backend {
         let _ = (window, title);
     }
 
-    /// Sets a top-level window's icon (title bar, task bar, window switcher)
-    /// from an RGBA image. A backend without window icons does nothing; one
-    /// that opens its window lazily keeps the icon until the window exists.
-    fn set_window_icon(&self, window: WindowId, icon: &Image) {
+    /// Sets a top-level window's icon (title bar, task bar, window switcher).
+    /// The runtime calls it right after [`Backend::open_window`] when the
+    /// window's [`PlatformSpec::icon`] (or the app's) is set. A backend
+    /// without window icons, or without the kind of icon given, does nothing;
+    /// one that opens its window lazily keeps the icon until the window exists.
+    fn set_window_icon(&self, window: WindowId, icon: &WindowIcon) {
         let _ = (window, icon);
     }
 

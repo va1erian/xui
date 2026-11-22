@@ -3,8 +3,8 @@
 //! Unit tests for the window backend that do not need a live window.
 
 use super::{Decorations, PlatformSpec, WindowState};
-use xui_core::Image;
 use xui_core::units::dip;
+use xui_core::{Image, WindowIcon};
 
 #[test]
 fn windows_open_in_daylight_or_nightfall_after_the_platform_preference() {
@@ -47,7 +47,9 @@ fn a_window_that_does_not_exist_yet_remembers_its_icon() {
         state.winit_icon().is_none(),
         "no icon until the app sets one"
     );
-    state.icon = Some(Image::from_rgba(2, 2, vec![0xFF; 16]).expect("image"));
+    state.icon = Some(WindowIcon::image(
+        Image::from_rgba(2, 2, vec![0xFF; 16]).expect("image"),
+    ));
     assert!(
         state.winit_icon().is_some(),
         "the pending icon converts when the window is created"
@@ -57,5 +59,16 @@ fn a_window_that_does_not_exist_yet_remembers_its_icon() {
 #[test]
 fn an_image_becomes_a_winit_icon() {
     let image = Image::from_rgba(4, 4, vec![0x80; 64]).expect("image");
-    assert!(super::to_winit_icon(&image).is_some());
+    assert!(super::to_winit_icon(&WindowIcon::image(image)).is_some());
+}
+
+#[test]
+fn an_icon_without_images_has_no_winit_icon() {
+    assert!(super::to_winit_icon(&WindowIcon::images([])).is_none());
+}
+
+#[cfg(not(windows))]
+#[test]
+fn a_resource_icon_is_ignored_off_windows() {
+    assert!(super::to_winit_icon(&WindowIcon::resource(1)).is_none());
 }

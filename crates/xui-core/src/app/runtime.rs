@@ -292,6 +292,7 @@ where
     backend.init();
     let window = backend.open_window(&spec)?;
     let core = Core::new(Rc::clone(&backend), window);
+    core.set_icon(spec.icon.clone());
     // The runtime exists before the app, so the sink can catch an event that
     // arrives before `make` runs; `drain` puts a message back until `prime`.
     let runtime = Runtime::pending(Rc::clone(&core), true);

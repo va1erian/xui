@@ -36,7 +36,7 @@ pub use backend::{
     Backdrop, Backend, BackendError, Canvas, Cap, Corner, Dash, Decorations, Event, FontSpec,
     GradientStop, ImageSampling, LinearGradient, NativeWindowHandle, NodeKind, NodeOptions,
     NodeSpec, Painter, ParentRef, PlatformSpec, RadialGradient, Rgba, Stroke, TextHit, TextLayout,
-    TextMetrics, TextShaper, TextStyle, TextVAlign, TimerId, WidgetId, WindowId,
+    TextMetrics, TextShaper, TextStyle, TextVAlign, TimerId, WidgetId, WindowIcon, WindowId,
 };
 pub use color::Color;
 pub use geometry::{Point, Rect, Size};

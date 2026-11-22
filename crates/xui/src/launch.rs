@@ -7,7 +7,7 @@ use std::rc::Rc;
 use xui_canvas::snapshot::{Gallery, SnapshotError};
 use xui_canvas::{OffscreenBackend, WinitBackend};
 use xui_core::app::{App, Ui};
-use xui_core::backend::{Backend, BackendError, PlatformSpec, Result};
+use xui_core::backend::{Backend, BackendError, PlatformSpec, Result, WindowIcon};
 use xui_core::{Dip, Theme};
 
 /// Starts describing an app window titled `title`, on the backend
@@ -47,6 +47,13 @@ impl Launch {
     /// The window's initial client size, in design units.
     pub fn size(mut self, width: impl Into<Dip>, height: impl Into<Dip>) -> Launch {
         self.inner = self.inner.size(width, height);
+        self
+    }
+
+    /// The app's icon, inherited by the windows it opens later; see
+    /// [`xui_core::Launch::icon`].
+    pub fn icon(mut self, icon: impl Into<WindowIcon>) -> Launch {
+        self.inner = self.inner.icon(icon);
         self
     }
 

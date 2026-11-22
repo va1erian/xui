@@ -6,7 +6,9 @@ use std::rc::Rc;
 
 use super::design::DesignScope;
 use super::{App, Core, Proxy, WindowHandle, secondary};
-use crate::backend::{Event, NativeWindowHandle, PlatformSpec, Result, TimerId, WidgetId};
+use crate::backend::{
+    Event, NativeWindowHandle, PlatformSpec, Result, TimerId, WidgetId, WindowIcon,
+};
 use crate::geometry::Rect;
 use crate::image::Image;
 use crate::theme::Theme;
@@ -66,20 +68,36 @@ impl<M: 'static> Ui<M> {
             .set_window_title(self.core.window(), title);
     }
 
+    /// Replaces the icon of this handle's own top-level window. Windows it
+    /// opens afterwards inherit the new icon.
+    pub fn set_window_icon(&self, icon: impl Into<WindowIcon>) {
+        self.core.set_icon(Some(icon.into()));
+    }
+
+    /// What a window this one opens inherits from it.
+    fn inherited(&self) -> secondary::Inherited {
+        secondary::Inherited {
+            theme: self.core.theme().get(),
+            icon: self.core.icon(),
+        }
+    }
+
     /// Opens a non-modal secondary window that runs its own [`App`].
     ///
-    /// The child inherits this window's theme. The returned [`WindowHandle`]
+    /// The child inherits this window's theme, and its icon unless the
+    /// child's `spec` sets one. The returned [`WindowHandle`]
     /// sends messages to the child, retitles, captures and closes it.
     pub fn open_window<B, F>(&self, spec: PlatformSpec, make: F) -> Result<WindowHandle<B::Msg>>
     where
         B: App + 'static,
         F: FnOnce(&mut Ui<B::Msg>) -> B,
     {
-        secondary::open_secondary(self.core.backend(), self.core.theme().get(), &spec, make)
+        secondary::open_secondary(self.core.backend(), self.inherited(), &spec, make)
     }
 
     /// Opens a modal secondary window that runs its own [`App`], disabling this
-    /// window and blocking until the child closes.
+    /// window and blocking until the child closes. The child inherits as with
+    /// [`Ui::open_window`].
     ///
     /// The child closes with a value through [`Ui::close_with_result`]; `None`
     /// is returned on a backend that cannot run a modal loop, or when the child
@@ -93,7 +111,7 @@ impl<M: 'static> Ui<M> {
         secondary::open_modal(
             self.core.backend(),
             self.core.window(),
-            self.core.theme().get(),
+            self.inherited(),
             &spec,
             make,
         )

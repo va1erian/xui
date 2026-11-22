@@ -11,9 +11,11 @@ use std::cell::{OnceCell, RefCell};
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
-use xui_core::backend::{Event, PlatformSpec, Result as BackendResult, WidgetId, WindowId};
+use xui_core::Theme;
+use xui_core::backend::{
+    Event, PlatformSpec, Result as BackendResult, WidgetId, WindowIcon, WindowId,
+};
 use xui_core::router::WidgetHost;
-use xui_core::{Image, Theme};
 
 use crate::Surface;
 use crate::text_layout::CosmicShaper;
@@ -53,7 +55,7 @@ struct OffscreenWindow {
     /// The node the pointer is over, so a move to another tells it it left.
     hover: Option<WidgetId>,
     /// The last icon the app set with `Backend::set_window_icon`.
-    icon: Option<Image>,
+    icon: Option<WindowIcon>,
 }
 
 /// A backend that renders into a software surface.
@@ -153,7 +155,7 @@ impl OffscreenBackend {
     /// The last icon set on `window` with
     /// [`Backend::set_window_icon`](xui_core::backend::Backend::set_window_icon),
     /// so an app's tests can check that it set one.
-    pub fn window_icon(&self, window: WindowId) -> Option<Image> {
+    pub fn window_icon(&self, window: WindowId) -> Option<WindowIcon> {
         self.windows
             .borrow()
             .get(&window.raw())

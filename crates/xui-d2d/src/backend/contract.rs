@@ -7,8 +7,8 @@ use std::time::Duration;
 
 use xui_core::backend::{
     Backend, BackendError, Cursor, Event, FileDialogOutcome, FileDialogRequest, FontSpec,
-    NativeSurface, NodeSpec, Painter, ParentRef, PlatformSpec, Result, TextLayout, TextMetrics,
-    TextShaper, TextStyle, TimerId, Waker, WidgetId, WindowId,
+    NativeSurface, NativeWindowHandle, NodeSpec, Painter, ParentRef, PlatformSpec, Result,
+    TextLayout, TextMetrics, TextShaper, TextStyle, TimerId, Waker, WidgetId, WindowIcon, WindowId,
 };
 use xui_core::router::WidgetHost;
 use xui_core::{Dip, Rect, Theme};
@@ -83,6 +83,15 @@ impl Backend for D2dBackend {
         if let Some(hwnd) = self.shared.hwnd_of(window) {
             sys::set_title(hwnd, title);
         }
+    }
+
+    fn set_window_icon(&self, window: WindowId, icon: &WindowIcon) {
+        self.shared.set_icon(window, icon.clone());
+    }
+
+    fn native_window(&self, window: WindowId) -> Option<NativeWindowHandle> {
+        let hwnd = self.shared.hwnd_of(window)?;
+        Some(NativeWindowHandle::from_raw(hwnd.value() as usize))
     }
 
     fn set_window_enabled(&self, window: WindowId, enabled: bool) {

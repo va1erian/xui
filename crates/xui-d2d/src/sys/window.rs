@@ -137,8 +137,10 @@ pub(super) fn register_class() {
     register_class_named(CLASS);
 }
 
-/// Registers a class served by [`wndproc`], with the arrow cursor.
+/// Registers a class served by [`wndproc`], with the arrow cursor and the
+/// executable's default icon (none when it has no icon resource).
 pub(super) fn register_class_named(name: PCWSTR) {
+    let (icon, small_icon) = super::icon::class_icons();
     // SAFETY: registers a class whose procedure is `wndproc`; registering the
     // same class twice fails harmlessly, which is what makes this idempotent.
     unsafe {
@@ -151,6 +153,8 @@ pub(super) fn register_class_named(name: PCWSTR) {
             lpfnWndProc: Some(wndproc),
             hInstance: instance.into(),
             hCursor: LoadCursorW(None, IDC_ARROW).unwrap_or_default(),
+            hIcon: icon,
+            hIconSm: small_icon,
             lpszClassName: name,
             ..Default::default()
         };

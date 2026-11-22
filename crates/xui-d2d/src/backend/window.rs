@@ -5,10 +5,10 @@
 use std::rc::Rc;
 
 use xui_core::Theme;
-use xui_core::backend::{BackendError, PlatformSpec, Result, WindowId};
+use xui_core::backend::{BackendError, PlatformSpec, Result, WindowIcon, WindowId};
 
 use super::{Shared, WindowState};
-use crate::sys::{settings, window};
+use crate::sys::{icon, settings, window};
 
 /// Daylight or Nightfall, after the user's dark-mode setting.
 pub(super) fn system_theme() -> Theme {
@@ -53,9 +53,48 @@ impl Shared {
                 focused: None,
                 tracking: false,
                 primary,
+                icon: None,
+                icons: None,
             },
         );
+        self.show_icon(id);
         Ok(id)
+    }
+
+    /// Sets the icon `window` shows instead of the executable's default.
+    pub(super) fn set_icon(&self, window: WindowId, icon: WindowIcon) {
+        if let Some(state) = self.windows.borrow_mut().get_mut(&window.raw()) {
+            state.icon = Some(icon);
+        }
+        self.show_icon(window);
+    }
+
+    /// Loads `window`'s icon at its current DPI and shows it. The class icon
+    /// is loaded once at the system DPI; this keeps the title bar and task bar
+    /// icons sharp on a monitor at another DPI, and after a DPI change.
+    pub(super) fn show_icon(&self, window: WindowId) {
+        let Some((hwnd, icon, dpi)) = self
+            .windows
+            .borrow()
+            .get(&window.raw())
+            .map(|state| (state.hwnd, state.icon.clone(), state.dpi))
+        else {
+            return;
+        };
+        let Some(icons) = icon::load(icon.as_ref(), dpi) else {
+            return;
+        };
+        // `WM_SETICON` is sent to this window's own procedure, so no state is
+        // borrowed while it runs.
+        icon::apply(hwnd, &icons);
+        // The icons shown until now are released only once the window no
+        // longer shows them.
+        let replaced = self
+            .windows
+            .borrow_mut()
+            .get_mut(&window.raw())
+            .map(|state| state.icons.replace(icons));
+        drop(replaced);
     }
 
     /// Forgets `window`: its nodes, timers and capture, and its entry. Returns

@@ -140,6 +140,13 @@ cargo run -p xui-d2d --example cookbook # the cookbook on Direct2D (Windows)
 `xui_core::app(..)` and `run_app` are the same entry points for an app that
 depends on `xui-core` and a backend crate directly.
 
+The app's window icon is one more builder call:
+`xui::app("Hello").icon(image)` takes an `Image` or a `WindowIcon` (several
+sizes of one picture, or a Windows icon resource by id). Windows the app opens
+later inherit it unless their `PlatformSpec::icon` sets their own. On the
+Direct2D backend a Windows app with an embedded icon resource shows it without
+any call.
+
 ## 7. Explore the samples
 
 - `crates/xui/examples/widgets.rs` — every portable widget.

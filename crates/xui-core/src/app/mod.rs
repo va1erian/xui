@@ -39,7 +39,7 @@ use std::sync::Arc;
 
 use proxy::Inbox;
 
-use crate::backend::{Backend, TimerId, WidgetId, WindowId};
+use crate::backend::{Backend, TimerId, WidgetId, WindowIcon, WindowId};
 use crate::geometry::Rect;
 use crate::router::Router;
 use crate::theme::Theme;
@@ -95,6 +95,9 @@ pub(crate) struct Core<M> {
     queue: RefCell<VecDeque<M>>,
     inbox: Arc<Inbox<M>>,
     theme: Rc<Cell<Theme>>,
+    /// The window's icon, which windows it opens inherit; `None` while the
+    /// backend's default shows.
+    icon: RefCell<Option<WindowIcon>>,
     /// The window's root design-mode scope (a form designer): widgets under it
     /// ignore their own input so the editor can select and move them.
     design_root: Rc<design::DesignScope>,
@@ -142,6 +145,7 @@ impl<M> Core<M> {
             queue: RefCell::new(VecDeque::new()),
             inbox: Inbox::new(),
             theme: Rc::new(Cell::new(Theme::light())),
+            icon: RefCell::new(None),
             design_root: design::DesignScope::root(),
             router: Router::new(),
             on_close: RefCell::new(None),
@@ -181,6 +185,20 @@ impl<M> Core<M> {
     /// The window's current theme, shared with the widgets' painters.
     pub(crate) fn theme(&self) -> Rc<Cell<Theme>> {
         Rc::clone(&self.theme)
+    }
+
+    /// The window's icon, if the app set one.
+    pub(crate) fn icon(&self) -> Option<WindowIcon> {
+        self.icon.borrow().clone()
+    }
+
+    /// Shows `icon` on the window and remembers it for the windows it opens.
+    /// `None` leaves the backend's default.
+    pub(crate) fn set_icon(&self, icon: Option<WindowIcon>) {
+        if let Some(icon) = &icon {
+            self.backend.set_window_icon(self.window, icon);
+        }
+        *self.icon.borrow_mut() = icon;
     }
 
     /// The window's animation driver.

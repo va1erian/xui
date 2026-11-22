@@ -9,11 +9,12 @@ use std::rc::{Rc, Weak};
 use std::time::Instant;
 
 use xui_core::Theme;
-use xui_core::backend::{Event, WidgetId, WindowId};
+use xui_core::backend::{Event, WidgetId, WindowIcon, WindowId};
 use xui_core::router::WidgetHost;
 
 use crate::sys::frame_timer::FrameTimer;
 use crate::sys::gfx::{DwShaper, Target};
+use crate::sys::icon::WindowIcons;
 use crate::sys::surface::SurfaceWindow;
 use crate::sys::window::Hwnd;
 
@@ -50,6 +51,11 @@ struct WindowState {
     /// Whether a `WM_MOUSELEAVE` is already requested.
     tracking: bool,
     primary: bool,
+    /// The icon the app set; `None` shows the executable's default.
+    icon: Option<WindowIcon>,
+    /// The icons the window shows at its current DPI, kept alive while it
+    /// shows them; `None` while the class icon shows.
+    icons: Option<WindowIcons>,
 }
 
 /// The state every window shares.
