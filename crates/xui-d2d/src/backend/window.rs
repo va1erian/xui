@@ -57,27 +57,41 @@ impl Shared {
                 icons: None,
             },
         );
-        self.show_icon(id);
+        // A window whose spec has an icon gets it from the runtime right
+        // away; loading the default first would only be thrown away.
+        if spec.icon.is_none() {
+            self.show_icon(id, None);
+        }
         Ok(id)
     }
 
-    /// Sets the icon `window` shows instead of the executable's default.
+    /// Sets the icon `window` shows instead of the executable's default. An
+    /// icon that fails to load (a missing resource, no images) is ignored, so
+    /// the window keeps the icon it shows and follows DPI changes with it.
     pub(super) fn set_icon(&self, window: WindowId, icon: WindowIcon) {
-        if let Some(state) = self.windows.borrow_mut().get_mut(&window.raw()) {
-            state.icon = Some(icon);
-        }
-        self.show_icon(window);
+        self.show_icon(window, Some(icon));
     }
 
-    /// Loads `window`'s icon at its current DPI and shows it. The class icon
-    /// is loaded once at the system DPI; this keeps the title bar and task bar
-    /// icons sharp on a monitor at another DPI, and after a DPI change.
-    pub(super) fn show_icon(&self, window: WindowId) {
-        let Some((hwnd, icon, dpi)) = self
+    /// Reloads `window`'s icon at its current DPI, as after a DPI change.
+    pub(super) fn reload_icon(&self, window: WindowId) {
+        let icon = self
             .windows
             .borrow()
             .get(&window.raw())
-            .map(|state| (state.hwnd, state.icon.clone(), state.dpi))
+            .and_then(|state| state.icon.clone());
+        self.show_icon(window, icon);
+    }
+
+    /// Loads `icon` (the executable's default when `None`) at `window`'s
+    /// current DPI, shows it and remembers it. The class icon is loaded once
+    /// at the system DPI; this keeps the title bar and task bar icons sharp
+    /// on a monitor at another DPI, and after a DPI change.
+    fn show_icon(&self, window: WindowId, icon: Option<WindowIcon>) {
+        let Some((hwnd, dpi)) = self
+            .windows
+            .borrow()
+            .get(&window.raw())
+            .map(|state| (state.hwnd, state.dpi))
         else {
             return;
         };
@@ -93,7 +107,10 @@ impl Shared {
             .windows
             .borrow_mut()
             .get_mut(&window.raw())
-            .map(|state| state.icons.replace(icons));
+            .map(|state| {
+                state.icon = icon;
+                state.icons.replace(icons)
+            });
         drop(replaced);
     }
 

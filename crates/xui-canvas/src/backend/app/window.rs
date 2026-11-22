@@ -53,7 +53,7 @@ impl App<'_> {
                 .get(&raw)
                 .and_then(WindowState::winit_icon)
             {
-                window.set_window_icon(Some(icon));
+                crate::backend::show_winit_icon(&window, icon);
             }
             let metrics = window_metrics(&window);
             if let Some(state) = self.shared.windows.borrow_mut().get_mut(&raw) {

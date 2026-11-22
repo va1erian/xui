@@ -12,6 +12,7 @@ use crate::image::Image;
 /// [`PlatformSpec::icon`](super::PlatformSpec::icon), or at run time with
 /// [`Ui::set_window_icon`](crate::Ui::set_window_icon).
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub enum WindowIcon {
     /// The same picture as RGBA images at one or more sizes. A backend picks
     /// the image that suits each size it needs (see [`WindowIcon::closest`])

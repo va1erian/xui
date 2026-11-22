@@ -2,9 +2,13 @@
 // `native` reads a window's icons back through Win32, the one place this test
 // needs `unsafe`, so it is confined to that module.
 
-//! A window's icon on the backend: the app's icon reaches the title bar and
-//! task bar at the window's DPI, is reloaded when the DPI changes, and the
-//! window's native handle is exposed.
+//! A window's icon on the backend: the executable's icon shows with no app
+//! code, the app's icon reaches the title bar and task bar at the window's DPI
+//! and is reloaded when the DPI changes, and the window's native handle is
+//! exposed.
+//!
+//! On MSVC the build script links an icon group (id 1, 16 and 32 px) into
+//! every test binary, so the resource tests have an executable icon to find.
 //!
 //! No test enters the message loop: windows are created hidden and every
 //! message here is sent synchronously, so there is nothing to hang on.
@@ -20,8 +24,8 @@ mod native {
     use windows::Win32::Graphics::Gdi::{BITMAP, DeleteObject, GetObjectW};
     use windows::Win32::UI::HiDpi::GetSystemMetricsForDpi;
     use windows::Win32::UI::WindowsAndMessaging::{
-        GetIconInfo, HICON, ICON_BIG, ICON_SMALL, ICONINFO, IsWindow, SM_CXSMICON, SendMessageW,
-        WM_DPICHANGED, WM_GETICON,
+        GCLP_HICON, GetClassLongPtrW, GetIconInfo, HICON, ICON_BIG, ICON_SMALL, ICONINFO, IsWindow,
+        SM_CXICON, SM_CXSMICON, SendMessageW, WM_DPICHANGED, WM_GETICON,
     };
 
     fn hwnd(raw: usize) -> HWND {
@@ -59,10 +63,21 @@ mod native {
         }
     }
 
-    /// The small icon size Windows uses at `dpi`.
-    pub fn small_icon_size(dpi: u32) -> i32 {
-        // SAFETY: a plain metric query.
-        unsafe { GetSystemMetricsForDpi(SM_CXSMICON, dpi) }
+    /// The big and small icon sizes Windows uses at `dpi`.
+    pub fn icon_sizes(dpi: u32) -> (i32, i32) {
+        // SAFETY: plain metric queries.
+        unsafe {
+            (
+                GetSystemMetricsForDpi(SM_CXICON, dpi),
+                GetSystemMetricsForDpi(SM_CXSMICON, dpi),
+            )
+        }
+    }
+
+    /// Whether the window's class carries an icon.
+    pub fn class_has_icon(raw: usize) -> bool {
+        // SAFETY: a class query on a live window.
+        unsafe { GetClassLongPtrW(hwnd(raw), GCLP_HICON) != 0 }
     }
 
     /// Tells the window its DPI changed to `dpi`, as Windows does when it
@@ -111,21 +126,60 @@ fn native_window_is_the_windows_hwnd() {
     assert!(!native::is_window(raw), "the window was destroyed");
 }
 
+/// Asserts that the window shows its own big and small icons at the sizes of
+/// `dpi`.
+fn assert_icons_at(raw: usize, dpi: u32) {
+    let (big, small) = native::icon_sizes(dpi);
+    assert_eq!(
+        native::icon_width(raw, false),
+        Some(big),
+        "big icon at {dpi}"
+    );
+    assert_eq!(
+        native::icon_width(raw, true),
+        Some(small),
+        "small icon at {dpi}"
+    );
+}
+
+/// A DPI the window is not at, to move it to.
+fn other_dpi(backend: &D2dBackend, window: WindowId) -> u32 {
+    if backend.dpi(window) == 192 { 96 } else { 192 }
+}
+
+#[cfg(target_env = "msvc")]
+#[test]
+fn a_window_shows_the_executables_icon_with_no_app_code() {
+    let backend = D2dBackend::new();
+    let (window, raw) = open(&backend);
+    assert!(native::class_has_icon(raw), "the class carries the icon");
+    assert_icons_at(raw, backend.dpi(window));
+    let dpi = other_dpi(&backend, window);
+    native::change_dpi(raw, dpi);
+    assert_icons_at(raw, dpi);
+    backend.close_window(window);
+}
+
+#[cfg(target_env = "msvc")]
+#[test]
+fn a_resource_icon_loads_at_the_windows_dpi_and_follows_it() {
+    let backend = D2dBackend::new();
+    let (window, raw) = open(&backend);
+    backend.set_window_icon(window, &picture(64));
+    backend.set_window_icon(window, &WindowIcon::resource(1));
+    assert_icons_at(raw, backend.dpi(window));
+    let dpi = other_dpi(&backend, window);
+    native::change_dpi(raw, dpi);
+    assert_icons_at(raw, dpi);
+    backend.close_window(window);
+}
+
 #[test]
 fn an_image_icon_is_shown_at_the_windows_icon_sizes() {
     let backend = D2dBackend::new();
     let (window, raw) = open(&backend);
-    // The test executable has no icon resource, so no icon of its own yet.
-    assert_eq!(native::icon_width(raw, true), None);
-
     backend.set_window_icon(window, &picture(256));
-    let dpi = backend.dpi(window);
-    assert_eq!(
-        native::icon_width(raw, true),
-        Some(native::small_icon_size(dpi)),
-        "the image was resampled to the small icon size"
-    );
-    assert!(native::icon_width(raw, false).is_some(), "a big icon too");
+    assert_icons_at(raw, backend.dpi(window));
     backend.close_window(window);
 }
 
@@ -134,23 +188,22 @@ fn the_icon_is_reloaded_when_the_dpi_changes() {
     let backend = D2dBackend::new();
     let (window, raw) = open(&backend);
     backend.set_window_icon(window, &picture(64));
-    let dpi = if backend.dpi(window) == 192 { 96 } else { 192 };
+    let dpi = other_dpi(&backend, window);
     native::change_dpi(raw, dpi);
-    assert_eq!(
-        native::icon_width(raw, true),
-        Some(native::small_icon_size(dpi)),
-        "the small icon matches the new DPI"
-    );
+    assert_icons_at(raw, dpi);
     backend.close_window(window);
 }
 
 #[test]
-fn a_missing_resource_leaves_the_current_icon() {
+fn a_missing_resource_leaves_the_current_icon_and_its_dpi_reload() {
     let backend = D2dBackend::new();
     let (window, raw) = open(&backend);
     backend.set_window_icon(window, &picture(32));
-    let before = native::icon_width(raw, true);
     backend.set_window_icon(window, &WindowIcon::resource(0x7FFF));
-    assert_eq!(native::icon_width(raw, true), before);
+    assert_icons_at(raw, backend.dpi(window));
+    // The image the window kept, not the missing resource, follows the DPI.
+    let dpi = other_dpi(&backend, window);
+    native::change_dpi(raw, dpi);
+    assert_icons_at(raw, dpi);
     backend.close_window(window);
 }

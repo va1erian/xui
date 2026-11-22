@@ -96,17 +96,18 @@ unsafe extern "system" fn first_name(
     FALSE
 }
 
-/// The executable's default icon at the system's big and small sizes, for a
-/// window class; null handles when the executable has none. Loaded shared, so
-/// the system owns them and repeated calls return the same handles.
-pub(super) fn class_icons() -> (HICON, HICON) {
+/// The executable's default icon at the system's icon size, for a window
+/// class; a null handle when the executable has none. Loaded shared, so the
+/// system owns it and repeated calls return the same handle. The class's small
+/// icon is left null: the system then picks it from this icon's resource,
+/// which a shared load of a second size is not guaranteed to do.
+pub(super) fn class_icon() -> HICON {
     let Some(name) = default_name() else {
-        return (HICON::default(), HICON::default());
+        return HICON::default();
     };
-    // SAFETY: plain metric queries.
-    let (big, small) = unsafe { (GetSystemMetrics(SM_CXICON), GetSystemMetrics(SM_CXSMICON)) };
-    let load = |size| load_resource(name, size, LR_SHARED).unwrap_or_default();
-    (load(big), load(small))
+    // SAFETY: a plain metric query.
+    let size = unsafe { GetSystemMetrics(SM_CXICON) };
+    load_resource(name, size, LR_SHARED).unwrap_or_default()
 }
 
 /// Loads the icon resource `name` from the executable at `size` pixels.

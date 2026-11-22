@@ -143,6 +143,18 @@
   change while the user is scrolled down, as `ListView::refresh_model` is for
   a list.
 
+- **Window icons.** `app(..).icon(..)` (on `xui` and `xui_core`) takes an
+  `Image` or a `WindowIcon`: one picture at several sizes, or a Windows icon
+  resource by id. Windows the app opens later (`open_window`, `open_modal`)
+  inherit it unless their `PlatformSpec::icon` sets one, and
+  `Ui::set_window_icon` changes it at run time. On `D2dBackend` a window with
+  no icon set shows the executable's first icon resource, with no app code;
+  icons load at the big and small sizes of the window's DPI and reload on a
+  DPI change. `WinitBackend` gives `winit` the largest image, and on Windows
+  sets the task bar icon too.
+- **`D2dBackend::native_window`** returns the window's `HWND`, so
+  `Ui::native_window()` works on the Direct2D backend.
+
 ### Fixed
 
 - **Every one-line body `Label` now paints vertically centred in its box**,
@@ -162,6 +174,11 @@
 
 ### Breaking changes
 
+- `Backend::set_window_icon` takes a `&WindowIcon` instead of an `&Image`, and
+  the runtime calls it right after `open_window` when the window has an icon.
+  A custom backend matches on the icon (`WindowIcon` is `#[non_exhaustive]`)
+  and uses `WindowIcon::closest` to pick an image; `OffscreenBackend::window_icon`
+  returns the `WindowIcon`.
 - **The native-control path is gone; xui paints every widget itself.**
   `ImplKind`, `Backend::supports` / `Ui::supports`, `Backend::set_cue` /
   `set_password` (and their `Ui` wrappers) and `Event::TextChanged` are

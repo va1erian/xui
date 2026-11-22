@@ -50,8 +50,9 @@ let backend: Rc<dyn Backend> = Rc::new(WinitBackend::new());
   geometry through the `TextShaper`/`TextLayout` seam.
 - `capture` composites into an offscreen surface.
 - A window icon (`Launch::icon`, `PlatformSpec::icon`) goes to `winit` as one
-  image, the largest given, which the platform scales; a
-  `WindowIcon::Resource` loads on Windows only.
+  image, the largest given, which the platform scales (on Windows it is set as
+  the task bar icon too); a `WindowIcon::Resource` loads on Windows only, at
+  the system's default size. Icons are not reloaded on a DPI change.
 - No `native_window`, and no nested modal loop (`run_modal` reports
   `Unsupported`, so `Ui::open_modal` is unavailable on this backend).
   Non-modal secondary windows (`Ui::open_window`), multiple top-level windows

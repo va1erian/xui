@@ -235,7 +235,7 @@ impl Shared {
         if let Some(state) = self.windows.borrow_mut().get_mut(&window.raw()) {
             state.dpi = dpi;
         }
-        self.show_icon(window);
+        self.reload_icon(window);
         let suggested = window::apply_suggested_rect(hwnd, msg)?;
         self.invalidate_window(window);
         self.deliver(

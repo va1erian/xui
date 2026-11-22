@@ -102,7 +102,7 @@ impl Backend for WinitBackend {
             state.icon = Some(icon.clone());
         }
         if let Some(icon) = super::to_winit_icon(icon) {
-            self.window_handle(window, |handle| handle.set_window_icon(Some(icon)));
+            self.window_handle(window, |handle| super::show_winit_icon(handle, icon));
         }
     }
 

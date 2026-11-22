@@ -63,7 +63,8 @@ impl HasDisplayHandle for SharedWindow {
 ///
 /// `winit` takes a single image and the platform scales it to each size it
 /// shows, so the largest image is the sharpest choice. A resource icon exists
-/// only on Windows, where `winit` loads it at the system's default size.
+/// only on Windows, where `winit` loads it at the system's default size; it is
+/// not reloaded when the window's DPI changes.
 pub(crate) fn to_winit_icon(icon: &WindowIcon) -> Option<winit::window::Icon> {
     match icon {
         WindowIcon::Images(_) => {
@@ -76,9 +77,20 @@ pub(crate) fn to_winit_icon(icon: &WindowIcon) -> Option<winit::window::Icon> {
             use winit::platform::windows::IconExtWindows;
             winit::window::Icon::from_resource(*id, None).ok()
         }
-        #[cfg(not(windows))]
-        WindowIcon::Resource(_) => None,
+        _ => None,
     }
+}
+
+/// Shows `icon` on `window`. On Windows `winit`'s window icon is only the
+/// small (title bar) one, so the same icon also goes to the task bar and
+/// Alt+Tab.
+pub(crate) fn show_winit_icon(window: &Window, icon: winit::window::Icon) {
+    #[cfg(windows)]
+    {
+        use winit::platform::windows::WindowExtWindows;
+        window.set_taskbar_icon(Some(icon.clone()));
+    }
+    window.set_window_icon(Some(icon));
 }
 
 /// The theme a window opens in for the platform's dark-mode `preference`:
