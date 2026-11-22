@@ -72,3 +72,10 @@ fn an_icon_without_images_has_no_winit_icon() {
 fn a_resource_icon_is_ignored_off_windows() {
     assert!(super::to_winit_icon(&WindowIcon::resource(1)).is_none());
 }
+
+#[cfg(windows)]
+#[test]
+fn a_resource_the_executable_lacks_has_no_winit_icon() {
+    // This test binary embeds no icon resource.
+    assert!(super::to_winit_icon(&WindowIcon::resource(0x7FFF)).is_none());
+}

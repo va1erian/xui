@@ -139,3 +139,36 @@ fn save_snapshots<M: 'static>(
         }
     });
 }
+
+#[cfg(test)]
+mod tests {
+    use std::rc::Rc;
+
+    use xui_canvas::OffscreenBackend;
+    use xui_core::backend::Backend;
+    use xui_core::{Image, WindowIcon};
+
+    struct Quiet;
+
+    impl xui_core::App for Quiet {
+        type Msg = ();
+
+        fn update(&mut self, _msg: (), _ui: &mut xui_core::Ui<()>) {}
+    }
+
+    #[test]
+    fn the_launch_icon_reaches_the_window() {
+        let backend = Rc::new(OffscreenBackend::new());
+        let image = Image::from_rgba(2, 2, vec![0x40; 16]).expect("image");
+        let mut seen = None;
+        super::app("icon")
+            .icon(image.clone())
+            .backend(Rc::clone(&backend) as Rc<dyn Backend>)
+            .run(|ui| {
+                seen = Some(backend.window_icon(ui.window()));
+                Ok(Quiet)
+            })
+            .expect("the app ran");
+        assert_eq!(seen, Some(Some(WindowIcon::image(image))));
+    }
+}
