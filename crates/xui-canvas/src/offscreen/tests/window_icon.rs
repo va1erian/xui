@@ -1,6 +1,7 @@
 //! The offscreen backend records the icon an app sets on a window.
 
 use super::*;
+use xui_core::WindowIcon;
 
 #[test]
 fn the_offscreen_backend_records_the_last_window_icon() {
@@ -14,8 +15,9 @@ fn the_offscreen_backend_records_the_last_window_icon() {
         "no icon until one is set"
     );
 
-    let first = xui_core::Image::from_rgba(1, 1, vec![1, 2, 3, 255]).expect("image");
-    let second = xui_core::Image::from_rgba(2, 1, vec![9; 8]).expect("image");
+    let first =
+        WindowIcon::image(xui_core::Image::from_rgba(1, 1, vec![1, 2, 3, 255]).expect("image"));
+    let second = WindowIcon::resource(1);
     backend.set_window_icon(window, &first);
     backend.set_window_icon(window, &second);
     assert_eq!(backend.window_icon(window), Some(second));

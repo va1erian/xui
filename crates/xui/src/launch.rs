@@ -7,7 +7,7 @@ use std::rc::Rc;
 use xui_canvas::snapshot::{Gallery, SnapshotError};
 use xui_canvas::{OffscreenBackend, WinitBackend};
 use xui_core::app::{App, Ui};
-use xui_core::backend::{Backend, BackendError, PlatformSpec, Result};
+use xui_core::backend::{Backend, BackendError, PlatformSpec, Result, WindowIcon};
 use xui_core::{Dip, Theme};
 
 /// Starts describing an app window titled `title`, on the backend
@@ -47,6 +47,13 @@ impl Launch {
     /// The window's initial client size, in design units.
     pub fn size(mut self, width: impl Into<Dip>, height: impl Into<Dip>) -> Launch {
         self.inner = self.inner.size(width, height);
+        self
+    }
+
+    /// The app's icon, inherited by the windows it opens later; see
+    /// [`xui_core::Launch::icon`].
+    pub fn icon(mut self, icon: impl Into<WindowIcon>) -> Launch {
+        self.inner = self.inner.icon(icon);
         self
     }
 
@@ -131,4 +138,37 @@ fn save_snapshots<M: 'static>(
             }
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use std::rc::Rc;
+
+    use xui_canvas::OffscreenBackend;
+    use xui_core::backend::Backend;
+    use xui_core::{Image, WindowIcon};
+
+    struct Quiet;
+
+    impl xui_core::App for Quiet {
+        type Msg = ();
+
+        fn update(&mut self, _msg: (), _ui: &mut xui_core::Ui<()>) {}
+    }
+
+    #[test]
+    fn the_launch_icon_reaches_the_window() {
+        let backend = Rc::new(OffscreenBackend::new());
+        let image = Image::from_rgba(2, 2, vec![0x40; 16]).expect("image");
+        let mut seen = None;
+        super::app("icon")
+            .icon(image.clone())
+            .backend(Rc::clone(&backend) as Rc<dyn Backend>)
+            .run(|ui| {
+                seen = Some(backend.window_icon(ui.window()));
+                Ok(Quiet)
+            })
+            .expect("the app ran");
+        assert_eq!(seen, Some(Some(WindowIcon::image(image))));
+    }
 }

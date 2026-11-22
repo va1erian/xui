@@ -16,7 +16,7 @@ use super::dialog::{FileDialogOutcome, FileDialogRequest};
 use super::event::{Event, TimerId};
 use super::ids::{WidgetId, WindowId};
 use super::node::{NodeKind, ParentRef};
-use super::{Painter, PlatformSpec};
+use super::{Painter, PlatformSpec, WindowIcon};
 use crate::geometry::Rect;
 use crate::router::WidgetHost;
 use crate::theme::Theme;
@@ -52,6 +52,8 @@ struct Node {
 /// A window the headless backend recorded.
 struct SinkWindow {
     title: String,
+    /// The last icon set with [`Backend::set_window_icon`](super::Backend::set_window_icon).
+    icon: Option<WindowIcon>,
     client: Rect,
     dpi: u32,
     sink: Option<Rc<dyn WidgetHost>>,
@@ -330,6 +332,15 @@ impl HeadlessBackend {
             .windows
             .get(&window.raw())
             .map(|w| w.title.clone())
+    }
+
+    /// The icon last set on `window`, if any.
+    pub fn window_icon(&self, window: WindowId) -> Option<WindowIcon> {
+        self.state
+            .borrow()
+            .windows
+            .get(&window.raw())
+            .and_then(|w| w.icon.clone())
     }
 
     /// The theme last applied to `window`.

@@ -7,7 +7,7 @@ use std::rc::Rc;
 use xui_core::backend::{
     Backend, BackendError, Event, FontSpec, NodeSpec, Painter, ParentRef, PlatformSpec,
     Result as BackendResult, TextLayout, TextMetrics, TextShaper, TextStyle, TimerId, Waker,
-    WidgetId, WindowId,
+    WidgetId, WindowIcon, WindowId,
 };
 use xui_core::image::Image;
 use xui_core::router::WidgetHost;
@@ -50,7 +50,7 @@ impl Backend for OffscreenBackend {
         self.nodes.borrow_mut().remove_window(window);
     }
 
-    fn set_window_icon(&self, window: WindowId, icon: &Image) {
+    fn set_window_icon(&self, window: WindowId, icon: &WindowIcon) {
         if let Some(entry) = self.windows.borrow_mut().get_mut(&window.raw()) {
             entry.icon = Some(icon.clone());
         }

@@ -9,7 +9,7 @@ use super::{HeadlessBackend, Node, SinkWindow, remove_orphans};
 use crate::backend::{
     Backend, BackendError, Event, FileDialogOutcome, FileDialogRequest, FontSpec, NodeSpec,
     Painter, ParentRef, PlatformSpec, Result, TextLayout, TextMetrics, TextShaper, TextStyle,
-    TimerId, Waker, WidgetId, WindowId,
+    TimerId, Waker, WidgetId, WindowIcon, WindowId,
 };
 use crate::geometry::Rect;
 use crate::image::Image;
@@ -52,6 +52,7 @@ impl Backend for HeadlessBackend {
             id,
             SinkWindow {
                 title: spec.title.clone(),
+                icon: None,
                 client: Self::size(spec),
                 dpi: 96,
                 sink: None,
@@ -73,6 +74,12 @@ impl Backend for HeadlessBackend {
     fn set_window_title(&self, window: WindowId, title: &str) {
         if let Some(w) = self.state.borrow_mut().windows.get_mut(&window.raw()) {
             w.title = title.to_string();
+        }
+    }
+
+    fn set_window_icon(&self, window: WindowId, icon: &WindowIcon) {
+        if let Some(w) = self.state.borrow_mut().windows.get_mut(&window.raw()) {
+            w.icon = Some(icon.clone());
         }
     }
 

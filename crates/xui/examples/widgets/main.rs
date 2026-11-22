@@ -20,7 +20,7 @@ mod page;
 
 use xui::prelude::*;
 use xui_core::widget::{Dialog, DialogAction, Tooltip};
-use xui_core::{Color, Properties, Value};
+use xui_core::{Color, Image, Properties, Value};
 
 #[derive(Clone)]
 enum Msg {
@@ -132,8 +132,29 @@ fn show_context(menu: &Menu<Msg>, ui: &Ui<Msg>, x: f32, y: f32) {
     menu.show_context(at(x), at(y));
 }
 
+/// The gallery's window icon: a blue disc with a white dot, drawn at 64 px so
+/// each backend can scale it down to the sizes it shows.
+fn gallery_icon() -> Image {
+    const SIDE: u32 = 64;
+    let centre = SIDE as f32 / 2.0;
+    // How much of the pixel at `distance` from the centre a disc of `radius`
+    // covers, with a one-pixel soft edge.
+    let cover = |distance: f32, radius: f32| (radius - distance + 0.5).clamp(0.0, 1.0);
+    let mut pixels = Vec::with_capacity((SIDE * SIDE * 4) as usize);
+    for y in 0..SIDE {
+        for x in 0..SIDE {
+            let distance = (x as f32 + 0.5 - centre).hypot(y as f32 + 0.5 - centre);
+            let dot = cover(distance, 12.0);
+            let blend = |blue: f32| (blue + (255.0 - blue) * dot) as u8;
+            let alpha = (cover(distance, centre - 1.0) * 255.0) as u8;
+            pixels.extend_from_slice(&[blend(32.0), blend(110.0), blend(220.0), alpha]);
+        }
+    }
+    Image::from_rgba(SIDE, SIDE, pixels).expect("the icon's pixels match its size")
+}
+
 fn main() -> Result<()> {
-    let launch = xui::app("xui widgets").size(1296, 664);
+    let launch = xui::app("xui widgets").size(1296, 664).icon(gallery_icon());
     // `XUI_BACKEND=d2d` shows the same page on the Direct2D backend.
     #[cfg(windows)]
     let launch = if std::env::var("XUI_BACKEND").as_deref() == Ok("d2d") {

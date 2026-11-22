@@ -33,9 +33,9 @@ use winit::raw_window_handle::{
 };
 use winit::window::Window;
 
-use xui_core::backend::{Cursor, Decorations, PlatformSpec, WidgetId, WindowId};
+use xui_core::backend::{Cursor, Decorations, PlatformSpec, WidgetId, WindowIcon, WindowId};
 use xui_core::router::WidgetHost;
-use xui_core::{Dip, Image, Theme};
+use xui_core::{Dip, Theme};
 
 use crate::geometry;
 use crate::gl::{GlWidget, RendererState};
@@ -58,10 +58,39 @@ impl HasDisplayHandle for SharedWindow {
     }
 }
 
-/// Converts an RGBA image to a `winit` window icon; `None` if `winit` rejects
-/// its dimensions.
-pub(crate) fn to_winit_icon(image: &Image) -> Option<winit::window::Icon> {
-    winit::window::Icon::from_rgba(image.pixels().to_vec(), image.width(), image.height()).ok()
+/// Converts a window icon to a `winit` one; `None` if `winit` rejects it or
+/// the platform has no such icon.
+///
+/// `winit` takes a single image and the platform scales it to each size it
+/// shows, so the largest image is the sharpest choice. A resource icon exists
+/// only on Windows, where `winit` loads it at the system's default size; it is
+/// not reloaded when the window's DPI changes.
+pub(crate) fn to_winit_icon(icon: &WindowIcon) -> Option<winit::window::Icon> {
+    match icon {
+        WindowIcon::Images(_) => {
+            let image = icon.closest(u32::MAX)?;
+            winit::window::Icon::from_rgba(image.pixels().to_vec(), image.width(), image.height())
+                .ok()
+        }
+        #[cfg(windows)]
+        WindowIcon::Resource(id) => {
+            use winit::platform::windows::IconExtWindows;
+            winit::window::Icon::from_resource(*id, None).ok()
+        }
+        _ => None,
+    }
+}
+
+/// Shows `icon` on `window`. On Windows `winit`'s window icon is only the
+/// small (title bar) one, so the same icon also goes to the task bar and
+/// Alt+Tab.
+pub(crate) fn show_winit_icon(window: &Window, icon: winit::window::Icon) {
+    #[cfg(windows)]
+    {
+        use winit::platform::windows::WindowExtWindows;
+        window.set_taskbar_icon(Some(icon.clone()));
+    }
+    window.set_window_icon(Some(icon));
 }
 
 /// The theme a window opens in for the platform's dark-mode `preference`:
@@ -95,7 +124,7 @@ pub(crate) struct WindowState {
     pub(crate) window: Option<Rc<Window>>,
     /// The icon the app asked for. Kept so a window that does not exist yet
     /// gets it when it is created.
-    pub(crate) icon: Option<Image>,
+    pub(crate) icon: Option<WindowIcon>,
     /// Whether the window shows the system title bar.
     pub(crate) decorations: Decorations,
     /// Whether the user may resize the window.
@@ -122,7 +151,7 @@ pub(crate) struct WindowState {
 }
 
 impl WindowState {
-    /// The `winit` icon for the image the app asked for, if it set one that
+    /// The `winit` icon for the one the app asked for, if it set one that
     /// `winit` accepts.
     pub(crate) fn winit_icon(&self) -> Option<winit::window::Icon> {
         self.icon.as_ref().and_then(to_winit_icon)

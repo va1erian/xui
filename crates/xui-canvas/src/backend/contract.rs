@@ -9,7 +9,7 @@ use winit::window::Window;
 use xui_core::backend::{
     Backend, BackendError, Cursor, Event, FontSpec, NodeSpec, Painter, ParentRef, PlatformSpec,
     Result as BackendResult, TextLayout, TextMetrics, TextShaper, TextStyle, TimerId, Waker,
-    WidgetId, WindowId,
+    WidgetId, WindowIcon, WindowId,
 };
 use xui_core::image::Image;
 use xui_core::router::WidgetHost;
@@ -97,12 +97,12 @@ impl Backend for WinitBackend {
         self.window_handle(window, |handle| handle.set_title(&title));
     }
 
-    fn set_window_icon(&self, window: WindowId, icon: &Image) {
+    fn set_window_icon(&self, window: WindowId, icon: &WindowIcon) {
         if let Some(state) = self.shared.windows.borrow_mut().get_mut(&window.raw()) {
             state.icon = Some(icon.clone());
         }
         if let Some(icon) = super::to_winit_icon(icon) {
-            self.window_handle(window, |handle| handle.set_window_icon(Some(icon)));
+            self.window_handle(window, |handle| super::show_winit_icon(handle, icon));
         }
     }
 

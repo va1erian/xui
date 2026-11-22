@@ -5,10 +5,10 @@
 use std::rc::Rc;
 
 use xui_core::Theme;
-use xui_core::backend::{BackendError, PlatformSpec, Result, WindowId};
+use xui_core::backend::{BackendError, PlatformSpec, Result, WindowIcon, WindowId};
 
 use super::{Shared, WindowState};
-use crate::sys::{settings, window};
+use crate::sys::{icon, settings, window};
 
 /// Daylight or Nightfall, after the user's dark-mode setting.
 pub(super) fn system_theme() -> Theme {
@@ -53,9 +53,65 @@ impl Shared {
                 focused: None,
                 tracking: false,
                 primary,
+                icon: None,
+                icons: None,
             },
         );
+        // A window whose spec has an icon gets it from the runtime right
+        // away; loading the default first would only be thrown away.
+        if spec.icon.is_none() {
+            self.show_icon(id, None);
+        }
         Ok(id)
+    }
+
+    /// Sets the icon `window` shows instead of the executable's default. An
+    /// icon that fails to load (a missing resource, no images) is ignored, so
+    /// the window keeps the icon it shows and follows DPI changes with it.
+    pub(super) fn set_icon(&self, window: WindowId, icon: WindowIcon) {
+        self.show_icon(window, Some(icon));
+    }
+
+    /// Reloads `window`'s icon at its current DPI, as after a DPI change.
+    pub(super) fn reload_icon(&self, window: WindowId) {
+        let icon = self
+            .windows
+            .borrow()
+            .get(&window.raw())
+            .and_then(|state| state.icon.clone());
+        self.show_icon(window, icon);
+    }
+
+    /// Loads `icon` (the executable's default when `None`) at `window`'s
+    /// current DPI, shows it and remembers it. The class icon is loaded once
+    /// at the system DPI; this keeps the title bar and task bar icons sharp
+    /// on a monitor at another DPI, and after a DPI change.
+    fn show_icon(&self, window: WindowId, icon: Option<WindowIcon>) {
+        let Some((hwnd, dpi)) = self
+            .windows
+            .borrow()
+            .get(&window.raw())
+            .map(|state| (state.hwnd, state.dpi))
+        else {
+            return;
+        };
+        let Some(icons) = icon::load(icon.as_ref(), dpi) else {
+            return;
+        };
+        // `WM_SETICON` is sent to this window's own procedure, so no state is
+        // borrowed while it runs.
+        icon::apply(hwnd, &icons);
+        // The icons shown until now are released only once the window no
+        // longer shows them.
+        let replaced = self
+            .windows
+            .borrow_mut()
+            .get_mut(&window.raw())
+            .map(|state| {
+                state.icon = icon;
+                state.icons.replace(icons)
+            });
+        drop(replaced);
     }
 
     /// Forgets `window`: its nodes, timers and capture, and its entry. Returns

@@ -21,7 +21,7 @@ use std::rc::{Rc, Weak};
 
 use super::runtime::{Host, Runtime, Sink};
 use super::{App, Core, Ui};
-use crate::backend::{Backend, NativeWindowHandle, PlatformSpec, Result, WindowId};
+use crate::backend::{Backend, NativeWindowHandle, PlatformSpec, Result, WindowIcon, WindowId};
 use crate::image::Image;
 use crate::theme::Theme;
 
@@ -111,10 +111,18 @@ impl<M: 'static> WindowHandle<M> {
     }
 }
 
+/// What a secondary window takes from the window that opens it.
+pub(crate) struct Inherited {
+    /// The opener's theme.
+    pub(crate) theme: Theme,
+    /// The opener's icon, used unless the child's spec sets its own.
+    pub(crate) icon: Option<WindowIcon>,
+}
+
 /// Opens a non-modal secondary window running its own app.
 pub(crate) fn open_secondary<B, F>(
     backend: Rc<dyn Backend>,
-    theme: Theme,
+    inherited: Inherited,
     spec: &PlatformSpec,
     make: F,
 ) -> Result<WindowHandle<B::Msg>>
@@ -122,7 +130,7 @@ where
     B: App + 'static,
     F: FnOnce(&mut Ui<B::Msg>) -> B,
 {
-    let built = build(backend, theme, spec, make)?;
+    let built = build(backend, inherited, spec, make)?;
     built.runtime.drain();
     // A child that closed itself while its app was being built has no later
     // event to reap it.
@@ -144,7 +152,7 @@ where
 pub(crate) fn open_modal<B, F, R>(
     backend: Rc<dyn Backend>,
     owner: WindowId,
-    theme: Theme,
+    inherited: Inherited,
     spec: &PlatformSpec,
     make: F,
 ) -> Option<R>
@@ -153,7 +161,7 @@ where
     F: FnOnce(&mut Ui<B::Msg>) -> B,
     R: 'static,
 {
-    let built = build(Rc::clone(&backend), theme, spec, make).ok()?;
+    let built = build(Rc::clone(&backend), inherited, spec, make).ok()?;
     built.runtime.drain();
 
     backend.set_window_enabled(owner, false);
@@ -175,10 +183,11 @@ struct Built<B: App> {
 }
 
 /// Creates the window, its [`Core`], its app and its runtime, installs the
-/// event sink and registers the runtime.
+/// event sink and registers the runtime. The child shows its spec's icon, or
+/// else the opener's.
 fn build<B, F>(
     backend: Rc<dyn Backend>,
-    theme: Theme,
+    inherited: Inherited,
     spec: &PlatformSpec,
     make: F,
 ) -> Result<Built<B>>
@@ -188,8 +197,9 @@ where
 {
     let window = backend.open_window(spec)?;
     let core = Core::new(Rc::clone(&backend), window);
-    core.theme().set(theme);
-    backend.set_theme(window, &theme);
+    core.set_icon(spec.icon.clone().or(inherited.icon));
+    core.theme().set(inherited.theme);
+    backend.set_theme(window, &inherited.theme);
     let mut ui = Ui::new(Rc::clone(&core));
     let app = core.building(|| make(&mut ui));
     let runtime = Runtime::new(Rc::clone(&core), app, false);

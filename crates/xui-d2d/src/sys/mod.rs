@@ -6,6 +6,7 @@ pub(crate) mod clipboard;
 pub(crate) mod dialog;
 pub(crate) mod frame_timer;
 pub(crate) mod gfx;
+pub(crate) mod icon;
 pub(super) mod message_window;
 pub(crate) mod pointer_lock;
 mod pump;

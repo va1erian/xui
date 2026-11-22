@@ -49,6 +49,10 @@ let backend: Rc<dyn Backend> = Rc::new(WinitBackend::new());
 - Text is shaped with `cosmic-text`, which also gives hit-testing and selection
   geometry through the `TextShaper`/`TextLayout` seam.
 - `capture` composites into an offscreen surface.
+- A window icon (`Launch::icon`, `PlatformSpec::icon`) goes to `winit` as one
+  image, the largest given, which the platform scales (on Windows it is set as
+  the task bar icon too); a `WindowIcon::Resource` loads on Windows only, at
+  the system's default size. Icons are not reloaded on a DPI change.
 - No `native_window`, and no nested modal loop (`run_modal` reports
   `Unsupported`, so `Ui::open_modal` is unavailable on this backend).
   Non-modal secondary windows (`Ui::open_window`), multiple top-level windows
@@ -111,6 +115,11 @@ xui_core::app("Hello")
 ```
 
 - `run_modal` is a nested message loop and `file_dialog` the Common Item Dialog.
+- `native_window` returns the window's `HWND`, for an app's own OS integration.
+- **Window icon:** with no icon set, every window shows the executable's first
+  icon resource (the one Explorer shows), so an app that embeds one needs no
+  code. A `WindowIcon` set by the app is loaded at the big and small icon sizes
+  of the window's DPI (images are resampled), and reloaded on `WM_DPICHANGED`.
 - Covered: DPI (per-monitor v2) and `DpiChanged`, mouse with capture, keyboard
   and Tab traversal, timers, `wake`, clipboard text, system dark mode and
   reduced motion, cursors, the whole `Canvas` trait, text shaping,
@@ -138,7 +147,7 @@ xui_core::app("Hello")
   loop (dragging or sizing a window border, a native menu) no frame is
   delivered until it ends.
 - Not covered: IME, UI Automation, borderless windows and Mica/Acrylic, drag
-  regions, window icon, `capture`, `GlWidget`.
+  regions, `capture`, `GlWidget`.
 
 ## Native surfaces
 

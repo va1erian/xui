@@ -6,7 +6,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use super::{App, Ui, run_app};
-use crate::backend::{Backend, BackendError, PlatformSpec, Result};
+use crate::backend::{Backend, BackendError, PlatformSpec, Result, WindowIcon};
 use crate::units::Dip;
 
 /// Starts describing an app window titled `title`:
@@ -39,6 +39,16 @@ impl Launch {
     /// The window's initial client size, in design units.
     pub fn size(mut self, width: impl Into<Dip>, height: impl Into<Dip>) -> Launch {
         self.spec = self.spec.size(width.into(), height.into());
+        self
+    }
+
+    /// The app's icon, shown in the window's title bar, the task bar and the
+    /// window switcher. Windows the app opens later (settings dialogs, modals)
+    /// inherit it unless their own spec sets one. Without it the backend's
+    /// default shows: on Windows under `xui-d2d`, the executable's first icon
+    /// resource.
+    pub fn icon(mut self, icon: impl Into<WindowIcon>) -> Launch {
+        self.spec = self.spec.icon(icon);
         self
     }
 

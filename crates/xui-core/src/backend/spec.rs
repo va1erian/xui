@@ -54,8 +54,14 @@ pub struct PlatformSpec {
     pub caption_inset: Dip,
     /// The material behind the client area.
     pub backdrop: Backdrop,
+    /// The window's own icon. `None` (the default) inherits the app's icon
+    /// (see [`Launch::icon`](crate::Launch::icon)), or leaves the backend's
+    /// default when the app set none. The runtime applies it through
+    /// [`Backend::set_window_icon`](super::Backend::set_window_icon).
+    pub icon: Option<WindowIcon>,
 }
 
+use super::WindowIcon;
 use crate::units::Dip;
 
 impl PlatformSpec {
@@ -69,6 +75,7 @@ impl PlatformSpec {
             decorations: Decorations::System,
             caption_inset: Dip(0.0),
             backdrop: Backdrop::Opaque,
+            icon: None,
         }
     }
 
@@ -97,11 +104,17 @@ impl PlatformSpec {
         self.backdrop = backdrop;
         self
     }
+
+    /// Gives the window its own icon instead of the app's.
+    pub fn icon(mut self, icon: impl Into<WindowIcon>) -> PlatformSpec {
+        self.icon = Some(icon.into());
+        self
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{Backdrop, Decorations, PlatformSpec};
+    use super::{Backdrop, Decorations, PlatformSpec, WindowIcon};
     use crate::units::dip;
 
     #[test]
@@ -110,6 +123,13 @@ mod tests {
         assert_eq!(spec.decorations, Decorations::System);
         assert_eq!(spec.caption_inset, dip(0.0));
         assert_eq!(spec.backdrop, Backdrop::Opaque);
+        assert_eq!(spec.icon, None);
+    }
+
+    #[test]
+    fn builder_sets_the_window_icon() {
+        let spec = PlatformSpec::new("t").icon(WindowIcon::resource(7));
+        assert_eq!(spec.icon, Some(WindowIcon::Resource(7)));
     }
 
     #[test]

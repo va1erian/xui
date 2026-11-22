@@ -13,6 +13,7 @@ use crate::theme::Theme;
 mod animation;
 mod boot;
 mod delivery;
+mod icon;
 mod reduced_motion;
 mod runtime;
 mod windows;
